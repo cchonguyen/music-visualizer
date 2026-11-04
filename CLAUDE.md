@@ -4,11 +4,12 @@
 @.claude/project-rules.md
 
 ## Project
-- What: a browser app that turns a local music file into live 2D visuals (bars, waveform, radial rings). No accounts, no uploads.
-- Scope and decisions: `.spec/SCOPE_BRIEF.md` (v2, Council-reviewed).
-- Stack: plain TypeScript + Vite, Canvas 2D, Web Audio API. Hosting: Cloudflare Workers static assets (planned).
+- What: a desktop web app (Chrome/Edge, Mac and Windows) that visualizes a music file, tab/system audio, or the mic. No accounts, no uploads.
+- Scope and contracts: `.spec/SYSTEM_SPEC.md` (current). Decisions: `.spec/DECISIONS.md`.
+- Stack: plain TypeScript + Vite, raw WebGL2, Web Audio API, Vitest. Hosting: Cloudflare Workers static assets (planned).
 - Planned domain: `music-visualizer.charliechonguyen.com` (custom_domain route).
-- Status: harness set up, no app code yet. GitHub repo `music-visualizer` to be created by owner.
+- Status: Stage 1 planned (14 slices, `.spec/PROGRESS.md`; detail in `docs/stage1-slices.md`). No app code yet.
+- GitHub: https://github.com/cchonguyen/music-visualizer (branch `main`).
 
 ## Work Mode
 - Default is **Manager Mode** (`"workMode": "manager"` in `.spec/harness.json`): no `[IN_PROGRESS]` slice means no edits outside `.spec/` until a task is planned. Small one-file tweaks use `/quick-fix` (added in a later slice).
