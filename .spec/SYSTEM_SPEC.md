@@ -128,7 +128,7 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 - **Share prompt every session:** the browser asks each time. The app cannot skip it. Capture stops when the user stops sharing or closes the tab.
 - **Hidden tab:** keeps audio, pauses rendering, resumes cleanly.
 - **Cloudflare:** static files only; no per-request code. Limits not at risk.
-- **Domain:** `music-visualizer.charliechonguyen.com` as a custom domain, if the zone is in the owner's Cloudflare account. Fallback: `*.workers.dev`.
+- **Domain (live 2026-11-04):** `music-visualizer.charliechonguyen.com` (custom domain, owner approved). `*.workers.dev` kept as backup.
 
 ## 6. Cost Guardrails
 
@@ -159,7 +159,7 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 - **4b — Preset loader and crossfade:** load a preset as a Scene, and blend two Scenes over 3–10 seconds in the Compositor (each Scene keeps its own feedback buffers).
 - **`.milk` import:** moved to Later. Both Council reviewers call it a compiler sub-project.
 - **Butterchurn:** reference only (MIT-licensed, readable). Not a dependency. Its maintenance is one person, with issues turned off.
-- **regl:** Council round 2 recommends against it (it predates WebGL2 patterns like VAOs and GLSL 300 es). Our earlier check found the repo still receives commits, but that doesn't show WebGL2 fit. Recommendation: drop the checkpoint and keep a small typed helper set (`createProgram`, `createVAO`, `createFBO`, `createPingPong`). Owner may override.
+- **regl (decided 2026-11-04: dropped, owner approved):** Council round 2 recommends against it (it predates WebGL2 patterns like VAOs and GLSL 300 es). Our earlier check found the repo still receives commits, but that doesn't show WebGL2 fit. Recommendation: drop the checkpoint and keep a small typed helper set (`createProgram`, `createVAO`, `createFBO`, `createPingPong`). Owner may override.
 
 **What's cheap to change later:** visual styles, colors, shader math, UI layout.
 **What's expensive to change later (so we set it now):** the audio data shape, who owns the GPU context, the feedback-buffer capability, resize and pixel-ratio logic, and context-loss recovery.
@@ -177,7 +177,5 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 **Resolved 2026-11-04:** system audio and mic in Stage 1; test on Mac and Windows; WebGL2 from the first visual; no rendering library; own preset format; quiet passages dim, never black; beat/bar tracking later; latency under 100 ms; Stage 1 pass criteria (four checks); H1 research done (not unique; edge is curated presets and musical response).
 
 **Open:**
-1. Drop the regl checkpoint (Council recommendation) or keep it.
-2. Custom domain `music-visualizer.charliechonguyen.com` (free; creates a DNS record).
-3. Time estimates per stage.
-4. Owner's notes on the five reference videos (what to copy from each).
+1. Time estimates per stage.
+2. Owner's notes on the five reference videos (what to copy from each).

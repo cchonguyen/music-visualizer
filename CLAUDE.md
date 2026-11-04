@@ -7,7 +7,7 @@
 - What: a desktop web app (Chrome/Edge, Mac and Windows) that visualizes a music file, tab/system audio, or the mic. No accounts, no uploads.
 - Scope and contracts: `.spec/SYSTEM_SPEC.md` (current). Decisions: `.spec/DECISIONS.md`.
 - Stack: plain TypeScript + Vite, raw WebGL2, Web Audio API, Vitest. Hosting: Cloudflare Workers static assets (planned).
-- Live (Stage 1 test build): https://music-visualizer.charliechonguyen.workers.dev. Custom domain `music-visualizer.charliechonguyen.com` waits for owner OK.
+- Live (Stage 1 test build): https://music-visualizer.charliechonguyen.com (custom domain, owner approved 2026-11-04). Backup: https://music-visualizer.charliechonguyen.workers.dev
 - Status: Stage 1 slices 1.0–1.12 done; 1.13 (owner device test, `docs/stage1-test-report.md`) open. Queue: `.spec/PROGRESS.md`.
 - GitHub: https://github.com/cchonguyen/music-visualizer (branch `main`).
 

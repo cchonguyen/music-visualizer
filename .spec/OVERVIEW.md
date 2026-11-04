@@ -4,7 +4,7 @@
 A desktop web app (Chrome or Edge) that draws live visuals in time with music. It can play a file you pick, or visualize what your computer is playing from a browser tab or the whole system (you approve the screen-share prompt and tick "share audio"). Everything runs locally: nothing is uploaded or stored, and no account is needed.
 
 ## Current Build Status
-- **Live:** https://music-visualizer.charliechonguyen.workers.dev (Stage 1 test build). Test signals verified by the lead agent; your Mac/Windows check is pending.
+- **Live:** https://music-visualizer.charliechonguyen.com (Stage 1 test build; workers.dev backup). Test signals verified by the lead agent; your Mac/Windows check is pending.
 - **In Progress:** none
 - **Up Next:** your device test (`docs/stage1-test-report.md`), then Stage 2 visuals.
 
