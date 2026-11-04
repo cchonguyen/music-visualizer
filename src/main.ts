@@ -11,6 +11,7 @@ import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
 import { TunnelLayer } from './render/layers/tunnel';
+import { ParticleLayer } from './render/layers/particles';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -42,6 +43,8 @@ function start(): void {
     host.addLayer(new TrailTestLayer());
   } else if (params.has('tunnel')) {
     host.addLayer(new TunnelLayer());
+  } else if (params.has('particles')) {
+    host.addLayer(new ParticleLayer());
   } else if (params.has('scenes')) {
     compositor = new Compositor([
       new Scene('pulse', [new BassPulseLayer()]),
