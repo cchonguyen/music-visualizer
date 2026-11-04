@@ -5,7 +5,8 @@ import { compileProgram, FULLSCREEN_VERT } from '../../gl/shader';
 import { createVao } from '../../gl/vao';
 import type { RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
-import { DEFAULT_PALETTE, getPalette, type Palette } from '../palette';
+import { getPalette, type Palette } from '../palette';
+import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState } from '../tunnelState';
 
@@ -31,14 +32,9 @@ export class TunnelLayer implements RenderLayer {
   private uRingContrast: WebGLUniformLocation | null = null;
   private uRingDensity: WebGLUniformLocation | null = null;
 
-  private paletteName: string = DEFAULT_PALETTE;
   private readonly flight = new FlightState();
   private beatEnv = 0;
   private uBeat: WebGLUniformLocation | null = null;
-
-  setPalette(name: string): void {
-    this.paletteName = name;
-  }
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -73,7 +69,7 @@ export class TunnelLayer implements RenderLayer {
     const dt = Math.max(0, clock.dtSec);
     this.beatEnv = Math.exp(-dt / BEAT_RELEASE_SEC) * this.beatEnv;
     if (frame.beatByBand.sub && !this.calm) this.beatEnv = 1;
-    const palette: Palette = getPalette(this.paletteName);
+    const palette: Palette = getPalette(getCurrentPalette());
 
     gl.useProgram(this.program);
     gl.uniform1f(this.uBeat, this.beatEnv); // must follow useProgram, or the call is an invalid operation

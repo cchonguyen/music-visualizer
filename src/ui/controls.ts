@@ -3,6 +3,7 @@
 import type { AudioEngine, SourceKind } from '../audio/engine';
 import type { TestSignal } from '../audio/testSignals';
 import { showNotice } from './notices';
+import { cyclePalette } from '../render/paletteStore';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -148,6 +149,10 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       case 'f':
       case 'F':
         toggleFullscreen();
+        break;
+      case 'p':
+      case 'P':
+        showNotice(`Palette: ${cyclePalette()}`, 'info', 2000);
         break;
     }
   });
