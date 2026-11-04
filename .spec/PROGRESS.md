@@ -19,7 +19,7 @@
 - [x] **Slice 1.11: App shell and controls** [DONE] (test signals verified in browser; file/capture/mic in 1.13) `[RED][UI / VISUAL]` worker: lead | Target files: `index.html`, `src/main.ts`, `src/ui/controls.ts` [NEW], `src/ui/notices.ts` [NEW], `src/style.css` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 1.12: Deploy to Cloudflare** [DONE] (https://music-visualizer.charliechonguyen.com, backup https://music-visualizer.charliechonguyen.workers.dev) `[YELLOW][CORE / DATA]` worker: lead + owner login | Target files: `wrangler.jsonc` [NEW], `package.json` | Verify: npx wrangler deploy
 - [x] **Slice 1.14: Council round 2 fixes** [DONE] `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/audio/types.ts`, `src/audio/frameBuilder.ts`, `src/audio/normalize.ts`, `src/audio/sources.ts`, `src/audio/engine.ts`, `src/render/clock.ts` [NEW], `src/render/layer.ts`, `src/gl/context.ts`, `src/render/layers/bassPulse.ts`, `src/render/layers/waveform.ts`, `src/ui/debugPanel.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build
-- [ ] **Slice 1.13: Device test report** [PENDING] `[GREEN][UI / VISUAL]` worker: owner | Target files: `docs/stage1-test-report.md` [NEW] | Verify: owner sign-off
+- [x] **Slice 1.13: Device test report** [DONE] (owner reports pass on Mac and Windows, 2026-11-04) `[GREEN][UI / VISUAL]` worker: owner | Target files: `docs/stage1-test-report.md` [NEW] | Verify: owner sign-off
 
 ## Stage 2 — Visuals on WebGL2 (outline; slice specs written after Stage 1 sign-off)
 

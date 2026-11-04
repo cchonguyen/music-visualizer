@@ -55,5 +55,5 @@ After Council round 2 fixes: kick 10 beats in 5 s, tone and silence 0 beats, 2 k
 Test signals pass in automated checks (see `docs/stage1-slices.md`, "Browser test results"). File, capture and microphone are untested: they need your machines and permission prompts.
 
 ## Sign-off
-- [ ] Owner: Stage 1 passes on Mac
-- [ ] Owner: Stage 1 passes on Windows
+- [x] Owner: Stage 1 passes on Mac (reported 2026-11-04, all tests passed; per-row notes not recorded)
+- [x] Owner: Stage 1 passes on Windows (reported 2026-11-04, all tests passed; per-row notes not recorded)
