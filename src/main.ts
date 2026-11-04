@@ -10,6 +10,7 @@ import { WaveformLayer } from './render/layers/waveform';
 import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
+import { TunnelLayer } from './render/layers/tunnel';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -39,6 +40,8 @@ function start(): void {
   let compositor: Compositor | null = null;
   if (params.has('trail')) {
     host.addLayer(new TrailTestLayer());
+  } else if (params.has('tunnel')) {
+    host.addLayer(new TunnelLayer());
   } else if (params.has('scenes')) {
     compositor = new Compositor([
       new Scene('pulse', [new BassPulseLayer()]),

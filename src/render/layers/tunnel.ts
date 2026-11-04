@@ -10,6 +10,8 @@ import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState } from '../tunnelState';
 
 const RING_DENSITY = 0.5;
+/** Beat flash on the rings: instant attack, 150 ms release (owner reference notes: beats thicken rings, never move the camera). */
+const BEAT_RELEASE_SEC = 0.15;
 const RING_CONTRAST_NORMAL = 0.5;
 const RING_CONTRAST_CALM = 0.25;
 
@@ -31,6 +33,8 @@ export class TunnelLayer implements RenderLayer {
 
   private paletteName: string = DEFAULT_PALETTE;
   private readonly flight = new FlightState();
+  private beatEnv = 0;
+  private uBeat: WebGLUniformLocation | null = null;
 
   setPalette(name: string): void {
     this.paletteName = name;
@@ -48,6 +52,8 @@ export class TunnelLayer implements RenderLayer {
     this.uAccentB = gl.getUniformLocation(this.program, 'uAccentB');
     this.uRingContrast = gl.getUniformLocation(this.program, 'uRingContrast');
     this.uRingDensity = gl.getUniformLocation(this.program, 'uRingDensity');
+    this.uBeat = gl.getUniformLocation(this.program, 'uBeat');
+    this.beatEnv = 0;
     this.vao = createVao(gl);
   }
 
@@ -61,12 +67,16 @@ export class TunnelLayer implements RenderLayer {
 
     bindTarget(gl, target);
 
-    // NOTE(spec): the slice contract does not pass beat data to the shader, so the
-    // beat-driven ring thickening from the 2.4 spec is not wired in this slice.
     const phase = this.flight.advance(clock.dtSec, frame.energy, this.calm);
+    // Beat flash: jumps to 1 on a beat, then decays over BEAT_RELEASE_SEC.
+    // Calm mode turns beat-triggered visuals off entirely.
+    const dt = Math.max(0, clock.dtSec);
+    this.beatEnv = Math.exp(-dt / BEAT_RELEASE_SEC) * this.beatEnv;
+    if (frame.beatByBand.sub && !this.calm) this.beatEnv = 1;
     const palette: Palette = getPalette(this.paletteName);
 
     gl.useProgram(this.program);
+    gl.uniform1f(this.uBeat, this.beatEnv); // must follow useProgram, or the call is an invalid operation
     gl.uniform1f(this.uPhase, phase);
     gl.uniform1f(this.uSub, frame.env.sub);
     gl.uniform2f(this.uRes, target.width, target.height);
@@ -96,6 +106,7 @@ export class TunnelLayer implements RenderLayer {
     this.uAccentB = null;
     this.uRingContrast = null;
     this.uRingDensity = null;
+    this.uBeat = null;
     this.gl = null;
   }
 }

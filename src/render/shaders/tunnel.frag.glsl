@@ -9,6 +9,7 @@ uniform vec3 uAccentA;       // palette accent A (ring stripes)
 uniform vec3 uAccentB;       // palette accent B (soft glow on ring crests)
 uniform float uRingContrast; // 0.5 normal, lower in calm
 uniform float uRingDensity;  // rings per unit depth (0.5)
+uniform float uBeat;         // 0..1 beat flash, decays after each beat (ring brightness only)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -37,6 +38,8 @@ void main() {
   vec3 rings = mix(uBase, uAccentA, stripe) * pulse;
   // Subtle accent B glow only where a stripe crest is near 1.
   rings += uAccentB * 0.15 * smoothstep(0.85, 1.0, stripe);
+  // Beat flash: crests brighten on a beat. Brightness only, no camera movement.
+  rings += uAccentA * 0.25 * clamp(uBeat, 0.0, 1.0) * smoothstep(0.8, 1.0, stripe);
 
   // Centre mask: blend into the dim floor colour at the vanishing point.
   float mask = smoothstep(0.02, 0.18, radius);
