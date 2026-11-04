@@ -61,6 +61,17 @@ function streamSource(ctx: AudioContext, stream: MediaStream): ActiveSource {
   };
 }
 
+/** Plain-English fix for a share that carried no audio (displaySurface from Chrome). */
+export function noAudioMessage(surface: string | undefined): string {
+  if (surface === 'window') {
+    return "You shared a single window, and windows cannot carry sound. Click Tab / system audio again and choose a Chrome Tab (with 'Share tab audio' ticked) or Entire Screen (with 'Share system audio' ticked).";
+  }
+  if (surface === 'monitor') {
+    return "You shared the whole screen without system sound. Click Tab / system audio again and tick 'Share system audio' in the prompt.";
+  }
+  return "No audio was shared. Click Tab / system audio again and tick 'Share tab audio' (for a Chrome tab) or 'Share system audio' (for the whole screen) in the share prompt.";
+}
+
 /** Tab or system audio through the screen-share prompt (Chrome/Edge desktop). */
 export async function displaySource(ctx: AudioContext): Promise<ActiveSource> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
@@ -77,8 +88,10 @@ export async function displaySource(ctx: AudioContext): Promise<ActiveSource> {
     selfBrowserSurface: 'exclude',
   } as DisplayMediaStreamOptions);
   if (stream.getAudioTracks().length === 0) {
+    // Read what was actually shared, so the message can say exactly what to change.
+    const surface = stream.getVideoTracks()[0]?.getSettings().displaySurface;
     for (const t of stream.getTracks()) t.stop(); // don't leave an orphaned share running
-    throw new SourceError("No audio was shared. Try again and tick 'Share audio' (or 'Share system audio') in the share prompt.");
+    throw new SourceError(noAudioMessage(surface));
   }
   return streamSource(ctx, stream);
 }
