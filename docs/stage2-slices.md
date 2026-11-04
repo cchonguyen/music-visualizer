@@ -93,12 +93,14 @@ Contracts in force: `src/audio/types.ts` (AudioFrame, read-only, reused each fra
 **Target files:** `src/render/layers/tunnel.ts` [NEW], `src/render/shaders/tunnel.frag.glsl` [NEW], `src/render/tunnelState.ts` [NEW], test: `src/render/tunnelState.test.ts` [NEW]
 
 **Contract:**
-- Motion: `flightPhase` is a `Phase`, advanced by `clock.dtSec × (base + boost × frame.energy)`. Never `time × speed`.
+- Motion: `flightPhase` is a `Phase`, advanced by `clock.dtSec × (base + boost × frame.energy)`. Never `time × speed`. Keep the `boost` small: owner references show steady flight with no camera shake (see `docs/reference-visuals.md`).
+- Beat acts on rings: `frame.beatByBand.sub` thickens and brightens ring strokes for a short release. The camera never jolts on a beat.
 - Shader: full-screen triangle, polar coordinates (angle, `radius`). `depth = 1 / max(radius, 0.15)`, so depth is capped near the centre.
 - **Centre mask (architect fix 6):** `mask = smoothstep(0.02, 0.18, radius)`. The tunnel centre blends into the dim floor colour, so rings never bunch into a high-frequency strobe at the vanishing point.
 - Ring stripes at `depth` offset by `flightPhase`. Sub band (`env.sub`) drives a slow radial brightness pulse, and the dim floor is kept.
 - Stripe limit: no more than about 5 alternating light-dark rings in the central view. Stripe contrast is a uniform, so Calm mode can soften it.
 - Calm mode: `base` is a gentle drift, `boost` is zero, and beat-triggered kicks are off.
+- Palette: a uniform set from the palette option (default cyan, magenta, ultraviolet on near-black; see `docs/reference-visuals.md`).
 
 **Pure tests:** `tunnelState` phase never decreases while energy swings 0.08↔1.0; speed clamps to zero or above; the centre mask is 0 at radius 0 and 1 beyond 0.18.
 
@@ -116,6 +118,8 @@ Contracts in force: `src/audio/types.ts` (AudioFrame, read-only, reused each fra
 **Contract:**
 - A fixed pool of N particles (for example 600), drawn with `drawArraysInstanced` on a 4-vertex quad. Each particle has a seed.
 - **Do not multiply brightness by `frame.beatByBand.high` directly.** That flag is true for one frame (16 ms) and would flicker. Use a CPU envelope instead: `highFlashEnv`, attack 0 ms, release 150 ms, triggered by the flag.
+- **Motion:** particles stream **outward from the vanishing point** (as in the Neon Particle Tunnel reference), not in random drift.
+- **Density:** sparse in quiet sections, rising only with `energy`.
 - Twinkle: each particle's brightness is `smoothstep` applied to `fract(phase + seed)`, scaled by `frame.env.high`. This staggers the twinkles continuously, so they don't pulse all at once.
 - Soft radial falloff in the fragment shader. Brightness weight stays below the bass pulse.
 
