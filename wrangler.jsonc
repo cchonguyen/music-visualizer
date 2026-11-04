@@ -1,0 +1,14 @@
+{
+  // Static-assets-only Worker: no server code runs, so free-tier request limits don't apply.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "music-visualizer",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  // Free *.workers.dev URL only. Custom domain (music-visualizer.charliechonguyen.com)
+  // waits for the owner's OK because it creates a DNS record on the live domain.
+  "workers_dev": true,
+  "preview_urls": false
+}

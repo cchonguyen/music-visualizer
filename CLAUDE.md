@@ -7,8 +7,8 @@
 - What: a desktop web app (Chrome/Edge, Mac and Windows) that visualizes a music file, tab/system audio, or the mic. No accounts, no uploads.
 - Scope and contracts: `.spec/SYSTEM_SPEC.md` (current). Decisions: `.spec/DECISIONS.md`.
 - Stack: plain TypeScript + Vite, raw WebGL2, Web Audio API, Vitest. Hosting: Cloudflare Workers static assets (planned).
-- Planned domain: `music-visualizer.charliechonguyen.com` (custom_domain route).
-- Status: Stage 1 planned (14 slices, `.spec/PROGRESS.md`; detail in `docs/stage1-slices.md`). No app code yet.
+- Live (Stage 1 test build): https://music-visualizer.charliechonguyen.workers.dev. Custom domain `music-visualizer.charliechonguyen.com` waits for owner OK.
+- Status: Stage 1 slices 1.0–1.12 done; 1.13 (owner device test, `docs/stage1-test-report.md`) open. Queue: `.spec/PROGRESS.md`.
 - GitHub: https://github.com/cchonguyen/music-visualizer (branch `main`).
 
 ## Work Mode
@@ -21,3 +21,5 @@
 - `npm run typecheck` — TypeScript check
 - `npm test` — unit tests (Vitest)
 - `npm run build` — production build to `dist/`
+- `npm run deploy` — build and deploy to Cloudflare (check `npx wrangler whoami` first)
+- Free-model slices: `~/OpenBot/Agents/agent-29a801b6-9741-4a30-91c7-ffeb35065c9e/scripts/run-slice.sh <id> <model>` (OpenBot's bundled OpenCode)
