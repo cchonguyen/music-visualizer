@@ -12,6 +12,8 @@ import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
 import { TunnelLayer } from './render/layers/tunnel';
 import { ParticleLayer } from './render/layers/particles';
+import { BarsLayer } from './render/layers/bars';
+import { RingsLayer } from './render/layers/rings';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -45,6 +47,9 @@ function start(): void {
     host.addLayer(new TunnelLayer());
   } else if (params.has('particles')) {
     host.addLayer(new ParticleLayer());
+  } else if (params.has('bars')) {
+    host.addLayer(new BarsLayer());
+    host.addLayer(new RingsLayer());
   } else if (params.has('scenes')) {
     compositor = new Compositor([
       new Scene('pulse', [new BassPulseLayer()]),
