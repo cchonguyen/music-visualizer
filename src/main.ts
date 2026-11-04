@@ -7,6 +7,7 @@ import type { AudioFrame } from './audio/types';
 import { GlHost } from './gl/context';
 import { BassPulseLayer } from './render/layers/bassPulse';
 import { WaveformLayer } from './render/layers/waveform';
+import { TrailTestLayer } from './render/layers/trailTest';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -30,8 +31,13 @@ function start(): void {
     showNotice((err as Error).message, 'error', 0);
     return;
   }
-  host.addLayer(new BassPulseLayer());
-  host.addLayer(new WaveformLayer());
+  // ?trail shows the slice 2.1 feedback proof instead of the Stage 1 tracers.
+  if (new URLSearchParams(location.search).has('trail')) {
+    host.addLayer(new TrailTestLayer());
+  } else {
+    host.addLayer(new BassPulseLayer());
+    host.addLayer(new WaveformLayer());
+  }
   startScreen.hidden = true;
 
   const state: ControlsState = {

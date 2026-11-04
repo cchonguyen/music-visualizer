@@ -23,9 +23,9 @@
 
 ## Stage 2 — Visuals on WebGL2 (specs in docs/stage2-slices.md)
 
-- [ ] **Slice 2.0: Palette module (neon default, switchable)** [PENDING] `[GREEN][CORE / DATA]` worker: free | Target files: `src/render/palette.ts` [NEW], `src/render/palette.test.ts` [NEW] | Verify: npm test -- src/render/palette.test.ts && npm run typecheck
+- [ ] **Slice 2.0: Palette module (neon default, switchable)** [IN_PROGRESS] `[GREEN][CORE / DATA]` worker: free | Target files: `src/render/palette.ts` [NEW], `src/render/palette.test.ts` [NEW] | Verify: npm test -- src/render/palette.test.ts && npm run typecheck
 
-- [ ] **Slice 2.1: Typed GL helpers + ping-pong framebuffers + trail test** [PENDING] `[RED][UI / VISUAL]` worker: lead | Target files: `src/gl/fbo.ts` [NEW], `src/gl/vao.ts` [NEW], `src/render/layers/trailTest.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 2.1: Typed GL helpers + ping-pong framebuffers + trail test** [IN_PROGRESS] `[RED][UI / VISUAL]` worker: lead | Target files: `src/gl/fbo.ts` [NEW], `src/gl/vao.ts` [NEW], `src/render/layers/trailTest.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 2.2: Scene, Compositor and safety pass** [PENDING] `[RED][UI / VISUAL]` worker: lead | Target files: `src/render/scene.ts` [NEW], `src/render/compositor.ts` [NEW], `src/render/shaders/composite.frag.glsl` [NEW], `src/gl/context.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 2.3: Sub-bass resolution (FFT 8192 vs low-pass filter, measured)** [PENDING] `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/audio/engine.ts`, `src/audio/frameBuilder.ts` | Verify: npm test
 - [ ] **Slice 2.4: Forward-flight tunnel** [PENDING] `[YELLOW][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/tunnel.ts` [NEW], `src/render/shaders/tunnel.frag.glsl` [NEW] | Verify: npm run typecheck && npm run build
