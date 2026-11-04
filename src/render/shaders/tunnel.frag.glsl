@@ -11,7 +11,8 @@ uniform vec3 uAccentB;       // palette accent B (soft glow on ring crests)
 uniform float uRingContrast; // 0.5 normal, lower in calm
 uniform float uRingDensity;  // rings per unit depth (0.5)
 uniform float uBeat;         // 0..1 beat flash, decays after each beat (ring brightness only)
-uniform vec2 uCenter;        // vanishing-point sway (midrange-driven, bounded)
+uniform vec2 uCenter;        // vanishing-point bend offset, uv units (figure-eight, calm = 0)
+uniform float uRoll;         // ring roll angle, radians (integrated in JS)
 uniform float uDensity;      // ring spacing, breathes with the bass
 uniform float uHue;          // 0..1: mix from accent A to accent B (slow drift + treble)
 
@@ -19,23 +20,34 @@ in vec2 vUv;
 out vec4 outColor;
 
 const float TAU = 6.2831853;
+const float HEX_AMOUNT = 0.05; // 6-sided ring shape, +/-5%
 
 void main() {
   // Centred, aspect-correct coordinates: rings stay circular on any canvas.
   float aspect = uRes.x / max(uRes.y, 1.0);
-  vec2 p = (vUv - 0.5 - uCenter) * vec2(aspect, 1.0);
+  vec2 scale = vec2(aspect, 1.0);
+  vec2 p0 = (vUv - 0.5) * scale;
+  // Bend: the vanishing point moves fully at the centre and not at all at the
+  // top or bottom edge, so the outer rim stays put.
+  float rim = clamp(2.0 * length(p0), 0.0, 1.0);
+  vec2 p = p0 - uCenter * scale * (1.0 - rim);
   float radius = length(p);
-  // NOTE(spec): angle = atan(p.y, p.x) is in the slice contract, but nothing in v1
-  // reads it, so it is left out of the shader rather than compiled as dead code.
+
+  // 6-sided shape, rolled by uRoll. Rings are slightly hexagonal, not round.
+  float angle = atan(p.y, p.x);
+  float shaped = radius * (1.0 + HEX_AMOUNT * cos(6.0 * (angle - uRoll)));
 
   // Depth is capped near the centre so the vanishing point never strobes.
-  float depth = 1.0 / max(radius, 0.15);
+  float depth = 1.0 / max(shaped, 0.15);
 
   // Ring stripes, offset by the integrated flight phase.
   float wave = 0.5 + 0.5 * cos(TAU * (depth * uDensity - uPhase));
   // Sharp stripes (P1, 2026-11-04): only the crests carry colour, and the space
   // between rings falls to the near-black palette base. Calm (low contrast) keeps softer crests.
-  float stripe = pow(wave, mix(2.5, 4.0, clamp(uRingContrast * 2.0, 0.0, 1.0)));
+  // Crest width (P3): thin far away (centre), thick close up (edge).
+  float sharp = mix(2.5, 4.0, clamp(uRingContrast * 2.0, 0.0, 1.0));
+  float expo = mix(sharp * 1.5, sharp * 0.6, smoothstep(0.1, 0.6, shaped));
+  float stripe = pow(wave, expo);
 
   // Full-screen pulse stays small (15%): a large whole-screen brightness swing
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.

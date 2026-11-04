@@ -1,5 +1,105 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_SPEED, BOOST, FlightState, flightRate } from './tunnelState';
+import {
+  BASE_SPEED,
+  BOOST,
+  BendState,
+  bendOffset,
+  BEND_X,
+  BEND_Y,
+  FlightState,
+  flightRate,
+  ROLL_BASE,
+  ROLL_ENERGY,
+  RollState,
+  rollRate,
+  wrapAngle,
+} from './tunnelState';
+
+const TAU = 2 * Math.PI;
+
+describe('rollRate', () => {
+  it('is never negative, even for out-of-range energy', () => {
+    for (const energy of [-5, 0, 1, 3, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(rollRate(energy, false)).toBeGreaterThanOrEqual(0);
+      expect(rollRate(energy, true)).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('rises with energy and clamps energy to 0..1', () => {
+    expect(rollRate(0, false)).toBeCloseTo(ROLL_BASE, 10);
+    expect(rollRate(1, false)).toBeCloseTo(ROLL_BASE + ROLL_ENERGY, 10);
+    expect(rollRate(5, false)).toBeCloseTo(ROLL_BASE + ROLL_ENERGY, 10);
+  });
+
+  it('calm rate ignores energy (no speed-up)', () => {
+    expect(rollRate(0, true)).toBeCloseTo(ROLL_BASE, 10);
+    expect(rollRate(1, true)).toBeCloseTo(ROLL_BASE, 10);
+  });
+});
+
+describe('wrapAngle', () => {
+  it('keeps angles in [0, 2π) and maps non-finite input to 0', () => {
+    expect(wrapAngle(0)).toBe(0);
+    expect(wrapAngle(TAU + 0.5)).toBeCloseTo(0.5, 10);
+    expect(wrapAngle(-0.5)).toBeCloseTo(TAU - 0.5, 10);
+    expect(wrapAngle(Number.NaN)).toBe(0);
+    expect(wrapAngle(Number.POSITIVE_INFINITY)).toBe(0);
+  });
+});
+
+describe('RollState', () => {
+  it('integrates dt times rate and stays in [0, 2π)', () => {
+    const roll = new RollState();
+    expect(roll.advance(1, 0, false)).toBeCloseTo(ROLL_BASE, 10);
+    for (let i = 0; i < 100000; i++) {
+      const angle = roll.advance(0.016, 1, false);
+      expect(angle).toBeGreaterThanOrEqual(0);
+      expect(angle).toBeLessThan(TAU);
+    }
+  });
+
+  it('ignores negative and non-finite dt (no backward roll)', () => {
+    const roll = new RollState();
+    roll.advance(1, 0, false);
+    const before = roll.current;
+    expect(roll.advance(-5, 1, false)).toBeCloseTo(before, 10);
+    expect(roll.advance(Number.NaN, 1, false)).toBeCloseTo(before, 10);
+  });
+
+  it('reset returns the angle to 0', () => {
+    const roll = new RollState();
+    roll.advance(2, 1, false);
+    roll.reset();
+    expect(roll.current).toBe(0);
+  });
+});
+
+describe('bendOffset', () => {
+  it('is zero in calm mode', () => {
+    expect(bendOffset(1.2, 1, true)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('stays inside the figure-eight bounds, scaled by mid', () => {
+    const bend = new BendState();
+    for (let i = 0; i < 1000; i++) {
+      const { x, y } = bendOffset(bend.advance(0.05), 1, false);
+      expect(Math.abs(x)).toBeLessThanOrEqual(BEND_X + 1e-12);
+      expect(Math.abs(y)).toBeLessThanOrEqual(BEND_Y + 1e-12);
+    }
+  });
+
+  it('is zero when mid is zero or not finite', () => {
+    expect(bendOffset(1.2, 0, false)).toEqual({ x: 0, y: 0 });
+    expect(bendOffset(1.2, Number.NaN, false)).toEqual({ x: 0, y: 0 });
+  });
+});
+
+describe('BendState', () => {
+  it('reaches half a cycle (pi) after 5 seconds at 0.1 Hz', () => {
+    const bend = new BendState();
+    expect(bend.advance(5)).toBeCloseTo(Math.PI, 6);
+  });
+});
 
 describe('flightRate', () => {
   it('is never negative, even for out-of-range energy', () => {
