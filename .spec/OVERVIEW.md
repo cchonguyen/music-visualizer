@@ -1,15 +1,18 @@
 # Project Overview (Owner's Manual)
 
 ## What This App Does
-A web app that plays a music file you pick and draws live visuals in time with it: bars, a waveform, and rings. Everything runs in your browser on your device, and nothing is uploaded or stored. It's meant to be fun on a laptop or a phone with no account needed.
+A desktop web app (Chrome or Edge) that draws live visuals in time with music. It can play a file you pick, or visualize what your computer is playing from a browser tab or the whole system (you approve the screen-share prompt and tick "share audio"). Everything runs locally: nothing is uploaded or stored, and no account is needed.
 
 ## Current Build Status
-- **Live & Verified:** none yet. Harness and scope are set up in the project folder and on GitHub.
+- **Live & Verified:** none yet. Harness, spec, and scope are set up in the project folder and on GitHub.
 - **In Progress:** none
-- **Up Next:** Stage 1 — the audio core (load a file, play, seek, volume), tested on an iPhone and a laptop before any visuals are built.
+- **Up Next:** Stage 1 — the audio core (file playback and tab/system audio capture feeding one analyser), tested on your desktop.
+
+## Scope Change
+- 2026-11-04: rescoped to desktop first. iPhone and phone versions are deferred. Reason: system audio can't be captured on iPhone, and desktop allows heavier visuals.
 
 ## Where the Plan Lives
 - Working contract: `.spec/SYSTEM_SPEC.md`
-- v2 web brief (Council-reviewed): `.spec/SCOPE_BRIEF.md`
+- Earlier phone-focused brief (superseded for scope): `.spec/SCOPE_BRIEF.md`
 - Long-term research RFC: `docs/RFC-milkdrop-next.md`
 - Decisions: `.spec/DECISIONS.md`
