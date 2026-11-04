@@ -20,7 +20,8 @@ void main() {
   vec2 p0 = (vUv - 0.5) * scale;
   float rim = clamp(2.0 * length(p0), 0.0, 1.0);
   vec2 p = p0 - uCenter * scale * (1.0 - rim);
-  float d = abs(length(p) - uRadius);
+  // uRadius is in clip units (screen edge = 1.0, as the particles use), so double the tunnel radius.
+  float d = abs(2.0 * length(p) - uRadius);
 
   float core = exp(-pow(d / CORE_WIDTH, 2.0));
   float glow = exp(-pow(d / GLOW_WIDTH, 2.0)) * 0.25;
