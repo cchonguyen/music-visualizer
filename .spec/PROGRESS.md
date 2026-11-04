@@ -5,7 +5,7 @@
 
 ## Stage 1 — Audio core and GPU proof
 
-- [ ] **Slice 1.0: Project scaffold** [PENDING] `[GREEN][CORE / DATA]` worker: lead | Target files: `package.json` [NEW], `tsconfig.json` [NEW], `vite.config.ts` [NEW], `index.html` [NEW], `src/main.ts` [NEW], `.gitignore` [NEW] | Verify: npm run typecheck && npm test -- --passWithNoTests && npm run build
+- [x] **Slice 1.0: Project scaffold** [DONE] `[GREEN][CORE / DATA]` worker: lead | Target files: `package.json` [NEW], `tsconfig.json` [NEW], `vite.config.ts` [NEW], `index.html` [NEW], `src/main.ts` [NEW], `.gitignore` [NEW] | Verify: npm run typecheck && npm test -- --passWithNoTests && npm run build
 - [ ] **Slice 1.1: Band math and AudioFrame types** [PENDING] `[GREEN][CORE / DATA]` worker: free | Target files: `src/audio/types.ts` [NEW], `src/audio/bands.ts` [NEW], `src/audio/bands.test.ts` [NEW] | Verify: npm test -- src/audio/bands.test.ts && npm run typecheck
 - [ ] **Slice 1.2: Envelope follower and rolling normalizer** [PENDING] `[GREEN][CORE / DATA]` worker: free | Target files: `src/audio/envelope.ts` [NEW], `src/audio/normalize.ts` [NEW], `src/audio/envelope.test.ts` [NEW], `src/audio/normalize.test.ts` [NEW] | Verify: npm test -- src/audio/envelope.test.ts src/audio/normalize.test.ts && npm run typecheck
 - [ ] **Slice 1.3: Spectral flux and onset detector** [PENDING] `[GREEN][CORE / DATA]` worker: free | Target files: `src/audio/onset.ts` [NEW], `src/audio/onset.test.ts` [NEW] | Verify: npm test -- src/audio/onset.test.ts && npm run typecheck

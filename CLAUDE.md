@@ -17,4 +17,7 @@
 - One `[IN_PROGRESS]` line = **Slice Mode**: strict single-task lock on that slice's target files.
 
 ## Project-Specific Commands
-- Add the quick checks for this project here (typecheck, unit tests, lint).
+- `npm run dev` — local dev server
+- `npm run typecheck` — TypeScript check
+- `npm test` — unit tests (Vitest)
+- `npm run build` — production build to `dist/`
