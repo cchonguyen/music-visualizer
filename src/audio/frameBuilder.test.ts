@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FrameBuilder } from "./frameBuilder";
+import { FrameBuilder, loudnessFromWaveform } from "./frameBuilder";
 import { binForFrequency } from "./bands";
 
 const SAMPLE_RATE = 48000;
@@ -154,5 +154,41 @@ describe("FrameBuilder time handling", () => {
     expect(afterReset.dtSec).toBe(0);
     expect(afterReset.beat).toBe(false);
     expect(afterReset.energy).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("Council round 2 checks", () => {
+  const SR = 48000, FFT = 4096;
+  const sine = (hz: number, amp: number) => {
+    const w = new Float32Array(FFT);
+    for (let i = 0; i < FFT; i++) w[i] = amp * Math.sin((2 * Math.PI * hz * i) / SR);
+    return w;
+  };
+
+  it("ignores a maxed DC bin (bin 0) in the sub band", () => {
+    const fb = new FrameBuilder(SR, FFT);
+    const spec = new Uint8Array(FFT / 2);
+    spec[0] = 255;
+    let f = fb.build(0, spec, new Float32Array(FFT));
+    for (let i = 1; i < 30; i++) f = fb.build(i / 60, spec, new Float32Array(FFT));
+    expect(f.raw.sub).toBe(0);
+    expect(f.beat).toBe(false);
+  });
+
+  it("a narrow 600 Hz tone reads as loud, not diluted by silent bins", () => {
+    const fb = new FrameBuilder(SR, FFT);
+    const spec = new Uint8Array(FFT / 2);
+    spec[51] = 255; // one bin near 600 Hz
+    const wave = sine(600, 0.5); // about -9 dBFS RMS
+    let f = fb.build(0, spec, wave);
+    for (let i = 1; i < 60; i++) f = fb.build(i / 60, spec, wave);
+    expect(f.raw.mid).toBeLessThan(0.05); // the band mean IS diluted...
+    expect(f.loudness).toBeGreaterThan(0.85); // ...but RMS loudness is not
+    expect(f.energy).toBeGreaterThan(0.5);
+  });
+
+  it("loudness is absolute: a quieter sine reads lower", () => {
+    expect(loudnessFromWaveform(sine(1000, 0.05))).toBeLessThan(loudnessFromWaveform(sine(1000, 0.5)));
+    expect(loudnessFromWaveform(new Float32Array(FFT))).toBe(0);
   });
 });

@@ -71,3 +71,20 @@ describe("RollingNormalizer recovery is scale-free", () => {
     expect(timeToRecover(1)).toBeLessThan(12);
   });
 });
+
+describe("RollingNormalizer freeze", () => {
+  it("does not pump a near-silent passage back up when freezeBelow is set", () => {
+    const n = new RollingNormalizer(12, 0.001, 0.02);
+    for (let i = 0; i < 400; i++) n.push(0.8, 0.01);
+    let out = 0;
+    for (let i = 0; i < 1000; i++) out = n.push(0.01, 0.01); // 10 s near-silence
+    expect(n.peak()).toBeCloseTo(0.8, 5);
+    expect(out).toBeLessThan(0.05);
+  });
+  it("defaults to a 12 s time constant", () => {
+    const n = new RollingNormalizer();
+    n.push(1, 0);
+    n.push(0.1, 12); // below the decayed peak, so the peak is just the decay
+    expect(n.peak()).toBeCloseTo(Math.exp(-1), 3);
+  });
+});

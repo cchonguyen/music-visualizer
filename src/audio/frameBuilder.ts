@@ -20,9 +20,12 @@ const ATTACK_MS = 10;
 const RELEASE_MS = 250;
 
 // Rolling normalizer settings from the slice contract.
-const BAND_NORM_TAU_SEC = 4;
+const BAND_NORM_TAU_SEC = 12;
 const BAND_NORM_FLOOR = 0.02;
-const ENERGY_NORM_TAU_SEC = 10;
+const ENERGY_NORM_TAU_SEC = 20;
+// Perceptual loudness window for RMS (Council round 2).
+const LOUDNESS_MIN_DB = -50;
+const LOUDNESS_MAX_DB = -6;
 const ENERGY_NORM_FLOOR = 0.02;
 
 // Same ranges as bands.ts. End bins are exclusive so each bin belongs to one band.
@@ -39,6 +42,21 @@ function endBinExclusive(hz: number, sampleRate: number, fftSize: number): numbe
     fftSize / 2,
     Math.max(0, Math.round((hz * fftSize) / sampleRate)),
   );
+}
+
+/** RMS of a waveform, mapped from LOUDNESS_MIN_DB..LOUDNESS_MAX_DB dBFS to 0..1. */
+export function loudnessFromWaveform(wave: Float32Array): number {
+  if (wave.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < wave.length; i += 1) {
+    const v = wave[i] ?? 0;
+    sum += v * v;
+  }
+  const rms = Math.sqrt(sum / wave.length);
+  if (rms <= 0) return 0;
+  const db = 20 * Math.log10(rms);
+  const t = (db - LOUDNESS_MIN_DB) / (LOUDNESS_MAX_DB - LOUDNESS_MIN_DB);
+  return t < 0 ? 0 : t > 1 ? 1 : t;
 }
 
 function makeLevels(): BandLevels {
@@ -106,14 +124,15 @@ export class FrameBuilder {
     this.subEnvelope = new Envelope(ATTACK_MS, RELEASE_MS);
     this.midEnvelope = new Envelope(ATTACK_MS, RELEASE_MS);
     this.highEnvelope = new Envelope(ATTACK_MS, RELEASE_MS);
-    this.subNormalizer = new RollingNormalizer(BAND_NORM_TAU_SEC, BAND_NORM_FLOOR);
-    this.midNormalizer = new RollingNormalizer(BAND_NORM_TAU_SEC, BAND_NORM_FLOOR);
-    this.highNormalizer = new RollingNormalizer(BAND_NORM_TAU_SEC, BAND_NORM_FLOOR);
+    this.subNormalizer = new RollingNormalizer(BAND_NORM_TAU_SEC, BAND_NORM_FLOOR, SIGNAL_EPS);
+    this.midNormalizer = new RollingNormalizer(BAND_NORM_TAU_SEC, BAND_NORM_FLOOR, SIGNAL_EPS);
+    this.highNormalizer = new RollingNormalizer(BAND_NORM_TAU_SEC, BAND_NORM_FLOOR, SIGNAL_EPS);
 
     this.energyEnvelope = new Envelope(ATTACK_MS, RELEASE_MS);
     this.energyNormalizer = new RollingNormalizer(
       ENERGY_NORM_TAU_SEC,
       ENERGY_NORM_FLOOR,
+      SIGNAL_EPS,
     );
 
     this.subDetector = new OnsetDetector();
@@ -133,6 +152,7 @@ export class FrameBuilder {
       raw: makeLevels(),
       env: makeLevels(),
       norm: makeLevels(),
+      loudness: 0,
       energy: 0,
       flux: 0,
       fluxByBand: makeLevels(),
@@ -188,12 +208,16 @@ export class FrameBuilder {
 
     // Energy: silent frames are exactly 0; otherwise a dim floor plus the slow
     // normalizer, so quiet passages stay visible but never fully normalize away.
-    const meanRaw = (bands.sub + bands.mid + bands.high) / 3;
-    const envMean = this.energyEnvelope.step(meanRaw, dtSec);
-    // Gate on the smoothed level, not the raw frame: otherwise energy drops to
-    // 0 in the gap between two kicks and complexity flickers (browser test).
-    const isSignal = envMean > SIGNAL_EPS;
-    const slowNorm = this.energyNormalizer.push(envMean, dtSec);
+    // Loudness from time-domain RMS, not a mean over bands: a narrow sound (a
+    // solo flute) would otherwise be diluted by hundreds of silent bins
+    // (Council round 2). Mapped to a perceptual dB scale.
+    const loud = loudnessFromWaveform(this.waveform);
+    const envLoud = this.energyEnvelope.step(loud, dtSec);
+    frame.loudness = envLoud;
+    // Gate on the smoothed level, not the raw frame, so energy doesn't flicker
+    // to 0 between kicks.
+    const isSignal = envLoud > SIGNAL_EPS;
+    const slowNorm = this.energyNormalizer.push(envLoud, dtSec);
     frame.energy = isSignal ? 0.08 + 0.92 * slowNorm : 0;
 
     // Flux compares this raw spectrum with the previous frame's. The first

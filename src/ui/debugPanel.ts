@@ -21,6 +21,8 @@ export interface DebugPanelInput {
   frameMs: number;
   /** Null unless the test-signal source is active (only it has kick times). */
   latency: PanelLatency | null;
+  /** Capture/mic audio-track settings, to confirm voice filters are off. */
+  trackSettings?: MediaTrackSettings | null;
 }
 
 /** Latency below this is a pass and renders green. */
@@ -94,7 +96,7 @@ export class DebugPanel {
           `${fmt(f.env[b.key]).padStart(9)}` +
           `${fmt(f.norm[b.key]).padStart(9)}`,
       ),
-      `energy  ${fmt(f.energy)}`,
+      `loud    ${fmt(f.loudness)}   energy ${fmt(f.energy)}`,
       `flux    ${fmt(f.flux, 4)}   ` +
         `sub ${fmt(f.fluxByBand.sub, 4)}  mid ${fmt(f.fluxByBand.mid, 4)}  ` +
         `high ${fmt(f.fluxByBand.high, 4)}`,
@@ -102,18 +104,25 @@ export class DebugPanel {
         `(sub ${f.beatByBand.sub ? 1 : 0} mid ${f.beatByBand.mid ? 1 : 0} ` +
         `high ${f.beatByBand.high ? 1 : 0})  strength ${fmt(f.beatStrength)}`,
     ];
+    const ts = input.trackSettings;
+    if (ts) {
+      const flag = (v: unknown) => (v === false ? "off" : v === true ? "ON!" : "?");
+      lines.push(
+        `filters echo ${flag(ts.echoCancellation)}  noise ${flag(ts.noiseSuppression)}  gain ${flag(ts.autoGainControl)}`,
+      );
+    }
     this.stats.textContent = lines.join("\n");
 
     // Latency line: n/a unless running the test signal; green under 100 ms.
     const l = input.latency;
     if (!l || l.samples === 0) {
-      this.status.textContent = "latency n/a";
+      this.status.textContent = "latency n/a (measured with the Kick test signal only)";
       this.status.style.color = "#7f8ea3";
       return;
     }
     const pass = l.medianMs < PASS_LIMIT_MS;
     this.status.textContent =
-      `latency ${l.medianMs.toFixed(1)} ms  (n=${l.samples})  ` +
+      `detector latency ${l.medianMs.toFixed(1)} ms vs what you hear  (n=${l.samples})  ` +
       (pass ? "PASS" : "OVER");
     this.status.style.color = pass ? "#4ade80" : "#f87171";
   }

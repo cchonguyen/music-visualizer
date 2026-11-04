@@ -2,7 +2,8 @@
 import type { AudioFrame } from '../../audio/types';
 import { createDataTexture, type DataTexture, updateDataTexture } from '../../gl/texture';
 import { compileProgram } from '../../gl/shader';
-import type { RenderLayer, RenderTarget } from '../layer';
+import type { RenderClock } from '../clock';
+import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import vertSrc from '../shaders/waveform.vert.glsl?raw';
 import fragSrc from '../shaders/waveform.frag.glsl?raw';
 
@@ -15,8 +16,6 @@ export class WaveformLayer implements RenderLayer {
   private uAlpha: WebGLUniformLocation | null = null;
   // Created lazily on first draw, because the sample count comes from the frame.
   private tex: DataTexture | null = null;
-  private width = 1;
-  private height = 1;
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: drop any texture reference from before a context restore.
@@ -30,12 +29,11 @@ export class WaveformLayer implements RenderLayer {
     this.vao = gl.createVertexArray();
   }
 
-  resize(width: number, height: number, _dpr: number): void {
-    this.width = width;
-    this.height = height;
+  resize(_width: number, _height: number, _dpr: number): void {
+    // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, _timeSec: number, target: RenderTarget, alpha: number): void {
+  draw(frame: AudioFrame, _clock: RenderClock, target: RenderTarget): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('WaveformLayer: draw before init');
 
@@ -50,20 +48,14 @@ export class WaveformLayer implements RenderLayer {
     }
     updateDataTexture(gl, this.tex, frame.waveform);
 
-    if (target.kind === 'canvas') {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, this.width, this.height);
-    } else {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
-      gl.viewport(0, 0, target.width, target.height);
-    }
+    bindTarget(gl, target);
 
     gl.useProgram(this.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.tex.texture);
     gl.uniform1i(this.uWave, 0);
     gl.uniform1i(this.uCount, n);
-    gl.uniform1f(this.uAlpha, alpha);
+    gl.uniform1f(this.uAlpha, 1); // layer opacity (crossfades happen in the compositor)
 
     // Blend only for this draw so other layers keep their own blend state.
     gl.enable(gl.BLEND);

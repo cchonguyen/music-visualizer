@@ -2,6 +2,13 @@
 // Revised 2026-11-04 after Council review. All fields are required: there is one
 // producer (FrameBuilder), and optional fields get forgotten by test mocks.
 // Visuals read ONLY this object; they never touch Web Audio nodes.
+//
+// Lifetime rule (Council round 2): FrameBuilder reuses this object and its
+// arrays every frame. Treat everything as read-only and never keep a reference
+// past the current draw. Copy what you need to keep.
+//
+// Clock rule: `time`/`dtSec` are the AUDIO clock (stops when audio is suspended).
+// Animation and motion use the RENDER clock passed to RenderLayer.draw().
 
 export interface BandLevels {
   sub: number; // 20–120 Hz, half-open bin range
@@ -22,7 +29,8 @@ export interface AudioFrame {
   raw: BandLevels; // band energy this frame, 0..1, no smoothing
   env: BandLevels; // after asymmetric envelope, 0..1
   norm: BandLevels; // env / rolling peak, 0..1 (use for effect SIZE)
-  energy: number; // 0 when silent, else 0.08 + 0.92 * slowNorm (use for COMPLEXITY)
+  loudness: number; // ABSOLUTE perceived loudness 0..1: time-domain RMS mapped -50..-6 dBFS, smoothed
+  energy: number; // TRACK-RELATIVE loudness: 0 when silent, else 0.08 + 0.92 * slowNorm (use for COMPLEXITY)
   flux: number; // sub-band spectral flux (per-bin mean), >= 0
   fluxByBand: BandLevels; // per-band flux (per-bin mean), >= 0
   beat: boolean; // sub-band onset fired this frame (same as beatByBand.sub)

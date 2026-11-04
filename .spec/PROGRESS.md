@@ -1,7 +1,7 @@
 # Task Progress & Single-Slice Work Lock
 
 > Rule: Mark only ONE task line at a time with `[IN_PROGRESS]`.
-> Stage 1 detail (contracts, tests, worker tier, waves): `docs/stage1-slices.md`. Nothing started yet.
+> Stage 1 detail (contracts, tests, worker tier, waves): `docs/stage1-slices.md`.
 
 ## Stage 1 — Audio core and GPU proof
 
@@ -15,7 +15,17 @@
 - [x] **Slice 1.7: Audio engine and sources** [DONE] (browser check in 1.11) `[RED][CORE / DATA]` worker: lead | Target files: `src/audio/engine.ts` [NEW], `src/audio/sources.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 1.8: WebGL2 core** [DONE] `[RED][UI / VISUAL]` worker: lead | Target files: `src/gl/context.ts` [NEW], `src/gl/shader.ts` [NEW], `src/gl/texture.ts` [NEW], `src/render/layer.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 1.9: Tracer visuals (bass pulse, waveform)** [DONE] `[YELLOW][UI / VISUAL]` worker: cheap, needs 1.6 and 1.8 | Target files: `src/render/layers/bassPulse.ts` [NEW], `src/render/layers/waveform.ts` [NEW], `src/render/shaders/bassPulse.frag.glsl` [NEW], `src/render/shaders/waveform.vert.glsl` [NEW], `src/render/shaders/waveform.frag.glsl` [NEW] | Verify: npm run typecheck && npm run build
-- [ ] **Slice 1.10: Debug panel and latency** [PENDING] `[YELLOW][UI / VISUAL]` worker: cheap, needs 1.6 and 1.7 | Target files: `src/ui/debugPanel.ts` [NEW], `src/audio/latency.ts` [NEW], `src/audio/latency.test.ts` [NEW] | Verify: npm test -- src/audio/latency.test.ts && npm run typecheck
+- [x] **Slice 1.10: Debug panel and latency** [DONE] `[YELLOW][UI / VISUAL]` worker: cheap, needs 1.6 and 1.7 | Target files: `src/ui/debugPanel.ts` [NEW], `src/audio/latency.ts` [NEW], `src/audio/latency.test.ts` [NEW] | Verify: npm test -- src/audio/latency.test.ts && npm run typecheck
 - [x] **Slice 1.11: App shell and controls** [DONE] (test signals verified in browser; file/capture/mic in 1.13) `[RED][UI / VISUAL]` worker: lead | Target files: `index.html`, `src/main.ts`, `src/ui/controls.ts` [NEW], `src/ui/notices.ts` [NEW], `src/style.css` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 1.12: Deploy to Cloudflare** [DONE] (workers.dev only: https://music-visualizer.charliechonguyen.workers.dev) `[YELLOW][CORE / DATA]` worker: lead + owner login | Target files: `wrangler.jsonc` [NEW], `package.json` | Verify: npx wrangler deploy
+- [x] **Slice 1.14: Council round 2 fixes** [DONE] `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/audio/types.ts`, `src/audio/frameBuilder.ts`, `src/audio/normalize.ts`, `src/audio/sources.ts`, `src/audio/engine.ts`, `src/render/clock.ts` [NEW], `src/render/layer.ts`, `src/gl/context.ts`, `src/render/layers/bassPulse.ts`, `src/render/layers/waveform.ts`, `src/ui/debugPanel.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 1.13: Device test report** [PENDING] `[GREEN][UI / VISUAL]` worker: owner | Target files: `docs/stage1-test-report.md` [NEW] | Verify: owner sign-off
+
+## Stage 2 — Visuals on WebGL2 (outline; slice specs written after Stage 1 sign-off)
+
+- [ ] **Slice 2.1: Typed GL helpers + ping-pong framebuffers + trail test** [PENDING] `[RED][UI / VISUAL]` worker: lead | Target files: `src/gl/fbo.ts` [NEW], `src/gl/vao.ts` [NEW], `src/render/layers/trailTest.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 2.2: Scene, Compositor and safety pass** [PENDING] `[RED][UI / VISUAL]` worker: lead | Target files: `src/render/scene.ts` [NEW], `src/render/compositor.ts` [NEW], `src/render/shaders/composite.frag.glsl` [NEW], `src/gl/context.ts` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 2.3: Sub-bass resolution (FFT 8192 vs low-pass filter, measured)** [PENDING] `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/audio/engine.ts`, `src/audio/frameBuilder.ts` | Verify: npm test
+- [ ] **Slice 2.4: Forward-flight tunnel** [PENDING] `[YELLOW][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/tunnel.ts` [NEW], `src/render/shaders/tunnel.frag.glsl` [NEW] | Verify: npm run typecheck && npm run build
+- [ ] **Slice 2.5: Treble particles (instanced quads)** [PENDING] `[YELLOW][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/particles.ts` [NEW], `src/render/shaders/particles.vert.glsl` [NEW], `src/render/shaders/particles.frag.glsl` [NEW] | Verify: npm run typecheck && npm run build
+- [ ] **Slice 2.6: Bars, waveform and rings** [PENDING] `[GREEN][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/bars.ts` [NEW], `src/render/layers/rings.ts` [NEW] | Verify: npm run typecheck && npm run build

@@ -33,6 +33,8 @@ Parallel waves need one git worktree (a separate working copy on its own branch)
 
 ## Shared contract: `AudioFrame`
 
+> **Superseded detail (2026-11-04, Council round 2):** the live contracts are `src/audio/types.ts` (adds `loudness`; lifetime and clock rules) and `src/render/layer.ts` (`draw(frame, clock, target)`, no `alpha`). `.spec/SYSTEM_SPEC.md` §4 and §7 describe them. The text below is the original slice spec.
+
 Defined in slice 1.1, used by everything after. Changing it later is expensive, so review it before Wave 1 starts.
 
 ```ts

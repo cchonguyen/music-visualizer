@@ -2,10 +2,9 @@
 // On GPU context loss it stops drawing; on restore it rebuilds every layer from
 // scratch (owner decision: clean restart, no state restore). Audio is untouched.
 import type { AudioFrame } from '../audio/types';
-import type { RenderLayer, RenderTarget } from '../render/layer';
+import { bindTarget, type RenderLayer, type RenderTarget } from '../render/layer';
+import { clampDt, type RenderClock } from '../render/clock';
 import { canvasSize } from './size';
-
-const CANVAS: RenderTarget = { kind: 'canvas' };
 
 export class WebGL2UnavailableError extends Error {
   constructor() {
@@ -22,6 +21,8 @@ export class GlHost {
   private resizeTimer = 0;
   private observer: ResizeObserver;
   private size = { width: 1, height: 1, dpr: 1 };
+  private clock: RenderClock = { timeSec: 0, dtSec: 0, frameIndex: 0 };
+  private lastNow: number | null = null;
   private getFrame: (() => AudioFrame) | null = null;
   /** Called after each drawn frame with the frame time in ms (for the debug panel). */
   onFrameTime: ((ms: number) => void) | null = null;
@@ -74,13 +75,21 @@ export class GlHost {
     // Browsers pause rAF in hidden tabs, so nothing renders there (spec).
     if (this.lost || !this.getFrame) return;
     const t0 = performance.now();
+    const dt = this.lastNow === null ? 0 : clampDt((now - this.lastNow) / 1000);
+    this.lastNow = now;
+    this.clock = { timeSec: this.clock.timeSec + dt, dtSec: dt, frameIndex: this.clock.frameIndex + 1 };
     const frame = this.getFrame();
     const gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.size.width, this.size.height);
+    const target: RenderTarget = { kind: 'canvas', width: this.size.width, height: this.size.height };
+    bindTarget(gl, target);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    for (const layer of this.layers) layer.draw(frame, now / 1000, CANVAS, 1);
+    for (const layer of this.layers) {
+      // Known starting state for every layer, so one can't break another.
+      bindTarget(gl, target);
+      gl.disable(gl.BLEND);
+      layer.draw(frame, this.clock, target);
+    }
     this.onFrameTime?.(performance.now() - t0);
   };
 

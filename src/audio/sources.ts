@@ -12,6 +12,8 @@ export interface ActiveSource {
   media?: HTMLAudioElement;
   /** Fires when the source ends on its own (user stops sharing, file ends). */
   onEnded?: (cb: () => void) => void;
+  /** Live audio-track settings (capture and mic), to confirm voice filters are off. */
+  settings?: () => MediaTrackSettings | null;
 }
 
 /** File: streamed through an <audio> element, never decoded whole into memory. */
@@ -50,7 +52,11 @@ function streamSource(ctx: AudioContext, stream: MediaStream): ActiveSource {
       for (const t of tracks) t.stop();
     },
     onEnded(cb) {
-      for (const t of stream.getAudioTracks()) t.addEventListener('ended', cb);
+      // Any track ending (incl. the screen-share video) means the share stopped.
+      for (const t of tracks) t.addEventListener('ended', cb);
+    },
+    settings() {
+      return stream.getAudioTracks()[0]?.getSettings() ?? null;
     },
   };
 }
@@ -60,19 +66,18 @@ export async function displaySource(ctx: AudioContext): Promise<ActiveSource> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new SourceError('This browser cannot share tab or system audio. Use Chrome or Edge on desktop.');
   }
-  // Chrome requires video in the request; we drop the video track right away.
+  // Chrome requires video in the request. Stopping the video track can end the
+  // whole share in some Chrome builds (Council round 2), so we keep it but ask
+  // for the smallest, slowest video possible and never draw it.
   const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: true,
+    video: { frameRate: { max: 1 }, width: { max: 320 }, height: { max: 240 } },
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     // Chrome hints: offer system audio and keep the current tab out of the list.
     systemAudio: 'include',
     selfBrowserSurface: 'exclude',
   } as DisplayMediaStreamOptions);
-  for (const v of stream.getVideoTracks()) {
-    v.stop();
-    stream.removeTrack(v);
-  }
   if (stream.getAudioTracks().length === 0) {
+    for (const t of stream.getTracks()) t.stop(); // don't leave an orphaned share running
     throw new SourceError("No audio was shared. Try again and tick 'Share audio' (or 'Share system audio') in the share prompt.");
   }
   return streamSource(ctx, stream);

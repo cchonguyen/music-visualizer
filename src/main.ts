@@ -68,6 +68,7 @@ function start(): void {
       sourceName: sourceName(engine.kind, state.fileName),
       frame,
       frameMs,
+      trackSettings: engine.trackSettings,
       latency:
         engine.kind === 'test:kick'
           ? estimateLatencyMs(engine.kickTimes, beatTimes, engine.ctx.outputLatency || 0, engine.ctx.baseLatency || 0, displayFrameMs)

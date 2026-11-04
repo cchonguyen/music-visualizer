@@ -146,6 +146,11 @@ export class AudioEngine {
     return this.builder.build(this.ctx.currentTime, this.byteSpectrum, this.waveform);
   }
 
+  /** Audio-track settings for capture/mic (null for file and test signals). */
+  get trackSettings(): MediaTrackSettings | null {
+    return this.active?.settings?.() ?? null;
+  }
+
   /** Output latency estimate from the browser, in seconds. */
   get outputLatencySec(): number {
     return (this.ctx.outputLatency || 0) + (this.ctx.baseLatency || 0);

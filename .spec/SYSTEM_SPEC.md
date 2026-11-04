@@ -12,10 +12,10 @@ Source documents: `.spec/SCOPE_BRIEF.md` (v2 brief, phone-focused, superseded fo
 
 **Staged roadmap:**
 - **Stage 1 — Audio core and GPU proof:** three audio sources feeding one analyser: (a) a local file via `<audio>`, (b) tab or system audio via `getDisplayMedia`, and (c) microphone via `getUserMedia`. Plus a built-in test-signal source and a debug panel showing live numbers (see `docs/visualization-ladder.md`, section 3). Play, pause, seek, volume, source switch. Plus a WebGL2 "tracer bullet": one shader whose brightness follows bass energy. This proves the audio-to-GPU path end to end before any real visual is built. Verified on the owner's Mac and Windows machines.
-- **Stage 2 — Visuals on WebGL2:** frequency bars, waveform, radial rings, all drawn with shaders. Shared analyser, beat/energy detection, mode switching, reduced-motion mode. Includes a feedback test (two framebuffers, one frame feeding the next).
+- **Stage 2 — Visuals on WebGL2 (order revised by Council round 2):** (1) framebuffer helper, ping-pong pair and a trail test; (2) Scene and Compositor with the safety pass; (3) forward-flight tunnel (full-screen shader driven by phase accumulators); (4) treble particles (instanced quads); (5) bars, waveform, rings. Plus sub-bass resolution fix, beat tuning on real music, mode switching, extended Calm mode.
 - **Stage 3 — Polish:** keyboard shortcuts, fullscreen, performance budget, hidden-tab and capture-ended handling, GPU-loss reset tested, accessibility pass.
-- **Stage 4 — Own preset system:** our own preset format, a preset loader, and crossfades between presets. Built on our own engine. Butterchurn is a reference only. Optional `.milk` import comes last and only if the owner still wants it.
-- **Later:** beat and bar tracker (for phrase-based scene changes, owner decision 2026-11-04), recording (canvas + audio), phone and iPhone version.
+- **Stage 4 — Own preset system:** our own preset format (a preset describes a whole Scene), a preset loader, and crossfades between scenes. Built on our own engine. Butterchurn is a reference only.
+- **Later:** `.milk` import (both Council reviewers: a compiler sub-project; our own format gives most of the value), beat and bar tracker (for phrase-based scene changes, owner decision 2026-11-04), recording (canvas + audio), phone and iPhone version.
 
 **Done means:** each stage works on the owner's desktop and has been used for real music before the next stage starts.
 
@@ -28,7 +28,7 @@ Until moved into a stage above:
 - Uploading audio to any server.
 - Native desktop wrapper (Tauri, Rust, Electron), installers, code signing.
 - Video or audio recording, export.
-- Butterchurn as a runtime dependency. `.milk` import (Stage 4, optional, last). ISF shaders (later).
+- Butterchurn as a runtime dependency. `.milk` import (later, only on owner request). ISF shaders (later).
 - Detached control screen or multi-window sync.
 - Rendering in background tabs; themes or saved visual presets.
 - Paid services or paid certificates of any kind.
@@ -76,13 +76,22 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 
 **Envelope followers (asymmetric):** attack 5–15 ms (near-instant), release 120–450 ms (damped). Visual mass needs momentum; elements settle back down gradually instead of snapping to zero. Exact values tuned in Stage 1 and locked in the debug panel. These are proposals from the reference guide, not verified measurements.
 
-**Dynamic normalization (rolling, 5–10 s):** a rolling peak/RMS window scales the response, so quiet intros remain readable and loud drops don't blow out to white. Rule: normalization scales the *visual size of effects*, never the *complexity* signal. Complexity tracks absolute loudness relative to the rolling window, so a real swell still reads as a swell (see owner's target).
+**Two loudness signals (Council round 2):**
+- `loudness` (absolute): time-domain RMS of the waveform, mapped from −50 to −6 dBFS onto 0..1, then smoothed. Not normalized. Use it when the visual must know how loud the music really is.
+- `energy` (track-relative): `loudness` divided by a slow rolling peak (τ 20 s), with a dim floor: 0 when silent, else 0.08 + 0.92 × that ratio. Drives complexity.
+- Per-band `norm`: band envelope divided by a rolling peak (τ 12 s). Drives effect *size*.
+- Normalizers stop decaying while the input is below 0.02 (near-silence), so a quiet breakdown isn't pumped back up before the drop.
+- Why RMS: the old mean over three wide bands diluted narrow sounds (a solo flute or a pure tone read as near-silent). Verified in the browser: a 2 kHz tone now reads 0.79 loudness.
+
+**Spectrum scale:** the analyser's byte spectrum is already in decibels (`getByteFrequencyData` maps −100..−30 dB to 0..255), so flux is computed on log magnitudes, as the Council recommended. Bin 0 (DC) is excluded: the sub band starts at 20 Hz.
+
+**Known limit, Stage 2 fix:** at 48 kHz and FFT 4096, each bin is 11.7 Hz wide, so the sub band (20–120 Hz) has only about 8 bins. Council split on the fix: a larger FFT (8192, more time smearing) or a time-domain low-pass filter for sub energy. Decide in Stage 2 by testing both on real kicks.
 
 **Rendering budget (desktop):** device pixel ratio capped at 2; target 60 fps at 1440p on the owner's main machine, with a fallback to lower resolution if frames drop.
 
-**Accessibility:** flashes ≤3/sec, luminance change <10%, no full-screen white flashes. `prefers-reduced-motion` read in JS (`matchMedia`) and switchable in the UI. Controls are native `<button>` and `<input type="range">` with visible focus. `aria-live="polite"` for source and mode names; canvas has `role="img"` and a description.
+**Accessibility:** flashes ≤3/sec, luminance change <10%, no full-screen white flashes. Also (Council round 2, WCAG 2.3.1): the saturated-red flash rule (pixels where R/(R+G+B) ≥ 0.8 have a stricter limit); no high-contrast moving stripes (more than about 5 alternating light-dark pairs in the central view) in the tunnel; motion sickness (vection) risk from forward flight. Enforcement happens in one place: a final safety pass in the Compositor that rate-limits full-screen brightness rises per 333 ms window and clamps saturated red. Calm mode (and `prefers-reduced-motion`) slows flight to a gentle drift, softens ring contrast, and turns off beat-triggered camera kicks. `prefers-reduced-motion` read in JS (`matchMedia`) and switchable in the UI. Controls are native `<button>` and `<input type="range">` with visible focus. `aria-live="polite"` for source and mode names; canvas has `role="img"` and a description.
 
-**Latency target:** under 100 ms from audio event to visual response, measured in the Stage 1 debug panel (owner, 2026-11-04). Stage 1 pass criteria are confirmed as the four checks in `docs/visualization-ladder.md`, section 3.
+**Latency target:** under 100 ms from audio event to visual response, measured in the Stage 1 debug panel (owner, 2026-11-04). What the number means (Council round 2): **detector latency versus what you hear, for the Kick test signal only**: detection gap + one display frame − (output + base latency). It is valid only for sources the app plays itself (file, test signal). For microphone and tab/system capture, the app isn't the player, so end-to-end delay isn't measurable this way; the panel shows n/a. It can be negative when output latency is large (Bluetooth, some Windows drivers): the visual then arrives before the sound. Stage 1 pass criteria are confirmed as the four checks in `docs/visualization-ladder.md`, section 3.
 
 **Response model (owner, 2026-11-04):**
 - Beat response: fast attack, tight pulse on the kick.
@@ -113,6 +122,9 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 - **Windows:** system audio works when sharing an entire screen with audio on. (Verify in Stage 1.)
 - **WebGL2 requirements:** WebGL2 must exist, or the app shows a clear message. Float render targets (`EXT_color_buffer_float`) are used when available, with an 8-bit fallback. Check both on each test machine in Stage 2.
 - **GPU loss (simple reset):** if the browser drops the WebGL2 connection (for example, on sleep or graphics switching), the visuals restart from a clean state. Nothing is restored from before the loss. Audio capture and playback keep running. Feedback trails reset; that's accepted. Built in Stage 1, tested in Stage 3. No page reload, because a reload would stop the capture.
+- **Screen-share video track:** Chrome requires video in the request. The app asks for the smallest, slowest video (≤1 fps, ≤320×240), never draws it, and keeps it alive (stopping it can end the whole share in some Chrome builds). If no audio track arrives, every track is stopped and the user sees "tick Share audio".
+- **macOS system audio (Council round 2):** tab audio always works in Chrome. Whole-system audio needs a recent macOS and Chrome, usually the "Entire screen" choice, and clean Screen Recording permission; it can fail silently. Verify in slice 1.13.
+- **Voice filters:** echo cancellation, noise suppression and auto gain are requested off for mic and capture. The debug panel shows the browser's actual settings so we can confirm.
 - **Share prompt every session:** the browser asks each time. The app cannot skip it. Capture stops when the user stops sharing or closes the tab.
 - **Hidden tab:** keeps audio, pauses rendering, resumes cleanly.
 - **Cloudflare:** static files only; no per-request code. Limits not at risk.
@@ -128,21 +140,26 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 
 **Build now, because it's hard to add later:**
 - The `AudioFrame` boundary (section 4).
-- A render-layer interface: `init(gl)`, `resize(width, height, dpr)`, `draw(frame, time)`, `dispose()`. Every visual implements it. The app owns the canvas and the WebGL2 context.
+- A render-layer interface: `init(gl)`, `resize(width, height, dpr)`, `draw(frame, clock, target)`, `dispose()`. Every visual implements it. The app owns the canvas and the WebGL2 context. (Revised 2026-11-04: `alpha` removed; render clock added.)
+- **Two clocks:** `AudioFrame.time`/`dtSec` is the audio clock (stops when audio is suspended). `RenderClock` (`timeSec`, `dtSec`, `frameIndex`) is the visual clock passed to `draw()`. Motion uses `Phase` accumulators (`phase += dt × speed`), never `time × speed`, so speed changes can't make the camera jump.
+- **Frame lifetime:** the `AudioFrame` and its arrays are reused every frame. Read-only; never keep a reference past the current draw.
+- **GPU state:** before each layer, the host binds the target, sets the viewport and disables blending. Layers set anything else themselves.
 - Simple GPU-loss reset (section 5) and resize handling in the shared layer, from Stage 1.
 - A shader-compile path that reports errors clearly to the owner.
 
 **Build in Stage 2, as separate slices:**
 - Texture helper: uploads the spectrum and waveform as one-row textures each frame.
-- Framebuffer helper with a ping-pong pair (two framebuffers swapped each frame). Proven with a simple trail test before any visual depends on it.
+- Framebuffer helper with a ping-pong pair (two framebuffers swapped each frame). Proven with a simple trail test before any visual depends on it. Never read a texture while drawing into it.
+- **Scene and Compositor (Council round 2, both reviewers):** a Scene is a group of layers plus its own offscreen target and its own feedback history. The Compositor renders each active Scene to its own framebuffer at full strength, then blends the finished images in one final pass, then runs the safety pass. Crossfades never fade individual layers (that muddies trails). During a crossfade two scenes each hold their own ping-pong pair; the old scene's resources are released when the fade ends.
+- Particles use instanced quads (`drawArraysInstanced`), not `gl.POINTS` (point sizes are clamped and clip differently on Windows and Mac).
 - Bars, waveform, and rings, each a separate shader and render-layer module.
 
 **Stage 4 plan (owner decision, 2026-11-04: own as much of the code as possible):**
 - **4a — Own preset format:** a JSON file per preset listing its shader programs, settings (each with a name, default, and range), colors, and transition preference. Start with 5–10 presets we make and tune by eye.
-- **4b — Preset loader and crossfade:** load a preset into the render interface, and blend two presets over 3–10 seconds using the Stage 2 ping-pong buffers.
-- **4c — Optional `.milk` import:** a parser and evaluator for MilkDrop's expression language (EEL) and shader pair. Judged only after 4a and 4b are working, because most of its work goes into compatibility, not visuals.
+- **4b — Preset loader and crossfade:** load a preset as a Scene, and blend two Scenes over 3–10 seconds in the Compositor (each Scene keeps its own feedback buffers).
+- **`.milk` import:** moved to Later. Both Council reviewers call it a compiler sub-project.
 - **Butterchurn:** reference only (MIT-licensed, readable). Not a dependency. Its maintenance is one person, with issues turned off.
-- **regl checkpoint (end of Stage 2):** if the helper layer is hard to follow or debug, adopt regl inside it before Stage 4. Otherwise keep raw WebGL2.
+- **regl:** Council round 2 recommends against it (it predates WebGL2 patterns like VAOs and GLSL 300 es). Our earlier check found the repo still receives commits, but that doesn't show WebGL2 fit. Recommendation: drop the checkpoint and keep a small typed helper set (`createProgram`, `createVAO`, `createFBO`, `createPingPong`). Owner may override.
 
 **What's cheap to change later:** visual styles, colors, shader math, UI layout.
 **What's expensive to change later (so we set it now):** the audio data shape, who owns the GPU context, the feedback-buffer capability, resize and pixel-ratio logic, and context-loss recovery.
@@ -155,20 +172,12 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 - iPhone has no element fullscreen. Use expand-to-viewport plus Add-to-Home-Screen.
 - Low Power Mode caps animation at 30 fps; treat 30 fps as a pass on iPhone.
 
-## 9. Open Owner Decisions
+## 9. Owner Decisions
 
-**Resolved 2026-11-04:**
-1. System audio is in Stage 1, alongside file playback.
-2. Test on both Mac and Windows.
-3. Renderer: WebGL2 from the first visual.
-4. Library: raw WebGL2 with small in-house helpers. No `regl` or other library (owner decision, 2026-11-04).
-
-5. Stage 4 direction: own preset format; `.milk` import optional and last (owner, 2026-11-04).
-6. Microphone is in Stage 1, on the same analyser as the other sources (owner, 2026-11-04).
+**Resolved 2026-11-04:** system audio and mic in Stage 1; test on Mac and Windows; WebGL2 from the first visual; no rendering library; own preset format; quiet passages dim, never black; beat/bar tracking later; latency under 100 ms; Stage 1 pass criteria (four checks); H1 research done (not unique; edge is curated presets and musical response).
 
 **Open:**
-7. regl decision at the end of Stage 2 (checkpoint, see section 7).
-8. Time estimates per stage: not yet set. Needed before approving the plan.
-9. Reference visuals the owner likes, to set the quality bar (see `docs/visualization-ladder.md`, section 4).
-10. Stage 1 pass criteria and latency target: proposed in `docs/visualization-ladder.md`, owner to confirm.
-11. Research check: do other web tools already visualize system audio? Run before Stage 1 ends (hypothesis H1).
+1. Drop the regl checkpoint (Council recommendation) or keep it.
+2. Custom domain `music-visualizer.charliechonguyen.com` (free; creates a DNS record).
+3. Time estimates per stage.
+4. Owner's notes on the five reference videos (what to copy from each).
