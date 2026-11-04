@@ -71,6 +71,25 @@ describe('radiusFor', () => {
     expect(radiusFor(-1)).toBeCloseTo(0.14, 9);
     expect(radiusFor(2)).toBeCloseTo(0.95, 9);
   });
+
+  it('default launch is 0.14, so the old single-argument call is unchanged', () => {
+    expect(radiusFor(0.5)).toBe(radiusFor(0.5, 0.14));
+  });
+
+  it('launch case: starts at the given crown radius and still ends at 0.95', () => {
+    // Crown tip at height 0.3: spawn radius 0.16 + 0.3 = 0.46.
+    expect(radiusFor(0, 0.46)).toBeCloseTo(0.46, 9);
+    expect(radiusFor(1, 0.46)).toBeCloseTo(0.95, 9);
+    expect(radiusFor(0.5, 0.46)).toBeCloseTo(0.46 + 0.49 * Math.pow(0.5, 1.8), 9);
+  });
+
+  it('launch case: a taller crown tip starts further out, and stays ordered', () => {
+    expect(radiusFor(0, 0.6)).toBeGreaterThan(radiusFor(0, 0.3));
+    for (let i = 0; i <= 10; i++) {
+      const life = i / 10;
+      expect(radiusFor(life, 0.6)).toBeGreaterThanOrEqual(radiusFor(life, 0.3));
+    }
+  });
 });
 
 describe('per-particle properties', () => {
