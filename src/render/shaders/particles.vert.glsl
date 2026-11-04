@@ -9,6 +9,9 @@ const vec2 CORNERS[4] = vec2[4](vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(-1.0, 1.
 
 uniform float uPhase;   // integrated phase, never decreases
 uniform float uAspect;  // target width / height
+uniform float uSwirl;   // midrange-driven swirl, 0..1
+
+out float vMix;         // 0..1: picks accent A or B per particle
 
 out vec2 vLocal;        // quad corner, -1..1
 out float vTwinkle;     // per-particle twinkle, 0..1, staggered by seed
@@ -19,8 +22,10 @@ void main() {
 
   // Angle uses its own hash. Reusing `seed` for both made particles line up into spirals.
   float angleSeed = fract(sin(float(gl_InstanceID) * 78.233 + 1.7) * 43758.5453);
-  float angle = angleSeed * TAU;
+  // Swirl grows with life, so trails curve outward instead of running straight.
   float life = fract(uPhase * 0.1 + seed);   // 0..1 along the path
+  float angle = angleSeed * TAU + uSwirl * life * 3.0;
+  vMix = fract(angleSeed * 7.0 + seed);
   float radius = life * 0.9;
   vec2 centre = vec2(cos(angle), sin(angle)) * radius;
 

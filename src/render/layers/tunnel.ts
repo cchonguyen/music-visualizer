@@ -7,6 +7,7 @@ import type { RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
+import { SlowFollower } from '../dynamics';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState } from '../tunnelState';
 
@@ -36,6 +37,10 @@ export class TunnelLayer implements RenderLayer {
   private readonly flight = new FlightState();
   private beatEnv = 0;
   private uBeat: WebGLUniformLocation | null = null;
+  private uCenter: WebGLUniformLocation | null = null;
+  private uDensity: WebGLUniformLocation | null = null;
+  private uHue: WebGLUniformLocation | null = null;
+  private highAvg = new SlowFollower(3);
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -51,6 +56,9 @@ export class TunnelLayer implements RenderLayer {
     this.uRingContrast = gl.getUniformLocation(this.program, 'uRingContrast');
     this.uRingDensity = gl.getUniformLocation(this.program, 'uRingDensity');
     this.uBeat = gl.getUniformLocation(this.program, 'uBeat');
+    this.uCenter = gl.getUniformLocation(this.program, 'uCenter');
+    this.uDensity = gl.getUniformLocation(this.program, 'uDensity');
+    this.uHue = gl.getUniformLocation(this.program, 'uHue');
     this.beatEnv = 0;
     this.vao = createVao(gl);
   }
@@ -84,6 +92,15 @@ export class TunnelLayer implements RenderLayer {
     gl.uniform3f(this.uAccentB, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
     gl.uniform1f(this.uRingContrast, this.calm ? RING_CONTRAST_CALM : RING_CONTRAST_NORMAL);
     gl.uniform1f(this.uRingDensity, RING_DENSITY);
+    // Motion and colour (2026-11-04): the rings must move and change, not sit still.
+    // Sway and breathing are bounded so they never jolt the view.
+    const t = clock.timeSec;
+    const mid = frame.norm.mid;
+    const highSlow = this.highAvg.step(frame.norm.high, clock.dtSec);
+    const sway = this.calm ? 0 : 1;
+    gl.uniform2f(this.uCenter, sway * 0.05 * Math.sin(t * 0.31) * mid, sway * 0.04 * Math.cos(t * 0.23) * mid);
+    gl.uniform1f(this.uDensity, RING_DENSITY * (1 + 0.3 * Math.max(0, frame.env.sub - 0.2)));
+    gl.uniform1f(this.uHue, Math.min(1, Math.max(0, 0.5 + 0.35 * Math.sin(t * 0.11) + 0.4 * (frame.norm.high - highSlow))));
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -107,6 +124,9 @@ export class TunnelLayer implements RenderLayer {
     this.uRingContrast = null;
     this.uRingDensity = null;
     this.uBeat = null;
+    this.uCenter = null;
+    this.uDensity = null;
+    this.uHue = null;
     this.gl = null;
   }
 }

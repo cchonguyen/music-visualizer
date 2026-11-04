@@ -28,6 +28,8 @@ export class ParticleLayer implements RenderLayer {
   private uPhase: WebGLUniformLocation | null = null;
   private uAspect: WebGLUniformLocation | null = null;
   private uAccent: WebGLUniformLocation | null = null;
+  private uAccentA: WebGLUniformLocation | null = null;
+  private uSwirl: WebGLUniformLocation | null = null;
   private uSparkle: WebGLUniformLocation | null = null;
   private uBrightness: WebGLUniformLocation | null = null;
 
@@ -46,6 +48,8 @@ export class ParticleLayer implements RenderLayer {
     this.uPhase = gl.getUniformLocation(this.program, 'uPhase');
     this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
     this.uAccent = gl.getUniformLocation(this.program, 'uAccent');
+    this.uAccentA = gl.getUniformLocation(this.program, 'uAccentA');
+    this.uSwirl = gl.getUniformLocation(this.program, 'uSwirl');
     this.uSparkle = gl.getUniformLocation(this.program, 'uSparkle');
     this.uBrightness = gl.getUniformLocation(this.program, 'uBrightness');
     this.phase.reset();
@@ -83,6 +87,9 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uPhase, phase);
     gl.uniform1f(this.uAspect, target.width / target.height);
     gl.uniform3f(this.uAccent, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
+    gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
+    // Midrange drives a swirl, so the sparkles curve as they travel (2026-11-04).
+    gl.uniform1f(this.uSwirl, this.calm ? 0 : Math.min(1, frame.norm.mid));
     gl.uniform1f(this.uSparkle, sparkle);
     gl.uniform1f(this.uBrightness, BRIGHTNESS);
 
@@ -110,6 +117,8 @@ export class ParticleLayer implements RenderLayer {
     this.uPhase = null;
     this.uAspect = null;
     this.uAccent = null;
+    this.uAccentA = null;
+    this.uSwirl = null;
     this.uSparkle = null;
     this.uBrightness = null;
     this.gl = null;

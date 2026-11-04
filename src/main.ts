@@ -11,6 +11,7 @@ import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
 import { TunnelLayer } from './render/layers/tunnel';
+import { SlowFollower } from './render/dynamics';
 import { getVisualGain } from './render/gainStore';
 import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
@@ -47,6 +48,9 @@ function start(): void {
   const params = new URLSearchParams(location.search);
   let compositor: Compositor | null = null;
   let tunnel: TunnelLayer | null = null;
+  let blendCompositor: Compositor | null = null;
+  let autoBlend = true;
+  const energySlow = new SlowFollower(6);
   if (params.has('trail')) {
     host.addLayer(new TrailTestLayer());
   } else if (params.has('tunnel')) {
@@ -75,10 +79,14 @@ function start(): void {
     ]);
     compositor.setWeights({ flight: 1 });
     host.addLayer(compositor);
+    blendCompositor = compositor;
+    // Auto blend: the bars scene drifts into the flight scene as the song gets louder
+    // (slow, so sections change the look rather than flicker). Keys: 1 flight, 2 bars, 0 auto.
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === '1') compositor!.setWeights({ flight: 1 });
-      if (e.key === '2') compositor!.setWeights({ bars: 1 });
+      if (e.key === '1') { autoBlend = false; compositor!.setWeights({ flight: 1 }); }
+      if (e.key === '2') { autoBlend = false; compositor!.setWeights({ bars: 1 }); }
+      if (e.key === '0') autoBlend = true;
     });
   }
 
@@ -125,6 +133,11 @@ function start(): void {
     });
     controls.tick();
     syncCalm();
+    if (blendCompositor && autoBlend) {
+      const slow = energySlow.step(frame.energy, displayFrameMs / 1000);
+      const bars = state.calm ? 0 : Math.min(0.6, Math.max(0, (slow - 0.55) * 1.5));
+      blendCompositor.setWeights({ flight: 1 - bars, bars });
+    }
 
     // Visual gain: scales the response (ring crests, sparkles, ring count), not the
     // full-screen background level, so turning it up can't wash the screen out.

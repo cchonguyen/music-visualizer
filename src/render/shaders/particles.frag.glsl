@@ -7,6 +7,8 @@ in vec2 vLocal;
 in float vTwinkle;
 
 uniform vec3 uAccent;      // palette accentB
+uniform vec3 uAccentA;     // palette accentA
+in float vMix;
 uniform float uSparkle;    // 0..1: frame.env.high plus flash, calm-scaled
 uniform float uBrightness; // default 0.6
 
@@ -17,6 +19,7 @@ void main() {
   // NOTE(spec): written as 1 - smoothstep(0, 1, d) because GLSL leaves smoothstep undefined when edge0 >= edge1.
   float a = 1.0 - smoothstep(0.0, 1.0, length(vLocal));
   float level = clamp(uSparkle, 0.0, 1.0) * vTwinkle;
-  vec3 colour = uAccent * a * uBrightness * level;
+  vec3 tint = mix(uAccent, uAccentA, step(0.5, vMix));
+  vec3 colour = tint * a * uBrightness * level;
   fragColor = vec4(min(colour, vec3(0.9)), 1.0);
 }
