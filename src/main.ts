@@ -37,14 +37,20 @@ function start(): void {
     showNotice((err as Error).message, 'error', 0);
     return;
   }
-  // ?trail shows the slice 2.1 feedback proof; ?scenes shows the slice 2.2
-  // compositor with two scenes (crossfade via window.__mv.compositor.setWeights).
+  startScreen.hidden = true;
+
+  // Default (live site): the Stage 2 scenes. Keys 1 and 2 switch scenes.
+  //   1 = flight: forward-flight tunnel + treble sparkles
+  //   2 = bars:   frequency bars + rings
+  // URL options for single checks: ?tracer (Stage 1), ?trail, ?tunnel, ?particles, ?bars, ?scenes.
   const params = new URLSearchParams(location.search);
   let compositor: Compositor | null = null;
+  let tunnel: TunnelLayer | null = null;
   if (params.has('trail')) {
     host.addLayer(new TrailTestLayer());
   } else if (params.has('tunnel')) {
-    host.addLayer(new TunnelLayer());
+    tunnel = new TunnelLayer();
+    host.addLayer(tunnel);
   } else if (params.has('particles')) {
     host.addLayer(new ParticleLayer());
   } else if (params.has('bars')) {
@@ -57,17 +63,30 @@ function start(): void {
     ]);
     compositor.setWeights({ pulse: 1 });
     host.addLayer(compositor);
-  } else {
+  } else if (params.has('tracer')) {
     host.addLayer(new BassPulseLayer());
     host.addLayer(new WaveformLayer());
+  } else {
+    tunnel = new TunnelLayer();
+    compositor = new Compositor([
+      new Scene('flight', [tunnel, new ParticleLayer()]),
+      new Scene('bars', [new BarsLayer(), new RingsLayer()]),
+    ]);
+    compositor.setWeights({ flight: 1 });
+    host.addLayer(compositor);
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === '1') compositor!.setWeights({ flight: 1 });
+      if (e.key === '2') compositor!.setWeights({ bars: 1 });
+    });
   }
-  startScreen.hidden = true;
 
   const state: ControlsState = {
     calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     fileName: '',
   };
   const controls = setupControls(engine, state);
+  const syncCalm = () => { if (tunnel) tunnel.calm = state.calm; };
   const panel = new DebugPanel();
 
   // Dev-only handle for automated checks; stripped from production builds.
@@ -104,6 +123,7 @@ function start(): void {
           : null,
     });
     controls.tick();
+    syncCalm();
 
     // Calm mode: the frame object is rebuilt every tick, so scaling it here
     // affects only this frame's drawing, never the analysis state.

@@ -3,7 +3,7 @@
 Live URL: https://music-visualizer.charliechonguyen.com (backup: https://music-visualizer.charliechonguyen.workers.dev)
 Automated checks (2026-11-04): typecheck clean, 122 unit tests pass, production build passes.
 
-Live build shows the Stage 1 tracer visuals by default. Stage 2 visuals are behind URL options so each can be checked alone:
+The live site opens on the Stage 2 **flight** scene (tunnel and treble sparkles). Press **2** for the **bars** scene (bars and rings), **1** to go back. Stage 1 tracers are at `?tracer`. Single checks:
 - `?tunnel` — forward-flight tunnel (rings, dim centre, beat flash on ring crests)
 - `?particles` — treble sparkles streaming outward (needs high-frequency sound: use the Sweep test signal or a file)
 - `?scenes` — two-scene crossfade demo (bass pulse, waveform)
