@@ -125,6 +125,21 @@ describe('flightRate', () => {
   });
 });
 
+describe('flightRate scale (P4 section contrast)', () => {
+  it('multiplies the normal rate by the scale', () => {
+    expect(flightRate(0.5, false, 1.5)).toBeCloseTo(flightRate(0.5, false) * 1.5, 10);
+    expect(flightRate(0.5, false, 0.5)).toBeCloseTo(flightRate(0.5, false) * 0.5, 10);
+  });
+
+  it('stays positive for a scale from 0.5 to 1.5', () => {
+    expect(flightRate(0, false, 0.5)).toBeGreaterThan(0);
+  });
+
+  it('ignores the scale in calm mode', () => {
+    expect(flightRate(1, true, 1.5)).toBeCloseTo(BASE_SPEED * 0.25, 10);
+  });
+});
+
 describe('FlightState', () => {
   it('never decreases while energy swings between 0.08 and 1.0 over 1000 frames', () => {
     const flight = new FlightState();

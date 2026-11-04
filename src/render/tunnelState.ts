@@ -22,12 +22,14 @@ function clamp01(value: number): number {
 
 /**
  * Flight rate in depth units per second. Never negative.
- * Normal: BASE_SPEED + BOOST * clamp(energy, 0, 1).
- * Calm:   BASE_SPEED * 0.25 (energy is ignored).
+ * Normal: (BASE_SPEED + BOOST * clamp(energy, 0, 1)) * scale.
+ * Calm:   BASE_SPEED * 0.25 (energy and scale are ignored).
+ * scale (P4): 1 + section contrast, so breakdowns slow the flight and drops speed it up.
  */
-export function flightRate(energy: number, calm: boolean): number {
+export function flightRate(energy: number, calm: boolean, scale = 1): number {
   if (calm) return BASE_SPEED * CALM_FACTOR;
-  return BASE_SPEED + BOOST * clamp01(energy);
+  const s = Number.isFinite(scale) ? Math.max(0, scale) : 1;
+  return (BASE_SPEED + BOOST * clamp01(energy)) * s;
 }
 
 const TAU = 2 * Math.PI;
@@ -122,8 +124,8 @@ export class FlightState {
    * NOTE(spec): Phase wraps at PHASE_WRAP (10000) per clock.ts, so "never decreases"
    * holds for any realistic session, but it is a modulo wrap, not an infinite counter.
    */
-  advance(dtSec: number, energy: number, calm: boolean): number {
-    return this.phase.advance(dtSec, flightRate(energy, calm));
+  advance(dtSec: number, energy: number, calm: boolean, scale = 1): number {
+    return this.phase.advance(dtSec, flightRate(energy, calm, scale));
   }
 
   /** Current phase without advancing. */

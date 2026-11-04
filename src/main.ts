@@ -17,6 +17,9 @@ import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { advanceSway } from './render/swayStore';
+import { ShockwaveLayer } from './render/layers/shockwave';
+import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
+import { ColourSwap } from './render/colourSwap';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -49,9 +52,14 @@ function start(): void {
   const params = new URLSearchParams(location.search);
   let compositor: Compositor | null = null;
   let tunnel: TunnelLayer | null = null;
+  let particles: ParticleLayer | null = null;
+  let shockwave: ShockwaveLayer | null = null;
   let blendCompositor: Compositor | null = null;
   let autoBlend = true;
   const energySlow = new SlowFollower(6);
+  // P4: section contrast (fast loudness minus 8 s slow loudness) and the drop colour swap.
+  const loudSlow = makeSlowLoudness();
+  const colourSwap = new ColourSwap();
   if (params.has('trail')) {
     host.addLayer(new TrailTestLayer());
   } else if (params.has('tunnel')) {
@@ -74,8 +82,10 @@ function start(): void {
     host.addLayer(new WaveformLayer());
   } else {
     tunnel = new TunnelLayer();
+    particles = new ParticleLayer();
+    shockwave = new ShockwaveLayer();
     compositor = new Compositor([
-      new Scene('flight', [tunnel, new ParticleLayer()]),
+      new Scene('flight', [tunnel, particles, shockwave]),
       new Scene('bars', [new BarsLayer(), new RingsLayer()]),
     ]);
     compositor.setWeights({ flight: 1 });
@@ -96,7 +106,11 @@ function start(): void {
     fileName: '',
   };
   const controls = setupControls(engine, state);
-  const syncCalm = () => { if (tunnel) tunnel.calm = state.calm; };
+  const syncCalm = () => {
+    if (tunnel) tunnel.calm = state.calm;
+    if (particles) particles.calm = state.calm;
+    if (shockwave) shockwave.calm = state.calm;
+  };
   const panel = new DebugPanel();
 
   // Dev-only handle for automated checks; stripped from production builds.
@@ -136,6 +150,20 @@ function start(): void {
     syncCalm();
     // One shared sway per frame (tunnel, particles, crown read it). Calm turns it off.
     advanceSway(displayFrameMs / 1000, frame.norm.mid, state.calm);
+    // P4 (before the visual gain, so energy is the track-relative value): contrast and colour swap.
+    const dtSec = displayFrameMs / 1000;
+    const contrast = sectionContrast(frame.loudness, loudSlow.step(frame.loudness, dtSec));
+    const swapMix = colourSwap.update({
+      dtSec,
+      contrast,
+      energy: frame.energy,
+      kick: frame.beatByBand.sub,
+      calm: state.calm,
+    });
+    for (const layer of [tunnel, particles]) {
+      if (layer) { layer.sectionContrast = contrast; layer.accentSwap = swapMix; }
+    }
+    if (shockwave) shockwave.accentSwap = swapMix;
     if (blendCompositor && autoBlend) {
       const slow = energySlow.step(frame.energy, displayFrameMs / 1000);
       const bars = state.calm ? 0 : Math.min(0.6, Math.max(0, (slow - 0.55) * 1.5));

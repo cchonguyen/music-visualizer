@@ -11,6 +11,7 @@ import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
 import { getSway } from '../swayStore';
+import { blendAccents } from '../colourSwap';
 
 const BRIGHTNESS = 1.0;
 const CALM_SPARKLE_SCALE = 0.3;
@@ -22,6 +23,10 @@ const FLASH_SPARKLE_SCALE = 0.5;
 export class ParticleLayer implements RenderLayer {
   /** Calm mode: no energy-driven density, dimmer sparkle. */
   calm = false;
+  /** Section contrast (P4): negative slows the particle stream, positive speeds it up. Ignored in calm. */
+  sectionContrast = 0;
+  /** Accent swap mix from ColourSwap (P4): 0 = normal, 1 = A and B exchanged. */
+  accentSwap = 0;
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -83,9 +88,10 @@ export class ParticleLayer implements RenderLayer {
     this.flash = highFlash(this.flash, frame.beatByBand.high, clock.dtSec);
 
     // Density rises with energy only in loud sections; phase never decreases.
+    const section = this.calm ? 1 : Math.max(0, 1 + this.sectionContrast);
     const rate = this.calm
       ? CALM_PHASE_RATE
-      : BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy;
+      : (BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy) * section;
     const phase = this.phase.advance(clock.dtSec, rate);
     // Calm slows the motion, but the twinkle keeps real time (only its brightness is dimmed).
     const twinkleTime = this.twinkle.advance(clock.dtSec, 1);
@@ -95,13 +101,14 @@ export class ParticleLayer implements RenderLayer {
     if (this.calm) sparkle *= CALM_SPARKLE_SCALE;
 
     const palette: Palette = getPalette(this.paletteName);
+    const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
 
     gl.useProgram(this.program);
     // Uniforms must follow useProgram, or the calls are an invalid operation.
     gl.uniform1f(this.uPhase, phase);
     gl.uniform1f(this.uAspect, target.width / target.height);
-    gl.uniform3f(this.uAccent, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
-    gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
+    gl.uniform3f(this.uAccent, accents.b[0], accents.b[1], accents.b[2]);
+    gl.uniform3f(this.uAccentA, accents.a[0], accents.a[1], accents.a[2]);
     // Midrange drives a swirl, so the sparkles curve as they travel (2026-11-04).
     gl.uniform1f(this.uSwirl, this.calm ? 0 : Math.min(1, frame.norm.mid));
     // Shared sway (uv units) doubled to clip units: the spawn origin follows the tunnel rim.

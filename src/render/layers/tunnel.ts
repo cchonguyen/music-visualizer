@@ -10,8 +10,9 @@ import { getCurrentPalette } from '../paletteStore';
 import { SlowFollower } from '../dynamics';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState, RollState } from '../tunnelState';
-import { flashGovernor } from '../safety';
 import { getSway } from '../swayStore';
+import { blendAccents } from '../colourSwap';
+import { kickGrant } from './shockwave';
 
 const RING_DENSITY = 0.5;
 /** Beat flash on the rings: instant attack, 150 ms release (owner reference notes: beats thicken rings, never move the camera). */
@@ -22,6 +23,10 @@ const RING_CONTRAST_CALM = 0.25;
 export class TunnelLayer implements RenderLayer {
   /** Calm mode: gentle drift, no energy boost, softer ring contrast. */
   calm = false;
+  /** Section contrast (P4): negative slows the flight, positive speeds it up. Ignored in calm. */
+  sectionContrast = 0;
+  /** Accent swap mix from ColourSwap (P4): 0 = normal, 1 = A and B exchanged. */
+  accentSwap = 0;
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -78,14 +83,16 @@ export class TunnelLayer implements RenderLayer {
 
     bindTarget(gl, target);
 
-    const phase = this.flight.advance(clock.dtSec, frame.energy, this.calm);
+    const scale = this.calm ? 1 : 1 + this.sectionContrast;
+    const phase = this.flight.advance(clock.dtSec, frame.energy, this.calm, scale);
     // Beat flash: jumps to 1 on a beat, then decays over BEAT_RELEASE_SEC.
     // Calm mode turns beat-triggered visuals off entirely.
     const dt = Math.max(0, clock.dtSec);
     this.beatEnv = Math.exp(-dt / BEAT_RELEASE_SEC) * this.beatEnv;
-    // Governed (P6): a beat only flashes if the global flash limit allows it.
-    if (frame.beatByBand.sub && !this.calm && flashGovernor.tryFlash(clock.timeSec)) this.beatEnv = 1;
+    // Governed (P6): one token per kick, shared with the shockwave (kickGrant).
+    if (kickGrant(frame, clock, this.calm)) this.beatEnv = 1;
     const palette: Palette = getPalette(getCurrentPalette());
+    const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
 
     gl.useProgram(this.program);
     gl.uniform1f(this.uBeat, this.beatEnv); // must follow useProgram, or the call is an invalid operation
@@ -94,8 +101,8 @@ export class TunnelLayer implements RenderLayer {
     gl.uniform1f(this.uLevel, frame.env.sub);
     gl.uniform2f(this.uRes, target.width, target.height);
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
-    gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
-    gl.uniform3f(this.uAccentB, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
+    gl.uniform3f(this.uAccentA, accents.a[0], accents.a[1], accents.a[2]);
+    gl.uniform3f(this.uAccentB, accents.b[0], accents.b[1], accents.b[2]);
     gl.uniform1f(this.uRingContrast, this.calm ? RING_CONTRAST_CALM : RING_CONTRAST_NORMAL);
     gl.uniform1f(this.uRingDensity, RING_DENSITY);
     // Motion and colour (2026-11-04): the rings must move and change, not sit still.
