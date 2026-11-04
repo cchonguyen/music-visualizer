@@ -8,6 +8,8 @@ import { GlHost } from './gl/context';
 import { BassPulseLayer } from './render/layers/bassPulse';
 import { WaveformLayer } from './render/layers/waveform';
 import { TrailTestLayer } from './render/layers/trailTest';
+import { Compositor } from './render/compositor';
+import { Scene } from './render/scene';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -31,9 +33,19 @@ function start(): void {
     showNotice((err as Error).message, 'error', 0);
     return;
   }
-  // ?trail shows the slice 2.1 feedback proof instead of the Stage 1 tracers.
-  if (new URLSearchParams(location.search).has('trail')) {
+  // ?trail shows the slice 2.1 feedback proof; ?scenes shows the slice 2.2
+  // compositor with two scenes (crossfade via window.__mv.compositor.setWeights).
+  const params = new URLSearchParams(location.search);
+  let compositor: Compositor | null = null;
+  if (params.has('trail')) {
     host.addLayer(new TrailTestLayer());
+  } else if (params.has('scenes')) {
+    compositor = new Compositor([
+      new Scene('pulse', [new BassPulseLayer()]),
+      new Scene('wave', [new WaveformLayer()]),
+    ]);
+    compositor.setWeights({ pulse: 1 });
+    host.addLayer(compositor);
   } else {
     host.addLayer(new BassPulseLayer());
     host.addLayer(new WaveformLayer());
@@ -48,7 +60,7 @@ function start(): void {
   const panel = new DebugPanel();
 
   // Dev-only handle for automated checks; stripped from production builds.
-  if (import.meta.env.DEV) (window as unknown as { __mv: unknown }).__mv = { engine, host };
+  if (import.meta.env.DEV) (window as unknown as { __mv: unknown }).__mv = { engine, host, compositor };
 
   const beatTimes: number[] = [];
   engine.on('source-changed', () => (beatTimes.length = 0));
