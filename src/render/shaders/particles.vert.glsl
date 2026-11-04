@@ -11,6 +11,7 @@ uniform float uPhase;   // integrated phase, never decreases
 uniform float uAspect;  // target width / height
 
 out vec2 vLocal;        // quad corner, -1..1
+out float vTwinkle;     // per-particle twinkle, 0..1, staggered by seed
 
 void main() {
   // Same seed formula as seedFor() in particleState.ts.
@@ -24,6 +25,9 @@ void main() {
   // Fade in and out over the life, so particles appear at the centre and vanish at the edge.
   float envelope = sin(life * PI);
   float halfSize = mix(0.004, 0.012, seed) * envelope;
+
+  // Twinkle: each particle flickers on its own timing (never all at once).
+  vTwinkle = smoothstep(0.3, 1.0, fract(uPhase * 0.7 + seed * 3.0));
 
   vec2 local = CORNERS[gl_VertexID];
   vLocal = local;
