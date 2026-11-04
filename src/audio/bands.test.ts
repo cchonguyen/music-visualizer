@@ -29,8 +29,8 @@ describe("bandLevel", () => {
     spectrum[2] = 0.6;
     spectrum[3] = 0.4;
 
-    // At 48 kHz / fftSize 32, each bin is 1500 Hz, so 3-4.5 kHz is exactly bin 3.
-    const level = bandLevel(spectrum, 3000, 4500, 48000, 32);
+    // At 48 kHz / fftSize 32, each bin is 1500 Hz; half-open [3 kHz, 6 kHz) is bins 2-3.
+    const level = bandLevel(spectrum, 3000, 6000, 48000, 32);
     expect(level).toBeCloseTo(0.5, 6);
   });
 
@@ -109,5 +109,16 @@ describe("byteSpectrumToUnit", () => {
     byteSpectrumToUnit(src, out);
 
     expect(Array.from(out)).toEqual([1, 1]);
+  });
+});
+
+describe("band ranges do not overlap", () => {
+  it("puts a single bin into exactly one band", () => {
+    const fftSize = 4096, sr = 48000;
+    const boundary = binForFrequency(120, sr, fftSize);
+    const spec = new Float32Array(fftSize / 2);
+    spec[boundary] = 1;
+    const b = computeBands(spec, sr, fftSize);
+    expect([b.sub, b.mid, b.high].filter((v) => v > 0).length).toBe(1);
   });
 });

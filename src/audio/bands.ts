@@ -1,7 +1,6 @@
-// NOTE(spec): `bandLevel` is defined as the mean of the bins "in range", so the
-// high-frequency bin is treated as inclusive. `computeBands` therefore uses the
-// exact published ranges (0-120, 120-2500, 2500-10000 Hz); a boundary bin can
-// belong to two bands, which is harmless because it is only one bin wide.
+// Lead review (Council 2026-11-04): bands are half-open bin ranges [lo, hi), so
+// each bin belongs to exactly one band (an inclusive end double-counted the
+// 120 Hz bin into both sub and mid).
 // NOTE(spec): `byteSpectrumToUnit` writes only over the overlapping prefix of
 // `src` and `out`, since the spec does not define behavior for length mismatches.
 
@@ -26,7 +25,7 @@ export function binForFrequency(hz: number, sampleRate: number, fftSize: number)
 }
 
 /**
- * Mean of the spectrum bins spanning [loHz, hiHz].
+ * Mean of the spectrum bins in the half-open range [bin(loHz), bin(hiHz)).
  * Returns 0 when the range is empty or the spectrum has no bins.
  */
 export function bandLevel(
@@ -36,10 +35,14 @@ export function bandLevel(
   sampleRate: number,
   fftSize: number,
 ): number {
-  const a = binForFrequency(loHz, sampleRate, fftSize);
-  const b = binForFrequency(hiHz, sampleRate, fftSize);
-  const start = Math.min(a, b);
-  const end = Math.min(spectrum.length - 1, Math.max(a, b));
+  // Start bin is clamped like binForFrequency; the exclusive end is clamped to
+  // the spectrum length, so a range reaching Nyquist still includes the top bin.
+  const start = binForFrequency(loHz, sampleRate, fftSize);
+  const endExclusive = Math.min(
+    spectrum.length,
+    Math.max(0, Math.round((hiHz * fftSize) / sampleRate)),
+  );
+  const end = endExclusive - 1;
 
   if (end < start) return 0;
 
