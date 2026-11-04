@@ -36,24 +36,30 @@ Parallel waves need one git worktree (a separate working copy on its own branch)
 Defined in slice 1.1, used by everything after. Changing it later is expensive, so review it before Wave 1 starts.
 
 ```ts
-// src/audio/types.ts
+// src/audio/types.ts  (revised 2026-11-04 after Council review: all fields required)
 export interface BandLevels {
-  sub: number;   // < 120 Hz
+  sub: number;   // 20–120 Hz, half-open bin range [bin(20), bin(120))
   mid: number;   // 120 Hz – 2.5 kHz
   high: number;  // 2.5 kHz – 10 kHz
 }
+export interface BandFlags { sub: boolean; mid: boolean; high: boolean; }
 
 export interface AudioFrame {
-  time: number;            // AudioContext.currentTime, seconds
-  raw: BandLevels;         // band energy this frame, 0..1, no smoothing
-  env: BandLevels;         // after asymmetric envelope, 0..1
-  norm: BandLevels;        // env scaled by rolling normalizer, 0..1 (use for effect SIZE)
-  energy: number;          // overall loudness vs rolling window, 0..1 (use for COMPLEXITY)
-  flux: number;            // spectral flux (novelty), >= 0
-  beat: boolean;           // true on the frame an onset fires
-  beatStrength: number;    // 0..1, how far flux exceeded threshold
-  waveform: Float32Array;  // time-domain samples, -1..1, length = fftSize
-  spectrum: Float32Array;  // magnitude per bin, 0..1, length = fftSize/2
+  frameIndex: number;           // increments every build(); resets to 0 on reset()
+  time: number;                 // AudioContext.currentTime, seconds
+  dtSec: number;                // min(0.1, max(0, time - previous time))
+  raw: BandLevels;              // band energy this frame, 0..1, no smoothing
+  env: BandLevels;              // after asymmetric envelope, 0..1
+  norm: BandLevels;             // env / rolling peak, 0..1 (use for effect SIZE)
+  energy: number;               // 0 when silent, else 0.08 + 0.92 * slowNorm (use for COMPLEXITY)
+  flux: number;                 // sub-band spectral flux (per-bin mean), >= 0
+  fluxByBand: BandLevels;       // per-band flux (per-bin mean), >= 0
+  beat: boolean;                // sub-band onset fired this frame (same as beatByBand.sub)
+  beatByBand: BandFlags;        // per-band onsets (treble particles use .high)
+  beatStrength: number;         // 0..1 for the sub-band onset
+  waveform: Float32Array;       // time-domain samples, -1..1, length = fftSize
+  spectrum: Float32Array;       // raw magnitude per bin, 0..1, length = fftSize/2
+  smoothedSpectrum: Float32Array; // per-bin envelope (attack 10 ms, release 250 ms), 0..1
   sampleRate: number;
 }
 ```
@@ -86,8 +92,8 @@ Rule from the spec: `norm` scales effect size; `energy` drives complexity. `ener
 
 **Goal:** fast-attack, slow-release smoothing, plus a rolling window that keeps quiet and loud music readable.
 **Target files:** `src/audio/envelope.ts` [NEW], `src/audio/normalize.ts` [NEW], `src/audio/envelope.test.ts` [NEW], `src/audio/normalize.test.ts` [NEW]
-**Envelope:** `class Envelope { constructor(attackMs: number, releaseMs: number); step(input: number, dtSec: number): number; reset(): void }`. Coefficient per step: `1 - Math.exp(-dt / tau)`, using attack tau when input > current, else release tau. Defaults: attack 10 ms, release 250 ms.
-**Normalizer:** `class RollingNormalizer { constructor(windowSec: number, floor: number); push(value: number, dtSec: number): number; peak(): number; reset(): void }`. Keeps a decaying peak over `windowSec` (default 8 s). Returns `value / max(peak, floor)`, clamped 0..1. `floor` (default 0.02) stops silence from being amplified into noise.
+**Envelope:** update rule `value += (1 - exp(-dt/tau)) * (input - value)`. `class Envelope { constructor(attackMs: number, releaseMs: number); step(input: number, dtSec: number): number; reset(): void }`. Coefficient per step: `1 - Math.exp(-dt / tau)`, using attack tau when input > current, else release tau. Defaults: attack 10 ms, release 250 ms.
+**Normalizer:** `class RollingNormalizer { constructor(windowSec: number, floor: number); push(value: number, dtSec: number): number; peak(): number; reset(): void }`. Constructor is `(tauSec = 4, floor = 0.02)`. Peak update: `peak = max(value, peak * exp(-dt / tauSec))` (scale-free recovery; a 20 dB drop recovers in about 9 s). Returns `value / max(peak, floor)`, clamped 0..1. `floor` (default 0.02) stops silence from being amplified into noise.
 **Tests must cover:** a step input reaches 90% within 3× attack time and decays to under 10% within 3× release time; dt of 0 changes nothing; normalizer returns ~1 for a steady signal after the window fills; a quiet signal after a loud one ramps back up over the window, not instantly; silence stays near 0 (floor works).
 **Verify:** `npm test -- src/audio/envelope.test.ts src/audio/normalize.test.ts && npm run typecheck`
 
@@ -96,8 +102,8 @@ Rule from the spec: `norm` scales effect size; `energy` drives complexity. `ener
 **Goal:** detect kicks reliably; ignore steady tones and silence.
 **Target files:** `src/audio/onset.ts` [NEW], `src/audio/onset.test.ts` [NEW]
 **Functions:**
-- `spectralFlux(prev: Float32Array, curr: Float32Array, loBin: number, hiBin: number): number` — sum of positive differences in the bin range.
-- `class OnsetDetector { constructor(opts?: { triggerRatio?: number; releaseRatio?: number; cooldownMs?: number; meanTauMs?: number }); step(flux: number, timeSec: number): { beat: boolean; strength: number }; reset(): void }`. Defaults: trigger 1.3, release 1.05, cooldown 150 ms, mean tau 500 ms (EMA of flux). Fires when flux > mean × trigger and armed; re-arms when flux < mean × release; never fires twice within cooldown. `strength = clamp((flux / (mean × trigger)) - 1, 0, 1)`.
+- `spectralFlux(prev: Float32Array, curr: Float32Array, loBin: number, hiBin: number): number` — mean (not sum) of positive differences per bin in the inclusive bin range.
+- `class OnsetDetector { constructor(opts?: { triggerRatio?: number; releaseRatio?: number; cooldownMs?: number; meanTauMs?: number }); step(flux: number, timeSec: number): { beat: boolean; strength: number }; reset(): void }`. Defaults: trigger 1.3, release 1.05, cooldown 150 ms, mean tau 500 ms (EMA of flux, seeded with the first flux value), `fluxFloor` 0.02 (thresholds use `max(mean, fluxFloor)`). Fires when flux > mean × trigger and armed; re-arms when flux < mean × release; never fires twice within cooldown. `strength = clamp((flux / (mean × trigger)) - 1, 0, 1)`.
 **Tests must cover:** a synthetic flux series with spikes every 500 ms fires exactly once per spike; a constant flux never fires after warm-up; spikes 100 ms apart fire only once (cooldown); zero flux never fires.
 **Verify:** `npm test -- src/audio/onset.test.ts && npm run typecheck`
 
@@ -114,7 +120,7 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 
 **Goal:** pure function for the render budget, so resize logic is tested without a browser.
 **Target files:** `src/gl/size.ts` [NEW], `src/gl/size.test.ts` [NEW]
-**Function:** `canvasSize(cssWidth: number, cssHeight: number, devicePixelRatio: number, opts?: { maxDpr?: number; maxPixels?: number }): { width: number; height: number; dpr: number }`. Defaults: maxDpr 2, maxPixels 3_686_400 (1440p at DPR 1, about 2560×1440). Uses `min(dpr, maxDpr)`, then scales down uniformly if width × height exceeds maxPixels. Returns integers, minimum 1×1.
+**Function:** `canvasSize(cssWidth: number, cssHeight: number, devicePixelRatio: number, opts?: { maxDpr?: number; maxPixels?: number }): { width: number; height: number; dpr: number }`. Defaults: maxDpr 2, maxPixels 3_686_400 (about 2560×1440; desktop target, the old 2.1 M phone budget is superseded). Uses `min(dpr, maxDpr)`, scales width down uniformly, derives height from width to keep aspect within 1 px, and re-checks so width × height never exceeds maxPixels. Returns integers, minimum 1×1.
 **Tests must cover:** DPR 3 is capped to 2; a 2560×1440 CSS window at DPR 2 is scaled down to fit maxPixels; zero size returns 1×1; aspect ratio is kept within 1 px.
 **Verify:** `npm test -- src/gl/size.test.ts && npm run typecheck`
 
@@ -122,7 +128,14 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 
 **Goal:** combine analyser arrays into one `AudioFrame` per animation frame.
 **Target files:** `src/audio/frameBuilder.ts` [NEW], `src/audio/frameBuilder.test.ts` [NEW]
-**Contract:** `class FrameBuilder { constructor(sampleRate: number, fftSize: number); build(timeSec: number, byteSpectrum: Uint8Array, floatWaveform: Float32Array): AudioFrame; reset(): void }`. Uses `computeBands` → one `Envelope` per band → one `RollingNormalizer` per band. `energy` = envelope of mean of raw bands, divided by a slower normalizer (window 20 s) with a dim floor: `energy = 0.08 + 0.92 × value` when any signal is present, so it never reads as zero during quiet music. Flux is computed on the sub band against the previous spectrum. `dt` is from the previous `timeSec` and clamped to 0.1 s (handles hidden tabs).
+**Contract:** `class FrameBuilder { constructor(sampleRate: number, fftSize: number); build(timeSec: number, byteSpectrum: Uint8Array, floatWaveform: Float32Array): AudioFrame; reset(): void }`.
+- Bands: `computeBands` → one `Envelope` (10 ms / 250 ms) per band → one `RollingNormalizer(4, 0.02)` per band.
+- `dtSec = min(0.1, max(0, timeSec - prevTime))` (handles hidden tabs and seek-back). First frame after construct/reset has dtSec 0.
+- Energy: `SIGNAL_EPS = 0.02`; `isSignal = mean(raw.sub, raw.mid, raw.high) > SIGNAL_EPS`. A separate envelope of that mean feeds a slow `RollingNormalizer(10, 0.02)`. `energy = isSignal ? 0.08 + 0.92 * slowNorm : 0`.
+- Flux: per band, `spectralFlux(prevSpectrum, spectrum, bandStartBin, bandEndBin - 1)` with one `OnsetDetector` per band. `flux = fluxByBand.sub`, `beat = beatByBand.sub`, `beatStrength` from the sub detector. On the first frame (no previous spectrum) all flux is 0.
+- `smoothedSpectrum`: per-bin envelope with the same attack and release, computed in place in a reused Float32Array.
+- Reuse output arrays between frames (no per-frame allocation); the returned frame is valid until the next `build()`.
+- `reset()` clears every envelope, normalizer, detector, the previous spectrum, frameIndex and prevTime. Called on every source switch.
 **Tests must cover:** fake kick spectra every 0.5 s give `beat` true on those frames only; a steady 2 kHz spectrum gives sub ≈ 0 and no beats; silence gives energy 0 and no beats; a jump in `timeSec` of 5 s doesn't blow up envelopes (dt clamp).
 **Verify:** `npm test -- src/audio/frameBuilder.test.ts && npm run typecheck`
 
@@ -131,7 +144,7 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 **Goal:** one engine with an analyser chain and four switchable sources.
 **Target files:** `src/audio/engine.ts` [NEW], `src/audio/sources.ts` [NEW]
 **Contract:** `class AudioEngine { static create(): AudioEngine` (called inside a click); `useFile(file: File): Promise<void>`; `useDisplayCapture(): Promise<void>`; `useMic(): Promise<void>`; `useTestSignal(s: TestSignal): void`; `stop(): void`; `readFrame(): AudioFrame`; `get media(): HTMLAudioElement | null`; `setVolume(v: number): void`; `on(event: 'source-ended' | 'error', cb): void }`.
-**Rules (from the spec):** `<audio>` → `MediaElementAudioSourceNode`, never `decodeAudioData` for whole files. Capture: if the stream has no audio track, raise a clear error ("Tick 'Share audio' in the share prompt"); listen for track `ended`. Mic: `echoCancellation`, `noiseSuppression`, `autoGainControl` all false. Volume through `GainNode` only. Capture and mic are **not** routed to the speakers (prevents feedback and doubling); file and test signals are. Analyser `fftSize` 4096, `smoothingTimeConstant` 0.
+**Rules (from the spec):** `<audio>` → `MediaElementAudioSourceNode`, never `decodeAudioData` for whole files. Capture: if the stream has no audio track, raise a clear error ("Tick 'Share audio' in the share prompt"); listen for track `ended`. Mic: `echoCancellation`, `noiseSuppression`, `autoGainControl` all false. Volume through `GainNode` only. Capture and mic are **not** routed to the speakers (prevents feedback and doubling); file and test signals are. Analyser `fftSize` 4096, `smoothingTimeConstant` 0, `minDecibels` -100, `maxDecibels` -30 (pinned so 0..1 levels and the 0.02 gates mean the same for every source). Every `use*()` stops the previous source and calls `FrameBuilder.reset()` synchronously, so a switch never creates a fake beat.
 **Accept (manual, lead + owner):** each source moves the debug numbers; switching sources doesn't leave the old one running.
 **Verify:** `npm run typecheck && npm test && npm run build` plus manual check in Chrome.
 
@@ -140,10 +153,11 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 **Goal:** the shared GPU layer: context, shaders, data textures, render-layer interface, and clean reset on GPU loss.
 **Target files:** `src/gl/context.ts` [NEW], `src/gl/shader.ts` [NEW], `src/gl/texture.ts` [NEW], `src/render/layer.ts` [NEW]
 **Contracts:**
-- `interface RenderLayer { init(gl: WebGL2RenderingContext): void; resize(width: number, height: number, dpr: number): void; draw(frame: AudioFrame, timeSec: number): void; dispose(): void }`
+- `type RenderTarget = { kind: 'canvas' } | { kind: 'fbo'; framebuffer: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number }`
+- `interface RenderLayer { init(gl: WebGL2RenderingContext): void; resize(width: number, height: number, dpr: number): void; draw(frame: AudioFrame, timeSec: number, target: RenderTarget, alpha: number): void; dispose(): void }`. Layers own their own framebuffer pairs (for trails). GlHost owns compositing order and passes `alpha` (crossfades, Stage 4).
 - `compileProgram(gl, vertSrc, fragSrc): WebGLProgram` throws an error that includes the shader log and line numbers.
 - `createDataTexture(gl, length)` and `updateDataTexture(gl, tex, data: Float32Array)` for one-row textures (spectrum, waveform). Uses `R32F` if `EXT_color_buffer_float`/float textures allow, else `R8` with a scaled upload.
-- `GlHost`: owns the canvas and context, uses `canvasSize` from 1.5, debounced resize, and on `webglcontextlost` → `preventDefault`, stop drawing; on `webglcontextrestored` → re-run `init` on all layers from scratch (no state restore, per owner decision). Shows "WebGL2 not available" if `getContext('webgl2')` fails.
+- `GlHost`: owns the canvas and context, uses `canvasSize` from 1.5, debounced resize, and on `webglcontextlost` → `preventDefault`, stop drawing; on `webglcontextrestored` → re-run `init` on all layers as fresh construction: recompile, recreate textures and framebuffers, clear every owned framebuffer on the first draw, reset JS state (no state restore, per owner decision). Never call `dispose()` after loss (GL objects are already dead); `dispose()` is for orderly removal only. Shows "WebGL2 not available" if `getContext('webgl2')` fails.
 **Accept:** a clear screen at the right size; forcing loss with `WEBGL_lose_context` restarts cleanly while audio keeps playing.
 **Verify:** `npm run typecheck && npm test && npm run build` plus manual check.
 
@@ -151,7 +165,7 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 
 **Goal:** the two Stage 1 visuals that prove response, nothing decorative.
 **Target files:** `src/render/layers/bassPulse.ts` [NEW], `src/render/layers/waveform.ts` [NEW], `src/render/shaders/bassPulse.frag.glsl` [NEW], `src/render/shaders/waveform.vert.glsl` [NEW], `src/render/shaders/waveform.frag.glsl` [NEW]
-**Bass pulse:** full-screen background whose brightness = `0.06 + 0.25 × env.sub` (dim floor; brightness change capped well under the WCAG flash limit). No other inputs.
+**Bass pulse:** full-screen background whose brightness = `0.06 + 0.25 × env.sub` (uses `env`, not `norm`, on purpose: the tracer must show absolute level, and the 0.06 floor keeps it dim, never black) (dim floor; brightness change capped well under the WCAG flash limit). No other inputs.
 **Waveform:** a line drawn from the waveform data texture, unscaled, no smoothing or effects.
 **Accept:** owner sees the pulse rise on each test kick and stay flat on tone and silence; waveform shape matches the test signal.
 **Verify:** `npm run typecheck && npm run build` plus manual check.
@@ -161,7 +175,7 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 **Goal:** live numbers that prove the audio is driving the visuals.
 **Target files:** `src/ui/debugPanel.ts` [NEW], `src/audio/latency.ts` [NEW], `src/audio/latency.test.ts` [NEW]
 **Panel (toggle with `D`, hidden by default):** source name, sample rate, `raw`/`env`/`norm` for each band, energy, flux, beat flag, frame time (ms), and estimated latency.
-**Latency (pure, testable):** `estimateLatencyMs(kickTimes: number[], beatTimes: number[], outputLatencySec: number, baseLatencySec: number, frameMs: number): { medianMs: number; samples: number }`. Pairs each detected beat with the nearest earlier kick within 200 ms; latency = detection gap + output latency + base latency + half a frame. Reports the median. Panel shows pass (green) under 100 ms.
+**Latency (pure, testable):** `estimateLatencyMs(kickTimes: number[], beatTimes: number[], outputLatencySec: number, baseLatencySec: number, frameMs: number): { medianMs: number; samples: number }`. Pairs each detected beat with the latest earlier kick within 200 ms that has not been used yet (each kick is used at most once); latency = detection gap + output latency + base latency + half a frame. Reports the median. Panel shows pass (green) under 100 ms. Latency shows `n/a` unless the test-signal source is active (only it has known kick times).
 **Tests must cover:** perfectly matched times give the fixed latency terms only; beats with no nearby kick are ignored; median of mixed values.
 **Verify:** `npm test -- src/audio/latency.test.ts && npm run typecheck`
 

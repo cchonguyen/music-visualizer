@@ -18,7 +18,13 @@ These are hypotheses. Each one has a test. None is proven yet.
 - That we have more features. We have fewer, on purpose.
 - That MilkDrop compatibility matters. It's optional and last.
 
-**Research check still needed:** whether other web tools already visualize system audio. Unverified. Run a search before Stage 1 ends, so H1 isn't claimed falsely.
+**H1 research check (2026-11-04): H1 is not unique.** Tab-audio web visualizers already exist, so "no install" alone is not our edge:
+- Open-source single-page tools using `getDisplayMedia` tab audio: [ravetab](https://github.com/mpopv/ravetab), [penpro/MusicVisualizer](https://github.com/penpro/MusicVisualizer) (Chrome/Edge only).
+- Chrome extensions using `tabCapture`: [SPV-2 Side Panel Visualizer](https://chromeboard.com/extension/spv-2-side-panel-visualiz-flkfiadmjmonooljmhhbapffoicdibdn), [MusicWave Visualizer](https://chromewebstore.google.com/detail/musicwave-visualizer/lgjgpcmbogpjkijfiojhpgppikiffjkn) (about two users).
+- Full system audio still needs a loopback driver ([SlipViz](https://github.com/Bountable/SlipViz) with BlackHole) or a native helper ([sj-audio-bridge](https://jayvee6.github.io/sj-audio-bridge/), macOS 14+).
+- One write-up claims Chrome on macOS shares **tab** audio, not system audio. This contradicts the Council's "Chrome 141+ on macOS 14.2+ shares system audio" finding. Stage 1 tests it on the owner's Mac.
+
+**So the edge is H2 + H3** (curated presets and musical response) delivered with no install. H1 is table stakes, not a differentiator.
 
 ## 2. Visualization Capability Ladder
 
