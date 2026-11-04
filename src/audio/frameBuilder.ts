@@ -189,8 +189,10 @@ export class FrameBuilder {
     // Energy: silent frames are exactly 0; otherwise a dim floor plus the slow
     // normalizer, so quiet passages stay visible but never fully normalize away.
     const meanRaw = (bands.sub + bands.mid + bands.high) / 3;
-    const isSignal = meanRaw > SIGNAL_EPS;
     const envMean = this.energyEnvelope.step(meanRaw, dtSec);
+    // Gate on the smoothed level, not the raw frame: otherwise energy drops to
+    // 0 in the gap between two kicks and complexity flickers (browser test).
+    const isSignal = envMean > SIGNAL_EPS;
     const slowNorm = this.energyNormalizer.push(envMean, dtSec);
     frame.energy = isSignal ? 0.08 + 0.92 * slowNorm : 0;
 

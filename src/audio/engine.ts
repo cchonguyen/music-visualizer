@@ -26,6 +26,8 @@ export class AudioEngine {
   private _kind: SourceKind = 'none';
   /** Scheduled kick times (AudioContext seconds) when the kick test signal runs. */
   kickTimes: number[] = [];
+  /** Until this context time, analysis sees silence (see readFrame). */
+  private settleUntil = 0;
 
   /** Must be called inside a click or key handler: browsers block audio otherwise. */
   static create(): AudioEngine {
@@ -92,6 +94,10 @@ export class AudioEngine {
     });
     this.active = source;
     this._kind = kind;
+    // The analyser still holds ~93 ms (fftSize / sampleRate) of the previous
+    // source. Until it drains, analysis sees silence, so a switch can't make a
+    // fake beat (found in browser testing, 2026-11-04).
+    this.settleUntil = this.ctx.currentTime + FFT_SIZE / this.ctx.sampleRate + 0.02;
     this.emit('source-changed', kind);
   }
 
@@ -130,8 +136,13 @@ export class AudioEngine {
 
   /** Called once per animation frame by the renderer. */
   readFrame(): AudioFrame {
-    this.analyser.getByteFrequencyData(this.byteSpectrum);
-    this.analyser.getFloatTimeDomainData(this.waveform);
+    if (this.ctx.currentTime < this.settleUntil) {
+      this.byteSpectrum.fill(0);
+      this.waveform.fill(0);
+    } else {
+      this.analyser.getByteFrequencyData(this.byteSpectrum);
+      this.analyser.getFloatTimeDomainData(this.waveform);
+    }
     return this.builder.build(this.ctx.currentTime, this.byteSpectrum, this.waveform);
   }
 

@@ -151,28 +151,29 @@ describe('toneSpec / sweepSpec', () => {
 });
 
 describe('scheduleTestSignal', () => {
-  it('calls start and stop on the fake context at the planned kick times', () => {
-    const { oscillators, result } = schedule('kick', 1);
+  it('schedules 10 minutes of kicks on one oscillator, shaped by its gain', () => {
+    const { oscillators, gains, result } = schedule('kick', 1);
 
-    // 10 s window starting at 1 s: 20 kicks, last one at 10.5 s.
-    expect(result.kickTimes).toEqual(planKicks(1, 10).map((k) => k.time));
-    expect(result.kickTimes).toHaveLength(20);
-    expect(oscillators).toHaveLength(20);
+    // 600 s window starting at 1 s: 1200 kicks every 0.5 s.
+    expect(result.kickTimes).toEqual(planKicks(1, 600).map((k) => k.time));
+    expect(result.kickTimes).toHaveLength(1200);
+    expect(oscillators).toHaveLength(1);
+    expect(oscillators[0]?.startTimes).toEqual([1]);
+    expect(oscillators[0]?.stopTimes).toEqual([601]);
+    expect(oscillators[0]?.frequency.setValueAtTimeCalls[0]).toEqual({ value: 60, time: 1 });
 
-    oscillators.forEach((osc, i) => {
-      const time = 1 + i * 0.5;
-      expect(osc.startTimes).toEqual([time]);
-      expect(osc.stopTimes).toEqual([time + 0.05]);
-    });
+    // Each kick: full level at its time, ramp down to near-silent 50 ms later.
+    const g = gains[0]!.gain;
+    expect(g.setValueAtTimeCalls).toContainEqual({ value: 1, time: 1.5 });
+    expect(g.rampCalls[0]).toEqual({ value: 0.001, time: 1.05 });
+    expect(g.rampCalls).toHaveLength(1200);
   });
 
-  it('wires each kick oscillator through a gain to the destination', () => {
+  it('wires the kick oscillator through a gain to the destination', () => {
     const { oscillators, gains, dest } = schedule('kick', 0);
-    expect(gains).toHaveLength(20);
-    const osc = oscillators[0];
-    const gain = gains[0];
-    expect(osc?.connections[0]).toBe(gain);
-    expect(gain?.connections[0]).toBe(dest);
+    expect(gains).toHaveLength(1);
+    expect(oscillators[0]?.connections[0]).toBe(gains[0]);
+    expect(gains[0]?.connections[0]).toBe(dest);
   });
 
   it('starts the tone without a scheduled stop', () => {
@@ -205,15 +206,12 @@ describe('scheduleTestSignal', () => {
     expect(() => result.stop()).not.toThrow();
   });
 
-  it('stop() stops every oscillator that was scheduled', () => {
+  it('stop() stops the kick oscillator now', () => {
     const { ctx, oscillators, result } = schedule('kick', 0);
-    // Each kick already carries its own scheduled stop time.
-    expect(oscillators.every((o) => o.stopTimes.length === 1)).toBe(true);
-
     ctx.currentTime = 99;
     result.stop();
-    expect(oscillators).toHaveLength(20);
-    expect(oscillators.every((o) => o.stopTimes.at(-1) === 99)).toBe(true);
+    expect(oscillators).toHaveLength(1);
+    expect(oscillators[0]?.stopTimes.at(-1)).toBe(99);
   });
 
   it('stop() also ends a tone that had no scheduled stop', () => {

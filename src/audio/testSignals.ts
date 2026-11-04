@@ -1,7 +1,6 @@
 // NOTE(spec): Two details the slice leaves open, resolved as simply as possible:
-// - scheduleTestSignal('kick') gets no duration, so it places the same 10 s window
-//   (20 kicks) that sweepSpec() uses. planKicks() itself stays fully parameterized
-//   so callers can choose any window.
+// - scheduleTestSignal('kick') runs a 10-minute window (1200 kicks) on a single
+//   oscillator. planKicks() itself stays fully parameterized.
 // - 'tone' has no duration in the contract, so it starts at startSec and keeps
 //   running until stop() is called.
 
@@ -10,10 +9,12 @@ export type TestSignal = 'kick' | 'tone' | 'sweep' | 'silence';
 
 /** Seconds between two planned kicks. */
 const KICK_INTERVAL_SEC = 0.5;
-/** Window of kicks placed by scheduleTestSignal('kick'). */
-const KICK_WINDOW_SEC = 10;
+/** Window of kicks placed by scheduleTestSignal('kick'): 10 minutes. */
+const KICK_WINDOW_SEC = 600;
 /** Steady test tones at a quarter of full scale: loud enough to analyse, not harsh. */
 const TONE_LEVEL = 0.25;
+/** Fade-in for steady tones: an instant start is a click, which reads as a beat. */
+const FADE_IN_SEC = 0.05;
 
 /**
  * Plan a row of kicks: one every 0.5 s, each starting inside
@@ -74,30 +75,35 @@ export function scheduleTestSignal(
   };
 }
 
-/** Schedule the 10 s kick window and return the absolute kick times. */
+/**
+ * Schedule kicks for KICK_WINDOW_SEC on ONE oscillator whose gain is shaped per
+ * kick (lead review: a 10 s window ended before anyone could watch it, and one
+ * node per kick would mean thousands of nodes for a long run).
+ */
 function scheduleKicks(
   ctx: BaseAudioContext,
   dest: AudioNode,
   startSec: number,
   sources: OscillatorNode[],
 ): number[] {
-  const kickTimes: number[] = [];
-  for (const kick of planKicks(startSec, KICK_WINDOW_SEC)) {
-    const osc = ctx.createOscillator();
-    osc.type = 'sine';
-    // Low sine burst: full level on the onset, near-silent by the end of the hit.
-    osc.frequency.setValueAtTime(kick.freq, kick.time);
-    const gain = ctx.createGain();
+  const kicks = planKicks(startSec, KICK_WINDOW_SEC);
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(60, startSec);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, startSec);
+  for (const kick of kicks) {
+    // Full level on the onset, near-silent by the end of the hit, then silence.
     gain.gain.setValueAtTime(1, kick.time);
     gain.gain.exponentialRampToValueAtTime(0.001, kick.time + kick.lengthSec);
-    osc.connect(gain);
-    gain.connect(dest);
-    osc.start(kick.time);
-    osc.stop(kick.time + kick.lengthSec);
-    sources.push(osc);
-    kickTimes.push(kick.time);
+    gain.gain.setValueAtTime(0, kick.time + kick.lengthSec);
   }
-  return kickTimes;
+  osc.connect(gain);
+  gain.connect(dest);
+  osc.start(startSec);
+  osc.stop(startSec + KICK_WINDOW_SEC);
+  sources.push(osc);
+  return kicks.map((k) => k.time);
 }
 
 /** Schedule the reference tone, which runs until stop(). */
@@ -112,7 +118,8 @@ function scheduleTone(
   osc.type = 'sine';
   osc.frequency.setValueAtTime(spec.freq, startSec);
   const gain = ctx.createGain();
-  gain.gain.setValueAtTime(TONE_LEVEL, startSec);
+  gain.gain.setValueAtTime(0.0001, startSec);
+  gain.gain.exponentialRampToValueAtTime(TONE_LEVEL, startSec + FADE_IN_SEC);
   osc.connect(gain);
   gain.connect(dest);
   osc.start(startSec); // no scheduled stop: stop() ends it
@@ -133,7 +140,8 @@ function scheduleSweep(
   osc.frequency.setValueAtTime(spec.fromHz, startSec);
   osc.frequency.exponentialRampToValueAtTime(spec.toHz, startSec + spec.durationSec);
   const gain = ctx.createGain();
-  gain.gain.setValueAtTime(TONE_LEVEL, startSec);
+  gain.gain.setValueAtTime(0.0001, startSec);
+  gain.gain.exponentialRampToValueAtTime(TONE_LEVEL, startSec + FADE_IN_SEC);
   osc.connect(gain);
   gain.connect(dest);
   osc.start(startSec);

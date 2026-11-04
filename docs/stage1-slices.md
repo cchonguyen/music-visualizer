@@ -175,7 +175,7 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 **Goal:** live numbers that prove the audio is driving the visuals.
 **Target files:** `src/ui/debugPanel.ts` [NEW], `src/audio/latency.ts` [NEW], `src/audio/latency.test.ts` [NEW]
 **Panel (toggle with `D`, hidden by default):** source name, sample rate, `raw`/`env`/`norm` for each band, energy, flux, beat flag, frame time (ms), and estimated latency.
-**Latency (pure, testable):** `estimateLatencyMs(kickTimes: number[], beatTimes: number[], outputLatencySec: number, baseLatencySec: number, frameMs: number): { medianMs: number; samples: number }`. Pairs each detected beat with the latest earlier kick within 200 ms that has not been used yet (each kick is used at most once); latency = detection gap + output latency + base latency + half a frame. Reports the median. Panel shows pass (green) under 100 ms. Latency shows `n/a` unless the test-signal source is active (only it has known kick times).
+**Latency (pure, testable):** `estimateLatencyMs(kickTimes: number[], beatTimes: number[], outputLatencySec: number, baseLatencySec: number, frameMs: number): { medianMs: number; samples: number }`. Pairs each detected beat with the latest earlier kick within 200 ms that has not been used yet (each kick is used at most once); result = how far the visual trails the sound you hear: detection gap + one display frame − (output + base latency). The speakers play the sound late by the output latency, so it hides part of the visual delay (corrected 2026-11-04; the first version added it). Reports the median. Panel shows pass (green) under 100 ms. Latency shows `n/a` unless the test-signal source is active (only it has known kick times).
 **Tests must cover:** perfectly matched times give the fixed latency terms only; beats with no nearby kick are ignored; median of mixed values.
 **Verify:** `npm test -- src/audio/latency.test.ts && npm run typecheck`
 
@@ -202,6 +202,16 @@ A second function `scheduleTestSignal(ctx: BaseAudioContext, dest: AudioNode, si
 **Verify:** owner signs off in the report.
 
 ---
+
+## Browser test results (lead, 2026-11-04, OpenBot browser, Chrome engine, 44.1 kHz)
+
+Measured by reading frames at 60 Hz through a dev-only handle (the embedded browser throttles animation to 1 fps, so on-screen fps was not measurable there).
+- **Kick:** one beat per kick (16/16), detection gap 9–20 ms, visual trails sound by about 8.5 ms median. Pass (target < 100 ms).
+- **Tone 2 kHz and silence:** 0 beats, bass pulse flat at 0. Pass.
+- **Waveform:** tone measured at 2,003 Hz from zero crossings; drawn correctly on screen. Pass.
+- **Fixed during testing:** fake beat after every source switch (analyser holds ~93 ms of old audio → 113 ms settle window); click at tone start read as a beat (50 ms fade-in); energy flickered to 0 between kicks (gate now on the smoothed level); kick test ended after 10 s (now 10 min on one oscillator).
+- **Known, for Stage 2:** the sweep fires ~4 bass beats as it crosses the bass range; a pure tone reads as near-silent `energy` because band levels are means over wide bands (narrow sounds like a solo flute are diluted). Candidate fix: drive `energy` from time-domain RMS loudness.
+- **Not yet tested:** file playback, tab/system capture, microphone (need real devices and permission prompts) → slice 1.13 on the owner's Mac and Windows machines.
 
 ## Open decisions before building
 
