@@ -33,9 +33,13 @@ export class ParticleLayer implements RenderLayer {
   private uSwirl: WebGLUniformLocation | null = null;
   private uSparkle: WebGLUniformLocation | null = null;
   private uBrightness: WebGLUniformLocation | null = null;
+  private uEnergy: WebGLUniformLocation | null = null;
+  private uTwinkleTime: WebGLUniformLocation | null = null;
 
   private paletteName: string = DEFAULT_PALETTE;
   private readonly phase = new Phase();
+  // Twinkle clock: advances at 1 per second (real time), so twinkle rate is in rad/s.
+  private readonly twinkle = new Phase();
   private flash = 0;
 
   setPalette(name: string): void {
@@ -53,7 +57,10 @@ export class ParticleLayer implements RenderLayer {
     this.uSwirl = gl.getUniformLocation(this.program, 'uSwirl');
     this.uSparkle = gl.getUniformLocation(this.program, 'uSparkle');
     this.uBrightness = gl.getUniformLocation(this.program, 'uBrightness');
+    this.uEnergy = gl.getUniformLocation(this.program, 'uEnergy');
+    this.uTwinkleTime = gl.getUniformLocation(this.program, 'uTwinkleTime');
     this.phase.reset();
+    this.twinkle.reset();
     this.flash = 0;
     this.vao = createVao(gl);
   }
@@ -78,6 +85,8 @@ export class ParticleLayer implements RenderLayer {
       ? CALM_PHASE_RATE
       : BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy;
     const phase = this.phase.advance(clock.dtSec, rate);
+    // Calm slows the motion, but the twinkle keeps real time (only its brightness is dimmed).
+    const twinkleTime = this.twinkle.advance(clock.dtSec, 1);
 
     // norm.high (track-relative): raw treble is often under 0.3 on real music, so env.high barely lit the particles.
     let sparkle = clamp01(frame.norm.high + this.flash * FLASH_SPARKLE_SCALE);
@@ -95,6 +104,8 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uSwirl, this.calm ? 0 : Math.min(1, frame.norm.mid));
     gl.uniform1f(this.uSparkle, sparkle);
     gl.uniform1f(this.uBrightness, BRIGHTNESS);
+    gl.uniform1f(this.uEnergy, clamp01(frame.energy));
+    gl.uniform1f(this.uTwinkleTime, twinkleTime);
 
     // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
     // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
@@ -124,6 +135,8 @@ export class ParticleLayer implements RenderLayer {
     this.uSwirl = null;
     this.uSparkle = null;
     this.uBrightness = null;
+    this.uEnergy = null;
+    this.uTwinkleTime = null;
     this.gl = null;
   }
 }
