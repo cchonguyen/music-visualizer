@@ -31,3 +31,6 @@
 - [x] **Slice 2.4: Forward-flight tunnel** [DONE] (browser: rings render, no GL errors; beat flash added) `[YELLOW][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/tunnel.ts` [NEW], `src/render/shaders/tunnel.frag.glsl` [NEW] | Verify: npm run typecheck && npm run build
 - [x] **Slice 2.5: Treble particles (instanced quads)** [DONE] (browser: streaming dots; twinkle added; ?particles) `[YELLOW][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/particles.ts` [NEW], `src/render/shaders/particles.vert.glsl` [NEW], `src/render/shaders/particles.frag.glsl` [NEW] | Verify: npm run typecheck && npm run build
 - [~] **Slice 2.6: Bars, waveform and rings** [PARTIAL] (rings verified in browser; bars built but not yet verified on screen; waveform move and basic scene not done) `[GREEN][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/bars.ts` [NEW], `src/render/layers/rings.ts` [NEW] | Verify: npm run typecheck && npm run build
+
+## Stage 2 polish — docs/stage2-polish-plan.md (2026-11-04)
+- [x] P1 black floor and contrast · [x] P6 flash governor · [x] P2 particle streaks · [x] P3 tunnel depth/bend/roll · [x] P4 shockwave, section contrast, colour swap · [ ] P5 radial crown and keys (in progress) · Patch: shared sway, governor scope, quiet floor (done). Device check and deploy pending.
