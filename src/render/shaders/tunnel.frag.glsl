@@ -48,6 +48,9 @@ void main() {
   float sharp = mix(2.5, 4.0, clamp(uRingContrast * 2.0, 0.0, 1.0));
   float expo = mix(sharp * 1.5, sharp * 0.6, smoothstep(0.1, 0.6, shaped));
   float stripe = pow(wave, expo);
+  // Quiet floor (patch 2026-11-04): crest bands never drop below 12% brightness, so faint
+  // rings stay visible in near-silence. The gaps between rings (low wave) stay at the base colour.
+  stripe = max(stripe, 0.12 * smoothstep(0.5, 0.9, wave));
 
   // Full-screen pulse stays small (15%): a large whole-screen brightness swing
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.

@@ -10,7 +10,7 @@ import { DEFAULT_PALETTE, getPalette, type Palette } from '../palette';
 import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
-import { flashGovernor } from '../safety';
+import { getSway } from '../swayStore';
 
 const BRIGHTNESS = 1.0;
 const CALM_SPARKLE_SCALE = 0.3;
@@ -31,6 +31,7 @@ export class ParticleLayer implements RenderLayer {
   private uAccent: WebGLUniformLocation | null = null;
   private uAccentA: WebGLUniformLocation | null = null;
   private uSwirl: WebGLUniformLocation | null = null;
+  private uSway: WebGLUniformLocation | null = null;
   private uSparkle: WebGLUniformLocation | null = null;
   private uBrightness: WebGLUniformLocation | null = null;
   private uEnergy: WebGLUniformLocation | null = null;
@@ -55,6 +56,7 @@ export class ParticleLayer implements RenderLayer {
     this.uAccent = gl.getUniformLocation(this.program, 'uAccent');
     this.uAccentA = gl.getUniformLocation(this.program, 'uAccentA');
     this.uSwirl = gl.getUniformLocation(this.program, 'uSwirl');
+    this.uSway = gl.getUniformLocation(this.program, 'uSway');
     this.uSparkle = gl.getUniformLocation(this.program, 'uSparkle');
     this.uBrightness = gl.getUniformLocation(this.program, 'uBrightness');
     this.uEnergy = gl.getUniformLocation(this.program, 'uEnergy');
@@ -76,9 +78,9 @@ export class ParticleLayer implements RenderLayer {
     bindTarget(gl, target);
 
     // Flash envelope: instant attack on a high-band onset, 150 ms release.
-    // Governed (P6): the sparkle flash shares the global flash limit with the tunnel.
-    const hit = frame.beatByBand.high && flashGovernor.tryFlash(clock.timeSec);
-    this.flash = highFlash(this.flash, hit, clock.dtSec);
+    // Not governed (patch 2026-11-04): a sparkle covers under 1% of the screen, so it
+    // does not use the flash budget and cannot block a kick shockwave.
+    this.flash = highFlash(this.flash, frame.beatByBand.high, clock.dtSec);
 
     // Density rises with energy only in loud sections; phase never decreases.
     const rate = this.calm
@@ -102,6 +104,9 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
     // Midrange drives a swirl, so the sparkles curve as they travel (2026-11-04).
     gl.uniform1f(this.uSwirl, this.calm ? 0 : Math.min(1, frame.norm.mid));
+    // Shared sway (uv units) doubled to clip units: the spawn origin follows the tunnel rim.
+    const sway = getSway();
+    gl.uniform2f(this.uSway, 2 * sway.x, 2 * sway.y);
     gl.uniform1f(this.uSparkle, sparkle);
     gl.uniform1f(this.uBrightness, BRIGHTNESS);
     gl.uniform1f(this.uEnergy, clamp01(frame.energy));

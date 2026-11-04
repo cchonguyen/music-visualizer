@@ -9,8 +9,9 @@ import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import { SlowFollower } from '../dynamics';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
-import { BendState, bendOffset, FlightState, RollState } from '../tunnelState';
+import { FlightState, RollState } from '../tunnelState';
 import { flashGovernor } from '../safety';
+import { getSway } from '../swayStore';
 
 const RING_DENSITY = 0.5;
 /** Beat flash on the rings: instant attack, 150 ms release (owner reference notes: beats thicken rings, never move the camera). */
@@ -37,7 +38,6 @@ export class TunnelLayer implements RenderLayer {
 
   private readonly flight = new FlightState();
   private readonly roll = new RollState();
-  private readonly bend = new BendState();
   private beatEnv = 0;
   private uBeat: WebGLUniformLocation | null = null;
   private uCenter: WebGLUniformLocation | null = null;
@@ -103,9 +103,9 @@ export class TunnelLayer implements RenderLayer {
     const t = clock.timeSec;
     const highSlow = this.highAvg.step(frame.norm.high, clock.dtSec);
     // Depth (P3): figure-eight bend of the vanishing point (off in calm), and a slow integrated roll.
-    const bendAngle = this.bend.advance(clock.dtSec);
-    const bend = bendOffset(bendAngle, frame.norm.mid, this.calm);
-    gl.uniform2f(this.uCenter, bend.x, bend.y);
+    // Shared sway (swayStore): the same offset drives particles and the crown.
+    const sway = getSway();
+    gl.uniform2f(this.uCenter, sway.x, sway.y);
     gl.uniform1f(this.uRoll, this.roll.advance(clock.dtSec, frame.energy, this.calm));
     gl.uniform1f(this.uDensity, RING_DENSITY * (1 + 0.3 * Math.max(0, frame.env.sub - 0.2)));
     gl.uniform1f(this.uHue, Math.min(1, Math.max(0, 0.5 + 0.35 * Math.sin(t * 0.11) + 0.4 * (frame.norm.high - highSlow))));

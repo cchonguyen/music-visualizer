@@ -13,6 +13,11 @@ uniform float uAspect;      // target width / height
 uniform float uSwirl;       // midrange drive, 0..1 (0 in Calm)
 uniform float uEnergy;      // track-relative loudness, 0..1: sets streak length
 uniform float uTwinkleTime; // integrated seconds, drives the twinkle
+uniform vec2 uSway;         // shared figure-eight sway, clip units (same as the tunnel)
+
+// Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
+// with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
+const float INNER_RIM = 0.16;
 
 out float vMix;             // 0..1: picks accent A or B per particle
 out vec2 vLocal;            // quad corner, -1..1 (x along the streak, y across it)
@@ -57,7 +62,8 @@ void main() {
   vLocal = CORNERS[gl_VertexID];
   // Head (x = 1) sits on the particle; the tail trails behind it along -axis.
   float t = vLocal.x * 0.5 + 0.5;
-  vec2 point = pos - axis * streakLen * (1.0 - t) + perp * vLocal.y * halfWidth;
+  vec2 origin = vec2(uSway.x * uAspect, uSway.y) * (1.0 - INNER_RIM);
+  vec2 point = origin + pos - axis * streakLen * (1.0 - t) + perp * vLocal.y * halfWidth;
 
   // Fade in and out over the life, so streaks appear near the centre and vanish at the edge.
   vFade = sin(life * PI);
