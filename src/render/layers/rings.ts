@@ -6,6 +6,8 @@ import { createVao } from '../../gl/vao';
 import type { RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import { getPalette, type Palette } from '../palette';
+import { SlowFollower, punch } from '../dynamics';
+import { getVisualGain } from '../gainStore';
 import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/rings.frag.glsl?raw';
 
@@ -25,6 +27,8 @@ function unit(x: number): number {
 export class RingsLayer implements RenderLayer {
   /** Calm mode: at most 3 rings and half-width strokes. */
   calm = false;
+  private readonly slowLoud = new SlowFollower(3);
+  private readonly slowSub = new SlowFollower(2);
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -59,11 +63,17 @@ export class RingsLayer implements RenderLayer {
 
     bindTarget(gl, target);
 
+    // Ring count follows change in loudness as well as level (energy sits near its
+    // maximum for loud music, so level alone barely moved the rings; measured).
+    const dt = Math.max(0, _clock.dtSec);
+    const loudAvg = this.slowLoud.step(frame.loudness, dt);
     const energy = unit(frame.energy);
+    const level = Math.min(1, 0.4 * energy + 0.6 * punch(frame.loudness, loudAvg, 4));
+    const bassPunch = punch(frame.env.sub, this.slowSub.step(frame.env.sub, dt), 4);
     const normMean = (unit(frame.norm.sub) + unit(frame.norm.mid) + unit(frame.norm.high)) / 3;
 
-    let count = Math.round(energy * MAX_RINGS);
-    let stroke = STROKE_BASE + STROKE_NORM_GAIN * normMean;
+    let count = Math.round(level * MAX_RINGS);
+    let stroke = STROKE_BASE + STROKE_NORM_GAIN * normMean + 0.012 * bassPunch * getVisualGain();
     if (this.calm) {
       count = Math.min(count, MAX_RINGS_CALM);
       stroke *= 0.5;

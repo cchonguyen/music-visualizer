@@ -6,6 +6,8 @@ import { createDataTexture, type DataTexture, updateDataTexture } from '../../gl
 import { createVao } from '../../gl/vao';
 import type { RenderClock } from '../clock';
 import { BAR_COUNT, barValues } from '../barsState';
+import { SlowFollower, punch } from '../dynamics';
+import { getVisualGain } from '../gainStore';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import { buildBarEdges, type BarEdge } from '../logScale';
 import { getPalette, type Palette } from '../palette';
@@ -26,7 +28,8 @@ export class BarsLayer implements RenderLayer {
   private edges: BarEdge[] = [];
   private edgeSampleRate = -1;
   private edgeFftSize = -1;
-  private barPeak = 0;
+  // Per-bar recent average (about 2.5 s): bars react to change, not only absolute level.
+  private slow: SlowFollower[] = Array.from({ length: BAR_COUNT }, () => new SlowFollower(2.5));
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -60,14 +63,18 @@ export class BarsLayer implements RenderLayer {
       this.edgeSampleRate = frame.sampleRate;
       this.edgeFftSize = fftSize;
     }
-    // Track-relative scaling: divide by a slowly decaying peak (12 s), so quiet
-    // bands still show. Without this, mean-of-bins values sat flat near 0.36 (measured).
+    // Two parts, both bounded: (1) expand the narrow absolute range (measured:
+    // bars sat between 0.3 and 0.65); (2) punch = how far a bar is above its own
+    // recent average, so hits and swells stand out. Visual gain scales the result.
     const raw = barValues(frame.smoothedSpectrum, this.edges);
-    let top = 0;
-    for (let i = 0; i < raw.length; i++) top = Math.max(top, raw[i] ?? 0);
-    this.barPeak = Math.max(top, this.barPeak * Math.exp(-Math.max(0, clock.dtSec) / 12));
-    const scale = 1 / Math.max(this.barPeak, 0.05);
-    for (let i = 0; i < raw.length; i++) raw[i] = Math.min(1, (raw[i] ?? 0) * scale);
+    const g = getVisualGain();
+    const dt = Math.max(0, clock.dtSec);
+    for (let i = 0; i < raw.length; i++) {
+      const v = raw[i] ?? 0;
+      const base = this.slow[i]!.step(v, dt);
+      const expanded = Math.min(1, Math.max(0, (v - 0.3) / 0.4));
+      raw[i] = Math.min(1, (0.6 * expanded + 0.8 * punch(v, base, 6)) * g);
+    }
     updateDataTexture(gl, this.bars, raw);
 
     const palette: Palette = getPalette(getCurrentPalette());
