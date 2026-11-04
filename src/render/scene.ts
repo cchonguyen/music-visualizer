@@ -9,8 +9,10 @@ import type { RenderClock } from './clock';
 import { bindTarget, type RenderLayer } from './layer';
 import decaySrc from './shaders/decay.frag.glsl?raw';
 
-/** Persistence of the feedback trail, per frame (0.96–0.98 per the architect review). */
-export const SCENE_DECAY = 0.97;
+/** Persistence of the feedback trail, per frame. Was 0.97 (grey-teal haze); 0.92 clears trails faster (P1, 2026-11-04). */
+export const SCENE_DECAY = 0.92;
+/** Per-frame subtraction from the trail: with SCENE_DECAY, a trail reaches black in about 300 ms. */
+export const SCENE_FADE = 0.004;
 
 export class Scene {
   readonly name: string;
@@ -69,6 +71,7 @@ export class Scene {
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
     gl.uniform1i(gl.getUniformLocation(this.prog, 'uPrev'), 0);
     gl.uniform1f(gl.getUniformLocation(this.prog, 'uDecay'), SCENE_DECAY);
+    gl.uniform1f(gl.getUniformLocation(this.prog, 'uFade'), SCENE_FADE);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 

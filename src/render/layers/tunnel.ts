@@ -10,6 +10,7 @@ import { getCurrentPalette } from '../paletteStore';
 import { SlowFollower } from '../dynamics';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState } from '../tunnelState';
+import { flashGovernor } from '../safety';
 
 const RING_DENSITY = 0.5;
 /** Beat flash on the rings: instant attack, 150 ms release (owner reference notes: beats thicken rings, never move the camera). */
@@ -78,7 +79,8 @@ export class TunnelLayer implements RenderLayer {
     // Calm mode turns beat-triggered visuals off entirely.
     const dt = Math.max(0, clock.dtSec);
     this.beatEnv = Math.exp(-dt / BEAT_RELEASE_SEC) * this.beatEnv;
-    if (frame.beatByBand.sub && !this.calm) this.beatEnv = 1;
+    // Governed (P6): a beat only flashes if the global flash limit allows it.
+    if (frame.beatByBand.sub && !this.calm && flashGovernor.tryFlash(clock.timeSec)) this.beatEnv = 1;
     const palette: Palette = getPalette(getCurrentPalette());
 
     gl.useProgram(this.program);

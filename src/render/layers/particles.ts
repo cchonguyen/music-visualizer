@@ -10,6 +10,7 @@ import { DEFAULT_PALETTE, getPalette, type Palette } from '../palette';
 import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
+import { flashGovernor } from '../safety';
 
 const BRIGHTNESS = 1.0;
 const CALM_SPARKLE_SCALE = 0.3;
@@ -68,7 +69,9 @@ export class ParticleLayer implements RenderLayer {
     bindTarget(gl, target);
 
     // Flash envelope: instant attack on a high-band onset, 150 ms release.
-    this.flash = highFlash(this.flash, frame.beatByBand.high, clock.dtSec);
+    // Governed (P6): the sparkle flash shares the global flash limit with the tunnel.
+    const hit = frame.beatByBand.high && flashGovernor.tryFlash(clock.timeSec);
+    this.flash = highFlash(this.flash, hit, clock.dtSec);
 
     // Density rises with energy only in loud sections; phase never decreases.
     const rate = this.calm

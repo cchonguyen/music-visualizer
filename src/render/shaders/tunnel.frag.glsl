@@ -33,8 +33,9 @@ void main() {
 
   // Ring stripes, offset by the integrated flight phase.
   float wave = 0.5 + 0.5 * cos(TAU * (depth * uDensity - uPhase));
-  // Contrast: at uRingContrast 0.5 the full 0..1 range is used; lower softens it.
-  float stripe = 0.5 + (wave - 0.5) * (2.0 * uRingContrast);
+  // Sharp stripes (P1, 2026-11-04): only the crests carry colour, and the space
+  // between rings falls to the near-black palette base. Calm (low contrast) keeps softer crests.
+  float stripe = pow(wave, mix(2.5, 4.0, clamp(uRingContrast * 2.0, 0.0, 1.0)));
 
   // Full-screen pulse stays small (15%): a large whole-screen brightness swing
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.
@@ -55,7 +56,6 @@ void main() {
   float mask = smoothstep(0.02, 0.18, radius);
   vec3 col = mix(uBase, rings, mask);
 
-  // Keep the rings dim: never above about 0.5 per channel.
-  col = min(col, vec3(0.5));
+  // No per-channel cap here (P1, 2026-11-04): the compositor's luminance cap limits brightness.
   outColor = vec4(col, 1.0);
 }

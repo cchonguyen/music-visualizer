@@ -3,11 +3,12 @@ precision highp float;
 
 // Scene feedback step: last frame, dimmed. Layers add their light on top after this.
 uniform sampler2D uPrev;
-uniform float uDecay; // 0.96–0.98 per frame
+uniform float uDecay; // 0.92 per frame: trails shrink quickly
+uniform float uFade;  // 0.004 per frame, subtracted: trails clear to black (~300 ms)
 
 in vec2 vUv;
 out vec4 outColor;
 
 void main() {
-  outColor = vec4(texture(uPrev, vUv).rgb * uDecay, 1.0);
+  outColor = vec4(max(texture(uPrev, vUv).rgb * uDecay - uFade, 0.0), 1.0);
 }

@@ -63,3 +63,33 @@ export function clampSaturatedRed(rgb: [number, number, number]): [number, numbe
     (1 - a) * rgb[2] + a * grey,
   ];
 }
+
+/** Shortest allowed gap between two visible flash events: at most 3 per second (WCAG 2.3.1). */
+export const MIN_FLASH_GAP_SEC = 1 / 3;
+
+/**
+ * Global flash governor (P6, 2026-11-04). Every visible flash (beat flash, shockwave,
+ * palette swap) asks here first. A request is granted only if MIN_FLASH_GAP_SEC has
+ * passed since the last grant, so flashes cannot strobe. A clock that jumps backwards
+ * (for example after a restart) resets the governor.
+ */
+export class FlashGovernor {
+  private lastGrantSec = Number.NEGATIVE_INFINITY;
+
+  /** True if a flash may show now. Call once per flash event, at its start. */
+  tryFlash(timeSec: number): boolean {
+    if (!Number.isFinite(timeSec)) return false;
+    if (timeSec < this.lastGrantSec) this.lastGrantSec = Number.NEGATIVE_INFINITY;
+    // The 1e-9 tolerance stops float rounding from refusing an exact 1/3 s gap.
+    if (timeSec - this.lastGrantSec < MIN_FLASH_GAP_SEC - 1e-9) return false;
+    this.lastGrantSec = timeSec;
+    return true;
+  }
+
+  reset(): void {
+    this.lastGrantSec = Number.NEGATIVE_INFINITY;
+  }
+}
+
+/** Shared by every layer, so the limit applies to the whole screen, not per layer. */
+export const flashGovernor = new FlashGovernor();

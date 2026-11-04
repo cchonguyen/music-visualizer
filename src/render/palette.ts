@@ -33,7 +33,7 @@ export const PALETTE_ORDER: PaletteName[] = ['neon', 'ember', 'coral', 'bloom'];
 const PALETTES: Record<PaletteName, Palette> = {
   neon: {
     name: 'neon',
-    base: hexToRgb('#05060d'),
+    base: hexToRgb('#05050a'),
     accentA: hexToRgb('#22d3ee'), // cyan
     accentB: hexToRgb('#e879f9'), // magenta
     accentC: hexToRgb('#7c3aed'), // ultraviolet
