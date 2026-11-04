@@ -36,11 +36,13 @@ export function seedFor(index: number): number {
 
 /**
  * Radius along the path for a life value. Accelerates outward:
- * r = mix(0.14, 0.95, life^1.8). Input is clamped to [0, 1].
+ * r = mix(launch, 0.95, life^1.8). Input is clamped to [0, 1].
+ * `launch` is the spawn radius: 0.14 by default, or 0.16 + crown height (P5) so
+ * particles leave the tips of the radial crown.
  */
-export function radiusFor(life: number): number {
+export function radiusFor(life: number, launch = RADIUS_NEAR): number {
   const l = Math.min(1, Math.max(0, life));
-  return RADIUS_NEAR + (RADIUS_FAR - RADIUS_NEAR) * Math.pow(l, 1.8);
+  return launch + (RADIUS_FAR - launch) * Math.pow(l, 1.8);
 }
 
 /** Life rate per particle, 0.06 to 0.16 (multiplies the integrated phase). */

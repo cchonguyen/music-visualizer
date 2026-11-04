@@ -11,6 +11,7 @@ import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
 import { getSway } from '../swayStore';
+import { getCrownHeights } from '../crownStore';
 import { blendAccents } from '../colourSwap';
 
 const BRIGHTNESS = 1.0;
@@ -41,6 +42,7 @@ export class ParticleLayer implements RenderLayer {
   private uBrightness: WebGLUniformLocation | null = null;
   private uEnergy: WebGLUniformLocation | null = null;
   private uTwinkleTime: WebGLUniformLocation | null = null;
+  private uCrown: WebGLUniformLocation | null = null;
 
   private paletteName: string = DEFAULT_PALETTE;
   private readonly phase = new Phase();
@@ -66,6 +68,7 @@ export class ParticleLayer implements RenderLayer {
     this.uBrightness = gl.getUniformLocation(this.program, 'uBrightness');
     this.uEnergy = gl.getUniformLocation(this.program, 'uEnergy');
     this.uTwinkleTime = gl.getUniformLocation(this.program, 'uTwinkleTime');
+    this.uCrown = gl.getUniformLocation(this.program, 'uCrown[0]');
     this.phase.reset();
     this.twinkle.reset();
     this.flash = 0;
@@ -118,6 +121,8 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uBrightness, BRIGHTNESS);
     gl.uniform1f(this.uEnergy, clamp01(frame.energy));
     gl.uniform1f(this.uTwinkleTime, twinkleTime);
+    // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).
+    gl.uniform1fv(this.uCrown, getCrownHeights());
 
     // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
     // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
@@ -149,6 +154,7 @@ export class ParticleLayer implements RenderLayer {
     this.uBrightness = null;
     this.uEnergy = null;
     this.uTwinkleTime = null;
+    this.uCrown = null;
     this.gl = null;
   }
 }

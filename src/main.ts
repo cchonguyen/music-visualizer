@@ -1,5 +1,5 @@
-// App entry: start screen → AudioEngine (inside the click) → GlHost with the two
-// Stage 1 tracer layers → debug panel and controls.
+// App entry: start screen → AudioEngine (inside the click) → GlHost with the scenes
+// and layers → debug panel and controls.
 import './style.css';
 import { AudioEngine } from './audio/engine';
 import { estimateLatencyMs } from './audio/latency';
@@ -11,12 +11,14 @@ import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
 import { TunnelLayer } from './render/layers/tunnel';
-import { SlowFollower } from './render/dynamics';
 import { getVisualGain } from './render/gainStore';
 import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
+import { CrownLayer } from './render/layers/crown';
 import { advanceSway } from './render/swayStore';
+import { advanceCrown } from './render/crownStore';
+import { sceneForKey } from './render/sceneKeys';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
@@ -28,6 +30,17 @@ import { browserSupportProblems, showNotice } from './ui/notices';
 const CALM_SCALE = 0.35;
 /** Keep the latest beat times for the latency estimate (about 30 s of kicks). */
 const MAX_BEATS = 60;
+
+/** One set of flight layers. Each scene owns its own layers, so each scene gets its own set. */
+interface FlightKit {
+  tunnel: TunnelLayer;
+  particles: ParticleLayer;
+  shockwave: ShockwaveLayer;
+}
+
+function flightKit(): FlightKit {
+  return { tunnel: new TunnelLayer(), particles: new ParticleLayer(), shockwave: new ShockwaveLayer() };
+}
 
 function start(): void {
   const startScreen = document.getElementById('start')!;
@@ -45,28 +58,33 @@ function start(): void {
   }
   startScreen.hidden = true;
 
-  // Default (live site): the Stage 2 scenes. Keys 1 and 2 switch scenes.
-  //   1 = flight: forward-flight tunnel + treble sparkles
+  // Default (live site): the crown scene. Keys switch scenes (see sceneKeys.ts):
+  //   0 = crown:  flight tunnel + radial crown + particles + shockwave
+  //   1 = flight: flight tunnel + particles + shockwave, no crown
   //   2 = bars:   frequency bars + rings
   // URL options for single checks: ?tracer (Stage 1), ?trail, ?tunnel, ?particles, ?bars, ?scenes.
   const params = new URLSearchParams(location.search);
   let compositor: Compositor | null = null;
-  let tunnel: TunnelLayer | null = null;
-  let particles: ParticleLayer | null = null;
-  let shockwave: ShockwaveLayer | null = null;
-  let blendCompositor: Compositor | null = null;
-  let autoBlend = true;
-  const energySlow = new SlowFollower(6);
+  // Single-layer debug options (?tunnel, ?particles) and the scene kits. Arrays, so TypeScript
+  // does not narrow them to null inside the per-frame closures.
+  const tunnels: TunnelLayer[] = [];
+  const particleLayers: ParticleLayer[] = [];
+  const kits: FlightKit[] = [];
+  // Whether the crown is on screen: its heights drive particle launches, so they are zero otherwise.
+  let crownOn = true;
   // P4: section contrast (fast loudness minus 8 s slow loudness) and the drop colour swap.
   const loudSlow = makeSlowLoudness();
   const colourSwap = new ColourSwap();
   if (params.has('trail')) {
     host.addLayer(new TrailTestLayer());
   } else if (params.has('tunnel')) {
-    tunnel = new TunnelLayer();
-    host.addLayer(tunnel);
+    const t = new TunnelLayer();
+    tunnels.push(t);
+    host.addLayer(t);
   } else if (params.has('particles')) {
-    host.addLayer(new ParticleLayer());
+    const p = new ParticleLayer();
+    particleLayers.push(p);
+    host.addLayer(p);
   } else if (params.has('bars')) {
     host.addLayer(new BarsLayer());
     host.addLayer(new RingsLayer());
@@ -81,23 +99,25 @@ function start(): void {
     host.addLayer(new BassPulseLayer());
     host.addLayer(new WaveformLayer());
   } else {
-    tunnel = new TunnelLayer();
-    particles = new ParticleLayer();
-    shockwave = new ShockwaveLayer();
-    compositor = new Compositor([
-      new Scene('flight', [tunnel, particles, shockwave]),
+    const crownKit = flightKit();
+    const flyKit = flightKit();
+    kits.push(crownKit, flyKit);
+    const crown = new CrownLayer();
+    const comp = new Compositor([
+      new Scene('crown', [crownKit.tunnel, crown, crownKit.particles, crownKit.shockwave]),
+      new Scene('flight', [flyKit.tunnel, flyKit.particles, flyKit.shockwave]),
       new Scene('bars', [new BarsLayer(), new RingsLayer()]),
     ]);
-    compositor.setWeights({ flight: 1 });
-    host.addLayer(compositor);
-    blendCompositor = compositor;
-    // Auto blend: the bars scene drifts into the flight scene as the song gets louder
-    // (slow, so sections change the look rather than flicker). Keys: 1 flight, 2 bars, 0 auto.
+    comp.setWeights({ crown: 1 });
+    compositor = comp;
+    host.addLayer(comp);
+    // No automatic blend: the view changes only when a key is pressed.
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === '1') { autoBlend = false; compositor!.setWeights({ flight: 1 }); }
-      if (e.key === '2') { autoBlend = false; compositor!.setWeights({ bars: 1 }); }
-      if (e.key === '0') autoBlend = true;
+      const name = sceneForKey(e.key);
+      if (!name) return;
+      comp.setWeights({ [name]: 1 });
+      crownOn = name === 'crown';
     });
   }
 
@@ -107,9 +127,13 @@ function start(): void {
   };
   const controls = setupControls(engine, state);
   const syncCalm = () => {
-    if (tunnel) tunnel.calm = state.calm;
-    if (particles) particles.calm = state.calm;
-    if (shockwave) shockwave.calm = state.calm;
+    for (const t of tunnels) t.calm = state.calm;
+    for (const p of particleLayers) p.calm = state.calm;
+    for (const k of kits) {
+      k.tunnel.calm = state.calm;
+      k.particles.calm = state.calm;
+      k.shockwave.calm = state.calm;
+    }
   };
   const panel = new DebugPanel();
 
@@ -150,6 +174,8 @@ function start(): void {
     syncCalm();
     // One shared sway per frame (tunnel, particles, crown read it). Calm turns it off.
     advanceSway(displayFrameMs / 1000, frame.norm.mid, state.calm);
+    // P5: crown heights once per frame (particles launch from them). Visual gain is applied inside.
+    advanceCrown(frame.smoothedSpectrum, frame.sampleRate, frame.spectrum.length * 2, displayFrameMs / 1000, state.calm, crownOn);
     // P4 (before the visual gain, so energy is the track-relative value): contrast and colour swap.
     const dtSec = displayFrameMs / 1000;
     const contrast = sectionContrast(frame.loudness, loudSlow.step(frame.loudness, dtSec));
@@ -160,14 +186,16 @@ function start(): void {
       kick: frame.beatByBand.sub,
       calm: state.calm,
     });
-    for (const layer of [tunnel, particles]) {
-      if (layer) { layer.sectionContrast = contrast; layer.accentSwap = swapMix; }
+    for (const layer of [...tunnels, ...particleLayers]) {
+      layer.sectionContrast = contrast;
+      layer.accentSwap = swapMix;
     }
-    if (shockwave) shockwave.accentSwap = swapMix;
-    if (blendCompositor && autoBlend) {
-      const slow = energySlow.step(frame.energy, displayFrameMs / 1000);
-      const bars = state.calm ? 0 : Math.min(0.6, Math.max(0, (slow - 0.55) * 1.5));
-      blendCompositor.setWeights({ flight: 1 - bars, bars });
+    for (const k of kits) {
+      k.tunnel.sectionContrast = contrast;
+      k.tunnel.accentSwap = swapMix;
+      k.particles.sectionContrast = contrast;
+      k.particles.accentSwap = swapMix;
+      k.shockwave.accentSwap = swapMix;
     }
 
     // Visual gain: scales the response (ring crests, sparkles, ring count), not the
