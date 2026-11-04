@@ -12,7 +12,7 @@ import type { AudioFrame } from './types';
 export type SourceKind = 'none' | 'file' | 'display' | 'mic' | `test:${TestSignal}`;
 type EngineEvent = 'source-ended' | 'error' | 'source-changed';
 
-const FFT_SIZE = 4096;
+const FFT_SIZE = 8192; // 2.3 measured: 4096 missed 6/20 kicks and fired 27 false beats under a 95 Hz note; 8192 caught 20/20
 
 export class AudioEngine {
   readonly ctx: AudioContext;

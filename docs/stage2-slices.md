@@ -168,3 +168,14 @@ Contracts in force: `src/audio/types.ts` (AudioFrame, read-only, reused each fra
 
 ## Open before 2.1 starts
 - The owner's reference-visual notes (what to copy from each video) would tune 2.4 and 2.5. They don't block 2.1 to 2.3.
+
+## 2.3 Result (recorded 2026-11-04, browser, 44.1/48 kHz context)
+
+Masking test: sustained 95 Hz note at −12 dBFS, 45 Hz kicks every 0.5 s at −6 dBFS, 20 kicks over 10 s.
+
+| Option | Kicks detected | False beats | Median latency | Max latency |
+|---|---|---|---|---|
+| A: FFT 4096 (current, 10.8 Hz bins) | 14 / 20 | 27 | 14 ms | 126 ms |
+| **A′: FFT 8192 (5.4 Hz bins), chosen** | **20 / 20** | **1** | **13 ms** | **17 ms** |
+
+Decision: FFT 8192 (option A). Option B (a separate low-pass analyser) was not needed. The one false beat is most likely the note's own onset from silence, which real songs also have.
