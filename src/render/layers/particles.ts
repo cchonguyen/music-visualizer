@@ -11,7 +11,7 @@ import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
 
-const BRIGHTNESS = 0.6;
+const BRIGHTNESS = 1.0;
 const CALM_SPARKLE_SCALE = 0.3;
 const CALM_PHASE_RATE = 0.2;
 const BASE_PHASE_RATE = 0.2;
@@ -86,12 +86,16 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uSparkle, sparkle);
     gl.uniform1f(this.uBrightness, BRIGHTNESS);
 
-    // Additive blending for this draw only; the host disables it before the next layer.
+    // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
+    // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
+    // 2026-11-04). So switch to ADD for this draw only, then restore MAX.
     gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, POOL_SIZE);
     gl.bindVertexArray(null);
+    gl.blendEquation(gl.MAX);
     gl.disable(gl.BLEND);
   }
 

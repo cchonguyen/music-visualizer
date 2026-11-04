@@ -37,7 +37,9 @@ void main() {
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.
   float pulse = 0.85 + 0.15 * clamp(uLevel, 0.0, 1.0);
 
-  vec3 rings = mix(uBase, uAccentA, stripe) * pulse;
+  // Bass pushes the ring stripes up to 25% brighter. Bounded for the flash limit.
+  float stripeGain = 0.75 + 0.25 * clamp(uSub, 0.0, 1.0);
+  vec3 rings = mix(uBase, uAccentA, stripe * stripeGain) * pulse;
   // Subtle accent B glow only where a stripe crest is near 1.
   rings += uAccentB * 0.15 * smoothstep(0.85, 1.0, stripe);
   // Beat flash: crests brighten on a beat. Brightness only, no camera movement.

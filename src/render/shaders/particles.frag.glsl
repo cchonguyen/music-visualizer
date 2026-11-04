@@ -16,7 +16,7 @@ void main() {
   // Radial falloff: 1 at the centre, 0 at the quad edge.
   // NOTE(spec): written as 1 - smoothstep(0, 1, d) because GLSL leaves smoothstep undefined when edge0 >= edge1.
   float a = 1.0 - smoothstep(0.0, 1.0, length(vLocal));
-  float level = clamp(uSparkle, 0.0, 0.8) * vTwinkle;
+  float level = clamp(uSparkle, 0.0, 1.0) * vTwinkle;
   vec3 colour = uAccent * a * uBrightness * level;
-  fragColor = vec4(min(colour, vec3(0.8)), 1.0);
+  fragColor = vec4(min(colour, vec3(0.9)), 1.0);
 }

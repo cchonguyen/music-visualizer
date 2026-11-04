@@ -17,14 +17,17 @@ void main() {
   // Same seed formula as seedFor() in particleState.ts.
   float seed = fract(sin(float(gl_InstanceID) * 12.9898) * 43758.5453);
 
-  float angle = seed * TAU;
+  // Angle uses its own hash. Reusing `seed` for both made particles line up into spirals.
+  float angleSeed = fract(sin(float(gl_InstanceID) * 78.233 + 1.7) * 43758.5453);
+  float angle = angleSeed * TAU;
   float life = fract(uPhase * 0.1 + seed);   // 0..1 along the path
   float radius = life * 0.9;
   vec2 centre = vec2(cos(angle), sin(angle)) * radius;
 
   // Fade in and out over the life, so particles appear at the centre and vanish at the edge.
   float envelope = sin(life * PI);
-  float halfSize = mix(0.004, 0.012, seed) * envelope;
+  // Sized up from 0.004–0.012 (measured: too small to read over the rings).
+  float halfSize = mix(0.008, 0.024, seed) * envelope;
 
   // Twinkle: each particle flickers on its own timing (never all at once).
   vTwinkle = smoothstep(0.3, 1.0, fract(uPhase * 0.7 + seed * 3.0));

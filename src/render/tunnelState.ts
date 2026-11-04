@@ -7,10 +7,10 @@
 import { Phase } from './clock';
 
 /** Steady flight speed, in depth units per second. */
-export const BASE_SPEED = 0.6;
+export const BASE_SPEED = 0.3;
 
 /** Extra speed per unit of track-relative energy (0..1). Kept small: no shake. */
-export const BOOST = 0.4;
+export const BOOST = 1.2; // raised from 0.4 (measured: speed barely changed on real music)
 
 /** Calm mode drifts at a quarter of the base speed, with no energy term. */
 const CALM_FACTOR = 0.25;
