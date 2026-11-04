@@ -4,6 +4,7 @@ import type { AudioEngine, SourceKind } from '../audio/engine';
 import type { TestSignal } from '../audio/testSignals';
 import { showNotice } from './notices';
 import { cyclePalette } from '../render/paletteStore';
+import { getVisualGain, setVisualGain } from '../render/gainStore';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -114,6 +115,16 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   volume.addEventListener('input', () => engine.setVolume(Number(volume.value)));
   calm.addEventListener('change', () => (state.calm = calm.checked));
+
+  // Visual gain: how strongly visuals respond to the music (not the volume).
+  const gain = $<HTMLInputElement>('gain');
+  const gainValue = $<HTMLSpanElement>('gain-value');
+  gain.value = String(getVisualGain());
+  gainValue.textContent = `${getVisualGain().toFixed(2)}×`;
+  gain.addEventListener('input', () => {
+    const v = setVisualGain(Number(gain.value));
+    gainValue.textContent = `${v.toFixed(2)}×`;
+  });
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();

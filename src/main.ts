@@ -11,6 +11,7 @@ import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
 import { TunnelLayer } from './render/layers/tunnel';
+import { getVisualGain } from './render/gainStore';
 import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
@@ -124,6 +125,15 @@ function start(): void {
     });
     controls.tick();
     syncCalm();
+
+    // Visual gain: scales the response (ring crests, sparkles, ring count), not the
+    // full-screen background level, so turning it up can't wash the screen out.
+    const g = getVisualGain();
+    if (g !== 1) {
+      const up = (x: number) => Math.min(1, x * g);
+      frame.norm.sub = up(frame.norm.sub); frame.norm.mid = up(frame.norm.mid); frame.norm.high = up(frame.norm.high);
+      frame.energy = up(frame.energy);
+    }
 
     // Calm mode: the frame object is rebuilt every tick, so scaling it here
     // affects only this frame's drawing, never the analysis state.

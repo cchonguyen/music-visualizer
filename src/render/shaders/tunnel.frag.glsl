@@ -2,7 +2,8 @@
 precision highp float;
 
 uniform float uPhase;        // flight phase from FlightState (integrated, monotonic)
-uniform float uSub;          // norm.sub, 0..1 (track-relative bass; was env.sub, too flat to see)
+uniform float uSub;          // norm.sub, 0..1 (track-relative bass, scaled by visual gain): ring crests
+uniform float uLevel;        // env.sub, 0..1 (absolute bass, unscaled): full-screen pulse
 uniform vec2 uRes;           // target size in pixels
 uniform vec3 uBase;          // palette base (dim floor)
 uniform vec3 uAccentA;       // palette accent A (ring stripes)
@@ -34,7 +35,7 @@ void main() {
 
   // Full-screen pulse stays small (15%): a large whole-screen brightness swing
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.
-  float pulse = 0.85 + 0.15 * clamp(uSub, 0.0, 1.0);
+  float pulse = 0.85 + 0.15 * clamp(uLevel, 0.0, 1.0);
 
   vec3 rings = mix(uBase, uAccentA, stripe) * pulse;
   // Subtle accent B glow only where a stripe crest is near 1.

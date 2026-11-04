@@ -25,6 +25,7 @@ export class TunnelLayer implements RenderLayer {
   private vao: WebGLVertexArrayObject | null = null;
   private uPhase: WebGLUniformLocation | null = null;
   private uSub: WebGLUniformLocation | null = null;
+  private uLevel: WebGLUniformLocation | null = null;
   private uRes: WebGLUniformLocation | null = null;
   private uBase: WebGLUniformLocation | null = null;
   private uAccentA: WebGLUniformLocation | null = null;
@@ -42,6 +43,7 @@ export class TunnelLayer implements RenderLayer {
     this.program = compileProgram(gl, FULLSCREEN_VERT, fragSrc, 'tunnel');
     this.uPhase = gl.getUniformLocation(this.program, 'uPhase');
     this.uSub = gl.getUniformLocation(this.program, 'uSub');
+    this.uLevel = gl.getUniformLocation(this.program, 'uLevel');
     this.uRes = gl.getUniformLocation(this.program, 'uRes');
     this.uBase = gl.getUniformLocation(this.program, 'uBase');
     this.uAccentA = gl.getUniformLocation(this.program, 'uAccentA');
@@ -75,6 +77,7 @@ export class TunnelLayer implements RenderLayer {
     gl.uniform1f(this.uBeat, this.beatEnv); // must follow useProgram, or the call is an invalid operation
     gl.uniform1f(this.uPhase, phase);
     gl.uniform1f(this.uSub, frame.norm.sub);
+    gl.uniform1f(this.uLevel, frame.env.sub);
     gl.uniform2f(this.uRes, target.width, target.height);
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
@@ -96,6 +99,7 @@ export class TunnelLayer implements RenderLayer {
     this.vao = null;
     this.uPhase = null;
     this.uSub = null;
+    this.uLevel = null;
     this.uRes = null;
     this.uBase = null;
     this.uAccentA = null;
