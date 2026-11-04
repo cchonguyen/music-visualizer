@@ -9,7 +9,7 @@ import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import { SlowFollower } from '../dynamics';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
-import { FlightState } from '../tunnelState';
+import { BendState, bendOffset, FlightState, RollState } from '../tunnelState';
 import { flashGovernor } from '../safety';
 
 const RING_DENSITY = 0.5;
@@ -36,9 +36,12 @@ export class TunnelLayer implements RenderLayer {
   private uRingDensity: WebGLUniformLocation | null = null;
 
   private readonly flight = new FlightState();
+  private readonly roll = new RollState();
+  private readonly bend = new BendState();
   private beatEnv = 0;
   private uBeat: WebGLUniformLocation | null = null;
   private uCenter: WebGLUniformLocation | null = null;
+  private uRoll: WebGLUniformLocation | null = null;
   private uDensity: WebGLUniformLocation | null = null;
   private uHue: WebGLUniformLocation | null = null;
   private highAvg = new SlowFollower(3);
@@ -58,6 +61,7 @@ export class TunnelLayer implements RenderLayer {
     this.uRingDensity = gl.getUniformLocation(this.program, 'uRingDensity');
     this.uBeat = gl.getUniformLocation(this.program, 'uBeat');
     this.uCenter = gl.getUniformLocation(this.program, 'uCenter');
+    this.uRoll = gl.getUniformLocation(this.program, 'uRoll');
     this.uDensity = gl.getUniformLocation(this.program, 'uDensity');
     this.uHue = gl.getUniformLocation(this.program, 'uHue');
     this.beatEnv = 0;
@@ -97,10 +101,12 @@ export class TunnelLayer implements RenderLayer {
     // Motion and colour (2026-11-04): the rings must move and change, not sit still.
     // Sway and breathing are bounded so they never jolt the view.
     const t = clock.timeSec;
-    const mid = frame.norm.mid;
     const highSlow = this.highAvg.step(frame.norm.high, clock.dtSec);
-    const sway = this.calm ? 0 : 1;
-    gl.uniform2f(this.uCenter, sway * 0.05 * Math.sin(t * 0.31) * mid, sway * 0.04 * Math.cos(t * 0.23) * mid);
+    // Depth (P3): figure-eight bend of the vanishing point (off in calm), and a slow integrated roll.
+    const bendAngle = this.bend.advance(clock.dtSec);
+    const bend = bendOffset(bendAngle, frame.norm.mid, this.calm);
+    gl.uniform2f(this.uCenter, bend.x, bend.y);
+    gl.uniform1f(this.uRoll, this.roll.advance(clock.dtSec, frame.energy, this.calm));
     gl.uniform1f(this.uDensity, RING_DENSITY * (1 + 0.3 * Math.max(0, frame.env.sub - 0.2)));
     gl.uniform1f(this.uHue, Math.min(1, Math.max(0, 0.5 + 0.35 * Math.sin(t * 0.11) + 0.4 * (frame.norm.high - highSlow))));
     gl.bindVertexArray(this.vao);
@@ -127,6 +133,7 @@ export class TunnelLayer implements RenderLayer {
     this.uRingDensity = null;
     this.uBeat = null;
     this.uCenter = null;
+    this.uRoll = null;
     this.uDensity = null;
     this.uHue = null;
     this.gl = null;
