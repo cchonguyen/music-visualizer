@@ -74,7 +74,7 @@ export class TunnelLayer implements RenderLayer {
     gl.useProgram(this.program);
     gl.uniform1f(this.uBeat, this.beatEnv); // must follow useProgram, or the call is an invalid operation
     gl.uniform1f(this.uPhase, phase);
-    gl.uniform1f(this.uSub, frame.env.sub);
+    gl.uniform1f(this.uSub, frame.norm.sub);
     gl.uniform2f(this.uRes, target.width, target.height);
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);

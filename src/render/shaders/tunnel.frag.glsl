@@ -2,7 +2,7 @@
 precision highp float;
 
 uniform float uPhase;        // flight phase from FlightState (integrated, monotonic)
-uniform float uSub;          // env.sub, 0..1 (absolute level)
+uniform float uSub;          // norm.sub, 0..1 (track-relative bass; was env.sub, too flat to see)
 uniform vec2 uRes;           // target size in pixels
 uniform vec3 uBase;          // palette base (dim floor)
 uniform vec3 uAccentA;       // palette accent A (ring stripes)
@@ -32,14 +32,17 @@ void main() {
   // Contrast: at uRingContrast 0.5 the full 0..1 range is used; lower softens it.
   float stripe = 0.5 + (wave - 0.5) * (2.0 * uRingContrast);
 
-  // Sub band: slow brightness pulse on the rings (15% span keeps flashes gentle).
+  // Full-screen pulse stays small (15%): a large whole-screen brightness swing
+  // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.
   float pulse = 0.85 + 0.15 * clamp(uSub, 0.0, 1.0);
 
   vec3 rings = mix(uBase, uAccentA, stripe) * pulse;
   // Subtle accent B glow only where a stripe crest is near 1.
   rings += uAccentB * 0.15 * smoothstep(0.85, 1.0, stripe);
   // Beat flash: crests brighten on a beat. Brightness only, no camera movement.
-  rings += uAccentA * 0.25 * clamp(uBeat, 0.0, 1.0) * smoothstep(0.8, 1.0, stripe);
+  rings += uAccentA * 0.45 * clamp(uBeat, 0.0, 1.0) * smoothstep(0.8, 1.0, stripe);
+  // Ring response to the bass level (track-relative): crests light up with the bass.
+  rings += uAccentA * 0.5 * clamp(uSub, 0.0, 1.0) * smoothstep(0.75, 1.0, stripe);
 
   // Centre mask: blend into the dim floor colour at the vanishing point.
   float mask = smoothstep(0.02, 0.18, radius);

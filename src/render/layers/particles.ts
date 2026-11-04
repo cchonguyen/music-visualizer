@@ -72,7 +72,8 @@ export class ParticleLayer implements RenderLayer {
       : BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy;
     const phase = this.phase.advance(clock.dtSec, rate);
 
-    let sparkle = clamp01(frame.env.high + this.flash * FLASH_SPARKLE_SCALE);
+    // norm.high (track-relative): raw treble is often under 0.3 on real music, so env.high barely lit the particles.
+    let sparkle = clamp01(frame.norm.high + this.flash * FLASH_SPARKLE_SCALE);
     if (this.calm) sparkle *= CALM_SPARKLE_SCALE;
 
     const palette: Palette = getPalette(this.paletteName);

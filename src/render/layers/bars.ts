@@ -26,6 +26,7 @@ export class BarsLayer implements RenderLayer {
   private edges: BarEdge[] = [];
   private edgeSampleRate = -1;
   private edgeFftSize = -1;
+  private barPeak = 0;
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -47,7 +48,7 @@ export class BarsLayer implements RenderLayer {
     // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, _clock: RenderClock, target: RenderTarget): void {
+  draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao || !this.bars) throw new Error('BarsLayer: draw before init');
 
@@ -59,8 +60,15 @@ export class BarsLayer implements RenderLayer {
       this.edgeSampleRate = frame.sampleRate;
       this.edgeFftSize = fftSize;
     }
-    const values = barValues(frame.smoothedSpectrum, this.edges);
-    updateDataTexture(gl, this.bars, values);
+    // Track-relative scaling: divide by a slowly decaying peak (12 s), so quiet
+    // bands still show. Without this, mean-of-bins values sat flat near 0.36 (measured).
+    const raw = barValues(frame.smoothedSpectrum, this.edges);
+    let top = 0;
+    for (let i = 0; i < raw.length; i++) top = Math.max(top, raw[i] ?? 0);
+    this.barPeak = Math.max(top, this.barPeak * Math.exp(-Math.max(0, clock.dtSec) / 12));
+    const scale = 1 / Math.max(this.barPeak, 0.05);
+    for (let i = 0; i < raw.length; i++) raw[i] = Math.min(1, (raw[i] ?? 0) * scale);
+    updateDataTexture(gl, this.bars, raw);
 
     const palette: Palette = getPalette(getCurrentPalette());
 
