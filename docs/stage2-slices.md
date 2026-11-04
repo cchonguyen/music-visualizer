@@ -6,11 +6,28 @@ Contracts in force: `src/audio/types.ts` (AudioFrame, read-only, reused each fra
 
 **Ownership rule (architect fix 1):** a `RenderLayer` draws onto whatever target it is given. It never receives or owns feedback history. The `Scene` owns the feedback loop (`PingPong`) and the decay pass. Before `Scene` exists (slice 2.1), the trail test owns its own `PingPong` internally.
 
-**Order:** trail buffers → scene and compositor with the safety pass → sub-bass fix → tunnel → particles → bars, waveform, rings. Each slice passes its browser check before the next starts.
+**Order:** palette (2.0, pure logic, can run in parallel now) → trail buffers → scene and compositor with the safety pass → sub-bass fix → tunnel → particles → bars, waveform, rings. Each slice passes its browser check before the next starts.
 
 **Worker tiers:** lead (Opus) for GL state, framebuffers, the compositor and the safety pass. Haiku or a free model only for visuals once the contracts exist. Parallel work only for free or cheap workers in separate worktrees.
 
 ---
+
+## 2.0 Palette module (switchable colour themes) `[free, can start now, no GL]`
+
+**Goal:** every visual reads its colours from one place, and the owner can swap palettes live.
+**Target files:** `src/render/palette.ts` [NEW], `src/render/palette.test.ts` [NEW]
+**Contract:**
+- `type PaletteName = 'neon' | 'ember' | 'bloom' | 'ember-coral'` (default `'neon'`).
+- `neon` (default, owner choice 2026-11-04): cyan `#22d3ee`, magenta `#e879f9`, ultraviolet `#7c3aed`, base near-black `#05060d`.
+- `ember` (Jupiter reference): amber `#f59e0b`, emerald `#34d399`, steel `#94a3b8`, base `#07060a`.
+- `coral` (The Eye reference): crimson `#dc2626`, coral `#fb7185`, amber `#fbbf24`, base `#0a0306`.
+- `bloom` (Quezacotl reference): cyan `#67e8f9`, magenta `#f0abfc`, cold white `#e0f2fe`, base slate `#0b1220`.
+- `getPalette(name): Palette` returns `{ name, base, accentA, accentB, accentC }` as `[r, g, b]` floats 0..1.
+- `nextPalette(name): PaletteName` cycles in a fixed order (used by the key).
+- Palette is passed to shaders as uniforms. Layers never hard-code colours.
+**Pure tests:** every palette has a base darker than all accents (luminance check); `nextPalette` cycles through all names and returns to the start; unknown names fall back to `neon`; colour values are within 0..1.
+**UI (added in 2.2 with the shell):** key `P` cycles palettes; the status line shows the name; the choice persists in `localStorage`.
+**Verify:** `npm run typecheck && npm test`.
 
 ## 2.1 Typed GL helpers, ping-pong framebuffers, trail test `[lead]`
 
@@ -100,7 +117,7 @@ Contracts in force: `src/audio/types.ts` (AudioFrame, read-only, reused each fra
 - Ring stripes at `depth` offset by `flightPhase`. Sub band (`env.sub`) drives a slow radial brightness pulse, and the dim floor is kept.
 - Stripe limit: no more than about 5 alternating light-dark rings in the central view. Stripe contrast is a uniform, so Calm mode can soften it.
 - Calm mode: `base` is a gentle drift, `boost` is zero, and beat-triggered kicks are off.
-- Palette: a uniform set from the palette option (default cyan, magenta, ultraviolet on near-black; see `docs/reference-visuals.md`).
+- Palette: colours come from `getPalette()` (slice 2.0) as uniforms. Default `neon`. Never hard-code colours in the layer.
 
 **Pure tests:** `tunnelState` phase never decreases while energy swings 0.08↔1.0; speed clamps to zero or above; the centre mask is 0 at radius 0 and 1 beyond 0.18.
 

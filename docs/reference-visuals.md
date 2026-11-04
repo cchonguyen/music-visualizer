@@ -26,5 +26,6 @@ Source: owner's notes on five YouTube references (2026-11-04). Used to tune Stag
 4. **Structure beats:** beats brighten thin rings or lines, never the full screen.
 5. **Strobe limit:** the Zedd drop is out of scope. The safety pass (slice 2.2) keeps flashes within WCAG 2.3.1 limits even when the music is intense.
 
-## Open owner choice
-- Default palette: cyan/magenta/ultraviolet (Neon Tunnel), or one of the alternatives?
+## Palette decision (owner, 2026-11-04)
+- Default: `neon` (cyan, magenta, ultraviolet on near-black).
+- Owner wants to switch between palettes. Built as slice 2.0 in `docs/stage2-slices.md`: the `P` key cycles `neon`, `ember`, `coral` and `bloom`.

@@ -21,7 +21,9 @@
 - [x] **Slice 1.14: Council round 2 fixes** [DONE] `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/audio/types.ts`, `src/audio/frameBuilder.ts`, `src/audio/normalize.ts`, `src/audio/sources.ts`, `src/audio/engine.ts`, `src/render/clock.ts` [NEW], `src/render/layer.ts`, `src/gl/context.ts`, `src/render/layers/bassPulse.ts`, `src/render/layers/waveform.ts`, `src/ui/debugPanel.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 1.13: Device test report** [DONE] (owner reports pass on Mac and Windows, 2026-11-04) `[GREEN][UI / VISUAL]` worker: owner | Target files: `docs/stage1-test-report.md` [NEW] | Verify: owner sign-off
 
-## Stage 2 — Visuals on WebGL2 (outline; slice specs written after Stage 1 sign-off)
+## Stage 2 — Visuals on WebGL2 (specs in docs/stage2-slices.md)
+
+- [ ] **Slice 2.0: Palette module (neon default, switchable)** [PENDING] `[GREEN][CORE / DATA]` worker: free | Target files: `src/render/palette.ts` [NEW], `src/render/palette.test.ts` [NEW] | Verify: npm test -- src/render/palette.test.ts && npm run typecheck
 
 - [ ] **Slice 2.1: Typed GL helpers + ping-pong framebuffers + trail test** [PENDING] `[RED][UI / VISUAL]` worker: lead | Target files: `src/gl/fbo.ts` [NEW], `src/gl/vao.ts` [NEW], `src/render/layers/trailTest.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 2.2: Scene, Compositor and safety pass** [PENDING] `[RED][UI / VISUAL]` worker: lead | Target files: `src/render/scene.ts` [NEW], `src/render/compositor.ts` [NEW], `src/render/shaders/composite.frag.glsl` [NEW], `src/gl/context.ts` | Verify: npm run typecheck && npm test && npm run build
