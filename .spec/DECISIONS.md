@@ -42,3 +42,4 @@
 - 2026-11-04: Stage 1 signed off by owner: all tests passed on Mac and Windows. Per-row notes not recorded. Stage 2 begins.
 - 2026-11-04: Default palette = neon (cyan, magenta, ultraviolet). Owner also requires palette switching: new slice 2.0 (pure palette module, P key cycles neon/ember/coral/bloom, choice saved locally). Why: owner choice; palettes from the reference videos.
 - 2026-11-04: Sub-bass fix measured (slice 2.3): FFT 8192 caught 20/20 kicks under a 95 Hz masking note (FFT 4096: 14/20, 27 false beats). FFT 8192 adopted; analysis window is now 186 ms.
+- 2026-11-04: Stage 2 progress: 2.0–2.5 done; 2.6 partly done (rings verified; bars not yet verified on screen). Free models hit usage limits mid-session; Haiku subagents used for 2.4, 2.5, 2.6 and the log-scale helper. Palette store and P key wired.
