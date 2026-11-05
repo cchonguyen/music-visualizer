@@ -94,3 +94,17 @@ describe('LinkRunner', () => {
     expect(Number.isInteger(out.sides)).toBe(true);
   });
 });
+
+describe('LFO rate', () => {
+  it('changes the sine speed and clamps the rate range', () => {
+    const quarter = 0.25; // seconds
+    // At 0.5 Hz a quarter second is a quarter cycle: sin(pi/4) → 0.5 + 0.5·0.707.
+    expect(sourceValue('lfoSine', inputs({ timeSec: quarter }), 0.5)).toBeCloseTo(0.5 + 0.5 * Math.SQRT1_2, 5);
+    // At 2 Hz the same time is a full cycle later: sin(pi) → 0.5.
+    expect(sourceValue('lfoSine', inputs({ timeSec: quarter }), 2)).toBeCloseTo(0.5, 5);
+    // Out-of-range rates are clamped to 8 Hz, so the result is still in 0..1.
+    const v = sourceValue('lfoSaw', inputs({ timeSec: 3.3 }), 1000);
+    expect(v).toBeGreaterThanOrEqual(0);
+    expect(v).toBeLessThanOrEqual(1);
+  });
+});

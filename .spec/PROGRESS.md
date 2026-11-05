@@ -1,6 +1,6 @@
 # Task Progress & Single-Slice Work Lock
 
-> Rule: Mark only ONE task line at a time with `[IN_PROGRESS]`.
+> Rule: Mark only ONE task line at a time as in progress (the IN_PROGRESS tag).
 > Stage 1 detail (contracts, tests, worker tier, waves): `docs/stage1-slices.md`.
 
 ## Stage 1 — Audio core and GPU proof
@@ -67,6 +67,11 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **T2** auto-cycle: timer (C), strong beat (B), shuffle (X); skip and favourite tags (src/presets/autoCycle.ts)
 - [x] **T3** starter pack: 10 drafts (src/presets/builtin/starter-*.json), tagged draft. Keys 3–9 and [ ] reach them. Owner tunes and approves.
 - [ ] **T4** Studio in a second window: not built (optional in the plan)
+
+- [x] **Slice 4.5: Adjustable LFO rate (retroactive slice for PR #8)** `[GREEN][CORE / DATA]` worker: lead | Target files: `src/presets/format.ts`, `src/presets/links.ts`, `src/presets/links.test.ts`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 4.6: Particle shapes (streak, dot, star, ring)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 4.7: Particle transforms (rotation, zoom)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.vert.glsl` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 4.8: Particle colour shift (hue offset and drift)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
 
 ## Parked after Stage 4 (2026-11-05)
 See `docs/stage4-parked.md`: safety check for random and linked presets, layer opacity and blend, filled rings fix, E4 invert/solarize/echo, V2 and V5 variants, T4 second window, cleanup.

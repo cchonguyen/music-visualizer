@@ -37,18 +37,33 @@ export interface ParticleParams {
   calmSparkleScale: number;
   flashSparkleScale: number;
   swirlGain: number; // scales how far particles curl (V2): 1 = as before, 3+ = vortex
+  shape: string; // particle shape: streak | dot | star | ring
+  rotation: number; // radians, -3.14..3.14: turns the whole particle field about the screen centre
+  zoom: number; // 0.5..2: scales the particle field about the screen centre (2 = twice as big)
+  hueShift: number; // turns, 0..1: fixed hue offset applied to the particle colour
+  hueDrift: number; // turns per second, -0.2..0.2: slow hue drift on top of hueShift
 }
 export const PARTICLE_DEFAULTS: ParticleParams = {
   brightness: 1.0,
   calmSparkleScale: 0.3,
   flashSparkleScale: 0.2,
   swirlGain: 1,
+  shape: 'streak',
+  rotation: 0,
+  zoom: 1,
+  hueShift: 0,
+  hueDrift: 0,
 };
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01 },
   { type: 'float', name: 'calmSparkleScale', label: 'Sparkle in calm', group: 'Sparkle', default: PARTICLE_DEFAULTS.calmSparkleScale, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'flashSparkleScale', label: 'Sparkle on hi-hat flash', group: 'Sparkle', default: PARTICLE_DEFAULTS.flashSparkleScale, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'swirlGain', label: 'Swirl (vortex when high)', group: 'Motion', default: PARTICLE_DEFAULTS.swirlGain, min: 0, max: 4, step: 0.01 },
+  { type: 'enum', name: 'shape', label: 'Particle shape', group: 'Shape', default: PARTICLE_DEFAULTS.shape, options: ['streak', 'dot', 'star', 'ring'] },
+  { type: 'float', name: 'rotation', label: 'Rotation (rad)', group: 'Transform', default: PARTICLE_DEFAULTS.rotation, min: -3.14, max: 3.14, step: 0.01 },
+  { type: 'float', name: 'zoom', label: 'Zoom', group: 'Transform', default: PARTICLE_DEFAULTS.zoom, min: 0.5, max: 2, step: 0.01 },
+  { type: 'float', name: 'hueShift', label: 'Hue shift (turns)', group: 'Colour', default: PARTICLE_DEFAULTS.hueShift, min: 0, max: 1, step: 0.01 },
+  { type: 'float', name: 'hueDrift', label: 'Hue drift (turns/s)', group: 'Colour', default: PARTICLE_DEFAULTS.hueDrift, min: -0.2, max: 0.2, step: 0.005 },
 ];
 
 export interface CrownParams {
