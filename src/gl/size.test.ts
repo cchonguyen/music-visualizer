@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { canvasSize } from "./size";
+import {
+  canvasSize,
+  clampRenderScale,
+  scaledBufferSize,
+  setRenderScale,
+  getRenderScale,
+} from "./size";
 
 describe("canvasSize", () => {
   it("caps DPR 3 to 2", () => {
@@ -43,5 +49,34 @@ describe("canvasSize budget sweep", () => {
         }
       }
     }
+  });
+});
+
+describe("render scale", () => {
+  it("snaps to the nearest allowed scale", () => {
+    expect(clampRenderScale(1)).toBe(1);
+    expect(clampRenderScale(0.8)).toBe(0.75);
+    expect(clampRenderScale(0.6)).toBe(0.5);
+    expect(clampRenderScale(0.1)).toBe(0.5);
+    expect(clampRenderScale(5)).toBe(1);
+  });
+
+  it("falls back to 100% for non-finite input", () => {
+    expect(clampRenderScale(Number.NaN)).toBe(1);
+    expect(clampRenderScale(Number.POSITIVE_INFINITY)).toBe(1);
+  });
+
+  it("sets and reads the session value (no storage in node)", () => {
+    expect(setRenderScale(0.5)).toBe(0.5);
+    expect(getRenderScale()).toBe(0.5);
+    setRenderScale(1);
+    expect(getRenderScale()).toBe(1);
+  });
+
+  it("scales a buffer size and keeps at least 1x1", () => {
+    expect(scaledBufferSize(1920, 1080, 1)).toEqual({ width: 1920, height: 1080 });
+    expect(scaledBufferSize(1920, 1080, 0.75)).toEqual({ width: 1440, height: 810 });
+    expect(scaledBufferSize(1920, 1080, 0.5)).toEqual({ width: 960, height: 540 });
+    expect(scaledBufferSize(1, 1, 0.5)).toEqual({ width: 1, height: 1 });
   });
 });
