@@ -78,10 +78,13 @@ export class Scene {
     // 2) Layers draw on top with a MAX blend: each pixel keeps the brighter of the
     // old trail and the new light. Additive blending was tried and saturated to white
     // within a second, because the trail re-adds the light every frame (browser check, 2026-11-04).
-    gl.enable(gl.BLEND);
-    gl.blendEquation(gl.MAX);
-    gl.blendFunc(gl.ONE, gl.ONE);
+    // Each layer gets the MAX blend set again before its draw. Some layers (particles,
+    // waveform) switch blending off or to another mode when they finish; without this reset,
+    // a later full-screen layer (the kick shockwave) would overwrite the trail with black.
     for (const layer of this.layers) {
+      gl.enable(gl.BLEND);
+      gl.blendEquation(gl.MAX);
+      gl.blendFunc(gl.ONE, gl.ONE);
       layer.draw(frame, clock, target);
     }
     gl.disable(gl.BLEND);
