@@ -35,8 +35,8 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 
 ## projectM-inspired features (plan: /mnt/project-files/plans/projectm-ideas-implementation.md, approved 2026-11-05; contracts: .spec/PROJECTM_SPEC.md)
 - [x] **Slice 5.1: Beat sensitivity slider** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/audio/onset.ts`, `src/audio/onset.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
-- [ ] **Slice 5.2: Render quality (buffer scale, persisted)** [IN_PROGRESS] `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/render/scene.ts`, `src/gl/size.ts`, `src/gl/size.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
-- [ ] **Slice 5.3: Aspect correction toggle** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/compositor.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm run build
+- [x] **Slice 5.2: Render quality (buffer scale, persisted)** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/render/scene.ts`, `src/gl/size.ts`, `src/gl/size.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 5.3: Aspect correction toggle** [IN_PROGRESS] `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/compositor.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm run build
 - [ ] **Slice 5.4: Display time vs blend time** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/format.ts`, `src/presets/format.test.ts`, `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.5: Hard-cut beat mode** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.6: Transition styles (T1)** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/compositor.ts`, `src/render/shaders/transition.frag.glsl` [NEW], `src/presets/format.ts` | Verify: npm run typecheck && npm test && npm run build
