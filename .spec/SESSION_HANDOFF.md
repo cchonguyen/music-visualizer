@@ -13,3 +13,10 @@
   - Accessibility fixes to make next: File… is not keyboard reachable (label on hidden input); play button label does not match state. Browser checks for focus, contrast and Studio keyboard are pending.
   - PR #8 still needs the owner's merge decision. Stage 3 items and effects order were set by the owner's note on 2026-11-05.
 - **Immediate Next Step for Claude:** owner review of the new PR. Then the accessibility fixes above as a new slice.
+
+## Session 2026-11-05 (Stage 3 thread continuation)
+- Slice 4.13 (Studio morph control) and slice 4.14 (keyboard File button, play label) finished, Referee VERIFIED. PR #13 to main, not merged.
+- Checks: typecheck exit 0, vitest 335 passed, build exit 0. No lint script.
+- Browser (preview build): start screen tab order and focus ring OK, start-screen text contrast 5.0 to 18.1:1, player controls and File button OK, Studio opens with E and Tab reaches its controls. Not checked: player-screen source label and overlay hint contrast, Studio every-control keyboard run.
+- Dashboard: `.spec/STATE.json` written for 4.13 and 4.14 (stage Claimed). Untracked, not committed. Accept on dashboard is the operator's step.
+- Open: frame-time measurement stays with the owner's desktop.
