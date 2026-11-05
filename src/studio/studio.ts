@@ -7,7 +7,7 @@ import { Pane } from 'tweakpane';
 import { LAYER_FACTORIES, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import { SCHEMAS } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession } from '../presets/session';
 import type { ParamSpec, ParamValue } from '../presets/schema';
@@ -180,6 +180,7 @@ export class Studio {
 
     // --- Audio link (slice E2) --------------------------------------------------------
     this.bindLinkEditor(pane, id, preset);
+    this.bindMorphEditor(pane, id, preset);
 
     // --- Frame time -----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
@@ -236,6 +237,41 @@ export class Studio {
     pane.addButton({ title: 'Remove audio link' }).on('click', () => {
       session.commit(id);
       delete (setting as Setting).link;
+      this.bind(id);
+    });
+  }
+
+  /** Morph the setting picked in the link editor: it swings between its value and a second value (slice E-c). */
+  private bindMorphEditor(pane: Pane, id: string, preset: Preset): void {
+    const target = linkTargets(preset).find((t) => t.key === this.linkTarget);
+    if (!target || (target.spec.type !== 'float' && target.spec.type !== 'int')) return;
+    const { spec, setting } = target;
+    const session = this.opts.session;
+    const onEdit = () => session.commit(id);
+    if (!setting.morph) {
+      pane.addButton({ title: 'Add morph (swing to a second value)' }).on('click', () => {
+        session.commit(id);
+        setting.morph = { to: morphTargetFor(spec, setting.value), rate: MORPH_RATE_DEFAULT };
+        this.bind(id);
+      });
+      return;
+    }
+    const morph = setting.morph;
+    pane.addBinding(morph as unknown as Record<string, unknown>, 'to', {
+      label: 'Morph to',
+      min: spec.min,
+      max: spec.max,
+      step: spec.step,
+    }).on('change', onEdit);
+    pane.addBinding(morph as unknown as Record<string, unknown>, 'rate', {
+      label: 'Morph rate (cycles/s)',
+      min: MORPH_RATE_MIN,
+      max: MORPH_RATE_MAX,
+      step: 0.01,
+    }).on('change', onEdit);
+    pane.addButton({ title: 'Remove morph' }).on('click', () => {
+      session.commit(id);
+      delete (setting as Setting).morph;
       this.bind(id);
     });
   }
@@ -339,8 +375,8 @@ export class Studio {
 }
 
 /** Every numeric setting that can take a link, with the key used in the Studio and the link meter key. */
-function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string }[] {
-  const out: { key: string; label: string; setting: Setting; meterKey: string }[] = [];
+function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] {
+  const out: { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] = [];
   let live = 0;
   preset.layers.forEach((layer, i) => {
     const k = layer.enabled ? live++ : -1;
@@ -353,16 +389,27 @@ function linkTargets(preset: Preset): { key: string; label: string; setting: Set
         label: `${i + 1}. ${layer.type} · ${spec.label}`,
         setting,
         meterKey: k >= 0 ? `L${k}.${spec.name}` : '',
+        spec,
       });
     }
   });
   for (const spec of FEEDBACK_NUMBERS) {
     const setting = preset.feedback[spec.name];
-    if (setting) out.push({ key: `F.${spec.name}`, label: `Feedback · ${spec.label}`, setting, meterKey: `F.${spec.name}` });
+    if (setting) out.push({ key: `F.${spec.name}`, label: `Feedback · ${spec.label}`, setting, meterKey: `F.${spec.name}`, spec });
   }
   return out;
 }
 const FEEDBACK_NUMBERS = SCHEMAS.feedback.filter((s) => s.type === 'float' || s.type === 'int');
+
+/** Default morph end: a quarter of the range away from the value, on whichever side has room, kept in range. */
+function morphTargetFor(spec: Extract<ParamSpec, { type: 'float' | 'int' }>, value: ParamValue): number {
+  const base = typeof value === 'number' ? value : spec.default;
+  const quarter = (spec.max - spec.min) * 0.25;
+  let to = base + quarter;
+  if (to > spec.max) to = base - quarter;
+  to = Math.min(spec.max, Math.max(spec.min, to));
+  return spec.type === 'int' ? Math.round(to) : to;
+}
 
 /** A new layer with the schema defaults, enabled, full opacity. */
 function defaultLayer(type: string): LayerEntry {
