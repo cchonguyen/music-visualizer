@@ -13,6 +13,7 @@ uniform vec3 uAccent;      // palette accentB
 uniform vec3 uAccentA;     // palette accentA
 uniform float uSparkle;    // 0..1: treble level plus flash, calm-scaled
 uniform float uBrightness; // default 0.6
+uniform int uShape;        // 0 streak, 1 dot, 2 star, 3 ring
 
 out vec4 fragColor;
 
@@ -24,8 +25,23 @@ void main() {
   float along = smoothstep(0.0, 1.0, vLocal.x * 0.5 + 0.5);
   float shape = across * along;
 
+  float r = length(vLocal);
+  if (uShape == 1) {
+    // Dot: soft round disc.
+    shape = 1.0 - smoothstep(0.0, 1.0, r);
+  } else if (uShape == 2) {
+    // Star: four points along the axes (thin where x*y is near 0), with a faint disc core.
+    float points = (1.0 - smoothstep(0.0, 0.08, abs(vLocal.x * vLocal.y))) * (1.0 - smoothstep(0.0, 1.0, r));
+    float disc = (1.0 - smoothstep(0.0, 0.25, r)) * 0.35;
+    shape = max(points, disc);
+  } else if (uShape == 3) {
+    // Ring: annulus around radius 0.6, width 0.2.
+    float band = 1.0 - smoothstep(0.0, 0.1, abs(r - 0.6));
+    shape = band;
+  }
+
   // White core near the middle of the quad, fading to the accent colour outward.
-  float core = 1.0 - smoothstep(0.0, 0.6, length(vLocal));
+  float core = 1.0 - smoothstep(0.0, 0.6, r);
   vec3 tint = mix(uAccent, uAccentA, step(0.5, vMix));
   vec3 colour = mix(tint, vec3(1.0), core);
 

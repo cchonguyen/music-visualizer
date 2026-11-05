@@ -17,6 +17,8 @@ import { getVisualGain } from '../gainStore';
 
 import { PARTICLE_DEFAULTS, type ParticleParams } from '../../presets/layerSchemas';
 
+const PARTICLE_SHAPES = ['streak', 'dot', 'star', 'ring'];
+
 const CALM_PHASE_RATE = 0.2;
 const BASE_PHASE_RATE = 0.2;
 const ENERGY_PHASE_RATE = 0.8;
@@ -53,6 +55,7 @@ export class ParticleLayer implements RenderLayer {
   private uEnergy: WebGLUniformLocation | null = null;
   private uTwinkleTime: WebGLUniformLocation | null = null;
   private uCrown: WebGLUniformLocation | null = null;
+  private uShape: WebGLUniformLocation | null = null;
 
   private paletteName: string = DEFAULT_PALETTE;
   private readonly phase = new Phase();
@@ -79,6 +82,7 @@ export class ParticleLayer implements RenderLayer {
     this.uEnergy = gl.getUniformLocation(this.program, 'uEnergy');
     this.uTwinkleTime = gl.getUniformLocation(this.program, 'uTwinkleTime');
     this.uCrown = gl.getUniformLocation(this.program, 'uCrown[0]');
+    this.uShape = gl.getUniformLocation(this.program, 'uShape');
     this.phase.reset();
     this.twinkle.reset();
     this.flash = 0;
@@ -134,6 +138,9 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uTwinkleTime, twinkleTime);
     // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).
     gl.uniform1fv(this.uCrown, getCrownHeights());
+    // Particle shape (4.6): 0 streak, 1 dot, 2 star, 3 ring. Unknown names fall back to streak.
+    const shapeIndex = Math.max(0, PARTICLE_SHAPES.indexOf(this.p.shape));
+    gl.uniform1i(this.uShape, shapeIndex);
 
     // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
     // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
@@ -161,6 +168,7 @@ export class ParticleLayer implements RenderLayer {
     this.uAccent = null;
     this.uAccentA = null;
     this.uSwirl = null;
+    this.uShape = null;
     this.uSparkle = null;
     this.uBrightness = null;
     this.uEnergy = null;

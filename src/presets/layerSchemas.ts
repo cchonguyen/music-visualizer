@@ -37,18 +37,21 @@ export interface ParticleParams {
   calmSparkleScale: number;
   flashSparkleScale: number;
   swirlGain: number; // scales how far particles curl (V2): 1 = as before, 3+ = vortex
+  shape: string; // particle shape: streak | dot | star | ring
 }
 export const PARTICLE_DEFAULTS: ParticleParams = {
   brightness: 1.0,
   calmSparkleScale: 0.3,
   flashSparkleScale: 0.2,
   swirlGain: 1,
+  shape: 'streak',
 };
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01 },
   { type: 'float', name: 'calmSparkleScale', label: 'Sparkle in calm', group: 'Sparkle', default: PARTICLE_DEFAULTS.calmSparkleScale, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'flashSparkleScale', label: 'Sparkle on hi-hat flash', group: 'Sparkle', default: PARTICLE_DEFAULTS.flashSparkleScale, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'swirlGain', label: 'Swirl (vortex when high)', group: 'Motion', default: PARTICLE_DEFAULTS.swirlGain, min: 0, max: 4, step: 0.01 },
+  { type: 'enum', name: 'shape', label: 'Particle shape', group: 'Shape', default: PARTICLE_DEFAULTS.shape, options: ['streak', 'dot', 'star', 'ring'] },
 ];
 
 export interface CrownParams {
