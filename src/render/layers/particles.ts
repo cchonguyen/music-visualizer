@@ -13,6 +13,7 @@ import { highFlash, POOL_SIZE } from '../particleState';
 import { getSway } from '../swayStore';
 import { getCrownHeights } from '../crownStore';
 import { blendAccents } from '../colourSwap';
+import { getVisualGain } from '../gainStore';
 
 const BRIGHTNESS = 1.0;
 const CALM_SPARKLE_SCALE = 0.3;
@@ -94,7 +95,7 @@ export class ParticleLayer implements RenderLayer {
     // Density rises with energy only in loud sections; phase never decreases.
     const section = this.calm ? 1 : Math.max(0, 1 + this.sectionContrast);
     const rate = this.calm
-      ? CALM_PHASE_RATE
+      ? CALM_PHASE_RATE * getVisualGain()
       : (BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy) * section;
     const phase = this.phase.advance(clock.dtSec, rate);
     // Calm slows the motion, but the twinkle keeps real time (only its brightness is dimmed).

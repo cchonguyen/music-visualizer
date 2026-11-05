@@ -135,8 +135,9 @@ describe('flightRate scale (P4 section contrast)', () => {
     expect(flightRate(0, false, 0.5)).toBeGreaterThan(0);
   });
 
-  it('ignores the scale in calm mode', () => {
-    expect(flightRate(1, true, 1.5)).toBeCloseTo(BASE_SPEED * 0.25, 10);
+  it('applies the scale in calm mode too (visual gain works in Calm)', () => {
+    expect(flightRate(1, true, 1.5)).toBeCloseTo(BASE_SPEED * 0.25 * 1.5, 10);
+    expect(flightRate(0, true, 1)).toBeCloseTo(BASE_SPEED * 0.25, 10);
   });
 });
 

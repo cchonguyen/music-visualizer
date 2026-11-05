@@ -23,12 +23,13 @@ function clamp01(value: number): number {
 /**
  * Flight rate in depth units per second. Never negative.
  * Normal: (BASE_SPEED + BOOST * clamp(energy, 0, 1)) * scale.
- * Calm:   BASE_SPEED * 0.25 (energy and scale are ignored).
+ * Calm:   BASE_SPEED * 0.25 * scale (energy is ignored; scale carries visual gain).
  * scale (P4): 1 + section contrast, so breakdowns slow the flight and drops speed it up.
  */
 export function flightRate(energy: number, calm: boolean, scale = 1): number {
-  if (calm) return BASE_SPEED * CALM_FACTOR;
   const s = Number.isFinite(scale) ? Math.max(0, scale) : 1;
+  // Visual gain (inside scale) also applies in Calm, so the slider works in every mode.
+  if (calm) return BASE_SPEED * CALM_FACTOR * s;
   return (BASE_SPEED + BOOST * clamp01(energy)) * s;
 }
 
