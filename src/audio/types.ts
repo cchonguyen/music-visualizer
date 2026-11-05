@@ -22,6 +22,13 @@ export interface BandFlags {
   high: boolean;
 }
 
+// The time-domain window split into bands. Each array has length = fftSize.
+export interface BandWaveforms {
+  sub: Float32Array; // below 120 Hz
+  mid: Float32Array; // 120 Hz – 2.5 kHz
+  high: Float32Array; // 2.5 kHz and up
+}
+
 export interface AudioFrame {
   frameIndex: number; // increments every build(); 0 after reset()
   time: number; // AudioContext.currentTime, seconds
@@ -37,6 +44,7 @@ export interface AudioFrame {
   beatByBand: BandFlags; // per-band onsets (treble particles use .high)
   beatStrength: number; // 0..1 for the sub-band onset
   waveform: Float32Array; // time-domain samples, -1..1, length = fftSize
+  bandWaveforms: BandWaveforms; // waveform split into sub / mid / high, each length = fftSize
   spectrum: Float32Array; // raw magnitude per bin, 0..1, length = fftSize/2
   smoothedSpectrum: Float32Array; // per-bin envelope, 0..1, length = fftSize/2
   sampleRate: number;

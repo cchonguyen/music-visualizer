@@ -157,6 +157,29 @@ describe("FrameBuilder time handling", () => {
   });
 });
 
+describe("FrameBuilder band waveforms", () => {
+  it("fills sub, mid and high waveforms of FFT_SIZE, with mid louder than sub for a 2 kHz tone", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    const wave = new Float32Array(FFT_SIZE);
+    for (let i = 0; i < FFT_SIZE; i += 1) {
+      wave[i] = 0.5 * Math.sin((2 * Math.PI * 2000 * i) / SAMPLE_RATE);
+    }
+
+    const frame = builder.build(0, toneSpectrum(2000), wave);
+
+    expect(frame.bandWaveforms.sub.length).toBe(FFT_SIZE);
+    expect(frame.bandWaveforms.mid.length).toBe(FFT_SIZE);
+    expect(frame.bandWaveforms.high.length).toBe(FFT_SIZE);
+
+    const rmsOf = (w: Float32Array) => {
+      let sum = 0;
+      for (let i = 0; i < w.length; i += 1) sum += (w[i] ?? 0) ** 2;
+      return Math.sqrt(sum / w.length);
+    };
+    expect(rmsOf(frame.bandWaveforms.mid)).toBeGreaterThan(rmsOf(frame.bandWaveforms.sub));
+  });
+});
+
 describe("Council round 2 checks", () => {
   const SR = 48000, FFT = 4096;
   const sine = (hz: number, amp: number) => {

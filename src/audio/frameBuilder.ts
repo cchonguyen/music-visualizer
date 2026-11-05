@@ -9,10 +9,11 @@
 // reused, which is the allocation that matters for frame-rate stability.
 
 import { byteSpectrumToUnit, binForFrequency, computeBands } from "./bands";
+import { BandSplitter } from "./bandWaveforms";
 import { Envelope } from "./envelope";
 import { RollingNormalizer } from "./normalize";
 import { OnsetDetector, spectralFlux } from "./onset";
-import type { AudioFrame, BandFlags, BandLevels } from "./types";
+import type { AudioFrame, BandFlags, BandLevels, BandWaveforms } from "./types";
 
 export const SIGNAL_EPS = 0.02;
 
@@ -101,6 +102,9 @@ export class FrameBuilder {
   private readonly prevSpectrum: Float32Array;
   private readonly smoothedSpectrum: Float32Array;
   private readonly waveform: Float32Array;
+  // Sub / mid / high copies of the waveform, same length as waveform.
+  private readonly bandWaveforms: BandWaveforms;
+  private readonly splitter: BandSplitter;
 
   // The frame and its nested objects are reused too; callers must not keep a
   // frame past the next build().
@@ -144,6 +148,12 @@ export class FrameBuilder {
     this.prevSpectrum = new Float32Array(binCount);
     this.smoothedSpectrum = new Float32Array(binCount);
     this.waveform = new Float32Array(Math.max(0, Math.floor(fftSize)));
+    this.bandWaveforms = {
+      sub: new Float32Array(this.waveform.length),
+      mid: new Float32Array(this.waveform.length),
+      high: new Float32Array(this.waveform.length),
+    };
+    this.splitter = new BandSplitter(sampleRate);
 
     this.frame = {
       frameIndex: 0,
@@ -160,6 +170,7 @@ export class FrameBuilder {
       beatByBand: makeFlags(),
       beatStrength: 0,
       waveform: this.waveform,
+      bandWaveforms: this.bandWaveforms,
       spectrum: this.spectrum,
       smoothedSpectrum: this.smoothedSpectrum,
       sampleRate: this.sampleRate,
@@ -183,6 +194,7 @@ export class FrameBuilder {
         : Math.min(0.1, Math.max(0, timeSec - this.prevTime));
 
     this.copyWaveform(floatWaveform);
+    this.splitter.split(this.waveform, this.bandWaveforms);
     this.copySpectrum(byteSpectrum);
 
     const bands = computeBands(this.spectrum, this.sampleRate, this.fftSize);
