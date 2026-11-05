@@ -24,3 +24,12 @@ Status: draft for owner decision. No slice is started. Build one slice at a time
 2. Confirm the effects order. Suggested: E-a, E-b, E-d, E-c, E-e, E-f.
 3. Confirm PR #8 option (retroactive slice or accept red gate).
 4. Provide owner-desktop frame-time numbers for S3-c, or allow a default budget.
+
+## Status check (2026-11-05, later)
+Already in code, so Stage 3 scope is smaller than the list above:
+- S3-a / S3-b: keyboard shortcuts (space, arrows, F for fullscreen, P palette) and a fullscreen button are in `src/ui/controls.ts`. Controls hide after 3 s idle.
+- S3-d (partly): capture end shows a notice (`source-ended`). Hidden-tab pause is noted in `src/gl/context.ts`. No test yet.
+- S3-e (partly): GPU-loss and restore handlers exist in `src/gl/context.ts`. No automated test yet.
+- S3-f (partly): `aria-live` notices, `aria-pressed` on source buttons, reduced-motion default for calm mode. No full accessibility audit yet.
+- S3-c: no measurement yet. Default budget proposed: 16.7 ms per frame at 60 fps, measured in the debug panel.
+Not started: effects E-a to E-f. No slice has been opened for them yet.
