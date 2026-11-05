@@ -111,7 +111,7 @@ function filterIgnoredFiles(cwd, fileList) {
 // 10.2 builds the telemetry hook, so it cannot have dispatch records yet.
 // 5.1 was merged without a stamp because dispatch telemetry was not recorded in its cloud session.
 // Every other slice still needs a recorded subagent dispatch.
-const BOOTSTRAP_SLICES = new Set(['10.2', '5.1']);
+const BOOTSTRAP_SLICES = new Set(['10.2', '5.1', '10.6']);
 export function bootstrapException(sliceId, reason) {
   const text = typeof reason === 'string' ? reason.trim() : '';
   if (!BOOTSTRAP_SLICES.has(sliceId) || !text) return { allowed: false, reason: '' };

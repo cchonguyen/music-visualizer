@@ -1,5 +1,5 @@
 // Kick shockwave (Stage 2, P4, 2026-11-04). On a sub-band kick, a thin bright ring
-// travels from radius 0.16 to 0.85 over 350 ms and fades. It is a local ring, not a
+// travels from radius 0.16 to 0.95 over 350 ms and fades. It is a local ring, not a
 // full-screen flash, and it sits on the same centre as the tunnel rim.
 import type { AudioFrame } from '../../audio/types';
 import { compileProgram, FULLSCREEN_VERT } from '../../gl/shader';

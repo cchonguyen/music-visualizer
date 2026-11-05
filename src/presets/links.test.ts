@@ -11,7 +11,9 @@ function frame(over: Partial<AudioFrame> = {}): AudioFrame {
     raw: { ...bands }, env: { ...bands, sub: 0.3 }, norm: { ...bands, sub: 0.6, mid: 0.2, high: 0.9 },
     loudness: 0.4, energy: 0.7, flux: 0.1, fluxByBand: { ...bands }, beat: false,
     beatByBand: { sub: false, mid: false, high: false }, beatStrength: 0,
-    waveform: new Float32Array(0), spectrum: new Float32Array(0), smoothedSpectrum: new Float32Array(0), sampleRate: 48000,
+    waveform: new Float32Array(0),
+    bandWaveforms: { sub: new Float32Array(0), mid: new Float32Array(0), high: new Float32Array(0) },
+    spectrum: new Float32Array(0), smoothedSpectrum: new Float32Array(0), sampleRate: 48000,
     ...over,
   };
 }

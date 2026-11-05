@@ -111,7 +111,7 @@ export interface ShockwaveParams {
 }
 export const SHOCKWAVE_DEFAULTS: ShockwaveParams = {
   ringStart: 0.16,
-  ringEnd: 0.85,
+  ringEnd: 0.95,
   ringSec: 0.35,
   style: 'ring',
 };

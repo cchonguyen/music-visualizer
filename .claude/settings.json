@@ -69,6 +69,15 @@
             "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" post-tool-scrub.mjs"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" post-tool-telemetry.mjs"
+          }
+        ]
       }
     ],
     "PostToolUseFailure": [
