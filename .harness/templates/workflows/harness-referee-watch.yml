@@ -25,17 +25,22 @@ jobs:
 
       - name: Find commits without a Referee trailer
         id: scan
-        continue-on-error: true
         env:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
-        run: node .harness/scripts/ci-gate.mjs push "$BEFORE" "$AFTER" > "$RUNNER_TEMP/unverified.txt"
+        run: |
+          set +e
+          node .harness/scripts/ci-gate.mjs push "$BEFORE" "$AFTER" > "$RUNNER_TEMP/unverified.txt"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Show the scan result
         run: cat "$RUNNER_TEMP/unverified.txt"
 
       - name: Open an issue for unverified commits
-        if: steps.scan.outcome == 'failure'
+        # Only exit 1 (new commits without a trailer) opens an issue. Exit 2 (scan could not run) does not.
+        if: steps.scan.outputs.code == '1'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

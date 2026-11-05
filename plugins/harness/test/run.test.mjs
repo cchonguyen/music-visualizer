@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findHarnessRoot, parsePayload, run, ADAPTER } from '../hooks/run.mjs';
+import { STANDING_RULES, sessionStartOutput } from '../hooks/standing-rules.mjs';
 
 function tmpRepo(adapterBody) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-run-'));
@@ -75,5 +76,23 @@ test('hooks.json routes every event through run.mjs', () => {
   const cfg = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
   const cmds = Object.values(cfg.hooks).flat().flatMap((m) => m.hooks.map((h) => h.command));
   assert.ok(cmds.length >= 6);
-  for (const c of cmds) assert.match(c, /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/run\.mjs" \S+\.mjs$/);
+  // refresh.mjs runs before the repo adapter exists (it installs the plugin the adapter comes from), so it is exempt.
+  // standing-rules.mjs is exempt too: it runs without .harness so the rules reach projects that have no engine.
+  for (const c of cmds) {
+    if (c.includes('/hooks/refresh.mjs"') || c.includes('/hooks/standing-rules.mjs"')) continue;
+    assert.match(c, /\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/run\.mjs" \S+\.mjs$/);
+  }
+});
+
+test('standing rules hook emits SessionStart context with the auto-merge rule', () => {
+  const out = JSON.parse(sessionStartOutput());
+  assert.equal(out.hookSpecificOutput.hookEventName, 'SessionStart');
+  assert.match(out.hookSpecificOutput.additionalContext, /Auto-merge: when a pull request is green/);
+  assert.equal(STANDING_RULES.length, 3);
+});
+
+test('standing rules hook is registered as its own SessionStart command, outside run.mjs', () => {
+  const cfg = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
+  const cmds = cfg.hooks.SessionStart.flatMap((m) => m.hooks.map((h) => h.command));
+  assert.ok(cmds.some((c) => c.endsWith('/hooks/standing-rules.mjs"')));
 });

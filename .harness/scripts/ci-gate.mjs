@@ -77,10 +77,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.exitCode = 1;
     }
   } else if (mode === 'push' && first && second) {
-    const missing = commitsMissingTrailer({ before: first, after: second });
-    if (missing.length === 0) {
+    // Exit 1 means "commits found without a trailer" and nothing else. A git failure (bad sha,
+    // shallow clone) exits 2, so the watch workflow does not open an issue for a scan that never ran.
+    let missing;
+    try {
+      missing = commitsMissingTrailer({ before: first, after: second });
+    } catch (err) {
+      console.log(`✗ Referee scan could not run: ${String(err.message).split('\n')[0]}`);
+      process.exitCode = 2;
+    }
+    if (missing && missing.length === 0) {
       console.log('✓ Every commit in this push carries a Referee trailer.');
-    } else {
+    } else if (missing) {
       console.log('✗ Commits without a Referee-Verdict trailer:');
       for (const line of missing) console.log(`  - ${line}`);
       process.exitCode = 1;
