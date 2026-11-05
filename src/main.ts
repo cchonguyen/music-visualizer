@@ -31,6 +31,7 @@ import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
+import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 
 /** Calm mode scales the bass pulse down (motion reduction for sensitive viewers). */
@@ -199,7 +200,11 @@ function start(): void {
   engine.on('source-changed', () => (beatTimes.length = 0));
 
   let frameMs = 16;
-  host.onFrameTime = (ms) => (frameMs = ms);
+  const budget = new FrameBudget();
+  host.onFrameTime = (ms) => {
+    frameMs = ms;
+    budget.push(ms);
+  };
   host.onContextChange = (s) =>
     showNotice(s === 'lost' ? 'Graphics reset… restarting visuals.' : 'Visuals restarted.', 'info', 3000);
 
@@ -219,6 +224,7 @@ function start(): void {
       sourceName: sourceName(engine.kind, state.fileName),
       frame,
       frameMs,
+      budget: budget.summary(),
       trackSettings: engine.trackSettings,
       latency:
         engine.kind === 'test:kick'
