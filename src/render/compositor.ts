@@ -31,6 +31,44 @@ type PostValues = typeof POST_IDENTITY;
 
 export const TRANSITIONS = ['crossfade', 'wipe', 'dissolve', 'zoom'] as const;
 
+// Aspect correction (slice 5.3): on by default. The scene is drawn into the largest 16:9 box that
+// fits the window, centred, so shapes keep the proportions they were designed with. Off: the scene
+// fills the whole window. The choice is saved locally.
+const ASPECT_KEY = 'mv.aspectCorrect';
+function readAspectSetting(): boolean {
+  try {
+    return localStorage.getItem(ASPECT_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+let aspectCorrect = readAspectSetting();
+
+export function getAspectCorrect(): boolean {
+  return aspectCorrect;
+}
+
+/** Turns aspect correction on or off. The compositor picks the change up on its next frame. */
+export function setAspectCorrect(on: boolean): boolean {
+  aspectCorrect = on;
+  try {
+    localStorage.setItem(ASPECT_KEY, on ? '1' : '0');
+  } catch {
+    // Private window or blocked storage: the choice still holds for this page load.
+  }
+  return aspectCorrect;
+}
+
+/** Largest 16:9 box that fits inside width x height (at least 1 px each side). */
+export function fit16x9(width: number, height: number): { width: number; height: number } {
+  const w = Math.max(1, width);
+  const h = Math.max(1, height);
+  if (w * 9 > h * 16) {
+    return { width: Math.min(w, Math.max(1, Math.round((h * 16) / 9))), height: h };
+  }
+  return { width: w, height: Math.min(h, Math.max(1, Math.round((w * 9) / 16))) };
+}
+
 export class Compositor implements RenderLayer {
   private scenes = new Map<string, Scene>();
   // `weights` is what is drawn now; `targets` is what the last key press asked for.
@@ -57,6 +95,13 @@ export class Compositor implements RenderLayer {
   private loudnessSlow = 0;
   // How long a scene switch takes to fade (seconds). Each preset can ask for its own (slice 4.4).
   private fadeSec = RELEASE_TAU_SEC;
+  // Slice 5.3: the canvas size as the host gave it, and the box the scene actually uses (w x h),
+  // drawn at (offX, offY) on the canvas. appliedAspect is the setting the buffers were sized for.
+  private rawW = 1;
+  private rawH = 1;
+  private offX = 0;
+  private offY = 0;
+  private appliedAspect = aspectCorrect;
 
   constructor(scenes: Scene[]) {
     for (const s of scenes) this.scenes.set(s.name, s);
@@ -167,12 +212,25 @@ export class Compositor implements RenderLayer {
   }
 
   resize(width: number, height: number, dpr: number): void {
-    this.w = width;
-    this.h = height;
+    this.rawW = width;
+    this.rawH = height;
     this.dpr = dpr;
-    this.full?.resize(width, height);
-    this.half?.resize(Math.max(1, width >> 1), Math.max(1, height >> 1));
-    for (const name of this.ready) this.scenes.get(name)?.resize(width, height, dpr);
+    this.offX = 0;
+    this.offY = 0;
+    if (aspectCorrect) {
+      const box = fit16x9(width, height);
+      this.w = box.width;
+      this.h = box.height;
+      this.offX = Math.floor((width - box.width) / 2);
+      this.offY = Math.floor((height - box.height) / 2);
+    } else {
+      this.w = width;
+      this.h = height;
+    }
+    this.appliedAspect = aspectCorrect;
+    this.full?.resize(this.w, this.h);
+    this.half?.resize(Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
+    for (const name of this.ready) this.scenes.get(name)?.resize(this.w, this.h, dpr);
   }
 
   private postActive(): boolean {
@@ -186,6 +244,8 @@ export class Compositor implements RenderLayer {
   draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
     const gl = this.gl;
     if (!gl || !this.prog || !this.vao) throw new Error('Compositor: draw before init');
+    // The setting was toggled since the buffers were sized: re-fit them (slice 5.3).
+    if (aspectCorrect !== this.appliedAspect) this.resize(this.rawW, this.rawH, this.dpr);
 
     // Bring scenes up and down with their weights (eased toward the key-press targets).
     this.easeWeights(clock.dtSec);
@@ -257,10 +317,20 @@ export class Compositor implements RenderLayer {
     return { kind: 'fbo', framebuffer: pass.framebuffer, texture: pass.texture, width: size.width, height: size.height };
   }
 
+  /** Binds an output target. Canvas output is drawn into the centred box (slice 5.3). */
+  private bindTo(gl: WebGL2RenderingContext, target: RenderTarget): void {
+    if (target.kind === 'fbo') {
+      bindTarget(gl, target);
+      return;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(this.offX, this.offY, this.w, this.h);
+  }
+
   /** Blend up to two textures with their weights and the brightness cap. `safety` 1 = apply the safety rules. */
   private blendPass(gl: WebGL2RenderingContext, texA: WebGLTexture | null, texB: WebGLTexture | null, wA: number, wB: number, cap: number, safety: number, target: RenderTarget): void {
     const prog = this.prog!;
-    bindTarget(gl, target);
+    this.bindTo(gl, target);
     gl.disable(gl.BLEND);
     gl.useProgram(prog);
     gl.activeTexture(gl.TEXTURE0);
@@ -282,7 +352,7 @@ export class Compositor implements RenderLayer {
   }
 
   private blurPass(gl: WebGL2RenderingContext, src: WebGLTexture, stepX: number, stepY: number, target: RenderTarget): void {
-    bindTarget(gl, target);
+    this.bindTo(gl, target);
     gl.disable(gl.BLEND);
     const prog = this.blurProg!;
     gl.useProgram(prog);
@@ -298,7 +368,7 @@ export class Compositor implements RenderLayer {
   private postPass(gl: WebGL2RenderingContext, img: WebGLTexture, bloom: WebGLTexture, target: RenderTarget): void {
     const p = this.post;
     const prog = this.postProg!;
-    bindTarget(gl, target);
+    this.bindTo(gl, target);
     gl.disable(gl.BLEND);
     gl.useProgram(prog);
     gl.activeTexture(gl.TEXTURE0);

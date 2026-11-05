@@ -7,6 +7,7 @@ import { cyclePalette } from '../render/paletteStore';
 import { getVisualGain, setVisualGain } from '../render/gainStore';
 import { getBeatSensitivity, setBeatSensitivity } from '../audio/onset';
 import { getRenderScale, RENDER_SCALES, setRenderScale } from '../gl/size';
+import { getAspectCorrect, setAspectCorrect } from '../render/compositor';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -153,6 +154,19 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   qualitySelect.addEventListener('change', () => setRenderScale(Number(qualitySelect.value)));
   qualityLabel.append(qualitySelect);
   controls.append(qualityLabel);
+
+  // Aspect correction (slice 5.3): keeps shapes round in non-16:9 windows. On by default; saved locally.
+  const aspectLabel = document.createElement('label');
+  aspectLabel.htmlFor = 'aspect-correct';
+  aspectLabel.append('Aspect correction ');
+  const aspectBox = document.createElement('input');
+  aspectBox.type = 'checkbox';
+  aspectBox.id = 'aspect-correct';
+  aspectBox.checked = getAspectCorrect();
+  aspectBox.setAttribute('aria-label', 'Aspect correction');
+  aspectBox.addEventListener('change', () => setAspectCorrect(aspectBox.checked));
+  aspectLabel.append(aspectBox);
+  controls.append(aspectLabel);
 
   // Visual gain: how strongly visuals respond to the music (not the volume).
   const gain = $<HTMLInputElement>('gain');
