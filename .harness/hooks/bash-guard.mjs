@@ -4,6 +4,8 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { bashWriteReason, isHubOrigin } from './lib/guard-rules.mjs';
+import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
+import { gateDecision } from './lib/doctor-state.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
@@ -13,6 +15,20 @@ try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { process.exit(0);
 
 const command = event.tool_input?.command || '';
 if (!command) process.exit(0);
+
+// Live doctor gate: non-allow-listed Bash needs a DOCTOR_PASS for the current HEAD
+const doctorRoot = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+const doctorHead = currentHead(doctorRoot);
+const gate = gateDecision({
+  state: ensureDoctorState({ root: doctorRoot, head: doctorHead }),
+  head: doctorHead,
+  toolName: event.tool_name || 'Bash',
+  command,
+});
+if (!gate.allowed) {
+  console.error(gate.reason);
+  process.exit(2);
+}
 
 const cwd = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 let origin = '';

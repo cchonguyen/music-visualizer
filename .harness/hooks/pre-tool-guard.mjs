@@ -11,6 +11,8 @@ import {
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
 import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 import { normalizePayload } from './adapter.mjs';
+import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
+import { gateDecision } from './lib/doctor-state.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
@@ -355,6 +357,20 @@ if (isDirectRun) {
     } catch {
       process.exit(0);
     }
+  }
+
+  // Live doctor gate: edits and non-allow-listed Bash need a DOCTOR_PASS for the current HEAD
+  const gateHead = currentHead(root);
+  const doctorState = ensureDoctorState({ root, head: gateHead });
+  const gate = gateDecision({
+    state: doctorState,
+    head: gateHead,
+    toolName: event.tool_name,
+    command: event.tool_input?.command,
+  });
+  if (!gate.allowed) {
+    console.error(gate.reason);
+    process.exit(2);
   }
 
   const role = resolveRole(event);
