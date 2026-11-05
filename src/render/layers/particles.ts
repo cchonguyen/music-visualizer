@@ -15,13 +15,11 @@ import { getCrownHeights } from '../crownStore';
 import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
 
-const BRIGHTNESS = 1.0;
-const CALM_SPARKLE_SCALE = 0.3;
+import { PARTICLE_DEFAULTS, type ParticleParams } from '../../presets/layerSchemas';
+
 const CALM_PHASE_RATE = 0.2;
 const BASE_PHASE_RATE = 0.2;
 const ENERGY_PHASE_RATE = 0.8;
-// Mild: hi-hat flashes add only a little sparkle, so the scene doesn't strobe on every hit.
-const FLASH_SPARKLE_SCALE = 0.2;
 
 export class ParticleLayer implements RenderLayer {
   /** Calm mode: no energy-driven density, dimmer sparkle. */
@@ -30,6 +28,16 @@ export class ParticleLayer implements RenderLayer {
   sectionContrast = 0;
   /** Accent swap mix from ColourSwap (P4): 0 = normal, 1 = A and B exchanged. */
   accentSwap = 0;
+  /** Settings (slice 4.2). Read every frame. */
+  private p: ParticleParams;
+
+  constructor(params: Partial<ParticleParams> = {}) {
+    this.p = { ...PARTICLE_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<ParticleParams>): void {
+    this.p = { ...this.p, ...params };
+  }
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -102,8 +110,9 @@ export class ParticleLayer implements RenderLayer {
     const twinkleTime = this.twinkle.advance(clock.dtSec, 1);
 
     // norm.high (track-relative): raw treble is often under 0.3 on real music, so env.high barely lit the particles.
-    let sparkle = clamp01(frame.norm.high + this.flash * FLASH_SPARKLE_SCALE);
-    if (this.calm) sparkle *= CALM_SPARKLE_SCALE;
+    // Hi-hat flashes add only a little sparkle (flashSparkleScale), so the scene doesn't strobe on every hit.
+    let sparkle = clamp01(frame.norm.high + this.flash * this.p.flashSparkleScale);
+    if (this.calm) sparkle *= this.p.calmSparkleScale;
 
     const palette: Palette = getPalette(this.paletteName);
     const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
@@ -115,12 +124,12 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform3f(this.uAccent, accents.b[0], accents.b[1], accents.b[2]);
     gl.uniform3f(this.uAccentA, accents.a[0], accents.a[1], accents.a[2]);
     // Midrange drives a swirl, so the sparkles curve as they travel (2026-11-04).
-    gl.uniform1f(this.uSwirl, this.calm ? 0 : Math.min(1, frame.norm.mid));
+    gl.uniform1f(this.uSwirl, (this.calm ? 0 : Math.min(1, frame.norm.mid)) * this.p.swirlGain);
     // Shared sway (uv units) doubled to clip units: the spawn origin follows the tunnel rim.
     const sway = getSway();
     gl.uniform2f(this.uSway, 2 * sway.x, 2 * sway.y);
     gl.uniform1f(this.uSparkle, sparkle);
-    gl.uniform1f(this.uBrightness, BRIGHTNESS);
+    gl.uniform1f(this.uBrightness, this.p.brightness);
     gl.uniform1f(this.uEnergy, clamp01(frame.energy));
     gl.uniform1f(this.uTwinkleTime, twinkleTime);
     // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).

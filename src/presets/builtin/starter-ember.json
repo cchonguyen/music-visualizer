@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "Ember",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "hueDrift": -0.005
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {}
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {}
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {
+    "saturation": 0.6,
+    "gamma": 1.2,
+    "brightness": 0.05
+  }
+}

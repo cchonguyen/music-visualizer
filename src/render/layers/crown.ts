@@ -12,13 +12,21 @@ import { getCurrentPalette } from '../paletteStore';
 import { blendAccents } from '../colourSwap';
 import { getSway } from '../swayStore';
 import fragSrc from '../shaders/crown.frag.glsl?raw';
-
-/** Scale of the sway on the crown centre. Matches the particle emitter (the rim, not the centre). */
-const RIM_FACTOR = 1 - 0.16;
+import { CROWN_DEFAULTS, type CrownParams } from '../../presets/layerSchemas';
 
 export class CrownLayer implements RenderLayer {
   /** Accent swap mix from ColourSwap (0 = normal, 1 = A and B exchanged). */
   accentSwap = 0;
+  /** Settings (slice 4.2). Read every frame. */
+  private p: CrownParams;
+
+  constructor(params: Partial<CrownParams> = {}) {
+    this.p = { ...CROWN_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<CrownParams>): void {
+    this.p = { ...this.p, ...params };
+  }
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -58,7 +66,7 @@ export class CrownLayer implements RenderLayer {
     gl.useProgram(this.program);
     // Uniforms must follow useProgram, or the calls are an invalid operation.
     gl.uniform2f(this.uRes, target.width, target.height);
-    gl.uniform2f(this.uCentre, 2 * sway.x * aspect * RIM_FACTOR, 2 * sway.y * RIM_FACTOR);
+    gl.uniform2f(this.uCentre, 2 * sway.x * aspect * this.p.rimFactor, 2 * sway.y * this.p.rimFactor);
     gl.uniform1fv(this.uHeights, getCrownHeights());
     gl.uniform3f(this.uAccent, accent[0], accent[1], accent[2]);
     gl.bindVertexArray(this.vao);

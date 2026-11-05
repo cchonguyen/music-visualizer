@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "Soft smoke",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "decay": 0.97,
+    "blur": 0.6,
+    "fade": 0.002
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {}
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {
+        "brightness": 0.6
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {}
+}

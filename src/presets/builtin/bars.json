@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Bars",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {},
+  "layers": [
+    { "type": "bars", "params": {} },
+    { "type": "rings", "params": { "maxRings": 6, "maxRingsCalm": 3, "strokeBase": 0.004, "strokeNormGain": 0.01 } }
+  ],
+  "post": {}
+}

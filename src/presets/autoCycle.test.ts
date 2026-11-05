@@ -1,0 +1,64 @@
+import { describe, it, expect } from 'vitest';
+import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './autoCycle';
+
+const opts = (over: Partial<CycleOptions>): CycleOptions => ({ ...DEFAULT_CYCLE, ...over });
+
+describe('eligible', () => {
+  it('drops skipped presets', () => {
+    const ids = eligible([{ id: 'a', tags: [] }, { id: 'b', tags: ['skip'] }, { id: 'c', tags: ['built-in'] }], opts({}));
+    expect(ids).toEqual(['a', 'c']);
+  });
+
+  it('keeps only favourites when asked', () => {
+    const ids = eligible([{ id: 'a', tags: ['favourite'] }, { id: 'b', tags: [] }], opts({ favouritesOnly: true }));
+    expect(ids).toEqual(['a']);
+  });
+});
+
+describe('AutoCycler', () => {
+  it('does nothing when off', () => {
+    expect(new AutoCycler().next(100, true, 'a', ['a', 'b'], opts({ mode: 'off' }))).toBeNull();
+  });
+
+  it('timer mode switches after the interval, in list order', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'timer', intervalSec: 2 });
+    expect(c.next(1, false, 'a', ['a', 'b', 'c'], o)).toBeNull();
+    expect(c.next(1.1, false, 'a', ['a', 'b', 'c'], o)).toBe('b');
+    expect(c.next(1, false, 'b', ['a', 'b', 'c'], o)).toBeNull();
+    expect(c.next(1.1, false, 'b', ['a', 'b', 'c'], o)).toBe('c');
+  });
+
+  it('beat mode waits for a strong beat and the minimum gap', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'beat', minGapSec: 5 });
+    expect(c.next(1, true, 'a', ['a', 'b'], o)).toBeNull(); // too soon after start
+    expect(c.next(5, false, 'a', ['a', 'b'], o)).toBeNull(); // no beat
+    expect(c.next(0, true, 'a', ['a', 'b'], o)).toBe('b');
+    expect(c.next(1, true, 'b', ['a', 'b'], o)).toBeNull(); // gap not yet passed
+  });
+
+  it('shuffle picks a different preset, using the injected random', () => {
+    const c = new AutoCycler(() => 0);
+    const o = opts({ mode: 'timer', intervalSec: 1, shuffle: true });
+    expect(c.next(2, false, 'a', ['a', 'b', 'c'], o)).toBe('b');
+  });
+
+  it('never picks the current preset with shuffle', () => {
+    let seed = 1;
+    const rng = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    const c = new AutoCycler(rng);
+    const o = opts({ mode: 'timer', intervalSec: 1, shuffle: true });
+    for (let i = 0; i < 50; i++) {
+      const next = c.next(2, false, 'a', ['a', 'b', 'c'], o);
+      expect(next).not.toBe('a');
+    }
+  });
+
+  it('needs at least two presets', () => {
+    expect(new AutoCycler().next(100, true, 'a', ['a'], opts({ mode: 'timer', intervalSec: 1 }))).toBeNull();
+  });
+});

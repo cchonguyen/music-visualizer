@@ -12,10 +12,7 @@ import { getCurrentPalette } from '../paletteStore';
 import { flashGovernor } from '../safety';
 import fragSrc from '../shaders/shockwave.frag.glsl?raw';
 import { getSway } from '../swayStore';
-
-export const RING_START = 0.16;
-export const RING_END = 0.85;
-export const RING_SEC = 0.35;
+import { SHOCKWAVE_DEFAULTS, type ShockwaveParams } from '../../presets/layerSchemas';
 
 // One kick, one flash token (P4, owner patch 2026-11-04). The tunnel's beat flash and
 // the shockwave both ask here. The first caller in a frame asks the governor and the
@@ -38,6 +35,16 @@ export class ShockwaveLayer implements RenderLayer {
   calm = false;
   /** Accent swap mix from ColourSwap (0 = normal, 1 = swapped). */
   accentSwap = 0;
+  /** Settings (slice 4.2). Read every frame. */
+  private p: ShockwaveParams;
+
+  constructor(params: Partial<ShockwaveParams> = {}) {
+    this.p = { ...SHOCKWAVE_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<ShockwaveParams>): void {
+    this.p = { ...this.p, ...params };
+  }
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -46,6 +53,7 @@ export class ShockwaveLayer implements RenderLayer {
   private uCenter: WebGLUniformLocation | null = null;
   private uRadius: WebGLUniformLocation | null = null;
   private uFade: WebGLUniformLocation | null = null;
+  private uGlow: WebGLUniformLocation | null = null;
   private uAccent: WebGLUniformLocation | null = null;
 
   private active = false;
@@ -59,6 +67,7 @@ export class ShockwaveLayer implements RenderLayer {
     this.uCenter = gl.getUniformLocation(this.program, 'uCenter');
     this.uRadius = gl.getUniformLocation(this.program, 'uRadius');
     this.uFade = gl.getUniformLocation(this.program, 'uFade');
+    this.uGlow = gl.getUniformLocation(this.program, 'uGlow');
     this.uAccent = gl.getUniformLocation(this.program, 'uAccent');
     this.active = false;
     this.age = 0;
@@ -79,12 +88,12 @@ export class ShockwaveLayer implements RenderLayer {
       this.active = true;
       this.age = 0;
     }
-    if (this.calm || this.age >= RING_SEC) this.active = false;
+    if (this.calm || this.age >= this.p.ringSec) this.active = false;
     if (!this.active) return;
 
     bindTarget(gl, target);
-    const k = Math.min(1, this.age / RING_SEC);
-    const radius = RING_START + (RING_END - RING_START) * k;
+    const k = Math.min(1, this.age / this.p.ringSec);
+    const radius = this.p.ringStart + (this.p.ringEnd - this.p.ringStart) * k;
     const fade = (1 - k) * (1 - k);
     const palette: Palette = getPalette(getCurrentPalette());
     const accent = blendAccents(palette.accentA, palette.accentB, this.accentSwap).a;
@@ -96,6 +105,7 @@ export class ShockwaveLayer implements RenderLayer {
     gl.uniform2f(this.uCenter, sway.x, sway.y);
     gl.uniform1f(this.uRadius, radius);
     gl.uniform1f(this.uFade, fade);
+    gl.uniform1f(this.uGlow, this.p.style === 'glow' ? 1 : 0);
     gl.uniform3f(this.uAccent, accent[0], accent[1], accent[2]);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

@@ -7,12 +7,14 @@ import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { createVao } from '../gl/vao';
 import type { RenderClock } from './clock';
 import { bindTarget, type RenderLayer } from './layer';
-import decaySrc from './shaders/decay.frag.glsl?raw';
+import feedbackSrc from './shaders/feedback.frag.glsl?raw';
+import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
+import type { ParamValue } from '../presets/schema';
 
-/** Persistence of the feedback trail, per frame. Was 0.97 (grey-teal haze); 0.92 clears trails faster (P1, 2026-11-04). */
-export const SCENE_DECAY = 0.92;
-/** Per-frame subtraction from the trail: with SCENE_DECAY, a trail reaches black in about 300 ms. */
-export const SCENE_FADE = 0.004;
+const UNIFORMS = [
+  'uPrev', 'uCentre', 'uDrift', 'uStretch', 'uZoom', 'uRot', 'uWarp', 'uWarpScale', 'uWarpSpeed',
+  'uTime', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
+] as const;
 
 export class Scene {
   readonly name: string;
@@ -23,15 +25,25 @@ export class Scene {
   private vao: WebGLVertexArrayObject | null = null;
   private w = 1;
   private h = 1;
+  /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
+  private fb: Record<string, number | string> = { ...FEEDBACK_DEFAULTS };
+  private uni = new Map<string, WebGLUniformLocation | null>();
 
   constructor(name: string, layers: RenderLayer[]) {
     this.name = name;
     this.layers = layers;
   }
 
+  /** Sets the trail motion and colour settings. Read on the next frame. */
+  setFeedback(values: Record<string, ParamValue>): void {
+    this.fb = { ...FEEDBACK_DEFAULTS, ...values };
+  }
+
   init(gl: WebGL2RenderingContext): void {
     this.gl = gl;
-    this.prog = compileProgram(gl, FULLSCREEN_VERT, decaySrc, `decay:${this.name}`);
+    this.prog = compileProgram(gl, FULLSCREEN_VERT, feedbackSrc, `feedback:${this.name}`);
+    this.uni.clear();
+    for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
     this.pp = new PingPong(gl, this.w, this.h);
     for (const l of this.layers) l.init(gl);
@@ -69,9 +81,7 @@ export class Scene {
     gl.useProgram(this.prog);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
-    gl.uniform1i(gl.getUniformLocation(this.prog, 'uPrev'), 0);
-    gl.uniform1f(gl.getUniformLocation(this.prog, 'uDecay'), SCENE_DECAY);
-    gl.uniform1f(gl.getUniformLocation(this.prog, 'uFade'), SCENE_FADE);
+    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -93,6 +103,28 @@ export class Scene {
 
     // 3) The finished image becomes "previous" and is what outputTexture() returns.
     pp.swap();
+  }
+
+  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number): void {
+    const n = (key: string) => Number(this.fb[key]);
+    const u = (name: string) => this.uni.get(name) ?? null;
+    gl.uniform1i(u('uPrev'), 0);
+    gl.uniform2f(u('uCentre'), n('centreX'), n('centreY'));
+    gl.uniform2f(u('uDrift'), n('driftX'), n('driftY'));
+    gl.uniform2f(u('uStretch'), n('stretchX'), n('stretchY'));
+    gl.uniform1f(u('uZoom'), n('zoom'));
+    gl.uniform1f(u('uRot'), n('rotate'));
+    gl.uniform1f(u('uWarp'), n('warp'));
+    gl.uniform1f(u('uWarpScale'), n('warpScale'));
+    gl.uniform1f(u('uWarpSpeed'), n('warpSpeed'));
+    gl.uniform1f(u('uTime'), timeSec);
+    gl.uniform1f(u('uAspect'), width / Math.max(height, 1));
+    gl.uniform1f(u('uWrap'), this.fb.wrap === 'wrap' ? 1 : 0);
+    gl.uniform1f(u('uHueDrift'), n('hueDrift'));
+    gl.uniform1f(u('uBlur'), n('blur'));
+    gl.uniform2f(u('uTexel'), 1 / Math.max(width, 1), 1 / Math.max(height, 1));
+    gl.uniform1f(u('uDecay'), n('decay'));
+    gl.uniform1f(u('uFade'), n('fade'));
   }
 
   dispose(): void {

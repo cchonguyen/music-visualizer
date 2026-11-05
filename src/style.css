@@ -19,3 +19,8 @@ button[aria-pressed="true"] { background: #2d5bd8; border-color: #2d5bd8; }
 .notice { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); max-width: 90vw; background: #3a1d1d; border: 1px solid #a33; padding: .6rem 1rem; border-radius: 6px; }
 .notice.info { background: #1d2a3a; border-color: #36a; }
 body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
+
+.toast { position: fixed; top: 1rem; right: 1rem; background: rgba(0,0,0,.6); border: 1px solid #444; padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
+.toast.shown { opacity: 1; }
+.studio { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; max-width: 90vw; overflow-y: auto; z-index: 5; }
+.studio[hidden] { display: none; }

@@ -10,13 +10,7 @@ import { SlowFollower, punch } from '../dynamics';
 import { getVisualGain, shapeReaction } from '../gainStore';
 import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/rings.frag.glsl?raw';
-
-/** Ring count at full energy. */
-const MAX_RINGS = 6;
-/** Calm mode caps the ring count here. */
-const MAX_RINGS_CALM = 3;
-const STROKE_BASE = 0.004;
-const STROKE_NORM_GAIN = 0.01;
+import { RINGS_DEFAULTS, type RingsParams } from '../../presets/layerSchemas';
 
 /** Clamp to 0..1; non-finite values count as 0. */
 function unit(x: number): number {
@@ -27,6 +21,17 @@ function unit(x: number): number {
 export class RingsLayer implements RenderLayer {
   /** Calm mode: at most 3 rings and half-width strokes. */
   calm = false;
+  /** Settings (slice 4.2). Read every frame. */
+  private p: RingsParams;
+
+  constructor(params: Partial<RingsParams> = {}) {
+    this.p = { ...RINGS_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<RingsParams>): void {
+    this.p = { ...this.p, ...params };
+  }
+
   private readonly slowLoud = new SlowFollower(3);
   private readonly slowSub = new SlowFollower(2);
 
@@ -39,6 +44,8 @@ export class RingsLayer implements RenderLayer {
   private uAspect: WebGLUniformLocation | null = null;
   private uBase: WebGLUniformLocation | null = null;
   private uAccent: WebGLUniformLocation | null = null;
+  private uSides: WebGLUniformLocation | null = null;
+  private uFilled: WebGLUniformLocation | null = null;
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -50,6 +57,8 @@ export class RingsLayer implements RenderLayer {
     this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
     this.uBase = gl.getUniformLocation(this.program, 'uBase');
     this.uAccent = gl.getUniformLocation(this.program, 'uAccent');
+    this.uSides = gl.getUniformLocation(this.program, 'uSides');
+    this.uFilled = gl.getUniformLocation(this.program, 'uFilled');
     this.vao = createVao(gl);
   }
 
@@ -72,10 +81,10 @@ export class RingsLayer implements RenderLayer {
     const bassPunch = punch(frame.env.sub, this.slowSub.step(frame.env.sub, dt), 4);
     const normMean = (unit(frame.norm.sub) + unit(frame.norm.mid) + unit(frame.norm.high)) / 3;
 
-    let count = Math.round(level * MAX_RINGS);
-    let stroke = STROKE_BASE + STROKE_NORM_GAIN * normMean + 0.012 * bassPunch * getVisualGain();
+    let count = Math.round(level * this.p.maxRings);
+    let stroke = this.p.strokeBase + this.p.strokeNormGain * normMean + 0.012 * bassPunch * getVisualGain();
     if (this.calm) {
-      count = Math.min(count, MAX_RINGS_CALM);
+      count = Math.min(count, this.p.maxRingsCalm);
       stroke *= 0.5;
     }
 
@@ -87,6 +96,8 @@ export class RingsLayer implements RenderLayer {
     gl.uniform1f(this.uNorm, normMean);
     gl.uniform1f(this.uStroke, stroke);
     gl.uniform1f(this.uAspect, aspect);
+    gl.uniform1f(this.uSides, this.p.sides);
+    gl.uniform1f(this.uFilled, this.p.style === 'filled' ? 1 : 0);
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccent, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
     gl.bindVertexArray(this.vao);

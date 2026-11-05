@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "name": "Pentagon pulse",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {},
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {
+        "sides": 5,
+        "ringDensity": 0.7
+      }
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {}
+    },
+    {
+      "type": "shockwave",
+      "params": {
+        "style": "glow"
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.5,
+    "bloomThreshold": 0.5
+  }
+}

@@ -16,6 +16,9 @@ uniform float uRoll;         // ring roll angle, radians (integrated in JS)
 uniform float uDensity;      // ring spacing, breathes with the bass
 uniform float uHue;          // 0..1: mix from accent A to accent B (slow drift + treble)
 uniform float uQuiet;        // 0..1: 1 in quiet passages, 0 when loud (smoothed in JS). Lifts the gaps.
+uniform float uPattern;      // wall pattern: 0 rings, 1 grid, 2 spokes, 3 checker, 4 stripes (V1)
+uniform float uSides;        // cross-section: 0 = classic hexagon, 3..12 = polygon (V1)
+uniform float uTwist;        // spiral twist of the spokes with depth (V1)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -34,15 +37,31 @@ void main() {
   vec2 p = p0 - uCenter * scale * (1.0 - rim);
   float radius = length(p);
 
-  // 6-sided shape, rolled by uRoll. Rings are slightly hexagonal, not round.
+  // Cross-section, rolled by uRoll. Default (uSides 0): slightly hexagonal, not round.
+  // With uSides 3..12 it is a regular polygon with that many sides (V1).
   float angle = atan(p.y, p.x);
-  float shaped = radius * (1.0 + HEX_AMOUNT * cos(6.0 * (angle - uRoll)));
+  float shaped;
+  if (uSides < 2.5) {
+    shaped = radius * (1.0 + HEX_AMOUNT * cos(6.0 * (angle - uRoll)));
+  } else {
+    float seg = TAU / uSides;
+    float a = mod(angle - uRoll, seg) - seg * 0.5;
+    shaped = radius * cos(seg * 0.5) / cos(a);
+  }
 
   // Depth is capped near the centre so the vanishing point never strobes.
   float depth = 1.0 / max(shaped, 0.15);
 
-  // Ring stripes, offset by the integrated flight phase.
-  float wave = 0.5 + 0.5 * cos(TAU * (depth * uDensity - uPhase));
+  // Wall pattern (V1). Rings are the default and match the old look exactly.
+  float ringWave = 0.5 + 0.5 * cos(TAU * (depth * uDensity - uPhase));
+  float spokeWave = 0.5 + 0.5 * cos(12.0 * (angle - uRoll) + uTwist * TAU * depth);
+  float streakWave = 0.5 + 0.5 * cos(TAU * (p.x * uDensity * 2.0 - uPhase));
+  int pattern = int(uPattern + 0.5);
+  float wave = ringWave;
+  if (pattern == 1) wave = 0.5 * (ringWave + spokeWave);
+  else if (pattern == 2) wave = spokeWave;
+  else if (pattern == 3) wave = ringWave * spokeWave;
+  else if (pattern == 4) wave = streakWave;
   // Sharp stripes (P1, 2026-11-04): only the crests carry colour, and the space
   // between rings falls to the near-black palette base. Calm (low contrast) keeps softer crests.
   // Crest width (P3): thin far away (centre), thick close up (edge).

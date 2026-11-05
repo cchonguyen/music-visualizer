@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "name": "Vortex",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "rotate": 0.004,
+    "zoom": 1.01,
+    "blur": 0.2
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {
+        "pattern": "spokes",
+        "twist": 0.4
+      }
+    },
+    {
+      "type": "particles",
+      "params": {
+        "swirlGain": 3
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {}
+}

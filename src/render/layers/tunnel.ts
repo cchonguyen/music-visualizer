@@ -14,18 +14,19 @@ import { getSway } from '../swayStore';
 import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
 import { RELEASE_TAU_SEC, releaseEnvelope } from '../releaseEnvelope';
+import { TUNNEL_DEFAULTS, type TunnelParams } from '../../presets/layerSchemas';
 
-const RING_DENSITY = 0.5;
+/** Wall pattern name to the shader's number (V1). Unknown names fall back to rings. */
+const PATTERNS = ['rings', 'grid', 'spokes', 'checker', 'stripes'];
+export function patternIndex(name: string): number {
+  return Math.max(0, PATTERNS.indexOf(name));
+}
 
 /** GLSL-style smoothstep: 0 below a, 1 above b, smooth in between. */
 function smoothstep(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
-/** Beat swell on the rings: 80 ms attack (smooth, not a flash), shared 320 ms release (C2). Never moves the camera. */
-const BEAT_ATTACK_TAU_SEC = 0.08;
-const RING_CONTRAST_NORMAL = 0.5;
-const RING_CONTRAST_CALM = 0.25;
 
 export class TunnelLayer implements RenderLayer {
   /** Calm mode: gentle drift, no energy boost, softer ring contrast. */
@@ -34,6 +35,16 @@ export class TunnelLayer implements RenderLayer {
   sectionContrast = 0;
   /** Accent swap mix from ColourSwap (P4): 0 = normal, 1 = A and B exchanged. */
   accentSwap = 0;
+  /** Settings (slice 4.2). Read every frame, so a change applies on the next frame. */
+  private p: TunnelParams;
+
+  constructor(params: Partial<TunnelParams> = {}) {
+    this.p = { ...TUNNEL_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<TunnelParams>): void {
+    this.p = { ...this.p, ...params };
+  }
 
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
@@ -47,6 +58,9 @@ export class TunnelLayer implements RenderLayer {
   private uAccentB: WebGLUniformLocation | null = null;
   private uRingContrast: WebGLUniformLocation | null = null;
   private uRingDensity: WebGLUniformLocation | null = null;
+  private uPattern: WebGLUniformLocation | null = null;
+  private uSides: WebGLUniformLocation | null = null;
+  private uTwist: WebGLUniformLocation | null = null;
 
   private readonly flight = new FlightState();
   private readonly roll = new RollState();
@@ -74,6 +88,9 @@ export class TunnelLayer implements RenderLayer {
     this.uAccentB = gl.getUniformLocation(this.program, 'uAccentB');
     this.uRingContrast = gl.getUniformLocation(this.program, 'uRingContrast');
     this.uRingDensity = gl.getUniformLocation(this.program, 'uRingDensity');
+    this.uPattern = gl.getUniformLocation(this.program, 'uPattern');
+    this.uSides = gl.getUniformLocation(this.program, 'uSides');
+    this.uTwist = gl.getUniformLocation(this.program, 'uTwist');
     this.uBeat = gl.getUniformLocation(this.program, 'uBeat');
     this.uCenter = gl.getUniformLocation(this.program, 'uCenter');
     this.uRoll = gl.getUniformLocation(this.program, 'uRoll');
@@ -103,7 +120,7 @@ export class TunnelLayer implements RenderLayer {
     // in the scene is the kick shockwave, which is governed (P6). Calm turns this off.
     const dt = Math.max(0, clock.dtSec);
     const beatTarget = !this.calm && frame.beatByBand.sub ? 1 : 0;
-    this.beatEnv = releaseEnvelope(this.beatEnv, beatTarget, dt, BEAT_ATTACK_TAU_SEC, RELEASE_TAU_SEC);
+    this.beatEnv = releaseEnvelope(this.beatEnv, beatTarget, dt, this.p.beatAttackSec, RELEASE_TAU_SEC);
     // Quiet amount: 1 at silence, 0 at normal loudness (absolute loudness, so any track counts).
     const quietTarget = 1 - smoothstep(0.05, 0.35, frame.loudness);
     this.quietEnv = releaseEnvelope(this.quietEnv, quietTarget, dt, 0.05, RELEASE_TAU_SEC);
@@ -120,8 +137,11 @@ export class TunnelLayer implements RenderLayer {
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccentA, accents.a[0], accents.a[1], accents.a[2]);
     gl.uniform3f(this.uAccentB, accents.b[0], accents.b[1], accents.b[2]);
-    gl.uniform1f(this.uRingContrast, this.calm ? RING_CONTRAST_CALM : RING_CONTRAST_NORMAL);
-    gl.uniform1f(this.uRingDensity, RING_DENSITY);
+    gl.uniform1f(this.uRingContrast, this.calm ? this.p.ringContrastCalm : this.p.ringContrast);
+    gl.uniform1f(this.uRingDensity, this.p.ringDensity);
+    gl.uniform1f(this.uPattern, patternIndex(this.p.pattern));
+    gl.uniform1f(this.uSides, this.p.sides);
+    gl.uniform1f(this.uTwist, this.p.twist);
     // Motion and colour (2026-11-04): the rings must move and change, not sit still.
     // Sway and breathing are bounded so they never jolt the view.
     const t = clock.timeSec;
@@ -131,7 +151,7 @@ export class TunnelLayer implements RenderLayer {
     const sway = getSway();
     gl.uniform2f(this.uCenter, sway.x, sway.y);
     gl.uniform1f(this.uRoll, this.roll.advance(clock.dtSec, frame.energy, this.calm));
-    gl.uniform1f(this.uDensity, RING_DENSITY * (1 + 0.3 * Math.max(0, frame.env.sub - 0.2)));
+    gl.uniform1f(this.uDensity, this.p.ringDensity * (1 + 0.3 * Math.max(0, frame.env.sub - 0.2)));
     gl.uniform1f(this.uHue, Math.min(1, Math.max(0, 0.5 + 0.35 * Math.sin(t * 0.11) + 0.4 * (frame.norm.high - highSlow))));
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

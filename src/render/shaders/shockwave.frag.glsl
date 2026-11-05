@@ -6,6 +6,7 @@ uniform vec2 uCenter;     // shared sway offset, uv units (same centre rule as t
 uniform float uRadius;    // ring radius, in the tunnel's radius units
 uniform float uFade;      // 1 at birth, 0 at the end of the ring's life
 uniform vec3 uAccent;     // palette accent for the ring
+uniform float uGlow;      // 0 = thin ring (default), 1 = soft radial glow field (V4)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -27,5 +28,10 @@ void main() {
   float glow = exp(-pow(d / GLOW_WIDTH, 2.0)) * 0.25;
   // The core is pushed toward white (a small bright feature may reach white, owner decision 2026-11-04).
   vec3 col = mix(uAccent, vec3(1.0), 0.6) * core * uFade + uAccent * glow * uFade;
+  if (uGlow > 0.5) {
+    // Glow field: a soft disc that grows to the ring radius and fades with the ring. It shares the kick's flash token.
+    float disc = 1.0 - smoothstep(0.0, 1.0, 2.0 * length(p) / max(uRadius, 0.05));
+    col += uAccent * 0.45 * disc * uFade;
+  }
   outColor = vec4(col, 1.0);
 }

@@ -1,43 +1,121 @@
-// Compositor (slice 2.2): draws the active scenes, blends them and applies the
-// brightness safety rules in one final pass. It is itself a RenderLayer, so the
-// host needs no changes.
+// Compositor (slice 2.2, extended in 4.x): draws the active scenes, blends them, then runs the
+// post chain and bloom (E4, E5), and finally the brightness safety pass. It is itself a
+// RenderLayer, so the host needs no changes.
 //
 // Rules:
-// - Each scene draws into its own feedback buffers (Scene). The compositor creates
-//   no extra framebuffers: it samples each scene's finished texture directly.
+// - Each scene draws into its own feedback buffers (Scene). The compositor samples each scene's finished texture.
 // - Crossfades blend whole scenes, never individual layers (muddied trails).
-// - A scene is initialised the first time it gets weight, and disposed when its
-//   weight returns to 0 (its fade has finished).
+// - A scene is initialised the first time it gets weight, and disposed when its weight returns to 0.
 // - At most two scenes can be active at once (the shader has two inputs).
+// - Order: blend -> post chain (+ bloom) -> safety. Safety is always last; no preset can turn it off.
+// - With no post effect set, the post passes are skipped and the output is the old single pass.
 import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
+import { PingPong } from '../gl/fbo';
 import { type RenderClock } from './clock';
 import { BrightnessLimiter } from './safety';
 import { RELEASE_TAU_SEC, releaseEnvelope } from './releaseEnvelope';
 import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import type { Scene } from './scene';
+import type { ParamValue } from '../presets/schema';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
+import postSrc from './shaders/post.frag.glsl?raw';
+import blurSrc from './shaders/blur.frag.glsl?raw';
+
+/** Post settings with identity values (see post.frag.glsl). */
+export const POST_IDENTITY = {
+  hueShift: 0, saturation: 1, contrast: 1, gamma: 1, brightness: 0, mirror: 0, vignette: 0, chroma: 0, bloom: 0, bloomThreshold: 0.6,
+};
+type PostValues = typeof POST_IDENTITY;
+
+export const TRANSITIONS = ['crossfade', 'wipe', 'dissolve', 'zoom'] as const;
 
 export class Compositor implements RenderLayer {
   private scenes = new Map<string, Scene>();
   // `weights` is what is drawn now; `targets` is what the last key press asked for.
-  // draw() eases weights toward targets, so a scene switch fades over RELEASE_TAU_SEC.
+  // draw() eases weights toward targets, so a scene switch fades over fadeSec.
   private weights = new Map<string, number>();
   private targets = new Map<string, number>();
   private ready = new Set<string>();
   private gl: WebGL2RenderingContext | null = null;
   private prog: WebGLProgram | null = null;
+  private postProg: WebGLProgram | null = null;
+  private blurProg: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
+  private full: PingPong | null = null;
+  private half: PingPong | null = null;
+  // Uniform locations, cached per program (a name can be missing from one program and present in another).
+  private locs = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
+  private post: PostValues = { ...POST_IDENTITY };
+  private transition = 0; // 0 crossfade, 1 wipe, 2 dissolve, 3 zoom-through (T1)
   private w = 1;
   private h = 1;
   private dpr = 1;
   private limiter = new BrightnessLimiter();
   private lastNow: number | null = null;
   private loudnessSlow = 0;
+  // How long a scene switch takes to fade (seconds). Each preset can ask for its own (slice 4.4).
+  private fadeSec = RELEASE_TAU_SEC;
 
   constructor(scenes: Scene[]) {
     for (const s of scenes) this.scenes.set(s.name, s);
+  }
+
+  /** Add a scene, or replace one with the same name (its old buffers are freed). Used when a preset is rebuilt. */
+  setScene(scene: Scene): void {
+    const old = this.scenes.get(scene.name);
+    if (old && this.ready.has(scene.name)) {
+      old.dispose();
+      this.ready.delete(scene.name);
+    }
+    this.scenes.set(scene.name, scene);
+  }
+
+  /** Remove a scene that is not on screen (weight 0). Frees its buffers. */
+  removeScene(name: string): void {
+    if ((this.weights.get(name) ?? 0) > 0 || (this.targets.get(name) ?? 0) > 0) {
+      throw new Error(`Compositor: cannot remove "${name}" while it is on screen`);
+    }
+    if (this.ready.has(name)) {
+      this.scenes.get(name)?.dispose();
+      this.ready.delete(name);
+    }
+    this.scenes.delete(name);
+    this.weights.delete(name);
+    this.targets.delete(name);
+  }
+
+  /** Crossfade time for scene switches, in seconds (0.05 to 10). Set per preset. */
+  setFadeSeconds(seconds: number): void {
+    this.fadeSec = Math.min(10, Math.max(0.05, seconds));
+  }
+
+  /** Transition style for scene switches (T1). Applies while two scenes blend. */
+  setTransition(style: string): void {
+    this.transition = Math.max(0, TRANSITIONS.indexOf(style as (typeof TRANSITIONS)[number]));
+  }
+
+  /** Post chain settings from the shown preset (E4, E5). Missing keys keep their identity value. */
+  setPost(values: Record<string, ParamValue>): void {
+    const next: PostValues = { ...POST_IDENTITY };
+    for (const key of Object.keys(POST_IDENTITY) as (keyof PostValues)[]) {
+      const v = values[key];
+      if (typeof v === 'number') next[key] = v;
+    }
+    this.post = next;
+  }
+
+  /** Uniform location for `name` in `prog`, looked up once and cached. */
+  private u(prog: WebGLProgram, name: string): WebGLUniformLocation | null {
+    const gl = this.gl!;
+    let map = this.locs.get(prog);
+    if (!map) {
+      map = new Map();
+      this.locs.set(prog, map);
+    }
+    if (!map.has(name)) map.set(name, gl.getUniformLocation(prog, name));
+    return map.get(name) ?? null;
   }
 
   /** Set how much each scene shows (0..1). Weights are normalised by the caller. */
@@ -51,17 +129,16 @@ export class Compositor implements RenderLayer {
   }
 
   /**
-   * Ease each scene's weight toward its target (C2 release envelope). A scene that is
-   * still fading out and a new one fading in can overlap briefly; if that would make
-   * three scenes visible (the shader has two inputs), the weakest fading-out scene is
-   * snapped to 0 so the cap holds.
+   * Ease each scene's weight toward its target. A scene that is still fading out and a new one
+   * fading in can overlap briefly; if that would make three scenes visible (the shader has two
+   * inputs), the weakest fading-out scene is snapped to 0 so the cap holds.
    */
   private easeWeights(dtSec: number): void {
     const names = new Set([...this.weights.keys(), ...this.targets.keys()]);
     for (const name of names) {
       const w = this.weights.get(name) ?? 0;
       const t = this.targets.get(name) ?? 0;
-      let next = releaseEnvelope(w, t, dtSec, RELEASE_TAU_SEC, RELEASE_TAU_SEC);
+      let next = releaseEnvelope(w, t, dtSec, this.fadeSec, this.fadeSec);
       if (Math.abs(next - t) < 1e-3) next = t; // settle exactly, so finished fades free buffers
       this.weights.set(name, next);
     }
@@ -76,7 +153,14 @@ export class Compositor implements RenderLayer {
     // Fresh construction after a context restore: every GL object is rebuilt.
     this.gl = gl;
     this.prog = compileProgram(gl, FULLSCREEN_VERT, compositeSrc, 'composite');
+    this.postProg = compileProgram(gl, FULLSCREEN_VERT, postSrc, 'post');
+    this.blurProg = compileProgram(gl, FULLSCREEN_VERT, blurSrc, 'blur');
+    this.locs.clear();
     this.vao = createVao(gl);
+    this.full?.dispose();
+    this.half?.dispose();
+    this.full = new PingPong(gl, this.w, this.h);
+    this.half = new PingPong(gl, Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
     this.ready.clear();
     this.limiter.reset();
     this.lastNow = null;
@@ -86,7 +170,17 @@ export class Compositor implements RenderLayer {
     this.w = width;
     this.h = height;
     this.dpr = dpr;
+    this.full?.resize(width, height);
+    this.half?.resize(Math.max(1, width >> 1), Math.max(1, height >> 1));
     for (const name of this.ready) this.scenes.get(name)?.resize(width, height, dpr);
+  }
+
+  private postActive(): boolean {
+    const p = this.post;
+    return (
+      p.hueShift !== 0 || p.saturation !== 1 || p.contrast !== 1 || p.gamma !== 1 || p.brightness !== 0 ||
+      p.mirror >= 2 || p.vignette > 0 || p.chroma > 0 || p.bloom > 0
+    );
   }
 
   draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
@@ -111,37 +205,44 @@ export class Compositor implements RenderLayer {
     // Each active scene renders its own buffers.
     for (const name of active) this.scenes.get(name)!.draw(frame, clock);
 
-    // Estimated brightness target: loudness-driven, with a dim floor (the limiter
-    // enforces the floor). Real pixels are never read back (see safety.ts).
+    // Estimated brightness target: loudness-driven, with a dim floor (the limiter enforces the floor).
     const now = performance.now();
     const dt = this.lastNow === null ? 0 : Math.min(0.1, Math.max(0, (now - this.lastNow) / 1000));
     this.lastNow = now;
-    // The brightness target follows a slowed loudness (not each kick), so the whole
-    // screen does not dim in step with every beat. The fall still uses the C2 release.
+    // The brightness target follows a slowed loudness, so the screen does not dim with every beat.
     this.loudnessSlow = releaseEnvelope(this.loudnessSlow, frame.loudness, dt, 0.5, 1.0);
     const cap = this.limiter.step(0.2 + 0.8 * this.loudnessSlow, dt);
 
-    // Final pass: blend the two active scenes and apply the safety rules.
-    bindTarget(gl, target);
-    gl.disable(gl.BLEND);
-    gl.useProgram(this.prog);
     const a = active[0];
     const b = active[1];
+    const wA = a ? this.weights.get(a) ?? 0 : 0;
+    const wB = b ? this.weights.get(b) ?? 0 : 0;
     const sceneA = a ? this.scenes.get(a) : undefined;
     const sceneB = b ? this.scenes.get(b) : undefined;
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, sceneA ? sceneA.outputTexture() : null);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, sceneB ? sceneB.outputTexture() : null);
-    gl.uniform1i(gl.getUniformLocation(this.prog, 'uA'), 0);
-    gl.uniform1i(gl.getUniformLocation(this.prog, 'uB'), 1);
-    gl.uniform1f(gl.getUniformLocation(this.prog, 'uWA'), a ? this.weights.get(a) ?? 0 : 0);
-    gl.uniform1f(gl.getUniformLocation(this.prog, 'uWB'), b ? this.weights.get(b) ?? 0 : 0);
-    gl.uniform1f(gl.getUniformLocation(this.prog, 'uCap'), cap);
-    gl.uniform1f(gl.getUniformLocation(this.prog, 'uSafety'), 1);
-    gl.bindVertexArray(this.vao);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.bindVertexArray(null);
+
+    if (!this.postActive() || !this.full || !this.half || !this.postProg || !this.blurProg) {
+      // Fast path: one pass, blend and safety together (the look before E4).
+      this.blendPass(gl, sceneA?.outputTexture() ?? null, sceneB?.outputTexture() ?? null, wA, wB, cap, 1, target);
+    } else {
+      const full = this.full;
+      const half = this.half;
+      const size = { width: full.width, height: full.height };
+      // 1) Blend into the post buffer (no safety yet).
+      this.blendPass(gl, sceneA?.outputTexture() ?? null, sceneB?.outputTexture() ?? null, wA, wB, cap, 0, this.bufferTarget(full.write, size));
+      full.swap();
+      // 2) Bloom (E5): blur a half-size copy, horizontally then vertically.
+      if (this.post.bloom > 0) {
+        this.blurPass(gl, full.read.texture, 2 / full.width, 0, this.bufferTarget(half.write, { width: half.width, height: half.height }));
+        half.swap();
+        this.blurPass(gl, half.read.texture, 0, 2 / half.height, this.bufferTarget(half.write, { width: half.width, height: half.height }));
+        half.swap();
+      }
+      // 3) Post chain (E4) and bloom add, into the other buffer.
+      this.postPass(gl, full.read.texture, this.post.bloom > 0 ? half.read.texture : full.read.texture, this.bufferTarget(full.write, size));
+      full.swap();
+      // 4) Safety, always last, into the real target.
+      this.blendPass(gl, full.read.texture, null, 1, 0, cap, 1, target);
+    }
 
     // Fades that have finished free their buffers.
     for (const name of [...this.ready]) {
@@ -152,15 +253,91 @@ export class Compositor implements RenderLayer {
     }
   }
 
+  private bufferTarget(pass: { framebuffer: WebGLFramebuffer; texture: WebGLTexture }, size: { width: number; height: number }): RenderTarget {
+    return { kind: 'fbo', framebuffer: pass.framebuffer, texture: pass.texture, width: size.width, height: size.height };
+  }
+
+  /** Blend up to two textures with their weights and the brightness cap. `safety` 1 = apply the safety rules. */
+  private blendPass(gl: WebGL2RenderingContext, texA: WebGLTexture | null, texB: WebGLTexture | null, wA: number, wB: number, cap: number, safety: number, target: RenderTarget): void {
+    const prog = this.prog!;
+    bindTarget(gl, target);
+    gl.disable(gl.BLEND);
+    gl.useProgram(prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texA);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, texB);
+    gl.uniform1i(this.u(prog, 'uA'), 0);
+    gl.uniform1i(this.u(prog, 'uB'), 1);
+    gl.uniform1f(this.u(prog, 'uWA'), wA);
+    gl.uniform1f(this.u(prog, 'uWB'), wB);
+    gl.uniform1f(this.u(prog, 'uCap'), cap);
+    gl.uniform1f(this.u(prog, 'uSafety'), safety);
+    gl.uniform1i(this.u(prog, 'uStyle'), this.transition);
+    const sum = wA + wB;
+    gl.uniform1f(this.u(prog, 'uT'), sum > 0 ? wB / sum : 0);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+
+  private blurPass(gl: WebGL2RenderingContext, src: WebGLTexture, stepX: number, stepY: number, target: RenderTarget): void {
+    bindTarget(gl, target);
+    gl.disable(gl.BLEND);
+    const prog = this.blurProg!;
+    gl.useProgram(prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, src);
+    gl.uniform1i(this.u(prog, 'uSrc'), 0);
+    gl.uniform2f(this.u(prog, 'uStep'), stepX, stepY);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+
+  private postPass(gl: WebGL2RenderingContext, img: WebGLTexture, bloom: WebGLTexture, target: RenderTarget): void {
+    const p = this.post;
+    const prog = this.postProg!;
+    bindTarget(gl, target);
+    gl.disable(gl.BLEND);
+    gl.useProgram(prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, img);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, bloom);
+    gl.uniform1i(this.u(prog, 'uImg'), 0);
+    gl.uniform1i(this.u(prog, 'uBloom'), 1);
+    gl.uniform1f(this.u(prog, 'uHue'), p.hueShift);
+    gl.uniform1f(this.u(prog, 'uSat'), p.saturation);
+    gl.uniform1f(this.u(prog, 'uContrast'), p.contrast);
+    gl.uniform1f(this.u(prog, 'uGamma'), p.gamma);
+    gl.uniform1f(this.u(prog, 'uBright'), p.brightness);
+    gl.uniform1f(this.u(prog, 'uMirror'), p.mirror);
+    gl.uniform1f(this.u(prog, 'uVignette'), p.vignette);
+    gl.uniform1f(this.u(prog, 'uChroma'), p.chroma);
+    gl.uniform1f(this.u(prog, 'uBloomAmt'), p.bloom);
+    gl.uniform1f(this.u(prog, 'uBloomThr'), p.bloomThreshold);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+
   dispose(): void {
     for (const name of this.ready) this.scenes.get(name)?.dispose();
     this.ready.clear();
+    this.full?.dispose();
+    this.half?.dispose();
+    this.full = null;
+    this.half = null;
     const gl = this.gl;
     if (gl) {
-      if (this.prog) gl.deleteProgram(this.prog);
+      for (const prog of [this.prog, this.postProg, this.blurProg]) if (prog) gl.deleteProgram(prog);
       if (this.vao) gl.deleteVertexArray(this.vao);
     }
     this.prog = null;
+    this.postProg = null;
+    this.blurProg = null;
+    this.locs.clear();
     this.vao = null;
     this.gl = null;
   }

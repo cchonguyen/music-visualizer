@@ -8,7 +8,7 @@
 - Scope and contracts: `.spec/SYSTEM_SPEC.md` (current). Decisions: `.spec/DECISIONS.md`.
 - Stack: plain TypeScript + Vite, raw WebGL2, Web Audio API, Vitest. Hosting: Cloudflare Workers static assets (planned).
 - Live (Stage 1 test build): https://music-visualizer.charliechonguyen.com (custom domain, owner approved 2026-11-04). Backup: https://music-visualizer.charliechonguyen.workers.dev
-- Status: Stage 1 signed off. Stage 2 polish (P1–P5 + patch) deployed 2026-11-04; owner device check open in `docs/stage2-test-report.md`. Stage 2.5 quiet-passage fixes deployed 2026-11-04 (root cause not fully confirmed); previously next: (`docs/stage2.5-plan.md`). Stage 3 parked; Stage 4 (presets, effects, Preset Studio) planned in `docs/stage4-presets-plan.md`, awaiting owner approval. Queue: `.spec/PROGRESS.md`.
+- Status: Stage 1–2.5 deployed 2026-11-04. Stage 4 (presets, effects, Preset Studio) built in code 2026-11-05 (all slices); owner visual sign-off open per `.spec/PROGRESS.md`. Plan: `docs/stage4-presets-plan.md`. Stage 3 parked.
 - GitHub: https://github.com/cchonguyen/music-visualizer (branch `main`).
 
 ## Work Mode

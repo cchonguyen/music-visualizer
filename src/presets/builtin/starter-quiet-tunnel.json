@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "name": "Quiet tunnel",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "zoom",
+    "seconds": 2.5
+  },
+  "feedback": {
+    "decay": 0.9
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {
+        "ringContrast": 0.35,
+        "ringDensity": 0.4
+      }
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {
+        "brightness": 0.7
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {}
+}

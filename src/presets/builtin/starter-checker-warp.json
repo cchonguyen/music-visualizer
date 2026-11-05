@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "Checker warp",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "warp": 0.6,
+    "warpSpeed": 1.5,
+    "wrap": "wrap"
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {
+        "pattern": "checker"
+      }
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {}
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {}
+}

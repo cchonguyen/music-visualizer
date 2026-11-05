@@ -4,6 +4,7 @@ import './style.css';
 import { AudioEngine } from './audio/engine';
 import { estimateLatencyMs } from './audio/latency';
 import type { AudioFrame } from './audio/types';
+import type { RenderLayer } from './render/layer';
 import { GlHost } from './gl/context';
 import { BassPulseLayer } from './render/layers/bassPulse';
 import { WaveformLayer } from './render/layers/waveform';
@@ -15,10 +16,16 @@ import { getVisualGain, shapeReaction } from './render/gainStore';
 import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
-import { CrownLayer } from './render/layers/crown';
+import { BUILTIN_PRESETS, SCHEMAS } from './presets/builtin';
+import { PresetSession } from './presets/session';
+import { applyLinkedPreset, hasLinks } from './presets/loader';
+import { LinkRunner } from './presets/links';
+import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
 import { advanceCrown } from './render/crownStore';
-import { sceneForKey } from './render/sceneKeys';
+import { cycleIndex, indexForDigit, readStoredPresetId, safeStorage, storePresetId, stepForKey } from './presets/library';
+import { showToast } from './ui/toast';
+import { Studio } from './studio/studio';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
@@ -31,15 +38,16 @@ const CALM_SCALE = 0.35;
 /** Keep the latest beat times for the latency estimate (about 30 s of kicks). */
 const MAX_BEATS = 60;
 
-/** One set of flight layers. Each scene owns its own layers, so each scene gets its own set. */
-interface FlightKit {
-  tunnel: TunnelLayer;
-  particles: ParticleLayer;
-  shockwave: ShockwaveLayer;
-}
-
-function flightKit(): FlightKit {
-  return { tunnel: new TunnelLayer(), particles: new ParticleLayer(), shockwave: new ShockwaveLayer() };
+/** Calm, section contrast and accent swap reach only the tunnel, particles and shockwave (as before 4.3). */
+function flagLayer(layer: RenderLayer, calm: boolean, contrast: number, swap: number): void {
+  if (layer instanceof TunnelLayer || layer instanceof ParticleLayer) {
+    layer.calm = calm;
+    layer.sectionContrast = contrast;
+    layer.accentSwap = swap;
+  } else if (layer instanceof ShockwaveLayer) {
+    layer.calm = calm;
+    layer.accentSwap = swap;
+  }
 }
 
 function start(): void {
@@ -58,18 +66,21 @@ function start(): void {
   }
   startScreen.hidden = true;
 
-  // Default (live site): the crown scene. Keys switch scenes (see sceneKeys.ts):
-  //   0 = crown:  flight tunnel + radial crown + particles + shockwave
-  //   1 = flight: flight tunnel + particles + shockwave, no crown
-  //   2 = bars:   frequency bars + rings
+  // Default: the last preset used (remembered), else Crown. Keys switch presets (library.ts):
+  //   0 = Crown, 1 = Flight, 2 = Bars (the old keys), 3-9 = later presets, [ and ] = previous / next.
   // URL options for single checks: ?tracer (Stage 1), ?trail, ?tunnel, ?particles, ?bars, ?scenes.
   const params = new URLSearchParams(location.search);
   let compositor: Compositor | null = null;
-  // Single-layer debug options (?tunnel, ?particles) and the scene kits. Arrays, so TypeScript
+  let session: PresetSession | null = null;
+  const linkRunner = new LinkRunner();
+  // Auto-cycle (T2): off by default. Keys: C timer, B beat, X shuffle.
+  const cycle: CycleOptions = { ...DEFAULT_CYCLE };
+  const cycler = new AutoCycler();
+  let switchShown: ((id: string) => void) | null = null;
+  // Single-layer debug options (?tunnel, ?particles) and the preset scenes. Arrays, so TypeScript
   // does not narrow them to null inside the per-frame closures.
   const tunnels: TunnelLayer[] = [];
   const particleLayers: ParticleLayer[] = [];
-  const kits: FlightKit[] = [];
   // Whether the crown is on screen: its heights drive particle launches, so they are zero otherwise.
   let crownOn = true;
   // P4: section contrast (fast loudness minus 8 s slow loudness) and the drop colour swap.
@@ -99,25 +110,68 @@ function start(): void {
     host.addLayer(new BassPulseLayer());
     host.addLayer(new WaveformLayer());
   } else {
-    const crownKit = flightKit();
-    const flyKit = flightKit();
-    kits.push(crownKit, flyKit);
-    const crown = new CrownLayer();
-    const comp = new Compositor([
-      new Scene('crown', [crownKit.tunnel, crown, crownKit.particles, crownKit.shockwave]),
-      new Scene('flight', [flyKit.tunnel, flyKit.particles, flyKit.shockwave]),
-      new Scene('bars', [new BarsLayer(), new RingsLayer()]),
-    ]);
-    comp.setWeights({ crown: 1 });
+    // Presets: the session owns every preset's working copy and scene. Built-ins come first, so
+    // keys 0 / 1 / 2 keep their old meaning (Crown / Flight / Bars).
+    const comp = new Compositor([]);
     compositor = comp;
     host.addLayer(comp);
+    session = new PresetSession(comp, SCHEMAS, safeStorage());
+    for (const b of BUILTIN_PRESETS) session.addBuiltin(b.id, b.preset);
+    for (const problem of session.loadUserPresets()) console.warn('Saved preset skipped:', problem);
+    const liveSession = session;
+    const order = () => liveSession.list().map((e) => e.id);
+    const remembered = readStoredPresetId();
+    let currentId = remembered && liveSession.get(remembered) ? remembered : 'crown';
+    const switchTo = (id: string, announce = false) => {
+      currentId = id;
+      cycler.reset();
+      liveSession.show(id);
+      crownOn = id === 'crown';
+      storePresetId(id);
+      if (announce) showToast(liveSession.get(id)!.preset.name);
+      if (studio.visible) studio.bind(id);
+    };
+    const studio = new Studio(document.getElementById('studio')!, {
+      session: liveSession,
+      switchTo: (id) => switchTo(id, true),
+      frameMs: () => frameMs,
+      linkMeter: (key) => linkRunner.meterByKey(key),
+    });
+    switchTo(currentId);
+    switchShown = (id) => switchTo(id, true);
     // No automatic blend: the view changes only when a key is pressed.
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const name = sceneForKey(e.key);
-      if (!name) return;
-      comp.setWeights({ [name]: 1 });
-      crownOn = name === 'crown';
+      if (e.key === 'c' || e.key === 'C' || e.key === 'b' || e.key === 'B' || e.key === 'x' || e.key === 'X') {
+        const k = e.key.toLowerCase();
+        if (k === 'c') cycle.mode = cycle.mode === 'timer' ? 'off' : 'timer';
+        if (k === 'b') cycle.mode = cycle.mode === 'beat' ? 'off' : 'beat';
+        if (k === 'x') cycle.shuffle = !cycle.shuffle;
+        const label = cycle.mode === 'off' ? 'Auto-cycle off' : `Auto-cycle: ${cycle.mode === 'timer' ? 'every 20 s' : 'on strong beats'}${cycle.shuffle ? ', shuffled' : ''}`;
+        if (k !== 'x' || cycle.mode !== 'off') showToast(label);
+        else showToast(`Shuffle ${cycle.shuffle ? 'on' : 'off'}`);
+        return;
+      }
+      if (e.key === 'e' || e.key === 'E') {
+        studio.setVisible(!studio.visible);
+        if (studio.visible) studio.bind(currentId);
+        return;
+      }
+      const step = stepForKey(e.key);
+      if (step !== null) {
+        const ids = order();
+        const at = Math.max(0, ids.indexOf(currentId));
+        return switchTo(ids[cycleIndex(at, ids.length, step)]!, true);
+      }
+      const digit = indexForDigit(e.key, order().length);
+      if (digit !== null) switchTo(order()[digit]!, true);
+    });
+    // A/B compare (slice S4): hold A to see the saved copy of the preset on screen; release to return.
+    window.addEventListener('keydown', (e) => {
+      if ((e.key === 'a' || e.key === 'A') && !e.repeat && !e.ctrlKey && !e.metaKey) liveSession.compare(currentId, true);
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'a' || e.key === 'A') liveSession.compare(currentId, false);
     });
   }
 
@@ -126,19 +180,10 @@ function start(): void {
     fileName: '',
   };
   const controls = setupControls(engine, state);
-  const syncCalm = () => {
-    for (const t of tunnels) t.calm = state.calm;
-    for (const p of particleLayers) p.calm = state.calm;
-    for (const k of kits) {
-      k.tunnel.calm = state.calm;
-      k.particles.calm = state.calm;
-      k.shockwave.calm = state.calm;
-    }
-  };
   const panel = new DebugPanel();
 
   // Dev-only handle for automated checks; stripped from production builds.
-  if (import.meta.env.DEV) (window as unknown as { __mv: unknown }).__mv = { engine, host, compositor };
+  if (import.meta.env.DEV) (window as unknown as { __mv: unknown }).__mv = { engine, host, compositor, session };
 
   const beatTimes: number[] = [];
   engine.on('source-changed', () => (beatTimes.length = 0));
@@ -171,7 +216,6 @@ function start(): void {
           : null,
     });
     controls.tick();
-    syncCalm();
     // One shared sway per frame (tunnel, particles, crown read it). Calm turns it off.
     advanceSway(displayFrameMs / 1000, frame.norm.mid, state.calm);
     // P5: crown heights once per frame (particles launch from them). Visual gain is applied inside.
@@ -186,16 +230,8 @@ function start(): void {
       kick: frame.beatByBand.sub,
       calm: state.calm,
     });
-    for (const layer of [...tunnels, ...particleLayers]) {
-      layer.sectionContrast = contrast;
-      layer.accentSwap = swapMix;
-    }
-    for (const k of kits) {
-      k.tunnel.sectionContrast = contrast;
-      k.tunnel.accentSwap = swapMix;
-      k.particles.sectionContrast = contrast;
-      k.particles.accentSwap = swapMix;
-      k.shockwave.accentSwap = swapMix;
+    for (const layer of [...tunnels, ...particleLayers, ...(session ? session.list().flatMap((e) => session!.sceneOf(e.id).layers) : [])]) {
+      flagLayer(layer, state.calm, contrast, swapMix);
     }
 
     // Visual gain bends the reaction curve (gainStore.shapeReaction): low = calmer, high =
@@ -210,6 +246,23 @@ function start(): void {
     // Calm mode: the frame object is rebuilt every tick, so scaling it here
     // affects only this frame's drawing, never the analysis state.
     if (state.calm) frame.env.sub *= CALM_SCALE;
+    // Auto-cycle (T2): pick the next preset when the timer or a strong beat says so.
+    if (session && switchShown && cycle.mode !== 'off') {
+      const shownId = session.shownId ?? 'crown';
+      const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags })), cycle);
+      const strongBeat = frame.beat && frame.beatStrength >= 0.8;
+      const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycle);
+      if (pick) switchShown(pick);
+    }
+    // Audio links (E2): the shown preset's linked settings follow the music, once per frame.
+    const shown = session?.shownId;
+    if (session && shown) {
+      const entry = session.get(shown);
+      if (entry && hasLinks(entry.preset)) {
+        const post = applyLinkedPreset(entry.preset, session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec);
+        compositor?.setPost(post);
+      }
+    }
     return frame;
   });
 }

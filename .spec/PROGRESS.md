@@ -43,10 +43,27 @@
 - [x] Browser check: quiet section (silence) shows dimmed tunnel, not black. Scene fade and particle flow not yet checked on screen.
 - Deployed 2026-11-04: https://music-visualizer.charliechonguyen.com · branch stage-2.5-quiet-passage pushed.
 
-## Stage 4 — Presets, effects and Preset Studio (docs/stage4-presets-plan.md, drafted 2026-11-04, awaiting owner approval)
-Stage 3 polish parked by owner. Build order:
-- [ ] Phase 1 foundation: 4.1 parameter schema + preset format · 4.2 layers read settings (no visible change) · 4.3 loader + 3 built-in JSON presets · 4.4 preset switching (1–9, [ ], crossfade time)
-- [ ] Phase 2 Studio v1: S1 live panel · S2 save/library/export · S3 layer stack · S4 undo/randomise/mutate/lock
-- [ ] Phase 3 effects: E1 feedback warp · E2 audio links · E3 feedback colour + blur · E4 post chain · E5 bloom
-- [ ] Phase 4 variety: V1 tunnel · V2 particles · V3 shapes/rings · V4 pulse · V5 spectrum ring + waveform modes
-- [ ] Phase 5: T1 transition styles · T2 auto-cycle · T3 starter pack · T4 Studio in second window (optional)
+## Stage 4 — Presets, effects and Preset Studio (docs/stage4-presets-plan.md)
+Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass. Browser-checked: default look (Crown), key switching, Studio panel, feedback warp, post chain and bloom, starter Vortex / Soft smoke / Circle wave, auto-cycle key. Owner visual sign-off still open for the 🖐 slices (4.2, 4.4, S1, E1, E2, E4, V1–V5, T1).
+- [x] **4.1** parameter schema + preset format (src/presets/schema.ts, format.ts)
+- [~] **4.2** layers read settings — no-change check by owner side by side 🖐 (src/presets/layerSchemas.ts)
+- [x] **4.3** loader + built-in JSON presets (src/presets/loader.ts, builtin/*.json)
+- [~] **4.4** switching: keys 0–9, [ ], toast, per-preset crossfade, remembered last preset — owner check 🖐
+- [~] **S1** live Studio panel (Tweakpane 4.0.5 + @tweakpane/core 2.0.5 for types) — every-setting check 🖐 (src/studio/studio.ts)
+- [x] **S2** save / save as / duplicate / delete / export / import (src/presets/session.ts)
+- [x] **S3** layer stack: enable, add, remove, reorder. Opacity and blend are stored but not drawn yet (no per-layer alpha).
+- [x] **S4** undo / redo, randomise, mutate, per-layer lock, A/B compare (hold A)
+- [~] **E1** feedback warp (src/render/shaders/feedback.frag.glsl) 🖐
+- [x] **E2** audio links: 13 sources, smoothing, link editor with meter (src/presets/links.ts). "bass" = env.sub; LFOs fixed at 0.5 Hz
+- [x] **E3** feedback colour (hue drift) and blur, inside the feedback pass
+- [~] **E4** post chain: hue, saturation, contrast, gamma, brightness, kaleidoscope, vignette, red/blue split (src/render/shaders/post.frag.glsl) 🖐. Invert, solarize and echo not built.
+- [x] **E5** bloom: half-size blur, threshold and amount
+- [~] **V1** tunnel: wall pattern (rings/grid/spokes/checker/stripes), polygon sides, spiral twist 🖐
+- [~] **V2** particles: swirl gain only (vortex when high). Outflow modes and shapes not built.
+- [~] **V3** rings: polygon sides, outline or filled (filled fills the whole inside area) 🖐
+- [~] **V4** kick style: ring or glow field (glow shares the kick's flash token) 🖐
+- [~] **V5** waveform layer: line or circle. XY scope, mirror and dots not built.
+- [~] **T1** transition styles: crossfade, wipe, dissolve, zoom-through (blend shader) 🖐
+- [x] **T2** auto-cycle: timer (C), strong beat (B), shuffle (X); skip and favourite tags (src/presets/autoCycle.ts)
+- [x] **T3** starter pack: 10 drafts (src/presets/builtin/starter-*.json), tagged draft. Keys 3–9 and [ ] reach them. Owner tunes and approves.
+- [ ] **T4** Studio in a second window: not built (optional in the plan)

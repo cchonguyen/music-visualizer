@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "name": "Honeycomb",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "decay": 0.9
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {
+        "pattern": "grid",
+        "sides": 6
+      }
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {}
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {}
+}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "name": "Stripe drift",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "driftX": 0.002,
+    "hueDrift": 0.01
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {
+        "pattern": "stripes"
+      }
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {}
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    }
+  ],
+  "post": {}
+}

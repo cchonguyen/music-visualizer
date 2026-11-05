@@ -6,8 +6,22 @@ import type { RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import vertSrc from '../shaders/waveform.vert.glsl?raw';
 import fragSrc from '../shaders/waveform.frag.glsl?raw';
+import { WAVEFORM_DEFAULTS, type WaveformParams } from '../../presets/layerSchemas';
 
 export class WaveformLayer implements RenderLayer {
+  private p: WaveformParams;
+
+  constructor(params: Partial<WaveformParams> = {}) {
+    this.p = { ...WAVEFORM_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<WaveformParams>): void {
+    this.p = { ...this.p, ...params };
+  }
+
+  private uMode: WebGLUniformLocation | null = null;
+  private uAspect: WebGLUniformLocation | null = null;
+  private uAmp: WebGLUniformLocation | null = null;
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
@@ -24,6 +38,9 @@ export class WaveformLayer implements RenderLayer {
     this.program = compileProgram(gl, vertSrc, fragSrc, 'waveform');
     this.uWave = gl.getUniformLocation(this.program, 'uWave');
     this.uCount = gl.getUniformLocation(this.program, 'uCount');
+    this.uMode = gl.getUniformLocation(this.program, 'uMode');
+    this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
+    this.uAmp = gl.getUniformLocation(this.program, 'uAmp');
     this.uAlpha = gl.getUniformLocation(this.program, 'uAlpha');
     // Empty VAO: vertices are generated from gl_VertexID, no vertex buffer.
     this.vao = gl.createVertexArray();
@@ -40,6 +57,7 @@ export class WaveformLayer implements RenderLayer {
     const n = frame.waveform.length;
     // A line strip needs at least two vertices; nothing to draw otherwise.
     if (n < 2) return;
+    const circle = this.p.mode === 'circle';
 
     // Recreate the texture only when the sample count changes; otherwise reuse it.
     if (!this.tex || this.tex.length !== n) {
@@ -55,13 +73,16 @@ export class WaveformLayer implements RenderLayer {
     gl.bindTexture(gl.TEXTURE_2D, this.tex.texture);
     gl.uniform1i(this.uWave, 0);
     gl.uniform1i(this.uCount, n);
+    gl.uniform1i(this.uMode, circle ? 1 : 0);
+    gl.uniform1f(this.uAspect, target.width / Math.max(target.height, 1));
+    gl.uniform1f(this.uAmp, this.p.amplitude);
     gl.uniform1f(this.uAlpha, 1); // layer opacity (crossfades happen in the compositor)
 
     // Blend only for this draw so other layers keep their own blend state.
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindVertexArray(this.vao);
-    gl.drawArrays(gl.LINE_STRIP, 0, n);
+    gl.drawArrays(gl.LINE_STRIP, 0, circle ? n + 1 : n);
     gl.bindVertexArray(null);
     gl.disable(gl.BLEND);
   }

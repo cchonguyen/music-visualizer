@@ -8,12 +8,30 @@ uniform float uWA;      // weight of scene A (0..1)
 uniform float uWB;      // weight of scene B (0..1)
 uniform float uCap;     // estimated luminance cap from BrightnessLimiter
 uniform float uSafety;  // 1.0 = apply limits, 0.0 = off (tests / debugging)
+uniform int uStyle;     // transition style while two scenes blend (T1): 0 crossfade, 1 wipe, 2 dissolve, 3 zoom-through
+uniform float uT;       // transition progress, 0 = all A, 1 = all B (only used when both weights > 0)
 
 in vec2 vUv;
 out vec4 outColor;
 
 void main() {
-  vec3 c = texture(uA, vUv).rgb * uWA + texture(uB, vUv).rgb * uWB;
+  vec3 c;
+  if (uStyle == 0 || uWA <= 0.0 || uWB <= 0.0) {
+    c = texture(uA, vUv).rgb * uWA + texture(uB, vUv).rgb * uWB;
+  } else if (uStyle == 1) {
+    // Wipe: scene B arrives from the left, with a soft edge.
+    float m = 1.0 - smoothstep(uT - 0.01, uT + 0.01, vUv.x);
+    c = mix(texture(uA, vUv).rgb, texture(uB, vUv).rgb, m);
+  } else if (uStyle == 2) {
+    // Dissolve: random pixels change first, then the rest.
+    float n = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453);
+    float m = 1.0 - smoothstep(uT - 0.1, uT + 0.1, n);
+    c = mix(texture(uA, vUv).rgb, texture(uB, vUv).rgb, m);
+  } else {
+    // Zoom-through: B grows out of the centre while A fades.
+    vec2 uvB = 0.5 + (vUv - 0.5) / (0.6 + 0.4 * uT);
+    c = texture(uA, vUv).rgb * (1.0 - uT) + texture(uB, uvB).rgb * uT;
+  }
 
   if (uSafety > 0.5) {
     // Saturated red: where R/(R+G+B) >= 0.8, mix toward grey of the same total.

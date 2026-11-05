@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "name": "Circle wave",
+  "tags": [
+    "built-in",
+    "starter",
+    "draft"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.32
+  },
+  "feedback": {
+    "decay": 0.93
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "params": {}
+    },
+    {
+      "type": "crown",
+      "params": {}
+    },
+    {
+      "type": "particles",
+      "params": {}
+    },
+    {
+      "type": "shockwave",
+      "params": {}
+    },
+    {
+      "type": "waveform",
+      "params": {
+        "mode": "circle",
+        "amplitude": 0.8
+      }
+    },
+    {
+      "type": "rings",
+      "params": {}
+    }
+  ],
+  "post": {}
+}
