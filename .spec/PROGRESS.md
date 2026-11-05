@@ -75,6 +75,7 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 
 ## Open items from the Stage 3 thread (continuation, 2026-11-05)
 - [x] **Slice 4.13: Studio control for morph (E-c)** `[GREEN][UI / VISUAL]` worker: lead (Haiku) | Target files: `src/studio/studio.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [ ] **Slice 4.14: Keyboard and label fixes from the accessibility audit (findings 1 and 2)** [IN_PROGRESS] `[GREEN][UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `index.html`, `src/ui/controls.ts` | Verify: npm run typecheck && npx vitest run && npm run build
 
 ## Parked after Stage 4 (2026-11-05)
 See `docs/stage4-parked.md`: safety check for random and linked presets, layer opacity and blend, filled rings fix, E4 invert/solarize/echo, V2 and V5 variants, T4 second window, cleanup.
