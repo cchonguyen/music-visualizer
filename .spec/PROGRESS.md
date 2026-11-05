@@ -68,5 +68,7 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **T3** starter pack: 10 drafts (src/presets/builtin/starter-*.json), tagged draft. Keys 3–9 and [ ] reach them. Owner tunes and approves.
 - [ ] **T4** Studio in a second window: not built (optional in the plan)
 
+- [ ] **S5: Adjustable LFO rate (retroactive slice for PR #8)** [IN_PROGRESS] `[GREEN][CORE / DATA]` worker: lead | Target files: `src/presets/format.ts`, `src/presets/links.ts`, `src/presets/links.test.ts`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
+
 ## Parked after Stage 4 (2026-11-05)
 See `docs/stage4-parked.md`: safety check for random and linked presets, layer opacity and blend, filled rings fix, E4 invert/solarize/echo, V2 and V5 variants, T4 second window, cleanup.
