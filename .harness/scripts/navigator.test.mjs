@@ -351,7 +351,7 @@ test('finishSlice git staging does not crash when tracking files are ignored by 
     fs.writeFileSync(path.join(dir, 'b.txt'), 'b content updated');
 
     // finishSlice should stage and commit without crashing on ignored tracking file
-    const res = finishSlice(dir, 'feat: finish with gitignored tracking file', { skipChecks: true });
+    const res = finishSlice(dir, 'feat: finish with gitignored tracking file', { skipChecks: true, dashboardSync: () => 'Dashboard-Sync: Slice 1 Claimed' });
     assert.equal(res.success, true);
     assert.equal(res.sliceId, '2');
 
