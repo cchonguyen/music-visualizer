@@ -20,3 +20,9 @@
 - Browser (preview build): start screen tab order and focus ring OK, start-screen text contrast 5.0 to 18.1:1, player controls and File button OK, Studio opens with E and Tab reaches its controls. Not checked: player-screen source label and overlay hint contrast, Studio every-control keyboard run.
 - Dashboard: `.spec/STATE.json` written for 4.13 and 4.14 (stage Claimed). Untracked, not committed. Accept on dashboard is the operator's step.
 - Open: frame-time measurement stays with the owner's desktop.
+
+## Session 2026-11-05 (projectM thread, branch claude/project-thread-nhomyl)
+- Spec written: `.spec/PROJECTM_SPEC.md`. Slices 5.1 (A1) to 5.10 (C4) in `.spec/PROGRESS.md`. Charlie approved the plan; `.milk` import parked.
+- Slice 5.1 (beat sensitivity) built and verified in the working tree, NOT committed. Verify: typecheck exit 0, vitest 341 passed in 39 files, build exit 0. No lint script in this repo.
+- Blocker: `finish-slice.mjs` stops at "Dashboard sync failed: bin/update-state.mjs not found". This is an engine gap in the spoke. Engine files change only in claude-harness-hub. Nothing was committed by the script.
+- Immediate next step: decide how to commit 5.1 (see thread), then slice 5.2 (A2) only after 5.1 is verified.

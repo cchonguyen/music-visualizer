@@ -5,6 +5,7 @@ import type { TestSignal } from '../audio/testSignals';
 import { showNotice } from './notices';
 import { cyclePalette } from '../render/paletteStore';
 import { getVisualGain, setVisualGain } from '../render/gainStore';
+import { getBeatSensitivity, setBeatSensitivity } from '../audio/onset';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -117,6 +118,22 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   volume.addEventListener('input', () => engine.setVolume(Number(volume.value)));
   calm.addEventListener('change', () => (state.calm = calm.checked));
+
+  // Beat sensitivity: higher means more onsets are reported as beats.
+  const beatLabel = document.createElement('label');
+  beatLabel.htmlFor = 'beat-sensitivity';
+  beatLabel.append('Beat sensitivity ');
+  const beatInput = document.createElement('input');
+  beatInput.type = 'range';
+  beatInput.id = 'beat-sensitivity';
+  beatInput.min = '0';
+  beatInput.max = '100';
+  beatInput.step = '1';
+  beatInput.value = String(Math.round(getBeatSensitivity() * 100));
+  beatInput.setAttribute('aria-label', 'Beat sensitivity');
+  beatInput.addEventListener('input', () => setBeatSensitivity(Number(beatInput.value) / 100));
+  beatLabel.append(beatInput);
+  controls.append(beatLabel);
 
   // Visual gain: how strongly visuals respond to the music (not the volume).
   const gain = $<HTMLInputElement>('gain');
