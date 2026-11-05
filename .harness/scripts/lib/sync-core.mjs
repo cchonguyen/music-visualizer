@@ -43,6 +43,8 @@ export function listHubOwned(hubRoot) {
   walk('.harness');
   walk('.claude/agents');
   walk('.claude/commands');
+  // The harness plugin ships from the hub (hooks, agents, setup script). Spokes that synced it
+  // before must keep it, not have it deleted as "removed in hub".
   walk('plugins/harness');
   for (const rel of ['.claude/harness-rules.md', '.harness-version', '.spec/EXTERNAL_AGENT_RULES.md']) {
     if (fs.existsSync(path.join(hubRoot, rel))) out.push(rel);

@@ -8,10 +8,11 @@ import { gateDecision } from '../hooks/lib/doctor-state.mjs';
 
 const HEAD = 'abc1234def5678';
 
-function makeRoot({ agent = true, handoff = true } = {}) {
+function makeRoot({ agent = true, handoff = true, spoke = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-root-'));
   fs.mkdirSync(path.join(root, '.spec'), { recursive: true });
   if (handoff) fs.writeFileSync(path.join(root, '.spec', 'SESSION_HANDOFF.md'), '# handoff\n');
+  if (spoke) fs.writeFileSync(path.join(root, '.harness-version'), '3.2.0\n');
   if (agent) {
     fs.mkdirSync(path.join(root, 'plugins', 'harness', 'agents'), { recursive: true });
     fs.writeFileSync(path.join(root, 'plugins', 'harness', 'agents', 'gf-coder.md'), '# gf-coder\n');
@@ -41,6 +42,29 @@ test('a clean run yields DOCTOR_PASS', () => {
 test('a missing gf-coder agent makes the status DOCTOR_FAIL and names the check', () => {
   const root = makeRoot({ agent: false });
   try {
+    const state = runProbes({ root, head: HEAD });
+    assert.equal(state.status, 'DOCTOR_FAIL');
+    assert.deepEqual(state.failing, ['gf-coder-registered']);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('a spoke without a synced plugin/harness directory passes the gf-coder check', () => {
+  const root = makeRoot({ agent: false, spoke: true });
+  try {
+    const state = runProbes({ root, head: HEAD });
+    assert.equal(state.status, 'DOCTOR_PASS');
+    assert.equal(byName(state, 'gf-coder-registered').ok, true);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test('a spoke that has plugins/harness but no gf-coder agent still fails', () => {
+  const root = makeRoot({ agent: false, spoke: true });
+  try {
+    fs.mkdirSync(path.join(root, 'plugins', 'harness', 'agents'), { recursive: true });
     const state = runProbes({ root, head: HEAD });
     assert.equal(state.status, 'DOCTOR_FAIL');
     assert.deepEqual(state.failing, ['gf-coder-registered']);
