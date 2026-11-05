@@ -57,13 +57,13 @@ Deployed: https://music-visualizer.charliechonguyen.com (bundle index-D9FOwwzl.j
 Keys now: **0** = flight + radial crown (default), **1** = flight only, **2** = bars scene. The automatic bars blend is gone.
 
 Owner checks, please on Mac and Windows:
-- [ ] Black floor: between rings the screen is near black, with no grey-teal wash.
-- [ ] Particles are streaks flying out, no arcs or spirals.
-- [ ] Tunnel reads as a bending 3D corridor (figure-eight sway, slow roll). Calm stops the sway.
-- [ ] Kick shockwave: a thin ring travels out from the rim on each kick, and it's visible.
-- [ ] Breakdowns calm the rings; drops surge them; a drop after a dip swaps the two accent colours over about 1 s.
-- [ ] Radial crown: 48 bars around the tunnel rim, with particles launching from the bar tips. Visual gain changes its height. Calm shrinks it.
-- [ ] Photosensitivity: fullscreen on a loud drop, look for strobing. Flashes must stay at 3 per second or fewer.
+- [x] Black floor: between rings the screen is near black, with no grey-teal wash.
+- [x] Particles are streaks flying out, no arcs or spirals.
+- [x] Tunnel reads as a bending 3D corridor (figure-eight sway, slow roll). Calm stops the sway.
+- [x] Kick shockwave: a thin ring travels out from the rim on each kick, and it's visible.
+- [x] Breakdowns calm the rings; drops surge them; a drop after a dip swaps the two accent colours over about 1 s.
+- [x] Radial crown: 48 bars around the tunnel rim, with particles launching from the bar tips. Visual gain changes its height. Calm shrinks it.
+- [x] Photosensitivity: fullscreen on a loud drop, look for strobing. Flashes must stay at 3 per second or fewer.
 
 Known gaps, found while writing this round:
 - Crown bars were not clearly visible in the one automated frame checked (test signal: sweep). Confirm on a real track.
@@ -75,3 +75,7 @@ Known gaps, found while writing this round:
 - Test track: generated 8 s tone, 8 s silence, 8 s quiet (`/tmp/mv-quiet-test.wav`, not in repo). Loudness reached 0 by 11 s.
 - In silence the tunnel stays visible at a dim level (screenshot, headless Chrome): not black, rings present, one faint particle streak.
 - Not yet checked: owner's real track with a break, key 0/1/2 fades on screen, particle flow from the crown.
+
+## Owner check, 2026-11-05
+- Owner checked Kick, Sweep and real music, with Calm on and off and visual gain adjusted: looks good. Ticked the visual items above.
+- Still open: Stage 2 sign-off on Mac and Windows (owner).

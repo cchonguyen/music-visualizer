@@ -33,7 +33,7 @@
 - [~] **Slice 2.6: Bars, waveform and rings** [PARTIAL] (rings verified in browser; bars built but not yet verified on screen; waveform move and basic scene not done) `[GREEN][UI / VISUAL]` worker: cheap | Target files: `src/render/layers/bars.ts` [NEW], `src/render/layers/rings.ts` [NEW] | Verify: npm run typecheck && npm run build
 
 ## Stage 2 polish — docs/stage2-polish-plan.md (2026-11-04)
-- [x] P1 black floor and contrast · [x] P6 flash governor · [x] P2 particle streaks · [x] P3 tunnel depth/bend/roll · [x] P4 shockwave, section contrast, colour swap · [ ] P5 radial crown and keys (in progress) · Patch: shared sway, governor scope, quiet floor (done). Device check and deploy pending.
+- [x] P1 black floor and contrast · [x] P6 flash governor · [x] P2 particle streaks · [x] P3 tunnel depth/bend/roll · [x] P4 shockwave, section contrast, colour swap · [x] P5 radial crown and keys · Patch: shared sway, governor scope, quiet floor (done). Owner visual check done 2026-11-05; deployed.
 
 ## Stage 2.5 — Quiet-passage fixes (docs/stage2.5-plan.md, 2026-11-04)
 - [~] Reproduce blackout: code trace done (no audio gate, no zero-brightness path found); live per-frame repro not captured with the video. Fix shipped as a floor, not a root-cause fix.
