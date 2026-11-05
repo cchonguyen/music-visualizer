@@ -5,6 +5,7 @@
 import type { AudioFrame } from '../audio/types';
 import { AUDIO_SOURCES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, type AudioLink, type AudioSource, type Settings } from './format';
 import type { ParamSpec, ParamValue } from './schema';
+import { morphValue } from './morph';
 
 export interface LinkInputs {
   frame: AudioFrame;
@@ -71,11 +72,25 @@ export class LinkRunner {
       if (!setting) continue;
       const base = setting.value;
       const link = setting.link;
-      if (!link || (spec.type !== 'float' && spec.type !== 'int')) {
+      if (spec.type !== 'float' && spec.type !== 'int') {
         out[spec.name] = base;
         continue;
       }
-      out[spec.name] = this.linked(`${scope}.${spec.name}`, base, link, spec, inputs, dtSec);
+      const morph = setting.morph;
+      if (!link && !morph) {
+        out[spec.name] = base;
+        continue;
+      }
+      // With a morph, the link (if any) starts from the morphed value.
+      const start: ParamValue = morph && typeof base === 'number' ? morphValue(base, morph, inputs.timeSec) : base;
+      if (!link) {
+        // Morph only: no smoothing. Clamp to the range and round for ints.
+        let value = Math.min(spec.max, Math.max(spec.min, typeof start === 'number' ? start : spec.default));
+        if (spec.type === 'int') value = Math.round(value);
+        out[spec.name] = value;
+        continue;
+      }
+      out[spec.name] = this.linked(`${scope}.${spec.name}`, start, link, spec, inputs, dtSec);
     }
     return out;
   }

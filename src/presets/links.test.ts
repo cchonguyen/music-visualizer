@@ -88,6 +88,14 @@ describe('LinkRunner', () => {
     expect(b.zoom as number).toBeCloseTo(1.2, 3);
   });
 
+  it('morphs a setting with no link: at half a period it reaches `to`', () => {
+    const morphed: Settings = { zoom: { value: 1, morph: { to: 1.1, rate: 0.5 } } };
+    const atStart = new LinkRunner().resolve('M', morphed, [zoom], inputs({ timeSec: 0 }), 0.016);
+    const atHalf = new LinkRunner().resolve('M', morphed, [zoom], inputs({ timeSec: 1 }), 0.016);
+    expect(atStart.zoom as number).toBeCloseTo(1, 5);
+    expect(atHalf.zoom as number).toBeCloseTo(1.1, 5);
+  });
+
   it('rounds integer settings', () => {
     const sides: ParamSpec = { type: 'int', name: 'sides', label: 'Sides', group: 'G', default: 4, min: 3, max: 12, step: 1 };
     const out = new LinkRunner().resolve('S', { sides: { value: 4, link: { source: 'sub', amount: 0.3, smooth: 0 } } }, [sides], inputs(), 10);
