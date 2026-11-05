@@ -29,3 +29,5 @@ Source plan: `/mnt/project-files/plans/projectm-ideas-implementation.md` (approv
 
 ## Verify rule
 Each slice runs `npm run typecheck && npm test && npm run build`, once after the final edit. Real output goes in the PR description.
+
+Slice ids: 5.1 = A1, 5.2 = A2, 5.3 = A3, 5.4 = B1, 5.5 = B2, 5.6 = B3, 5.7 = C1, 5.8 = C2, 5.9 = C3, 5.10 = C4 (plan names in .spec/PROJECTM_SPEC.md).
