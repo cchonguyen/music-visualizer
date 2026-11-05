@@ -70,3 +70,8 @@ Known gaps, found while writing this round:
 - The outer tunnel bands are wide and bright near the edge; the owner may want them thinner.
 - Shaders were checked only in one headless Chrome session.
 - The recording named `3.11.48 PM.mov` is not in the shared folder; the 3.04.25 PM check stands.
+
+## Stage 2.5 quiet-passage check (2026-11-04)
+- Test track: generated 8 s tone, 8 s silence, 8 s quiet (`/tmp/mv-quiet-test.wav`, not in repo). Loudness reached 0 by 11 s.
+- In silence the tunnel stays visible at a dim level (screenshot, headless Chrome): not black, rings present, one faint particle streak.
+- Not yet checked: owner's real track with a break, key 0/1/2 fades on screen, particle flow from the crown.

@@ -36,4 +36,9 @@
 - [x] P1 black floor and contrast · [x] P6 flash governor · [x] P2 particle streaks · [x] P3 tunnel depth/bend/roll · [x] P4 shockwave, section contrast, colour swap · [ ] P5 radial crown and keys (in progress) · Patch: shared sway, governor scope, quiet floor (done). Device check and deploy pending.
 
 ## Stage 2.5 — Quiet-passage fixes (docs/stage2.5-plan.md, 2026-11-04)
-- [ ] Reproduce blackout from video_1.mov · [ ] C1 dim floor >= 0.12 alpha, no layer cut-outs · [ ] C2 250–400 ms release envelopes on all opacities and master brightness · [ ] C3 particles and waveforms start at crown tips (r 0.16)
+- [~] Reproduce blackout: code trace done (no audio gate, no zero-brightness path found); live per-frame repro not captured with the video. Fix shipped as a floor, not a root-cause fix.
+- [x] C1 quiet-aware floor: gaps between rings keep 12% tint when quiet (uQuiet, shared 320 ms release); crest floor kept.
+- [x] C2 320 ms release: particle highFlash, brightness limiter fall, tunnel beat flash, scene-switch fade (compositor eases weights).
+- [x] C3 particles spawn at crown radius 0.16 and flow outward on the tunnel depth curve (P5 bar-tip launch removed).
+- [x] Browser check: quiet section (silence) shows dimmed tunnel, not black. Scene fade and particle flow not yet checked on screen.
+- Deployed 2026-11-04: https://music-visualizer.charliechonguyen.com · branch stage-2.5-quiet-passage pushed.
