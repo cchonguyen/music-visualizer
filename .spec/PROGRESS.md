@@ -42,3 +42,11 @@
 - [x] C3 particles spawn at crown radius 0.16 and flow outward on the tunnel depth curve (P5 bar-tip launch removed).
 - [x] Browser check: quiet section (silence) shows dimmed tunnel, not black. Scene fade and particle flow not yet checked on screen.
 - Deployed 2026-11-04: https://music-visualizer.charliechonguyen.com · branch stage-2.5-quiet-passage pushed.
+
+## Stage 4 — Presets, effects and Preset Studio (docs/stage4-presets-plan.md, drafted 2026-11-04, awaiting owner approval)
+Stage 3 polish parked by owner. Build order:
+- [ ] Phase 1 foundation: 4.1 parameter schema + preset format · 4.2 layers read settings (no visible change) · 4.3 loader + 3 built-in JSON presets · 4.4 preset switching (1–9, [ ], crossfade time)
+- [ ] Phase 2 Studio v1: S1 live panel · S2 save/library/export · S3 layer stack · S4 undo/randomise/mutate/lock
+- [ ] Phase 3 effects: E1 feedback warp · E2 audio links · E3 feedback colour + blur · E4 post chain · E5 bloom
+- [ ] Phase 4 variety: V1 tunnel · V2 particles · V3 shapes/rings · V4 pulse · V5 spectrum ring + waveform modes
+- [ ] Phase 5: T1 transition styles · T2 auto-cycle · T3 starter pack · T4 Studio in second window (optional)

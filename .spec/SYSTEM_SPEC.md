@@ -13,8 +13,8 @@ Source documents: `.spec/SCOPE_BRIEF.md` (v2 brief, phone-focused, superseded fo
 **Staged roadmap:**
 - **Stage 1 — Audio core and GPU proof:** three audio sources feeding one analyser: (a) a local file via `<audio>`, (b) tab or system audio via `getDisplayMedia`, and (c) microphone via `getUserMedia`. Plus a built-in test-signal source and a debug panel showing live numbers (see `docs/visualization-ladder.md`, section 3). Play, pause, seek, volume, source switch. Plus a WebGL2 "tracer bullet": one shader whose brightness follows bass energy. This proves the audio-to-GPU path end to end before any real visual is built. Verified on the owner's Mac and Windows machines.
 - **Stage 2 — Visuals on WebGL2 (order revised by Council round 2):** (1) framebuffer helper, ping-pong pair and a trail test; (2) Scene and Compositor with the safety pass; (3) forward-flight tunnel (full-screen shader driven by phase accumulators); (4) treble particles (instanced quads); (5) bars, waveform, rings. Plus sub-bass resolution fix, beat tuning on real music, mode switching, extended Calm mode.
-- **Stage 3 — Polish:** keyboard shortcuts, fullscreen, performance budget, hidden-tab and capture-ended handling, GPU-loss reset tested, accessibility pass.
-- **Stage 4 — Own preset system:** our own preset format (a preset describes a whole Scene), a preset loader, and crossfades between scenes. Built on our own engine. Butterchurn is a reference only.
+- **Stage 3 — Polish (parked by owner 2026-11-04; Stage 4 goes first):** keyboard shortcuts, fullscreen, performance budget, hidden-tab and capture-ended handling, GPU-loss reset tested, accessibility pass.
+- **Stage 4 — Own preset system (expanded 2026-11-04, plan in `docs/stage4-presets-plan.md`):** our own preset format (a preset describes a whole Scene), a preset loader, crossfades, MilkDrop-inspired feedback and post effects, more component variants, and a Preset Studio for live tuning and saving. Built on our own engine. Butterchurn is a reference only.
 - **Later:** `.milk` import (both Council reviewers: a compiler sub-project; our own format gives most of the value), beat and bar tracker (for phrase-based scene changes, owner decision 2026-11-04), recording (canvas + audio), phone and iPhone version.
 
 **Done means:** each stage works on the owner's desktop and has been used for real music before the next stage starts.
@@ -30,7 +30,7 @@ Until moved into a stage above:
 - Video or audio recording, export.
 - Butterchurn as a runtime dependency. `.milk` import (later, only on owner request). ISF shaders (later).
 - Detached control screen or multi-window sync.
-- Rendering in background tabs; themes or saved visual presets.
+- Rendering in background tabs. (Saved visual presets moved into Stage 4, 2026-11-04: browser storage and JSON files only.)
 - Paid services or paid certificates of any kind.
 - Full 3D scenes with physically based lighting and DMX or LED output. The reference guide's flagship examples use Unreal or TouchDesigner. Our v1 is 2D-on-GPU with a fixed-axis forward tunnel; true 3D is a later decision.
 - Third-party 3D engines (three.js and similar) in v1. Reason: we build on raw WebGL2 so the render layer stays small and fully understood. Revisit only if a slice proves it necessary.
