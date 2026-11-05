@@ -4,10 +4,24 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { finishSlice, parseActiveTargets } from './finish-slice.mjs';
+import { finishSlice, parseActiveTargets, bootstrapException } from './finish-slice.mjs';
 import { startSlice } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 import { appendCall, readCalls } from './lib/telemetry.mjs';
+
+test('bootstrap exception is allowed only for slices 10.2 and 5.1 with a stated reason', () => {
+  assert.deepEqual(bootstrapException('10.2', 'telemetry hook not yet live'), {
+    allowed: true, reason: 'telemetry hook not yet live'
+  });
+  assert.deepEqual(bootstrapException('5.1', 'stamp of a merged slice; dispatch telemetry not recorded in cloud session'), {
+    allowed: true, reason: 'stamp of a merged slice; dispatch telemetry not recorded in cloud session'
+  });
+  assert.equal(bootstrapException('5.1', '   ').allowed, false);
+  assert.equal(bootstrapException('10.2', undefined).allowed, false);
+  assert.equal(bootstrapException('5.2', 'any reason').allowed, false);
+  assert.equal(bootstrapException('10.3', 'any reason').allowed, false);
+  assert.equal(bootstrapException('9.9', 'any reason').allowed, false);
+});
 
 // Records one subagent dispatch for the slice, as the PostToolUse telemetry hook would.
 function seedDispatch(dir, sliceId = '1') {
