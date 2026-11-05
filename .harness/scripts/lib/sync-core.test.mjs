@@ -68,7 +68,6 @@ test('listHubOwned walks engine folders and skips spoke-owned files', () => {
   write('.harness/templates/spoke/CLAUDE.md');
   write('.claude/agents/engineer.md');
   write('.claude/commands/implement.md');
-  write('plugins/harness/agents/gf-coder.md');
   write('.claude/harness-rules.md');
   write('.harness-version');
   write('.spec/EXTERNAL_AGENT_RULES.md');
@@ -78,7 +77,6 @@ test('listHubOwned walks engine folders and skips spoke-owned files', () => {
   assert.ok(files.includes('.harness/hooks/a.mjs'));
   assert.ok(files.includes('.harness/templates/spoke/CLAUDE.md'));
   assert.ok(files.includes('.spec/EXTERNAL_AGENT_RULES.md'));
-  assert.ok(files.includes('plugins/harness/agents/gf-coder.md'));
   assert.ok(!files.includes('.spec/PROGRESS.md'));
   assert.ok(!files.includes('CLAUDE.md'));
   fs.rmSync(dir, { recursive: true, force: true });

@@ -19,6 +19,13 @@ export function currentHead(root) {
 
 const check = (name, severity, ok, detail) => ({ name, severity, ok, detail });
 
+// A spoke is a repo with .harness-version whose origin is not the hub.
+function isSpokeRoot(root) {
+  let origin = '';
+  try { origin = gitOut(root, ['remote', 'get-url', 'origin']); } catch {}
+  return fs.existsSync(path.join(root, '.harness-version')) && !isHubOrigin(origin);
+}
+
 function probeFastPathBudget() {
   const r = checkFastPathBudget({
     role: 'coordinator',
@@ -33,6 +40,10 @@ function probeFastPathBudget() {
 }
 
 function probeGfCoder(root) {
+  // The plugin is installed from the hub's main branch, not synced into spokes, so spokes skip this probe.
+  if (isSpokeRoot(root)) {
+    return check('gf-coder-registered', 'skip', true, 'spoke: harness plugin is installed from the hub, not synced');
+  }
   const ok = fs.existsSync(path.join(root, 'plugins', 'harness', 'agents', 'gf-coder.md'));
   return check('gf-coder-registered', 'fail', ok,
     ok ? 'plugins/harness/agents/gf-coder.md present' : 'plugins/harness/agents/gf-coder.md missing');
@@ -59,9 +70,7 @@ function probeTelemetry(root) {
 }
 
 function probeEngineHash(root) {
-  let origin = '';
-  try { origin = gitOut(root, ['remote', 'get-url', 'origin']); } catch {}
-  const isSpoke = fs.existsSync(path.join(root, '.harness-version')) && !isHubOrigin(origin);
+  const isSpoke = isSpokeRoot(root);
   return check('spoke-engine-hash', 'skip', true,
     isSpoke ? 'engine hash check not implemented yet' : 'not a spoke (no .harness-version or hub origin)');
 }
