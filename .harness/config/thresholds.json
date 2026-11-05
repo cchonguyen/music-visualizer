@@ -1,0 +1,32 @@
+{
+  "fa_fast_path": {
+    "max_source_reads": 3,
+    "max_reads": 3,
+    "max_searches": 1,
+    "max_edits": 1,
+    "max_single_file_edit_lines": 25,
+    "max_edit_lines": 25
+  },
+  "gf_circuit_breaker": {
+    "max_exploratory_searches": 2,
+    "max_searches": 2,
+    "max_test_failure_strikes": 2,
+    "max_strikes": 2,
+    "max_mutating_calls": 15
+  },
+  "line_budgets": {
+    "soft_caps": {
+      "AGENTS.md": 80,
+      "CLAUDE.md": 80,
+      ".spec/ATLAS.md": 50,
+      ".spec/boundaries/locks.md": 60,
+      ".spec/boundaries/do-not-build.md": 60,
+      ".spec/contracts/referee.md": 80,
+      ".spec/contracts/circuit-breaker.md": 80,
+      ".spec/contracts/baton-pass.md": 80,
+      ".spec/contracts/review-relay.md": 80,
+      ".spec/PROGRESS.md": 60,
+      ".spec/archive/HISTORY.md": 200
+    }
+  }
+}

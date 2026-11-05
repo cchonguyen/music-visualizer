@@ -1,0 +1,51 @@
+# Harness Referee watch (spoke template). Copy to .github/workflows/harness-referee-watch.yml in a spoke.
+# On every push to main, lists the non-merge commits that carry no Referee-Verdict trailer.
+# If any exist, it opens one issue naming them. It never reverts or blocks anything.
+name: Harness Referee watch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Find commits without a Referee trailer
+        id: scan
+        continue-on-error: true
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: node .harness/scripts/ci-gate.mjs push "$BEFORE" "$AFTER" > "$RUNNER_TEMP/unverified.txt"
+
+      - name: Show the scan result
+        run: cat "$RUNNER_TEMP/unverified.txt"
+
+      - name: Open an issue for unverified commits
+        if: steps.scan.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "Commits on main without a Referee-Verdict trailer, pushed at $SHA:"
+            echo
+            cat "$RUNNER_TEMP/unverified.txt"
+            echo
+            echo "Work on main should go through a slice (finish-slice.mjs stamps the trailers). Check whether the commit was a hand edit or a merge from a branch without a slice."
+          } > "$RUNNER_TEMP/issue.md"
+          gh issue create --title "Commit without Referee trailer on main at ${SHA:0:7}" --body-file "$RUNNER_TEMP/issue.md"
