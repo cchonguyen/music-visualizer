@@ -10,6 +10,7 @@ import { bindTarget, type RenderLayer } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
 import type { ParamValue } from '../presets/schema';
+import { getRenderScale, scaledBufferSize } from '../gl/size';
 
 const UNIFORMS = [
   'uPrev', 'uCentre', 'uDrift', 'uStretch', 'uZoom', 'uRot', 'uWarp', 'uWarpScale', 'uWarpSpeed',
@@ -25,6 +26,8 @@ export class Scene {
   private vao: WebGLVertexArrayObject | null = null;
   private w = 1;
   private h = 1;
+  /** Render scale the feedback buffer was last sized for (slice 5.2). */
+  private appliedScale: number | null = null;
   /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
   private fb: Record<string, number | string> = { ...FEEDBACK_DEFAULTS };
   private uni = new Map<string, WebGLUniformLocation | null>();
@@ -45,15 +48,24 @@ export class Scene {
     this.uni.clear();
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
-    this.pp = new PingPong(gl, this.w, this.h);
+    const b = scaledBufferSize(this.w, this.h, getRenderScale());
+    this.pp = new PingPong(gl, b.width, b.height);
+    this.appliedScale = getRenderScale();
     for (const l of this.layers) l.init(gl);
   }
 
   resize(width: number, height: number, dpr: number): void {
     this.w = width;
     this.h = height;
-    this.pp?.resize(width, height);
+    this.applyScale();
     for (const l of this.layers) l.resize(width, height, dpr);
+  }
+
+  /** Sizes the feedback buffer for the current render scale (slice 5.2). */
+  private applyScale(): void {
+    const b = scaledBufferSize(this.w, this.h, getRenderScale());
+    this.pp?.resize(b.width, b.height);
+    this.appliedScale = getRenderScale();
   }
 
   /** The finished image of the last draw (valid after draw()). */
@@ -64,6 +76,7 @@ export class Scene {
 
   draw(frame: AudioFrame, clock: RenderClock): void {
     const gl = this.gl;
+    if (gl && this.pp && getRenderScale() !== this.appliedScale) this.applyScale();
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 

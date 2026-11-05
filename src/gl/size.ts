@@ -45,3 +45,59 @@ export function canvasSize(
 
   return { width, height, dpr };
 }
+
+// Render quality (slice 5.2): the feedback buffer is drawn at a fraction of the canvas
+// size. The owner picks 100, 75 or 50 percent; the choice is saved locally.
+export const RENDER_SCALES = [1, 0.75, 0.5] as const;
+export type RenderScale = (typeof RENDER_SCALES)[number];
+export const RENDER_SCALE_DEFAULT: RenderScale = 1;
+const RENDER_SCALE_KEY = 'mv.renderScale';
+
+/** Returns the allowed scale closest to v, or the default for non-finite input. */
+export function clampRenderScale(v: number): RenderScale {
+  if (!Number.isFinite(v)) return RENDER_SCALE_DEFAULT;
+  let best: RenderScale = RENDER_SCALE_DEFAULT;
+  for (const s of RENDER_SCALES) {
+    if (Math.abs(s - v) < Math.abs(best - v)) best = s;
+  }
+  return best;
+}
+
+function loadRenderScale(): RenderScale {
+  try {
+    const saved = localStorage.getItem(RENDER_SCALE_KEY);
+    if (saved !== null) return clampRenderScale(Number(saved));
+  } catch {
+    // storage blocked: use the default
+  }
+  return RENDER_SCALE_DEFAULT;
+}
+
+let renderScale: RenderScale = loadRenderScale();
+
+export function getRenderScale(): RenderScale {
+  return renderScale;
+}
+
+export function setRenderScale(v: number): RenderScale {
+  renderScale = clampRenderScale(v);
+  try {
+    localStorage.setItem(RENDER_SCALE_KEY, String(renderScale));
+  } catch {
+    // not saved; applies for this session
+  }
+  return renderScale;
+}
+
+/** Feedback buffer size at a render scale. Never smaller than 1x1. */
+export function scaledBufferSize(
+  width: number,
+  height: number,
+  scale: number,
+): { width: number; height: number } {
+  const s = clampRenderScale(scale);
+  return {
+    width: Math.max(1, Math.round(width * s)),
+    height: Math.max(1, Math.round(height * s)),
+  };
+}
