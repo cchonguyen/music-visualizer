@@ -11,7 +11,7 @@ import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
 import { TunnelLayer } from './render/layers/tunnel';
-import { getVisualGain } from './render/gainStore';
+import { getVisualGain, shapeReaction } from './render/gainStore';
 import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
@@ -198,13 +198,13 @@ function start(): void {
       k.shockwave.accentSwap = swapMix;
     }
 
-    // Visual gain: scales the response (ring crests, sparkles, ring count), not the
-    // full-screen background level, so turning it up can't wash the screen out.
+    // Visual gain bends the reaction curve (gainStore.shapeReaction): low = calmer, high =
+    // more contrast. Applied to the reaction values only, not the full-screen level.
     const g = getVisualGain();
     if (g !== 1) {
-      const up = (x: number) => Math.min(1, x * g);
-      frame.norm.sub = up(frame.norm.sub); frame.norm.mid = up(frame.norm.mid); frame.norm.high = up(frame.norm.high);
-      frame.energy = up(frame.energy);
+      const bend = (x: number) => shapeReaction(x, g);
+      frame.norm.sub = bend(frame.norm.sub); frame.norm.mid = bend(frame.norm.mid); frame.norm.high = bend(frame.norm.high);
+      frame.energy = bend(frame.energy);
     }
 
     // Calm mode: the frame object is rebuilt every tick, so scaling it here

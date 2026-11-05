@@ -5,7 +5,7 @@ import { BAR_COUNT, barValues } from './barsState';
 import type { BarEdge } from './logScale';
 import { buildBarEdges } from './logScale';
 import { SlowFollower, punch } from './dynamics';
-import { getVisualGain } from './gainStore';
+import { getVisualGain, shapeReaction } from './gainStore';
 
 /** Calm dampens the crown (and so the particle launch) to 35%. */
 export const CROWN_CALM_SCALE = 0.35;
@@ -36,7 +36,7 @@ export function shapeHeights(
     const v = raw[i] ?? 0;
     const base = slowAvg[i]!.step(v, dt);
     const expanded = Math.min(1, Math.max(0, (v - 0.3) / 0.4));
-    const h = (0.6 * expanded + 0.8 * punch(v, base, 6)) * gain * calmScale;
+    const h = shapeReaction(0.6 * expanded + 0.8 * punch(v, base, 6), gain) * calmScale;
     out[i] = Math.min(1, Math.max(0, Number.isFinite(h) ? h : 0));
   }
   return out;

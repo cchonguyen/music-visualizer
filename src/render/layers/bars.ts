@@ -7,7 +7,7 @@ import { createVao } from '../../gl/vao';
 import type { RenderClock } from '../clock';
 import { BAR_COUNT, barValues } from '../barsState';
 import { SlowFollower, punch } from '../dynamics';
-import { getVisualGain } from '../gainStore';
+import { getVisualGain, shapeReaction } from '../gainStore';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import { buildBarEdges, type BarEdge } from '../logScale';
 import { getPalette, type Palette } from '../palette';
@@ -73,7 +73,7 @@ export class BarsLayer implements RenderLayer {
       const v = raw[i] ?? 0;
       const base = this.slow[i]!.step(v, dt);
       const expanded = Math.min(1, Math.max(0, (v - 0.3) / 0.4));
-      raw[i] = Math.min(1, (0.6 * expanded + 0.8 * punch(v, base, 6)) * g);
+      raw[i] = shapeReaction(0.6 * expanded + 0.8 * punch(v, base, 6), g);
     }
     updateDataTexture(gl, this.bars, raw);
 

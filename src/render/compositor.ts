@@ -14,13 +14,17 @@ import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { type RenderClock } from './clock';
 import { BrightnessLimiter } from './safety';
+import { RELEASE_TAU_SEC, releaseEnvelope } from './releaseEnvelope';
 import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import type { Scene } from './scene';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 
 export class Compositor implements RenderLayer {
   private scenes = new Map<string, Scene>();
+  // `weights` is what is drawn now; `targets` is what the last key press asked for.
+  // draw() eases weights toward targets, so a scene switch fades over RELEASE_TAU_SEC.
   private weights = new Map<string, number>();
+  private targets = new Map<string, number>();
   private ready = new Set<string>();
   private gl: WebGL2RenderingContext | null = null;
   private prog: WebGLProgram | null = null;
@@ -30,6 +34,7 @@ export class Compositor implements RenderLayer {
   private dpr = 1;
   private limiter = new BrightnessLimiter();
   private lastNow: number | null = null;
+  private loudnessSlow = 0;
 
   constructor(scenes: Scene[]) {
     for (const s of scenes) this.scenes.set(s.name, s);
@@ -42,7 +47,29 @@ export class Compositor implements RenderLayer {
     for (const name of Object.keys(weights)) {
       if (!this.scenes.has(name)) throw new Error(`Compositor: unknown scene "${name}"`);
     }
-    this.weights = new Map(Object.entries(weights).map(([k, v]) => [k, Math.min(1, Math.max(0, v))]));
+    this.targets = new Map(Object.entries(weights).map(([k, v]) => [k, Math.min(1, Math.max(0, v))]));
+  }
+
+  /**
+   * Ease each scene's weight toward its target (C2 release envelope). A scene that is
+   * still fading out and a new one fading in can overlap briefly; if that would make
+   * three scenes visible (the shader has two inputs), the weakest fading-out scene is
+   * snapped to 0 so the cap holds.
+   */
+  private easeWeights(dtSec: number): void {
+    const names = new Set([...this.weights.keys(), ...this.targets.keys()]);
+    for (const name of names) {
+      const w = this.weights.get(name) ?? 0;
+      const t = this.targets.get(name) ?? 0;
+      let next = releaseEnvelope(w, t, dtSec, RELEASE_TAU_SEC, RELEASE_TAU_SEC);
+      if (Math.abs(next - t) < 1e-3) next = t; // settle exactly, so finished fades free buffers
+      this.weights.set(name, next);
+    }
+    const visible = [...this.weights.entries()].filter(([, w]) => w > 0);
+    if (visible.length > 2) {
+      visible.sort((x, y) => (this.targets.get(x[0]) ?? 0) - (this.targets.get(y[0]) ?? 0) || x[1] - y[1]);
+      for (const [name] of visible.slice(0, visible.length - 2)) this.weights.set(name, 0);
+    }
   }
 
   init(gl: WebGL2RenderingContext): void {
@@ -66,7 +93,8 @@ export class Compositor implements RenderLayer {
     const gl = this.gl;
     if (!gl || !this.prog || !this.vao) throw new Error('Compositor: draw before init');
 
-    // Bring scenes up and down with their weights.
+    // Bring scenes up and down with their weights (eased toward the key-press targets).
+    this.easeWeights(clock.dtSec);
     const active: string[] = [];
     for (const [name, weight] of this.weights) {
       if (weight > 0) {
@@ -88,7 +116,10 @@ export class Compositor implements RenderLayer {
     const now = performance.now();
     const dt = this.lastNow === null ? 0 : Math.min(0.1, Math.max(0, (now - this.lastNow) / 1000));
     this.lastNow = now;
-    const cap = this.limiter.step(0.2 + 0.8 * frame.loudness, dt);
+    // The brightness target follows a slowed loudness (not each kick), so the whole
+    // screen does not dim in step with every beat. The fall still uses the C2 release.
+    this.loudnessSlow = releaseEnvelope(this.loudnessSlow, frame.loudness, dt, 0.5, 1.0);
+    const cap = this.limiter.step(0.2 + 0.8 * this.loudnessSlow, dt);
 
     // Final pass: blend the two active scenes and apply the safety rules.
     bindTarget(gl, target);

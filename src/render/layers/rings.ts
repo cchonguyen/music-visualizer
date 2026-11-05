@@ -7,7 +7,7 @@ import type { RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import { getPalette, type Palette } from '../palette';
 import { SlowFollower, punch } from '../dynamics';
-import { getVisualGain } from '../gainStore';
+import { getVisualGain, shapeReaction } from '../gainStore';
 import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/rings.frag.glsl?raw';
 
@@ -68,7 +68,7 @@ export class RingsLayer implements RenderLayer {
     const dt = Math.max(0, _clock.dtSec);
     const loudAvg = this.slowLoud.step(frame.loudness, dt);
     const energy = unit(frame.energy);
-    const level = Math.min(1, 0.4 * energy + 0.6 * punch(frame.loudness, loudAvg, 4));
+    const level = shapeReaction(Math.min(1, 0.4 * energy + 0.6 * punch(frame.loudness, loudAvg, 4)), getVisualGain());
     const bassPunch = punch(frame.env.sub, this.slowSub.step(frame.env.sub, dt), 4);
     const normMean = (unit(frame.norm.sub) + unit(frame.norm.mid) + unit(frame.norm.high)) / 3;
 

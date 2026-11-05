@@ -13,13 +13,15 @@ import { highFlash, POOL_SIZE } from '../particleState';
 import { getSway } from '../swayStore';
 import { getCrownHeights } from '../crownStore';
 import { blendAccents } from '../colourSwap';
+import { getVisualGain } from '../gainStore';
 
 const BRIGHTNESS = 1.0;
 const CALM_SPARKLE_SCALE = 0.3;
 const CALM_PHASE_RATE = 0.2;
 const BASE_PHASE_RATE = 0.2;
 const ENERGY_PHASE_RATE = 0.8;
-const FLASH_SPARKLE_SCALE = 0.5;
+// Mild: hi-hat flashes add only a little sparkle, so the scene doesn't strobe on every hit.
+const FLASH_SPARKLE_SCALE = 0.2;
 
 export class ParticleLayer implements RenderLayer {
   /** Calm mode: no energy-driven density, dimmer sparkle. */
@@ -85,7 +87,7 @@ export class ParticleLayer implements RenderLayer {
 
     bindTarget(gl, target);
 
-    // Flash envelope: instant attack on a high-band onset, 150 ms release.
+    // Flash envelope: instant attack on a high-band onset, 320 ms shared release (C2).
     // Not governed (patch 2026-11-04): a sparkle covers under 1% of the screen, so it
     // does not use the flash budget and cannot block a kick shockwave.
     this.flash = highFlash(this.flash, frame.beatByBand.high, clock.dtSec);
@@ -93,7 +95,7 @@ export class ParticleLayer implements RenderLayer {
     // Density rises with energy only in loud sections; phase never decreases.
     const section = this.calm ? 1 : Math.max(0, 1 + this.sectionContrast);
     const rate = this.calm
-      ? CALM_PHASE_RATE
+      ? CALM_PHASE_RATE * getVisualGain()
       : (BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy) * section;
     const phase = this.phase.advance(clock.dtSec, rate);
     // Calm slows the motion, but the twinkle keeps real time (only its brightness is dimmed).
