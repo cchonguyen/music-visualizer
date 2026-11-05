@@ -9,6 +9,7 @@ import {
   agentsBlock, colourOf, isEngineLocked, isEnginePath, isHubOrigin, nextContent,
 } from './lib/guard-rules.mjs';
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
+import { writeJsonAtomic } from '../scripts/lib/telemetry.mjs';
 import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
@@ -261,11 +262,7 @@ if (isDirectRun) {
   }
 
   function writeTelemetry(repoRoot, data) {
-    const p = path.join(repoRoot, '.spec', '.session-telemetry.json');
-    try {
-      fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8');
-    } catch {}
+    writeJsonAtomic(path.join(repoRoot, '.spec', '.session-telemetry.json'), data);
   }
 
   function captureCheckpoint() {

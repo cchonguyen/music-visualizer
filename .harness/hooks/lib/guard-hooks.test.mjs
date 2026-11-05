@@ -80,6 +80,10 @@ test('manager mode with the file in an active slice is allowed', () => {
     files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': SLICE('src/app.js'), 'src/app.js': 'a\n' },
   });
   assert.equal(runHook(GUARD, dir, edit(dir, 'src/app.js')).status, 0);
+  // The guard's telemetry write is atomic: the file parses after the run.
+  const telemPath = path.join(dir, '.spec', '.session-telemetry.json');
+  assert.equal(fs.existsSync(telemPath), true);
+  assert.equal(JSON.parse(fs.readFileSync(telemPath, 'utf8')).coordinator_edits, 1);
 });
 
 test('vibe mode (no harness.json) keeps the v2.2 behavior: no plan lock', () => {

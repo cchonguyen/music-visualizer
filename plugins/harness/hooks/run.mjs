@@ -33,7 +33,7 @@ export function parsePayload(raw) {
 export function run(script, raw, { env = process.env, cwd = process.cwd(), spawn = spawnSync, exists = fs.existsSync } = {}) {
   if (!script) return { status: 0, skipped: 'no script' };
   const payload = parsePayload(raw);
-  const root = findHarnessRoot([env.CLAUDE_PROJECT_DIR, payload.cwd, cwd], exists);
+  const root = findHarnessRoot([payload.cwd, env.CLAUDE_PROJECT_DIR, cwd], exists);
   if (!root) return { status: 0, skipped: 'no .harness' };
   const child = spawn(process.execPath, [path.join(root, ADAPTER), script], {
     input: raw,

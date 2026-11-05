@@ -6,6 +6,7 @@ import { showNotice } from './notices';
 import { cyclePalette } from '../render/paletteStore';
 import { getVisualGain, setVisualGain } from '../render/gainStore';
 import { getBeatSensitivity, setBeatSensitivity } from '../audio/onset';
+import { getRenderScale, RENDER_SCALES, setRenderScale } from '../gl/size';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -134,6 +135,24 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   beatInput.addEventListener('input', () => setBeatSensitivity(Number(beatInput.value) / 100));
   beatLabel.append(beatInput);
   controls.append(beatLabel);
+
+  // Render quality (slice 5.2): feedback buffer at 100, 75 or 50 percent. Saved locally.
+  const qualityLabel = document.createElement('label');
+  qualityLabel.htmlFor = 'render-quality';
+  qualityLabel.append('Render quality ');
+  const qualitySelect = document.createElement('select');
+  qualitySelect.id = 'render-quality';
+  qualitySelect.setAttribute('aria-label', 'Render quality');
+  for (const s of RENDER_SCALES) {
+    const opt = document.createElement('option');
+    opt.value = String(s);
+    opt.textContent = `${Math.round(s * 100)}%`;
+    qualitySelect.append(opt);
+  }
+  qualitySelect.value = String(getRenderScale());
+  qualitySelect.addEventListener('change', () => setRenderScale(Number(qualitySelect.value)));
+  qualityLabel.append(qualitySelect);
+  controls.append(qualityLabel);
 
   // Visual gain: how strongly visuals respond to the music (not the volume).
   const gain = $<HTMLInputElement>('gain');

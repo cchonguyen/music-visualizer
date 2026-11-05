@@ -60,6 +60,17 @@ fs.writeFileSync(process.env.CLAUDE_PROJECT_DIR + '/seen.json', JSON.stringify({
   assert.equal(seen.input, raw);
 });
 
+test('payload cwd repo wins over CLAUDE_PROJECT_DIR when both repos have a harness', () => {
+  const spoke = tmpRepo('');
+  const hub = tmpRepo('');
+  const sub = path.join(spoke, 'src');
+  fs.mkdirSync(sub, { recursive: true });
+  const r = run('post-tool-telemetry.mjs', JSON.stringify({ cwd: sub }), {
+    env: { CLAUDE_PROJECT_DIR: hub }, cwd: os.tmpdir(), spawn: () => ({ status: 0 }),
+  });
+  assert.equal(r.root, spoke);
+});
+
 test('hooks.json routes every event through run.mjs', () => {
   const cfg = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8'));
   const cmds = Object.values(cfg.hooks).flat().flatMap((m) => m.hooks.map((h) => h.command));
