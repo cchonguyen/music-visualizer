@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Carries the Elephant and Goldfish subagents and the harness hooks into Claude project threads. Hooks forward to each repo's own .harness/hooks/ and do nothing in repos without them.",
   "author": { "name": "cchonguyen" }
 }

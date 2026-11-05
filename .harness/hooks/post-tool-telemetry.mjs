@@ -10,6 +10,8 @@ try {
   try { event = JSON.parse(fs.readFileSync(0, 'utf8')); } catch {}
   const root = resolveRoot();
   const input = event.tool_input || {};
+  const toolName = String(event.tool_name || '');
+  const isDispatch = toolName === 'Agent' || toolName === 'Task';
   const raw = String(input.file_path || input.path || '');
   let filePath = raw;
   if (raw) {
@@ -18,8 +20,9 @@ try {
   }
   appendCall(root, {
     ts: new Date().toISOString(),
-    tool: String(event.tool_name || ''),
+    tool: toolName,
     agentType: String(event.agent_type || ''),
+    dispatchedType: isDispatch ? String(input.subagent_type || input.name || '') : '',
     role: resolveRole(event),
     filePath,
     slice: currentSliceId(root),

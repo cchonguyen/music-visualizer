@@ -12,6 +12,7 @@ const ALLOWED_SEGMENTS = [
   /^npm run (typecheck|lint|test)(\s|$)/,
   /^node \.harness\/scripts\/finish-slice\.mjs(\s|$)/,
   /^node \.harness\/scripts\/doctor\.mjs(\s|$)/,
+  /^rm \.spec\/\.doctor-canary$/,
   /^gh pr (view|list)(\s|$)/,
   /^(ls|cat|grep|rg)(\s|$)/,
   /^sed -n(\s|$)/,

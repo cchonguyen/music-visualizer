@@ -13,6 +13,8 @@ if curl -fsSL https://codeload.github.com/cchonguyen/claude-harness-hub/tar.gz/r
   rm -rf "$DEST"
   mv "$TMP/harness" "$DEST"
   echo "harness plugin installed at $DEST"
+  ver="$(grep -o '"version": *"[^"]*"' "$DEST/.claude-plugin/plugin.json" | sed 's/.*"\([^"]*\)"$/\1/')"
+  echo "harness plugin version $ver"
 else
   echo "harness plugin download failed; threads will run without it" >&2
 fi
