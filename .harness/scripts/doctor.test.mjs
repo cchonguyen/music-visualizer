@@ -111,6 +111,31 @@ test('a canary naming only a warn probe does not halt the doctor', () => {
   }
 });
 
+test('an installed plugin older than the repo warns without halting', () => {
+  const root = makeRoot();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-home-'));
+  const prevHome = process.env.HOME;
+  try {
+    fs.mkdirSync(path.join(root, 'plugins', 'harness', '.claude-plugin'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'plugins', 'harness', '.claude-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'harness', version: '0.2.0' }));
+    fs.mkdirSync(path.join(home, '.claude', 'skills', 'harness', '.claude-plugin'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude', 'skills', 'harness', '.claude-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'harness', version: '0.1.0' }));
+    process.env.HOME = home;
+    const state = runProbes({ root, head: HEAD });
+    const probe = byName(state, 'plugin-current');
+    assert.equal(probe.ok, false);
+    assert.equal(probe.severity, 'warn');
+    assert.equal(state.status, 'DOCTOR_PASS');
+  } finally {
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    cleanup(root);
+    cleanup(home);
+  }
+});
+
 test('the gate refuses Edit after a failing run and names the failing check', () => {
   const root = makeRoot({ agent: false });
   try {

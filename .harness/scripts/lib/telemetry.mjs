@@ -7,7 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseSliceLine } from './slice-parser.mjs';
 
-const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
+// Matches both `- [ ] **Slice N** [IN_PROGRESS]` and `- [IN_PROGRESS] **Slice N**` (the PROGRESS.md format).
+const ACTIVE_TASK = /^\s*-\s*(\[[^\]]*\]\s*)?.*\[IN_PROGRESS\]/;
 const SOURCE_WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
 
 export function telemetryPath(root) {
