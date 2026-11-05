@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import {
   appendCall, readCalls, dispatchesFor, mainSourceWrites, currentSliceId, isSourceFile, resolveRole, telemetryPath,
 } from './telemetry.mjs';
@@ -45,39 +43,15 @@ test('appendCall keeps the corrupt file as .bak and starts fresh', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('dispatchesFor counts Agent/Task calls with an agentType or dispatchedType for the slice only', () => {
+test('dispatchesFor counts Agent/Task calls with an agentType for the slice only', () => {
   const calls = [
     call({ tool: 'Agent', agentType: 'harness:gf-coder', filePath: '' }),
     call({ tool: 'Task', agentType: 'harness:el-architect', filePath: '' }),
-    call({ tool: 'Agent', agentType: '', dispatchedType: 'harness:gf-coder', filePath: '' }),
-    call({ tool: 'Agent', agentType: '', dispatchedType: '', filePath: '' }),
+    call({ tool: 'Agent', agentType: '', filePath: '' }),
     call({ tool: 'Agent', agentType: 'harness:gf-coder', slice: '2', filePath: '' }),
     call({ tool: 'Read', agentType: 'harness:gf-coder' }),
   ];
-  assert.equal(dispatchesFor(calls, '1').length, 3);
-});
-
-test('a main-thread dispatch with no agent_type is recorded by the hook and counted by the gate', () => {
-  const root = makeRoot();
-  fs.writeFileSync(path.join(root, '.spec', 'PROGRESS.md'), '- [ ] **Slice 1: Demo** [IN_PROGRESS] Target files: a.mjs\n');
-  const payload = {
-    session_id: 's1',
-    hook_event_name: 'PostToolUse',
-    tool_name: 'Agent',
-    tool_input: { subagent_type: 'harness:gf-coder', prompt: 'implement slice 1' },
-  };
-  const hook = fileURLToPath(new URL('../../hooks/post-tool-telemetry.mjs', import.meta.url));
-  const res = spawnSync(process.execPath, [hook], {
-    input: JSON.stringify(payload),
-    env: { ...process.env, CLAUDE_PROJECT_DIR: root },
-    encoding: 'utf8',
-  });
-  assert.equal(res.status, 0);
-  const calls = readCalls(root);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].dispatchedType, 'harness:gf-coder');
-  assert.equal(dispatchesFor(calls, '1').length, 1);
-  fs.rmSync(root, { recursive: true, force: true });
+  assert.equal(dispatchesFor(calls, '1').length, 2);
 });
 
 test('mainSourceWrites counts main-thread Edit/Write of source files only', () => {

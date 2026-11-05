@@ -101,13 +101,10 @@ export function appendCall(root, call) {
 
 const normPath = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.\//, '');
 
-/**
- * Subagent dispatches (Agent or Task) recorded for the slice. A main-thread dispatch carries no
- * agent_type in its PostToolUse payload, so it is identified by dispatchedType (the subagent_type it was sent to).
- */
+/** Subagent dispatches (Agent or Task) recorded for the slice. */
 export function dispatchesFor(calls, sliceId) {
   return (calls || []).filter((c) =>
-    (c.tool === 'Agent' || c.tool === 'Task') && c.slice === sliceId && Boolean(c.agentType || c.dispatchedType)
+    (c.tool === 'Agent' || c.tool === 'Task') && c.slice === sliceId && Boolean(c.agentType)
   );
 }
 
