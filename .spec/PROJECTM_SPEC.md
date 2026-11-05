@@ -8,8 +8,10 @@ Source plan: `/mnt/project-files/plans/projectm-ideas-implementation.md` (approv
 - Lives in `src/audio/onset.ts` as a module-level store (`setBeatSensitivity`, `getBeatSensitivity`). Detectors read it on each `step()`, so a slider change applies live without rebuilding the frame builder. An explicit `triggerRatio` option still wins, so existing tests are unchanged.
 - The slider lives in `src/ui/controls.ts`, created in code inside `#controls`. It is in memory only (persistence is A2's job).
 
-## A2 Render quality (planned, not started)
-- Buffer scale 100 / 75 / 50 percent, stored as a setting. Frame budget reads it.
+## A2 Render quality (built in slice 5.2)
+- Feedback buffer scale 100 / 75 / 50 percent (`RENDER_SCALES` in `src/gl/size.ts`), saved in localStorage under `mv.renderScale`.
+- `scaledBufferSize()` in `src/gl/size.ts` sizes the buffer. `src/render/scene.ts` reads `getRenderScale()` and resizes when the scale changes.
+- `src/render/frameBudget.ts` does not read the scale. It is a ring buffer of frame times checked against the 16.7 ms budget.
 
 ## A3 Aspect correction toggle (planned, not started)
 - Default on. Shapes stay round at non-16:9 sizes.
