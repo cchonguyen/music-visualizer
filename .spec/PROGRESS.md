@@ -1,6 +1,6 @@
 # Task Progress & Single-Slice Work Lock
 
-> Rule: Mark only ONE task line at a time with `[IN_PROGRESS]`.
+> Rule: Mark only ONE task line at a time as in progress (the IN_PROGRESS tag).
 > Stage 1 detail (contracts, tests, worker tier, waves): `docs/stage1-slices.md`.
 
 ## Stage 1 — Audio core and GPU proof
