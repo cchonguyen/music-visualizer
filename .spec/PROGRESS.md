@@ -67,3 +67,6 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **T2** auto-cycle: timer (C), strong beat (B), shuffle (X); skip and favourite tags (src/presets/autoCycle.ts)
 - [x] **T3** starter pack: 10 drafts (src/presets/builtin/starter-*.json), tagged draft. Keys 3–9 and [ ] reach them. Owner tunes and approves.
 - [ ] **T4** Studio in a second window: not built (optional in the plan)
+
+## Parked after Stage 4 (2026-11-05)
+See `docs/stage4-parked.md`: safety check for random and linked presets, layer opacity and blend, filled rings fix, E4 invert/solarize/echo, V2 and V5 variants, T4 second window, cleanup.
