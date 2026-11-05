@@ -49,12 +49,34 @@ function clamp01(value: number): number {
   return value;
 }
 
+export const DEFAULT_BEAT_SENSITIVITY = 0.5;
+let beatSensitivity = DEFAULT_BEAT_SENSITIVITY;
+
+/** Sets the global beat sensitivity (0..1). Non-finite input resets to the default. */
+export function setBeatSensitivity(value: number): void {
+  beatSensitivity = Number.isFinite(value) ? clamp01(value) : DEFAULT_BEAT_SENSITIVITY;
+}
+
+export function getBeatSensitivity(): number {
+  return beatSensitivity;
+}
+
+/**
+ * Maps sensitivity to a trigger ratio: 0 -> 2.0 (fewer beats), 0.5 -> 1.3,
+ * 1 -> 1.05 (more beats). Piecewise linear; input is clamped to 0..1.
+ */
+export function triggerRatioForSensitivity(sensitivity: number): number {
+  const s = clamp01(sensitivity);
+  if (s <= 0.5) return 2.0 - 1.4 * s;
+  return 1.3 - 0.5 * (s - 0.5);
+}
+
 /**
  * Adaptive threshold onset detector: compare flux with an exponential moving
  * average of recent flux, with hysteresis and a cooldown between beats.
  */
 export class OnsetDetector {
-  private readonly triggerRatio: number;
+  private readonly fixedTriggerRatio: number | null;
   private readonly releaseRatio: number;
   private readonly cooldownSec: number;
   private readonly meanTauSec: number;
@@ -66,7 +88,7 @@ export class OnsetDetector {
   private armed = true;
 
   constructor(opts: OnsetDetectorOptions = {}) {
-    this.triggerRatio = opts.triggerRatio ?? 1.3;
+    this.fixedTriggerRatio = opts.triggerRatio ?? null;
     this.releaseRatio = opts.releaseRatio ?? 1.05;
     this.cooldownSec = (opts.cooldownMs ?? 150) / 1000;
     this.meanTauSec = (opts.meanTauMs ?? 500) / 1000;
@@ -84,7 +106,8 @@ export class OnsetDetector {
     const mean = this.mean;
     // The floor keeps the ratio test from firing on tiny noise (Council review).
     const base = Math.max(mean, this.fluxFloor);
-    const triggerThreshold = base * this.triggerRatio;
+    const triggerRatio = this.fixedTriggerRatio ?? triggerRatioForSensitivity(beatSensitivity);
+    const triggerThreshold = base * triggerRatio;
 
     // Hysteresis: stay disarmed until flux falls back near the baseline.
     if (!this.armed && flux < base * this.releaseRatio) {
