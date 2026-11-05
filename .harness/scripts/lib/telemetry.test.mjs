@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   appendCall, readCalls, dispatchesFor, mainSourceWrites, currentSliceId, isSourceFile, resolveRole, telemetryPath,
+  writeJsonAtomic,
 } from './telemetry.mjs';
 
 function makeRoot() {
@@ -27,6 +28,24 @@ test('appendCall creates the file with version 1 and appends without resetting',
   assert.equal(parsed.version, 1);
   assert.deepEqual(parsed.calls.map((c) => c.tool), ['Read', 'Grep']);
   assert.deepEqual(readCalls(root).length, 2);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('writeJsonAtomic leaves no .tmp file and the final content parses', () => {
+  const root = makeRoot();
+  writeJsonAtomic(telemetryPath(root), { version: 1, calls: [call()] });
+  const leftovers = fs.readdirSync(path.join(root, '.spec')).filter((f) => f.endsWith('.tmp'));
+  assert.deepEqual(leftovers, []);
+  assert.equal(JSON.parse(fs.readFileSync(telemetryPath(root), 'utf8')).calls.length, 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('appendCall on an empty existing file appends the call and makes no .bak', () => {
+  const root = makeRoot();
+  fs.writeFileSync(telemetryPath(root), '');
+  appendCall(root, call({ tool: 'Read' }));
+  assert.equal(fs.existsSync(`${telemetryPath(root)}.bak`), false);
+  assert.deepEqual(readCalls(root).map((c) => c.tool), ['Read']);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

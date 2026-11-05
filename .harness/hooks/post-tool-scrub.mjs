@@ -4,6 +4,7 @@ import path from 'node:path';
 import { isTestOrBuild as matchRunner, advancesGreen } from './lib/runner-matcher.mjs';
 import { modeOf, saveCheckpoint, resolveRoot } from './lib/vibe.mjs';
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
+import { writeJsonAtomic } from '../scripts/lib/telemetry.mjs';
 
 const root = resolveRoot();
 const stateFile = path.join(root, '.spec', '.strike-counter.json');
@@ -57,10 +58,7 @@ if (activeSliceName && isMutatingTool) {
   telemetry.mutatingCallsOnSlice = (telemetry.mutatingCallsOnSlice || 0) + 1;
 }
 
-try {
-  fs.mkdirSync(path.dirname(telemetryPath), { recursive: true });
-  fs.writeFileSync(telemetryPath, JSON.stringify(telemetry, null, 2), 'utf8');
-} catch {}
+writeJsonAtomic(telemetryPath, telemetry);
 
 // 1. Reset strike counter for this session and queue batch telemetry when a test/build command succeeds
 if (isTestOrBuild) {
