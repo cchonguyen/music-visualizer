@@ -23,3 +23,10 @@
 - `npm run build` — production build to `dist/`
 - `npm run deploy` — build and deploy to Cloudflare (check `npx wrangler whoami` first)
 - Free-model slices: `~/OpenBot/Agents/agent-29a801b6-9741-4a30-91c7-ffeb35065c9e/scripts/run-slice.sh <id> <model>` (OpenBot's bundled OpenCode)
+
+## Autonomous Issue Lifecycle
+When instructed to work on any feature or fix:
+1. Search open issues via `gh issue list` to identify the matching issue ID.
+2. Link work by starting the branch from the issue: `gh issue develop <id> --checkout`.
+3. In every commit and pull request body, append `Closes #<id>`.
+4. Keep all responses to a single line: what changed and the PR link.
