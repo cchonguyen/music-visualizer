@@ -8,6 +8,7 @@ export const PRESET_VERSION = 1 as const;
 /** Every signal a setting can follow (see docs/stage4-presets-plan.md §4). Only stored here in 4.1; evaluated in E2. */
 export const AUDIO_SOURCES = [
   "sub", "bass", "mid", "high", "energy", "loudness", "beat", "onset", "section",
+  "beatStrength", "brightness", "subFlux", "midFlux", "highFlux",
   "lfoSine", "lfoSaw", "lfoRandom", "time",
 ] as const;
 export type AudioSource = (typeof AUDIO_SOURCES)[number];
@@ -31,10 +32,24 @@ export const LFO_RATE_DEFAULT = 0.5;
 export const LFO_RATE_MIN = 0.05;
 export const LFO_RATE_MAX = 8;
 
-/** One setting as stored: its value, plus an optional audio link. */
+/**
+ * Morph (slice E-c): a number setting swings between its value and `to`, following a slow cosine
+ * at `rate` Hz (value → to → value). Numeric settings only.
+ */
+export interface Morph {
+  to: number;
+  rate: number; // cycles per second
+}
+
+export const MORPH_RATE_DEFAULT = 0.1;
+export const MORPH_RATE_MIN = 0.02;
+export const MORPH_RATE_MAX = 4;
+
+/** One setting as stored: its value, plus an optional audio link and morph. */
 export interface Setting {
   value: ParamValue;
   link?: AudioLink;
+  morph?: Morph;
 }
 
 export type Settings = Record<string, Setting>;
@@ -89,9 +104,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Accepts either a plain value (`0.5`) or the full form (`{ "value": 0.5, "link": {...} }`). */
-function readSetting(entry: unknown): { value: unknown; link: unknown } {
-  if (isRecord(entry) && "value" in entry) return { value: entry.value, link: entry.link };
-  return { value: entry, link: undefined };
+function readSetting(entry: unknown): { value: unknown; link: unknown; morph: unknown } {
+  if (isRecord(entry) && "value" in entry) return { value: entry.value, link: entry.link, morph: entry.morph };
+  return { value: entry, link: undefined, morph: undefined };
+}
+
+/** Reads an optional morph. Only numeric settings can morph; anything else is dropped with a warning. */
+export function parseMorph(raw: unknown, spec: ParamSpec, where: string, warnings: string[]): Morph | undefined {
+  if (raw === undefined) return undefined;
+  if (spec.type !== "float" && spec.type !== "int") {
+    warnings.push(`${where}: only number settings can morph, morph dropped`);
+    return undefined;
+  }
+  if (!isRecord(raw) || typeof raw.to !== "number" || !Number.isFinite(raw.to)) {
+    warnings.push(`${where}: morph needs a numeric "to", morph dropped`);
+    return undefined;
+  }
+  const rate = typeof raw.rate === "number" && Number.isFinite(raw.rate)
+    ? Math.min(MORPH_RATE_MAX, Math.max(MORPH_RATE_MIN, raw.rate))
+    : MORPH_RATE_DEFAULT;
+  return { to: Math.min(spec.max, Math.max(spec.min, raw.to)), rate };
 }
 
 function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink | undefined {
@@ -136,12 +168,14 @@ function parseSettings(raw: unknown, specs: readonly ParamSpec[], where: string,
       out[spec.name] = { value: spec.default };
       continue;
     }
-    const { value, link } = readSetting(entry);
+    const { value, link, morph } = readSetting(entry);
     const coerced = coerceValue(spec, value);
     if (coerced.warning) warnings.push(`${where}.${spec.name}: ${coerced.warning}`);
     const setting: Setting = { value: coerced.value };
     const parsedLink = parseLink(link, `${where}.${spec.name}.link`, warnings);
     if (parsedLink) setting.link = parsedLink;
+    const parsedMorph = parseMorph(morph, spec, `${where}.${spec.name}.morph`, warnings);
+    if (parsedMorph) setting.morph = parsedMorph;
     out[spec.name] = setting;
   }
   return out;

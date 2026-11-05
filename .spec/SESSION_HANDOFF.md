@@ -1,9 +1,15 @@
 # Session Handoff
 
-- **Last Active Platform:** Claude Code (cloud thread, branch claude/project-thread-87opk1)
-- **Active Branch / State:** PR #8 open. It carries slices 4.5 (LFO rate), 4.6 (particle shapes), 4.7 (particle rotation and zoom) and 4.8 (particle colour shift). Kept as one PR on purpose: splitting by cherry-pick would change the trees the Referee gate checks.
+- **Last Active Platform:** Claude Code (cloud thread, branch claude/project-thread-3d7ebg)
+- **Active Branch / State:** claude/project-thread-3d7ebg, stacked on PR #8 (branch claude/project-thread-87opk1). PR #8 itself is untouched. This branch adds slices 4.9 to S3-f. The new PR's base is claude/project-thread-87opk1, so its diff shows only the new commits.
 - **Branch Owner:** claude
-- **Files Modified in Last Turn:** src/presets/layerSchemas.ts, src/presets/layerSchemas.test.ts, src/render/layers/particles.ts, src/render/shaders/particles.frag.glsl, src/render/shaders/particles.vert.glsl, .spec/PROGRESS.md, .spec/SESSION_HANDOFF.md
-- **Verification Status:** at 7ad7a32: typecheck pass, 298 tests pass, build pass. No lint script in package.json, so lint not run.
-- **Open for owner:** effects still to do: morphs, frame stepping, sound responsiveness. Stage 3 gaps: GPU-loss test, hidden-tab test, performance measurement (default 16.7 ms per frame at 60 fps), accessibility audit. Each needs /spec and one slice.
-- **Immediate Next Step for Claude:** open the next slice from docs/stage3-effects-scope.md (morphs), one slice at a time, with Haiku.
+- **Files Modified in Last Turn:** src/presets/*, src/render/frameStep.ts, src/render/frameBudget.ts, src/gl/lossState.ts, src/gl/context.ts, src/main.ts, src/ui/debugPanel.ts, docs/stage3-accessibility-audit.md, .spec/PROGRESS.md
+- **Verification Status:** Verified via finish-slice.mjs (Slice 4.12)
+- **Done this session:** morph (4.9, JSON `morph: {to, rate}` on number settings, no Studio control yet), freeze and step (4.10, K freezes, . steps one frame; steps still read the live audio frame), five audio sources (4.11: beatStrength, brightness, subFlux, midFlux, highFlux), frame-time budget (S3-c, budget line in debug panel), testable GPU-loss state and hidden-tab clamp test (S3-d/e), static accessibility audit (S3-f).
+- **Open for owner:**
+  - Morph has no Studio control. Set it in preset JSON for now.
+  - Frame-time numbers are not measured on the owner's desktop yet. The budget line shows them once the app runs.
+  - debugPanel.ts keeps its own 16.7 constant. It should import FRAME_BUDGET_MS from render/frameBudget.ts.
+  - Accessibility fixes to make next: File… is not keyboard reachable (label on hidden input); play button label does not match state. Browser checks for focus, contrast and Studio keyboard are pending.
+  - PR #8 still needs the owner's merge decision. Stage 3 items and effects order were set by the owner's note on 2026-11-05.
+- **Immediate Next Step for Claude:** owner review of the new PR. Then the accessibility fixes above as a new slice.

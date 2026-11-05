@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LinkRunner, sourceValue, type LinkInputs } from './links';
 import type { AudioFrame } from '../audio/types';
-import type { Settings } from './format';
+import { AUDIO_SOURCES, type Settings } from './format';
 import type { ParamSpec } from './schema';
 
 function frame(over: Partial<AudioFrame> = {}): AudioFrame {
@@ -35,6 +35,51 @@ describe('sources', () => {
         expect(v).toBeLessThanOrEqual(1);
       }
     }
+  });
+});
+
+describe('new sources (4.11)', () => {
+  it('AUDIO_SOURCES lists the five new names', () => {
+    for (const s of ['beatStrength', 'brightness', 'subFlux', 'midFlux', 'highFlux']) {
+      expect(AUDIO_SOURCES).toContain(s);
+    }
+  });
+
+  it('beatStrength passes through', () => {
+    expect(sourceValue('beatStrength', inputs({ frame: frame({ beatStrength: 0.7 }) }))).toBe(0.7);
+  });
+
+  it('highFlux reads fluxByBand.high', () => {
+    const f = frame({ fluxByBand: { sub: 0.1, mid: 0.2, high: 0.8 } });
+    expect(sourceValue('highFlux', inputs({ frame: f }))).toBe(0.8);
+    expect(sourceValue('subFlux', inputs({ frame: f }))).toBe(0.1);
+    expect(sourceValue('midFlux', inputs({ frame: f }))).toBe(0.2);
+  });
+
+  it('brightness is 0 for an all-zero spectrum', () => {
+    const f = frame({ spectrum: new Float32Array(64), frameIndex: 100 });
+    expect(sourceValue('brightness', inputs({ frame: f }))).toBe(0);
+  });
+
+  it('brightness is higher for high-bin energy than low-bin energy, both in 0..1', () => {
+    const low = new Float32Array(64);
+    low[1] = 1;
+    const high = new Float32Array(64);
+    high[60] = 1;
+    const vLow = sourceValue('brightness', inputs({ frame: frame({ spectrum: low, frameIndex: 201 }) }));
+    const vHigh = sourceValue('brightness', inputs({ frame: frame({ spectrum: high, frameIndex: 202 }) }));
+    expect(vLow).toBeGreaterThanOrEqual(0);
+    expect(vHigh).toBeLessThanOrEqual(1);
+    expect(vHigh).toBeGreaterThan(vLow);
+  });
+
+  it('brightness returns the same value on a second call with the same frame', () => {
+    const spectrum = new Float32Array(64);
+    spectrum[30] = 0.5;
+    const f = frame({ spectrum, frameIndex: 300 });
+    const first = sourceValue('brightness', inputs({ frame: f }));
+    const second = sourceValue('brightness', inputs({ frame: f }));
+    expect(second).toBe(first);
   });
 });
 
@@ -86,6 +131,14 @@ describe('LinkRunner', () => {
     // If it shared state with A (sub 0, so near 1), it would sit near 1.0.
     const b = runner.resolve('B', settings(link, 1), [zoom], inputs(), 0.0001);
     expect(b.zoom as number).toBeCloseTo(1.2, 3);
+  });
+
+  it('morphs a setting with no link: at half a period it reaches `to`', () => {
+    const morphed: Settings = { zoom: { value: 1, morph: { to: 1.1, rate: 0.5 } } };
+    const atStart = new LinkRunner().resolve('M', morphed, [zoom], inputs({ timeSec: 0 }), 0.016);
+    const atHalf = new LinkRunner().resolve('M', morphed, [zoom], inputs({ timeSec: 1 }), 0.016);
+    expect(atStart.zoom as number).toBeCloseTo(1, 5);
+    expect(atHalf.zoom as number).toBeCloseTo(1.1, 5);
   });
 
   it('rounds integer settings', () => {
