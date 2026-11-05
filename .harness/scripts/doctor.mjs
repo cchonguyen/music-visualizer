@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Live doctor (Slice 10.1). Runs probes, writes the session state the hooks gate on.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -82,6 +83,27 @@ function probeEngineHash(root) {
     isSpoke ? 'engine hash check not implemented yet' : 'not a spoke (no .harness-version or hub origin)');
 }
 
+function readPluginVersion(dir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(dir, '.claude-plugin', 'plugin.json'), 'utf8')).version || '';
+  } catch {
+    return '';
+  }
+}
+
+// Warn-only: flags an installed plugin copy that differs from the repo's plugins/harness version.
+function probePluginCurrent(root) {
+  const repoVersion = readPluginVersion(path.join(root, 'plugins', 'harness'));
+  if (!repoVersion) return check('plugin-current', 'skip', true, 'no plugins/harness in this repo');
+  const installedDir = path.join(os.homedir(), '.claude', 'skills', 'harness');
+  const installed = readPluginVersion(installedDir);
+  if (installed === repoVersion) {
+    return check('plugin-current', 'warn', true, `installed plugin ${installed} matches repo`);
+  }
+  return check('plugin-current', 'warn', false,
+    `installed plugin ${installed || 'missing'}, repo ${repoVersion}: restart the session to load it`);
+}
+
 // Canary: a file naming probes forces those probes to fail. Operator deletes it after the live test.
 function applyCanary(root, checks) {
   let text = '';
@@ -105,6 +127,7 @@ export function runProbes({ root, head = '', env = process.env } = {}) {
     probeHandoff(dir),
     probeTelemetry(dir),
     probeEngineHash(dir),
+    probePluginCurrent(dir),
   ];
   const checks = applyCanary(dir, base);
   const failing = checks.filter((c) => c.severity === 'fail' && !c.ok).map((c) => c.name);

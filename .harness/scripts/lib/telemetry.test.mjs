@@ -139,3 +139,15 @@ test('currentSliceId returns the single IN_PROGRESS slice id or empty string', (
   assert.equal(currentSliceId(root), '');
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('currentSliceId reads the PROGRESS.md format where the status tag leads the line', () => {
+  const root = makeRoot();
+  fs.writeFileSync(path.join(root, '.spec', 'PROGRESS.md'),
+    '# P\n- [x] **Slice 10.3: Done** [CORE / DATA] Target files: a.mjs\n'
+    + '- [IN_PROGRESS] **Slice 10.4: Bot Merge Identity** [CORE / DATA] Target files: .github/workflows/automerge.yml [NEW]\n');
+  assert.equal(currentSliceId(root), '10.4');
+  fs.writeFileSync(path.join(root, '.spec', 'PROGRESS.md'),
+    '- [IN_PROGRESS] **Slice 10.4: A**\n- [IN_PROGRESS] **Slice 10.5: B**\n');
+  assert.equal(currentSliceId(root), '');
+  fs.rmSync(root, { recursive: true, force: true });
+});

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer } from './ci-gate.mjs';
 
 const TREE = 'a'.repeat(40);
@@ -113,4 +113,11 @@ test('commitsMissingTrailer on a new branch checks only the tip commit', () => {
   const after = sh(dir, ['rev-parse', 'HEAD']);
   const missing = commitsMissingTrailer({ before: '0'.repeat(40), after, cwd: dir });
   assert.equal(missing.length, 1);
+});
+
+test('push mode exits 2, not 1, when git cannot scan the range', () => {
+  const dir = makeRepo();
+  const res = spawnSync(process.execPath, [path.join(import.meta.dirname, 'ci-gate.mjs'), 'push', 'f'.repeat(40), sh(dir, ['rev-parse', 'HEAD'])], { cwd: dir, encoding: 'utf8' });
+  assert.equal(res.status, 2);
+  assert.match(res.stdout, /could not run/);
 });
