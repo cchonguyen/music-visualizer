@@ -4,6 +4,7 @@
 import type { AudioFrame } from '../audio/types';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../render/layer';
 import { clampDt, type RenderClock } from '../render/clock';
+import { FrameStepper, STEP_DT_SEC } from '../render/frameStep';
 import { canvasSize } from './size';
 
 export class WebGL2UnavailableError extends Error {
@@ -24,6 +25,8 @@ export class GlHost {
   private clock: RenderClock = { timeSec: 0, dtSec: 0, frameIndex: 0 };
   private lastNow: number | null = null;
   private getFrame: (() => AudioFrame) | null = null;
+  /** Freeze mode (k) and single-frame steps (.). */
+  readonly stepper = new FrameStepper();
   /** Called after each drawn frame with the frame time in ms (for the debug panel). */
   onFrameTime: ((ms: number) => void) | null = null;
   /** Called when the GPU context is lost or restored. */
@@ -74,8 +77,13 @@ export class GlHost {
     this.rafId = requestAnimationFrame(this.tick);
     // Browsers pause rAF in hidden tabs, so nothing renders there (spec).
     if (this.lost || !this.getFrame) return;
+    if (!this.stepper.consumeDraw()) {
+      this.lastNow = now;
+      return;
+    }
     const t0 = performance.now();
-    const dt = this.lastNow === null ? 0 : clampDt((now - this.lastNow) / 1000);
+    // Frozen steps advance by a fixed frame so each step is one frame of motion.
+    const dt = this.stepper.isFrozen ? STEP_DT_SEC : this.lastNow === null ? 0 : clampDt((now - this.lastNow) / 1000);
     this.lastNow = now;
     this.clock = { timeSec: this.clock.timeSec + dt, dtSec: dt, frameIndex: this.clock.frameIndex + 1 };
     const frame = this.getFrame();

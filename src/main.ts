@@ -66,6 +66,16 @@ function start(): void {
   }
   startScreen.hidden = true;
 
+  // Freeze (k) holds the picture; while frozen, . draws exactly one frame (frameStep.ts).
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'k' || e.key === 'K') {
+      showToast(host.stepper.toggle() ? 'Frozen. Press . to step a frame.' : 'Running again.');
+      return;
+    }
+    if (e.key === '.' && host.stepper.isFrozen) host.stepper.requestStep();
+  });
+
   // Default: the last preset used (remembered), else Crown. Keys switch presets (library.ts):
   //   0 = Crown, 1 = Flight, 2 = Bars (the old keys), 3-9 = later presets, [ and ] = previous / next.
   // URL options for single checks: ?tracer (Stage 1), ?trail, ?tunnel, ?particles, ?bars, ?scenes.
