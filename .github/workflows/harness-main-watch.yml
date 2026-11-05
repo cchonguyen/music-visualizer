@@ -1,0 +1,57 @@
+# Harness main watch (spoke template). Copy to .github/workflows/harness-main-watch.yml in a spoke.
+# On a red main: pushes the tag harness-main-red at the failing commit and opens one issue.
+# On the next green main: deletes the tag and closes the issue. It never reverts anything.
+name: Harness main watch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Same quick checks as the PR check. Delete any line the spoke has no tool for.
+      - name: Quick checks on main
+        id: checks
+        continue-on-error: true
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck --silent
+          npm run lint --silent
+          npm test --silent
+
+      - name: Mark main red
+        if: steps.checks.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          git tag -f harness-main-red "$SHA"
+          git push -f origin harness-main-red
+          OPEN=$(gh issue list --state open --search "RED: main failed checks in:title" --json number --jq '.[0].number')
+          if [ -z "$OPEN" ]; then
+            gh issue create --title "RED: main failed checks at $SHA" \
+              --body "Main failed the harness quick checks at $SHA. Fix main before starting new slices. The tag harness-main-red marks this state and is removed automatically after the next green run."
+          fi
+
+      - name: Clear red on green main
+        if: steps.checks.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin --delete harness-main-red 2>/dev/null || true
+          gh issue list --state open --search "RED: main failed checks in:title" --json number --jq '.[].number' \
+            | xargs -r -n1 gh issue close --comment "Main is green again at ${{ github.sha }}."

@@ -1,0 +1,88 @@
+{
+  "model": "haiku",
+  "permissions": {
+    "allow": [
+      "Bash(node \"$CLAUDE_PROJECT_DIR\"/.harness/*)",
+      "Bash(node .harness/*)",
+      "Read(**/.env.example)",
+      "Read(**/.env.template)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.[!et]*)",
+      "Read(**/.env.e[!x]*)",
+      "Read(**/.env.ex[!a]*)",
+      "Read(**/.env.t[!e]*)",
+      "Read(**/.env.te[!m]*)",
+      "Read(**/.env.*.local)",
+      "Edit(**/.env*)",
+      "Bash(* > .env*)",
+      "Bash(* >> .env*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/session-start.mjs\" || echo 'HARNESS WARNING: Node.js was not found, so the harness guards are OFF this session. Tell the operator: install Node.js 18+ from https://nodejs.org (LTS button), then restart Claude Code.'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent|Task|Edit|Write|NotebookEdit|Read|View|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" pre-tool-guard.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" bash-guard.mjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" post-tool-scrub.mjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" post-tool-failure.mjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "el-architect",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.harness/hooks/adapter.mjs\" el-exit-gate.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

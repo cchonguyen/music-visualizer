@@ -1,0 +1,31 @@
+# Harness slice gate (spoke template). Copy to .github/workflows/harness-slice-gate.yml in a spoke.
+# A visible PR check. It goes red when the PR adds no slice to .spec/PROGRESS.md, or when the head
+# commit lacks Referee trailers or its Referee-Tree no longer matches the commit. It is not a required
+# check: the spoke has no branch protection, so the red mark is a signal, not a merge block.
+name: Harness slice gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  slice-gate:
+    name: Harness slice gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check slice and Referee trailer
+        env:
+          BASE: origin/${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .harness/scripts/ci-gate.mjs pr "$BASE" "$HEAD_SHA"

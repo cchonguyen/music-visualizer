@@ -1,0 +1,12 @@
+# Harness ephemeral session state
+.spec/.strike-counter.json
+.spec/.session-telemetry.json
+.spec/.learn-staging.txt
+.spec/HANDOFF_PACKET.md
+.spec/DEBUG_PACKET.md
+.spec/BRIEFING_PACKET.md
+.spec/STATUS_BATCH.jsonl
+.spec/.upshift-auth.json
+.spec/.slice-checkpoint
+.spec/.vibe-checkpoint.json
+.harness-backup/
