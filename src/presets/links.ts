@@ -5,6 +5,7 @@
 import type { AudioFrame } from '../audio/types';
 import { AUDIO_SOURCES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, type AudioLink, type AudioSource, type Settings } from './format';
 import type { ParamSpec, ParamValue } from './schema';
+import { morphValue } from './morph';
 
 export interface LinkInputs {
   frame: AudioFrame;
@@ -15,6 +16,28 @@ export interface LinkInputs {
 }
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+
+/** Last brightness result. A preset can ask for it many times per frame, so reuse it. */
+let brightnessCache: { frameIndex: number; spectrum: Float32Array; value: number } | null = null;
+
+/** Spectral centroid of the frame, mapped to 0..1 (0 Hz..8 kHz). Cached per frame and spectrum. */
+function brightnessOf(frame: AudioFrame): number {
+  const spectrum = frame.spectrum;
+  if (brightnessCache && brightnessCache.frameIndex === frame.frameIndex && brightnessCache.spectrum === spectrum) {
+    return brightnessCache.value;
+  }
+  const binHz = frame.sampleRate / (2 * spectrum.length);
+  let weighted = 0;
+  let total = 0;
+  for (let i = 0; i < spectrum.length; i++) {
+    const s = spectrum[i] ?? 0;
+    weighted += i * binHz * s;
+    total += s;
+  }
+  const value = total <= 0 ? 0 : clamp01((weighted / total) / 8000);
+  brightnessCache = { frameIndex: frame.frameIndex, spectrum, value };
+  return value;
+}
 
 /** A deterministic 0..1 value per time step, used by the random LFO. */
 function hash01(n: number): number {
@@ -45,6 +68,16 @@ export function sourceValue(source: AudioSource, inputs: LinkInputs, rateHz: num
       return clamp01(frame.flux);
     case 'section':
       return clamp01((inputs.sectionContrast + 1) / 2);
+    case 'beatStrength':
+      return clamp01(frame.beatStrength);
+    case 'brightness':
+      return brightnessOf(frame);
+    case 'subFlux':
+      return clamp01(frame.fluxByBand.sub);
+    case 'midFlux':
+      return clamp01(frame.fluxByBand.mid);
+    case 'highFlux':
+      return clamp01(frame.fluxByBand.high);
     case 'lfoSine':
       return 0.5 + 0.5 * Math.sin(2 * Math.PI * rate * t);
     case 'lfoSaw':
@@ -71,11 +104,25 @@ export class LinkRunner {
       if (!setting) continue;
       const base = setting.value;
       const link = setting.link;
-      if (!link || (spec.type !== 'float' && spec.type !== 'int')) {
+      if (spec.type !== 'float' && spec.type !== 'int') {
         out[spec.name] = base;
         continue;
       }
-      out[spec.name] = this.linked(`${scope}.${spec.name}`, base, link, spec, inputs, dtSec);
+      const morph = setting.morph;
+      if (!link && !morph) {
+        out[spec.name] = base;
+        continue;
+      }
+      // With a morph, the link (if any) starts from the morphed value.
+      const start: ParamValue = morph && typeof base === 'number' ? morphValue(base, morph, inputs.timeSec) : base;
+      if (!link) {
+        // Morph only: no smoothing. Clamp to the range and round for ints.
+        let value = Math.min(spec.max, Math.max(spec.min, typeof start === 'number' ? start : spec.default));
+        if (spec.type === 'int') value = Math.round(value);
+        out[spec.name] = value;
+        continue;
+      }
+      out[spec.name] = this.linked(`${scope}.${spec.name}`, start, link, spec, inputs, dtSec);
     }
     return out;
   }

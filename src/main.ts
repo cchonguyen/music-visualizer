@@ -31,6 +31,7 @@ import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
 import { setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
+import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 
 /** Calm mode scales the bass pulse down (motion reduction for sensitive viewers). */
@@ -65,6 +66,16 @@ function start(): void {
     return;
   }
   startScreen.hidden = true;
+
+  // Freeze (k) holds the picture; while frozen, . draws exactly one frame (frameStep.ts).
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'k' || e.key === 'K') {
+      showToast(host.stepper.toggle() ? 'Frozen. Press . to step a frame.' : 'Running again.');
+      return;
+    }
+    if (e.key === '.' && host.stepper.isFrozen) host.stepper.requestStep();
+  });
 
   // Default: the last preset used (remembered), else Crown. Keys switch presets (library.ts):
   //   0 = Crown, 1 = Flight, 2 = Bars (the old keys), 3-9 = later presets, [ and ] = previous / next.
@@ -189,7 +200,11 @@ function start(): void {
   engine.on('source-changed', () => (beatTimes.length = 0));
 
   let frameMs = 16;
-  host.onFrameTime = (ms) => (frameMs = ms);
+  const budget = new FrameBudget();
+  host.onFrameTime = (ms) => {
+    frameMs = ms;
+    budget.push(ms);
+  };
   host.onContextChange = (s) =>
     showNotice(s === 'lost' ? 'Graphics reset… restarting visuals.' : 'Visuals restarted.', 'info', 3000);
 
@@ -209,6 +224,7 @@ function start(): void {
       sourceName: sourceName(engine.kind, state.fileName),
       frame,
       frameMs,
+      budget: budget.summary(),
       trackSettings: engine.trackSettings,
       latency:
         engine.kind === 'test:kick'

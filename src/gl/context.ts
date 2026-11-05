@@ -4,7 +4,9 @@
 import type { AudioFrame } from '../audio/types';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../render/layer';
 import { clampDt, type RenderClock } from '../render/clock';
+import { FrameStepper, STEP_DT_SEC } from '../render/frameStep';
 import { canvasSize } from './size';
+import { ContextLossState } from './lossState';
 
 export class WebGL2UnavailableError extends Error {
   constructor() {
@@ -16,7 +18,7 @@ export class GlHost {
   readonly canvas: HTMLCanvasElement;
   private gl: WebGL2RenderingContext;
   private layers: RenderLayer[] = [];
-  private lost = false;
+  private loss = new ContextLossState();
   private rafId = 0;
   private resizeTimer = 0;
   private observer: ResizeObserver;
@@ -24,6 +26,8 @@ export class GlHost {
   private clock: RenderClock = { timeSec: 0, dtSec: 0, frameIndex: 0 };
   private lastNow: number | null = null;
   private getFrame: (() => AudioFrame) | null = null;
+  /** Freeze mode (k) and single-frame steps (.). */
+  readonly stepper = new FrameStepper();
   /** Called after each drawn frame with the frame time in ms (for the debug panel). */
   onFrameTime: ((ms: number) => void) | null = null;
   /** Called when the GPU context is lost or restored. */
@@ -45,7 +49,7 @@ export class GlHost {
   /** Add a layer; layers draw in the order added (first = bottom). */
   addLayer(layer: RenderLayer): void {
     this.layers.push(layer);
-    if (!this.lost) {
+    if (!this.loss.isLost) {
       layer.init(this.gl);
       layer.resize(this.size.width, this.size.height, this.size.dpr);
     }
@@ -66,16 +70,21 @@ export class GlHost {
   dispose(): void {
     this.stop();
     this.observer.disconnect();
-    if (!this.lost) for (const l of this.layers) l.dispose();
+    if (!this.loss.isLost) for (const l of this.layers) l.dispose();
     this.layers = [];
   }
 
   private tick = (now: number): void => {
     this.rafId = requestAnimationFrame(this.tick);
     // Browsers pause rAF in hidden tabs, so nothing renders there (spec).
-    if (this.lost || !this.getFrame) return;
+    if (this.loss.isLost || !this.getFrame) return;
+    if (!this.stepper.consumeDraw()) {
+      this.lastNow = now;
+      return;
+    }
     const t0 = performance.now();
-    const dt = this.lastNow === null ? 0 : clampDt((now - this.lastNow) / 1000);
+    // Frozen steps advance by a fixed frame so each step is one frame of motion.
+    const dt = this.stepper.isFrozen ? STEP_DT_SEC : this.lastNow === null ? 0 : clampDt((now - this.lastNow) / 1000);
     this.lastNow = now;
     this.clock = { timeSec: this.clock.timeSec + dt, dtSec: dt, frameIndex: this.clock.frameIndex + 1 };
     const frame = this.getFrame();
@@ -104,19 +113,19 @@ export class GlHost {
     this.size = canvasSize(rect.width, rect.height, window.devicePixelRatio || 1);
     this.canvas.width = this.size.width;
     this.canvas.height = this.size.height;
-    if (this.lost) return;
+    if (this.loss.isLost) return;
     for (const l of this.layers) l.resize(this.size.width, this.size.height, this.size.dpr);
   }
 
   private handleLost = (e: Event): void => {
     // preventDefault tells the browser we want a restore event later.
     e.preventDefault();
-    this.lost = true;
-    this.onContextChange?.('lost');
+    const ev = this.loss.markLost();
+    if (ev) this.onContextChange?.(ev);
   };
 
   private handleRestored = (): void => {
-    this.lost = false;
+    if (this.loss.markRestored() === null) return;
     // Fresh construction: every GL object from before the loss is dead.
     for (const l of this.layers) {
       l.init(this.gl);

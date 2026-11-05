@@ -75,3 +75,13 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 
 ## Parked after Stage 4 (2026-11-05)
 See `docs/stage4-parked.md`: safety check for random and linked presets, layer opacity and blend, filled rings fix, E4 invert/solarize/echo, V2 and V5 variants, T4 second window, cleanup.
+
+## Stage 3 remaining and effects (scope: docs/stage3-effects-scope.md, 2026-11-05)
+Order set by the owner: morphs, frame stepping, sound responsiveness, then Stage 3 gaps. One slice at a time.
+- [x] **Slice 4.9: Morph a number setting between two values (E-c)** [DONE] (typecheck, 308 tests, build) `[GREEN][CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/format.ts`, `src/presets/loader.ts`, `src/presets/links.ts`, `src/presets/morph.ts` [NEW], `src/presets/morph.test.ts` [NEW], `src/presets/links.test.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [x] **Slice 4.10: Freeze picture and step one frame (E-e, S3-a)** [DONE] (k freezes, . steps; typecheck, 314 tests, build) `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/render/frameStep.ts` [NEW], `src/render/frameStep.test.ts` [NEW], `src/gl/context.ts`, `src/main.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [x] **Slice 4.11: More audio sources for links (E-f)** [DONE] (5 new sources; typecheck, 320 tests, build) `[GREEN][CORE / DATA]` worker: lead | Target files: `src/presets/format.ts`, `src/presets/links.ts`, `src/presets/links.test.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [x] **Slice S3-c: Frame-time budget (16.7 ms at 60 fps)** [DONE] (budget line in debug panel; typecheck, 326 tests, build) `[GREEN][CORE / DATA]` worker: lead | Target files: `src/render/frameBudget.ts` [NEW], `src/render/frameBudget.test.ts` [NEW], `src/main.ts`, `src/ui/debugPanel.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [x] **Slice S3-d/e: GPU-loss and hidden-tab state tests** [DONE] (ContextLossState tests; clamp test for hidden-tab gap; typecheck, 335 tests, build) `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/gl/lossState.ts` [NEW], `src/gl/lossState.test.ts` [NEW], `src/gl/context.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [x] **Slice S3-f: Accessibility audit (static, then notes)** [DONE] (docs/stage3-accessibility-audit.md; 2 concrete gaps listed for next slice, browser checks pending) `[GREEN][UI / VISUAL]` worker: lead | Target files: `docs/stage3-accessibility-audit.md` [NEW] | Verify: npm run typecheck && npm run build
+- [x] **Slice 4.12: Referee stamp for the Stage 3 branch (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/SESSION_HANDOFF.md` | Verify: npm test && npm run typecheck

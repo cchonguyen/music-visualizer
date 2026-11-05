@@ -19,11 +19,16 @@ export interface DebugPanelInput {
   frame: AudioFrame;
   /** Wall-clock time of the last frame build, in milliseconds. */
   frameMs: number;
+  /** Rolling frame-time budget summary (optional; hidden when absent). */
+  budget?: { samples: number; p50Ms: number; p95Ms: number; overBudgetPct: number };
   /** Null unless the test-signal source is active (only it has kick times). */
   latency: PanelLatency | null;
   /** Capture/mic audio-track settings, to confirm voice filters are off. */
   trackSettings?: MediaTrackSettings | null;
 }
+
+/** Frame budget at 60 fps, shown in the budget line. */
+const FRAME_BUDGET_MS = 16.7;
 
 /** Latency below this is a pass and renders green. */
 const PASS_LIMIT_MS = 100;
@@ -88,6 +93,9 @@ export class DebugPanel {
       `rate    ${f.sampleRate} Hz   frameIndex ${f.frameIndex}`,
       `time    ${fmt(f.time, 3)} s   dt ${fmt(f.dtSec, 3)} s   ` +
         `build ${fmt(input.frameMs, 2)} ms`,
+      ...(input.budget
+        ? [`budget  ${fmt(FRAME_BUDGET_MS, 1)} ms: p95 ${fmt(input.budget.p95Ms, 1)} ms, ${fmt(input.budget.overBudgetPct, 1)}% over (${input.budget.samples} frames)`]
+        : []),
       "band    raw      env      norm",
       ...BANDS.map(
         (b) =>
