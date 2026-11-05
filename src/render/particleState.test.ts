@@ -4,7 +4,9 @@ import {
   hash01,
   highFlash,
   POOL_SIZE,
+  radialSpeedFor,
   radiusFor,
+  SPAWN_RADIUS,
   seedFor,
   speedFor,
   swirlFor,
@@ -46,16 +48,24 @@ describe('hash01', () => {
   });
 });
 
-describe('radiusFor', () => {
-  it('starts at 0.14 and ends at 0.95', () => {
-    expect(radiusFor(0)).toBeCloseTo(0.14, 9);
+describe('radiusFor (C3 spawn at the crown tips)', () => {
+  it('spawns at exactly r = 0.16 and ends at 0.95', () => {
+    expect(SPAWN_RADIUS).toBe(0.16);
+    expect(radiusFor(0)).toBeCloseTo(0.16, 9);
     expect(radiusFor(1)).toBeCloseTo(0.95, 9);
   });
 
-  it('accelerates outward: the midpoint sits well below the linear midpoint', () => {
-    // life^1.8 at 0.5 is about 0.287, so r is about 0.37, not 0.545 (linear).
-    expect(radiusFor(0.5)).toBeLessThan(0.14 + 0.5 * (0.95 - 0.14));
-    expect(radiusFor(0.5)).toBeCloseTo(0.14 + 0.81 * Math.pow(0.5, 1.8), 9);
+  it('clamps life outside [0, 1]', () => {
+    expect(radiusFor(-1)).toBeCloseTo(0.16, 9);
+    expect(radiusFor(2)).toBeCloseTo(0.95, 9);
+  });
+
+  it('follows tunnel depth: 1/r is linear in life (depth 1/0.16 down to 1/0.95)', () => {
+    for (let i = 0; i <= 10; i++) {
+      const life = i / 10;
+      const expectedDepth = 1 / 0.16 + (1 / 0.95 - 1 / 0.16) * life;
+      expect(1 / radiusFor(life)).toBeCloseTo(expectedDepth, 9);
+    }
   });
 
   it('is strictly increasing across life', () => {
@@ -67,27 +77,31 @@ describe('radiusFor', () => {
     }
   });
 
-  it('clamps life outside [0, 1]', () => {
-    expect(radiusFor(-1)).toBeCloseTo(0.14, 9);
-    expect(radiusFor(2)).toBeCloseTo(0.95, 9);
-  });
-
-  it('default launch is 0.14, so the old single-argument call is unchanged', () => {
-    expect(radiusFor(0.5)).toBe(radiusFor(0.5, 0.14));
-  });
-
-  it('launch case: starts at the given crown radius and still ends at 0.95', () => {
-    // Crown tip at height 0.3: spawn radius 0.16 + 0.3 = 0.46.
-    expect(radiusFor(0, 0.46)).toBeCloseTo(0.46, 9);
-    expect(radiusFor(1, 0.46)).toBeCloseTo(0.95, 9);
-    expect(radiusFor(0.5, 0.46)).toBeCloseTo(0.46 + 0.49 * Math.pow(0.5, 1.8), 9);
-  });
-
-  it('launch case: a taller crown tip starts further out, and stays ordered', () => {
-    expect(radiusFor(0, 0.6)).toBeGreaterThan(radiusFor(0, 0.3));
-    for (let i = 0; i <= 10; i++) {
+  it('radialSpeedFor is positive (outward) and matches the numeric derivative', () => {
+    const h = 1e-6;
+    // Interior points only: life is clamped to [0, 1], which would skew a central difference at the ends.
+    for (let i = 1; i <= 9; i++) {
       const life = i / 10;
-      expect(radiusFor(life, 0.6)).toBeGreaterThanOrEqual(radiusFor(life, 0.3));
+      const numeric = (radiusFor(life + h) - radiusFor(life - h)) / (2 * h);
+      expect(radialSpeedFor(life)).toBeGreaterThan(0);
+      expect(radialSpeedFor(life)).toBeCloseTo(numeric, 4);
+    }
+  });
+
+  it('a particle with positive velocity moves outward monotonically over time', () => {
+    // Use the per-particle life rate and the integrated phase, as the layer does.
+    for (const index of [0, 7, 123, 599]) {
+      const speed = speedFor(index);
+      // Start the particle at life 0 and step its phase forward.
+      let prev = radiusFor(0);
+      const steps = 200;
+      for (let s = 1; s <= steps; s++) {
+        const phase = (s / steps) * (1 / speed); // one full life cycle, no wrap
+        const life = phase * speed;
+        const r = radiusFor(life);
+        expect(r).toBeGreaterThan(prev);
+        prev = r;
+      }
     }
   });
 });
@@ -136,9 +150,9 @@ describe('highFlash', () => {
     expect(highFlash(0.2, true, 0)).toBe(1);
   });
 
-  it('decays to about exp(-1) of its start after 150 ms with no trigger', () => {
+  it('decays to about exp(-1) of its start after 320 ms with no trigger', () => {
     const start = 1;
-    const after = highFlash(start, false, 0.15);
+    const after = highFlash(start, false, 0.32);
     expect(Math.abs(after - Math.exp(-1))).toBeLessThan(0.01);
   });
 

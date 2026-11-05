@@ -3,12 +3,14 @@
 // JS cannot read the real brightness of a procedural shader without a slow GPU
 // readback, so this keeps an ESTIMATE of the scene's luminance cap:
 // - it may rise by at most RISE_PER_SEC (0.30/s, which is +0.10 per 333 ms);
-// - it falls with a time constant of 0.5 s, so a quiet passage pulls the cap
-//   back down instead of sticking at full brightness (architect review, 2026-11-04).
+// - it falls with the shared 320 ms release envelope (C2), so a quiet passage pulls
+//   the cap back down instead of sticking at full brightness (architect review, 2026-11-04).
 // The composite shader scales any pixel brighter than the cap down to it.
 
+import { releaseEnvelope, RELEASE_TAU_SEC } from './releaseEnvelope';
+
 export const RISE_PER_SEC = 0.3;
-export const FALL_TAU_SEC = 0.5;
+export const FALL_TAU_SEC = RELEASE_TAU_SEC;
 /** Dim floor: the cap never goes below this, so the screen is never forced black. */
 export const CAP_FLOOR = 0.15;
 
@@ -22,8 +24,7 @@ export class BrightnessLimiter {
     if (t > this.cap) {
       this.cap = Math.min(t, this.cap + RISE_PER_SEC * dt);
     } else {
-      const k = 1 - Math.exp(-dt / FALL_TAU_SEC);
-      this.cap = this.cap + k * (t - this.cap);
+      this.cap = releaseEnvelope(this.cap, t, dt, 0, FALL_TAU_SEC);
     }
     return this.cap;
   }

@@ -14,12 +14,10 @@ uniform float uSwirl;       // midrange drive, 0..1 (0 in Calm)
 uniform float uEnergy;      // track-relative loudness, 0..1: sets streak length
 uniform float uTwinkleTime; // integrated seconds, drives the twinkle
 uniform vec2 uSway;         // shared figure-eight sway, clip units (same as the tunnel)
-uniform float uCrown[48];   // radial crown heights 0..1 (crownStore); launch offset per bar
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
 const float INNER_RIM = 0.16;
-const int CROWN_BINS = 48;
 
 out float vMix;             // 0..1: picks accent A or B per particle
 out vec2 vLocal;            // quad corner, -1..1 (x along the streak, y across it)
@@ -42,12 +40,11 @@ void main() {
   // Life comes from the phase accumulator, so motion never jumps when energy changes.
   float life = fract(uPhase * speed + seed);
 
-  // Launch (P5): the particle leaves the tip of the crown bar in its angular bin.
-  int bin = min(int(floor(fract(angleBase / TAU) * float(CROWN_BINS))), CROWN_BINS - 1);
-  float launch = INNER_RIM + uCrown[bin];
-
-  // Radius accelerates outward: r = mix(launch, 0.95, life^1.8).
-  float radius = mix(launch, 0.95, pow(life, 1.8));
+  // Spawn (C3): every particle starts at the crown bar tips, r = 0.16.
+  // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/0.95, life).
+  float depthNear = 1.0 / INNER_RIM;
+  float depthFar = 1.0 / 0.95;
+  float radius = 1.0 / mix(depthNear, depthFar, life);
   // The swirl adds a small angular turn over the life, so trails bend gently.
   float angle = angleBase + swirlDir * uSwirl * life;
   vec2 dir = vec2(cos(angle), sin(angle));
@@ -55,7 +52,8 @@ void main() {
 
   // Motion direction = d(pos)/d(life): the radial part plus the swirl part.
   // The streak lies along this vector, so it points where the particle is going.
-  float dRadius = (0.95 - launch) * 1.8 * pow(max(life, 1e-3), 0.8);
+  // dr/dlife = (depthNear - depthFar) * r^2: the same flow speed as the tunnel rings.
+  float dRadius = (depthNear - depthFar) * radius * radius;
   vec2 vel = dRadius * dir + radius * swirlDir * uSwirl * vec2(-dir.y, dir.x);
   vec2 axis = normalize(vel);
   vec2 perp = vec2(-axis.y, axis.x);

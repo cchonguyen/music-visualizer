@@ -13,10 +13,16 @@ import { FlightState, RollState } from '../tunnelState';
 import { getSway } from '../swayStore';
 import { blendAccents } from '../colourSwap';
 import { kickGrant } from './shockwave';
+import { RELEASE_TAU_SEC, releaseEnvelope } from '../releaseEnvelope';
 
 const RING_DENSITY = 0.5;
-/** Beat flash on the rings: instant attack, 150 ms release (owner reference notes: beats thicken rings, never move the camera). */
-const BEAT_RELEASE_SEC = 0.15;
+
+/** GLSL-style smoothstep: 0 below a, 1 above b, smooth in between. */
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+/** Beat flash on the rings: instant attack, shared 320 ms release (C2). Beats thicken rings, never move the camera. */
 const RING_CONTRAST_NORMAL = 0.5;
 const RING_CONTRAST_CALM = 0.25;
 
@@ -49,6 +55,9 @@ export class TunnelLayer implements RenderLayer {
   private uRoll: WebGLUniformLocation | null = null;
   private uDensity: WebGLUniformLocation | null = null;
   private uHue: WebGLUniformLocation | null = null;
+  private uQuiet: WebGLUniformLocation | null = null;
+  /** Smoothed quiet amount, 0 (loud) to 1 (silent). Rises fast, falls on the shared 320 ms release. */
+  private quietEnv = 0;
   private highAvg = new SlowFollower(3);
 
   init(gl: WebGL2RenderingContext): void {
@@ -69,7 +78,9 @@ export class TunnelLayer implements RenderLayer {
     this.uRoll = gl.getUniformLocation(this.program, 'uRoll');
     this.uDensity = gl.getUniformLocation(this.program, 'uDensity');
     this.uHue = gl.getUniformLocation(this.program, 'uHue');
+    this.uQuiet = gl.getUniformLocation(this.program, 'uQuiet');
     this.beatEnv = 0;
+    this.quietEnv = 0;
     this.vao = createVao(gl);
   }
 
@@ -88,14 +99,18 @@ export class TunnelLayer implements RenderLayer {
     // Beat flash: jumps to 1 on a beat, then decays over BEAT_RELEASE_SEC.
     // Calm mode turns beat-triggered visuals off entirely.
     const dt = Math.max(0, clock.dtSec);
-    this.beatEnv = Math.exp(-dt / BEAT_RELEASE_SEC) * this.beatEnv;
+    this.beatEnv = releaseEnvelope(this.beatEnv, 0, dt, 0, RELEASE_TAU_SEC);
     // Governed (P6): one token per kick, shared with the shockwave (kickGrant).
     if (kickGrant(frame, clock, this.calm)) this.beatEnv = 1;
+    // Quiet amount: 1 at silence, 0 at normal loudness (absolute loudness, so any track counts).
+    const quietTarget = 1 - smoothstep(0.05, 0.35, frame.loudness);
+    this.quietEnv = releaseEnvelope(this.quietEnv, quietTarget, dt, 0.05, RELEASE_TAU_SEC);
     const palette: Palette = getPalette(getCurrentPalette());
     const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
 
     gl.useProgram(this.program);
     gl.uniform1f(this.uBeat, this.beatEnv); // must follow useProgram, or the call is an invalid operation
+    gl.uniform1f(this.uQuiet, this.quietEnv);
     gl.uniform1f(this.uPhase, phase);
     gl.uniform1f(this.uSub, frame.norm.sub);
     gl.uniform1f(this.uLevel, frame.env.sub);

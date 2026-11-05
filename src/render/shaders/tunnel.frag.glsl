@@ -15,6 +15,7 @@ uniform vec2 uCenter;        // vanishing-point bend offset, uv units (figure-ei
 uniform float uRoll;         // ring roll angle, radians (integrated in JS)
 uniform float uDensity;      // ring spacing, breathes with the bass
 uniform float uHue;          // 0..1: mix from accent A to accent B (slow drift + treble)
+uniform float uQuiet;        // 0..1: 1 in quiet passages, 0 when loud (smoothed in JS). Lifts the gaps.
 
 in vec2 vUv;
 out vec4 outColor;
@@ -51,6 +52,9 @@ void main() {
   // Quiet floor (patch 2026-11-04): crest bands never drop below 12% brightness, so faint
   // rings stay visible in near-silence. The gaps between rings (low wave) stay at the base colour.
   stripe = max(stripe, 0.12 * smoothstep(0.5, 0.9, wave));
+  // Quiet-aware floor (C1, 2026-11-04): in quiet passages the gaps between rings also
+  // hold a 12% tint, so the screen never goes fully dark. Loud passages keep the dark gaps.
+  stripe = max(stripe, 0.12 * uQuiet);
 
   // Full-screen pulse stays small (15%): a large whole-screen brightness swing
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.

@@ -85,7 +85,7 @@ export class ParticleLayer implements RenderLayer {
 
     bindTarget(gl, target);
 
-    // Flash envelope: instant attack on a high-band onset, 150 ms release.
+    // Flash envelope: instant attack on a high-band onset, 320 ms shared release (C2).
     // Not governed (patch 2026-11-04): a sparkle covers under 1% of the screen, so it
     // does not use the flash budget and cannot block a kick shockwave.
     this.flash = highFlash(this.flash, frame.beatByBand.high, clock.dtSec);
