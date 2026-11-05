@@ -90,3 +90,6 @@ Order set by the owner: morphs, frame stepping, sound responsiveness, then Stage
 - [x] **Slice S3-f: Accessibility audit (static, then notes)** [DONE] (docs/stage3-accessibility-audit.md; 2 concrete gaps listed for next slice, browser checks pending) `[GREEN][UI / VISUAL]` worker: lead | Target files: `docs/stage3-accessibility-audit.md` [NEW] | Verify: npm run typecheck && npm run build
 - [x] **Slice 4.12: Referee stamp for the Stage 3 branch (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/SESSION_HANDOFF.md` | Verify: npm test && npm run typecheck
 - [x] **Slice 4.15: Referee stamp for the PR #13 head (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/PROGRESS.md` | Verify: npm run typecheck && npx vitest run
+
+## Projectm feature slices (scope: .spec/PROJECTM_SPEC.md)
+- [ ] **Slice 5.1: Beat sensitivity slider** [IN_PROGRESS] `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/audio/onset.ts`, `src/audio/onset.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
