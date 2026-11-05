@@ -23,7 +23,13 @@ export interface AudioLink {
   source: AudioSource;
   amount: number; // -1..1
   smooth: number; // 0..1, how slowly the link follows the source
+  /** LFO sources only: cycles per second, 0.05..8. Missing means the default (0.5 Hz). */
+  rate?: number;
 }
+
+export const LFO_RATE_DEFAULT = 0.5;
+export const LFO_RATE_MIN = 0.05;
+export const LFO_RATE_MAX = 8;
 
 /** One setting as stored: its value, plus an optional audio link. */
 export interface Setting {
@@ -103,11 +109,15 @@ function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink |
     warnings.push(`${where}: link amount and smooth must be numbers, link dropped`);
     return undefined;
   }
-  return {
+  const link: AudioLink = {
     source: source as AudioSource,
     amount: Math.min(1, Math.max(-1, raw.amount)),
     smooth: Math.min(1, Math.max(0, raw.smooth)),
   };
+  if (typeof raw.rate === "number" && Number.isFinite(raw.rate)) {
+    link.rate = Math.min(LFO_RATE_MAX, Math.max(LFO_RATE_MIN, raw.rate));
+  }
+  return link;
 }
 
 /** Fills every known setting (defaults for missing ones), and reports unknown or bad ones. */

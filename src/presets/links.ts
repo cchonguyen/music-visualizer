@@ -3,7 +3,7 @@
 // `amount` is the share of the setting's full range (-1 .. 1). `shaped` is the source, smoothed
 // with a one-pole filter (smooth 0 = quick, 1 = slow). Pure logic, so it is unit tested.
 import type { AudioFrame } from '../audio/types';
-import { AUDIO_SOURCES, type AudioLink, type AudioSource, type Settings } from './format';
+import { AUDIO_SOURCES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, type AudioLink, type AudioSource, type Settings } from './format';
 import type { ParamSpec, ParamValue } from './schema';
 
 export interface LinkInputs {
@@ -23,8 +23,9 @@ function hash01(n: number): number {
 }
 
 /** The raw source value, 0..1, before smoothing. */
-export function sourceValue(source: AudioSource, inputs: LinkInputs): number {
+export function sourceValue(source: AudioSource, inputs: LinkInputs, rateHz: number = LFO_RATE_DEFAULT): number {
   const { frame, timeSec: t } = inputs;
+  const rate = Math.min(LFO_RATE_MAX, Math.max(LFO_RATE_MIN, Number.isFinite(rateHz) ? rateHz : LFO_RATE_DEFAULT));
   switch (source) {
     case 'sub':
       return clamp01(frame.norm.sub);
@@ -45,11 +46,11 @@ export function sourceValue(source: AudioSource, inputs: LinkInputs): number {
     case 'section':
       return clamp01((inputs.sectionContrast + 1) / 2);
     case 'lfoSine':
-      return 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.5 * t); // 0.5 Hz
+      return 0.5 + 0.5 * Math.sin(2 * Math.PI * rate * t);
     case 'lfoSaw':
-      return clamp01(((t * 0.5) % 1 + 1) % 1); // 0.5 Hz ramp
+      return clamp01(((t * rate) % 1 + 1) % 1);
     case 'lfoRandom':
-      return hash01(Math.floor(t * 2)); // new value twice a second
+      return hash01(Math.floor(t * rate * 2)); // new value every half cycle
     case 'time':
       return clamp01(((t % 60) + 60) % 60 / 60);
   }
@@ -80,7 +81,7 @@ export class LinkRunner {
   }
 
   private linked(key: string, base: ParamValue, link: AudioLink, spec: { type: 'float' | 'int'; default: number; min: number; max: number }, inputs: LinkInputs, dtSec: number): number {
-    const target = sourceValue(link.source, inputs);
+    const target = sourceValue(link.source, inputs, link.rate);
     const prev = this.state.get(key) ?? target;
     const tau = 0.02 + link.smooth * 0.5; // seconds; smooth 0 follows within about 20 ms
     const alpha = 1 - Math.exp(-Math.max(0, dtSec) / tau);

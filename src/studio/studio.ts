@@ -7,7 +7,7 @@ import { Pane } from 'tweakpane';
 import { LAYER_FACTORIES, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import { SCHEMAS } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession } from '../presets/session';
 import type { ParamSpec, ParamValue } from '../presets/schema';
@@ -224,6 +224,12 @@ export class Studio {
     }).on('change', onEdit);
     pane.addBinding(link as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -1, max: 1, step: 0.01 }).on('change', onEdit);
     pane.addBinding(link as unknown as Record<string, unknown>, 'smooth', { label: 'Smoothing', min: 0, max: 1, step: 0.01 }).on('change', onEdit);
+    if (link.source.startsWith('lfo')) {
+      // LFO rate (slice: adjustable LFOs). Blank means the 0.5 Hz default.
+      const rateBox = link as unknown as { rate?: number };
+      if (rateBox.rate === undefined) rateBox.rate = LFO_RATE_DEFAULT;
+      pane.addBinding(rateBox, 'rate', { label: 'LFO rate (Hz)', min: LFO_RATE_MIN, max: LFO_RATE_MAX, step: 0.05 }).on('change', onEdit);
+    }
     // The runner's keys are `${presetId}${L|F}…`, so the preset id goes in front.
     this.linkMonitor.value = target.meterKey ? this.opts.linkMeter?.(`${id}${target.meterKey}`) ?? 0 : 0;
     pane.addBinding(this.linkMonitor, 'value', { label: 'Source now (0–1)', readonly: true, format: (v: number) => v.toFixed(2) });
