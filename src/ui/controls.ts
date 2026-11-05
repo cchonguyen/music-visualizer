@@ -40,6 +40,7 @@ export interface ControlsState {
 export function setupControls(engine: AudioEngine, state: ControlsState): { tick(): void } {
   const controls = $<HTMLElement>('controls');
   const fileInput = $<HTMLInputElement>('file-input');
+  const fileBtn = $<HTMLButtonElement>('file-btn');
   const testSelect = $<HTMLSelectElement>('test-select');
   const playBtn = $<HTMLButtonElement>('play-btn');
   const seek = $<HTMLInputElement>('seek');
@@ -65,6 +66,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     loadFile(fileInput.files?.[0]);
     fileInput.value = ''; // allow picking the same file again
   });
+  fileBtn.addEventListener('click', () => fileInput.click());
 
   // Drag and drop (desktop extra; the file button is the main path).
   window.addEventListener('dragover', (e) => {
@@ -202,7 +204,10 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       const media = engine.media;
       playback.hidden = !media;
       if (!media) return;
-      playBtn.textContent = media.paused ? 'Play' : 'Pause';
+      const action = media.paused ? 'Play' : 'Pause';
+      if (playBtn.textContent !== action) playBtn.textContent = action;
+      const label = `${action} (Space)`;
+      if (playBtn.getAttribute('aria-label') !== label) playBtn.setAttribute('aria-label', label);
       if (Number.isFinite(media.duration) && media.duration > 0) {
         if (document.activeElement !== seek) seek.value = String(Math.round((media.currentTime / media.duration) * 1000));
         time.textContent = `${formatTime(media.currentTime)} / ${formatTime(media.duration)}`;

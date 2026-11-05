@@ -73,6 +73,10 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **Slice 4.7: Particle transforms (rotation, zoom)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.vert.glsl` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 4.8: Particle colour shift (hue offset and drift)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
 
+## Open items from the Stage 3 thread (continuation, 2026-11-05)
+- [x] **Slice 4.13: Studio control for morph (E-c)** `[GREEN][UI / VISUAL]` worker: lead (Haiku) | Target files: `src/studio/studio.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+- [x] **Slice 4.14: Keyboard and label fixes from the accessibility audit (findings 1 and 2)** `[GREEN][UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `index.html`, `src/ui/controls.ts` | Verify: npm run typecheck && npx vitest run && npm run build
+
 ## Parked after Stage 4 (2026-11-05)
 See `docs/stage4-parked.md`: safety check for random and linked presets, layer opacity and blend, filled rings fix, E4 invert/solarize/echo, V2 and V5 variants, T4 second window, cleanup.
 
@@ -85,3 +89,4 @@ Order set by the owner: morphs, frame stepping, sound responsiveness, then Stage
 - [x] **Slice S3-d/e: GPU-loss and hidden-tab state tests** [DONE] (ContextLossState tests; clamp test for hidden-tab gap; typecheck, 335 tests, build) `[YELLOW][CORE / DATA]` worker: lead | Target files: `src/gl/lossState.ts` [NEW], `src/gl/lossState.test.ts` [NEW], `src/gl/context.ts` | Verify: npm run typecheck && npx vitest run && npm run build
 - [x] **Slice S3-f: Accessibility audit (static, then notes)** [DONE] (docs/stage3-accessibility-audit.md; 2 concrete gaps listed for next slice, browser checks pending) `[GREEN][UI / VISUAL]` worker: lead | Target files: `docs/stage3-accessibility-audit.md` [NEW] | Verify: npm run typecheck && npm run build
 - [x] **Slice 4.12: Referee stamp for the Stage 3 branch (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/SESSION_HANDOFF.md` | Verify: npm test && npm run typecheck
+- [x] **Slice 4.15: Referee stamp for the PR #13 head (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/PROGRESS.md` | Verify: npm run typecheck && npx vitest run

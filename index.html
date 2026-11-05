@@ -21,7 +21,7 @@
 
     <nav id="controls" class="controls" aria-label="Player controls" hidden>
       <div class="group" role="group" aria-label="Audio source">
-        <label class="btn" for="file-input">File…</label>
+        <button type="button" id="file-btn" class="btn">File…</button>
         <input id="file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.webm,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/ogg" hidden />
         <button type="button" data-source="display">Tab / system audio</button>
         <button type="button" data-source="mic">Microphone</button>
@@ -35,7 +35,7 @@
         <button type="button" data-source="stop">Stop</button>
       </div>
       <div class="group" role="group" aria-label="Playback" id="playback">
-        <button type="button" id="play-btn" aria-label="Play or pause (Space)">Pause</button>
+        <button type="button" id="play-btn" aria-label="Pause (Space)">Pause</button>
         <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
         <span id="time" class="time">0:00</span>
       </div>
