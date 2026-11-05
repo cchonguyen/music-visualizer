@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer } from './ci-gate.mjs';
-import { hasDashboardTrailer } from './lib/dashboard-sync.mjs';
 
 const TREE = 'a'.repeat(40);
 
@@ -54,20 +53,11 @@ function makeRepo() {
   return dir;
 }
 
-function commitWithTrailers(dir, message, { tree, dashboard = true } = {}) {
+function commitWithTrailers(dir, message, { tree } = {}) {
   sh(dir, ['add', '-A']);
   const treeId = tree || sh(dir, ['write-tree']);
-  const args = ['commit', '-q', '-m', message, '--trailer', 'Referee-Verdict: VERIFIED', '--trailer', `Referee-Tree: ${treeId}`];
-  if (dashboard) args.push('--trailer', 'Dashboard-Sync: Slice 1.1 Claimed');
-  sh(dir, args);
+  sh(dir, ['commit', '-q', '-m', message, '--trailer', 'Referee-Verdict: VERIFIED', '--trailer', `Referee-Tree: ${treeId}`]);
 }
-
-test('hasDashboardTrailer requires a Dashboard-Sync line naming a slice and stage', () => {
-  assert.equal(hasDashboardTrailer('x\n\nDashboard-Sync: Slice 4.13 Claimed'), true);
-  assert.equal(hasDashboardTrailer('x\n\nDashboard-Sync: Slice 4.13'), false);
-  assert.equal(hasDashboardTrailer('x\n\nDashboard-Sync: none'), false);
-  assert.equal(hasDashboardTrailer('plain commit'), false);
-});
 
 test('checkPullRequest passes for a slice commit with a matching verdict', () => {
   const dir = makeRepo();
@@ -93,15 +83,6 @@ test('checkPullRequest fails when the head commit has no Referee trailer', () =>
   sh(dir, ['commit', '-q', '-m', 'Hand edit']);
   const problems = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
   assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
-});
-
-test('checkPullRequest fails when the head commit has a verdict but no dashboard sync', () => {
-  const dir = makeRepo();
-  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [x] **Slice 1.1: First**\n');
-  commitWithTrailers(dir, 'Finish Slice 1.1', { dashboard: false });
-  const problems = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
-  assert.equal(problems.length, 1);
-  assert.match(problems[0], /No dashboard sync/);
 });
 
 test('checkPullRequest fails when the commit changed after its verdict', () => {

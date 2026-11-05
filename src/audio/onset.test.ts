@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { OnsetDetector, spectralFlux } from './onset';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  OnsetDetector,
+  spectralFlux,
+  setBeatSensitivity,
+  getBeatSensitivity,
+  triggerRatioForSensitivity,
+  DEFAULT_BEAT_SENSITIVITY,
+} from './onset';
 
 const STEP_SEC = 0.01;
 
@@ -136,6 +143,67 @@ describe("OnsetDetector noise floor", () => {
       if (d.step(flux, i / 60).beat) beats++;
     }
     expect(beats).toBe(0);
+  });
+});
+
+describe('beat sensitivity', () => {
+  afterEach(() => {
+    setBeatSensitivity(DEFAULT_BEAT_SENSITIVITY);
+  });
+
+  it('maps known sensitivity points to trigger ratios', () => {
+    expect(triggerRatioForSensitivity(0)).toBeCloseTo(2.0);
+    expect(triggerRatioForSensitivity(0.5)).toBeCloseTo(1.3);
+    expect(triggerRatioForSensitivity(1)).toBeCloseTo(1.05);
+  });
+
+  it('is monotonic non-increasing across 0..1', () => {
+    let previous = Infinity;
+    for (let i = 0; i <= 10; i += 1) {
+      const ratio = triggerRatioForSensitivity(i / 10);
+      expect(ratio).toBeLessThanOrEqual(previous);
+      previous = ratio;
+    }
+  });
+
+  it('clamps out-of-range sensitivity inputs', () => {
+    expect(triggerRatioForSensitivity(-5)).toBeCloseTo(2.0);
+    expect(triggerRatioForSensitivity(5)).toBeCloseTo(1.05);
+  });
+
+  it('clamps stored sensitivity and resets non-finite input to the default', () => {
+    setBeatSensitivity(2);
+    expect(getBeatSensitivity()).toBe(1);
+    setBeatSensitivity(-1);
+    expect(getBeatSensitivity()).toBe(0);
+    setBeatSensitivity(Number.NaN);
+    expect(getBeatSensitivity()).toBe(DEFAULT_BEAT_SENSITIVITY);
+  });
+
+  it('fires on fewer events at sensitivity 0 than at sensitivity 1', () => {
+    // Steady baseline 0.1 with periodic 1.2x bumps: fires at ratio 1.05, not at 2.0.
+    const fluxAt = (i: number) => (i > 0 && i % 50 === 0 ? 0.12 : 0.1);
+
+    setBeatSensitivity(0);
+    const atZero = collectBeats(new OnsetDetector(), fluxAt, 301).length;
+
+    setBeatSensitivity(1);
+    const atOne = collectBeats(new OnsetDetector(), fluxAt, 301).length;
+
+    expect(atZero).toBe(0);
+    expect(atOne).toBeGreaterThan(atZero);
+  });
+
+  it('default sensitivity reproduces the fixed 1.3 trigger ratio', () => {
+    setBeatSensitivity(DEFAULT_BEAT_SENSITIVITY);
+    // Deterministic pseudo-random flux with bursts.
+    const fluxAt = (i: number) => 0.1 + 0.15 * Math.abs(Math.sin(i * 0.37)) ** 6;
+
+    const defaultBeats = collectBeats(new OnsetDetector(), fluxAt, 600);
+    const fixedBeats = collectBeats(new OnsetDetector({ triggerRatio: 1.3 }), fluxAt, 600);
+
+    expect(defaultBeats.length).toBeGreaterThan(0);
+    expect(defaultBeats).toEqual(fixedBeats);
   });
 });
 

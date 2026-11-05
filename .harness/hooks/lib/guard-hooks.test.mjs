@@ -29,6 +29,16 @@ function makeRepo({ origin = 'https://github.com/example/my-spoke.git', files = 
   return dir;
 }
 
+// Fixture repos run the live doctor gate too. Give each one a DOCTOR_PASS for its own HEAD so the
+// existing guard rules are what each test exercises, not the doctor.
+function doctorEnv(dir) {
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+  const file = path.join(os.tmpdir(), `doctor-pass-${path.basename(dir)}-${Date.now()}.json`);
+  fs.writeFileSync(file, JSON.stringify({ status: 'DOCTOR_PASS', head, failing: [] }));
+  dirs.push(file);
+  return { HARNESS_DOCTOR_STATE: file };
+}
+
 const SLICE = (targets, tag = 'YELLOW', type = 'CORE / DATA') =>
   `- [ ] **Slice 3.3** [IN_PROGRESS] \`[${tag}][${type}]\`: guard — Target files: ${targets}\n`;
 
@@ -37,7 +47,7 @@ function runHook(script, dir, event) {
     cwd: dir,
     input: JSON.stringify(event),
     encoding: 'utf8',
-    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   return { status: res.status, stderr: res.stderr };
 }
@@ -124,7 +134,7 @@ test('bash guard blocks a redirect into an engine path in a spoke', () => {
   const dir = makeRepo({ files: { '.claude/settings.json': '{}\n' } });
   const r = spawnSync(process.execPath, [BASH], {
     cwd: dir, input: JSON.stringify({ tool_input: { command: 'echo {} > .claude/settings.json' } }),
-    encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    encoding: 'utf8', env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /ENGINE LOCK/);
@@ -134,7 +144,7 @@ test('bash guard lets reads and the restore command through, and ignores the hub
   const dir = makeRepo({ files: { '.claude/settings.json': '{}\n' } });
   const run = (repoDir, command) => spawnSync(process.execPath, [BASH], {
     cwd: repoDir, input: JSON.stringify({ tool_input: { command } }), encoding: 'utf8',
-    env: { ...process.env, CLAUDE_PROJECT_DIR: repoDir },
+    env: { ...process.env, ...doctorEnv(repoDir), CLAUDE_PROJECT_DIR: repoDir },
   }).status;
   assert.equal(run(dir, 'cat .claude/settings.json'), 0);
   assert.equal(run(dir, 'node .harness/hooks/pre-tool-guard.mjs --restore'), 0);
@@ -151,7 +161,7 @@ test('SCOUT level routing maps facts deterministically to levels and agents', ()
   // Level 1: <3 files, no contract change
   fs.writeFileSync(scoutPath, 'Scout-Level: 1\nFiles-Touched: 2\nContract-Change: no\nCross-Module: no\n');
   const r1 = spawnSync(process.execPath, [EVAL, 'spec'], {
-    cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    cwd: dir, encoding: 'utf8', env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(r1.status, 0);
   assert.match(r1.stdout, /Level 1/);
@@ -159,7 +169,7 @@ test('SCOUT level routing maps facts deterministically to levels and agents', ()
   // Level 3: Cross module -> Opus
   fs.writeFileSync(scoutPath, 'Files-Touched: 8\nContract-Change: yes\nCross-Module: yes\n');
   const r3 = spawnSync(process.execPath, [EVAL, 'spec'], {
-    cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    cwd: dir, encoding: 'utf8', env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(r3.status, 0);
   assert.match(r3.stdout, /architect-opus/);
@@ -173,7 +183,7 @@ test('session-start resets session telemetry and post-tool-scrub tracks mutating
   // 1. Session start initializes telemetry
   const rStart = spawnSync(process.execPath, [START], {
     cwd: dir, input: JSON.stringify({ session_id: 'test-sess' }), encoding: 'utf8',
-    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(rStart.status, 0);
   const telemPath = path.join(dir, '.spec', '.session-telemetry.json');
@@ -192,7 +202,7 @@ test('session-start resets session telemetry and post-tool-scrub tracks mutating
       tool_response: { stdout: 'ok' }
     }),
     encoding: 'utf8',
-    env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+    env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(rScrub.status, 0);
   const updated = JSON.parse(fs.readFileSync(telemPath, 'utf8'));

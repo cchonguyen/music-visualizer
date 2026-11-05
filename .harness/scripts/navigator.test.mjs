@@ -17,6 +17,7 @@ import {
 import { freezeBlackBox } from './freeze-black-box.mjs';
 import { parseActiveTargets as parseTargetsFinish, finishSlice } from './finish-slice.mjs';
 import { parseActiveTargets as parseTargetsScope, analyze as analyzeScope } from './pr-scope-check.mjs';
+import { appendCall } from './lib/telemetry.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'navigator.mjs');
@@ -350,8 +351,11 @@ test('finishSlice git staging does not crash when tracking files are ignored by 
     // Create target file change
     fs.writeFileSync(path.join(dir, 'b.txt'), 'b content updated');
 
+    // The telemetry gate needs a subagent dispatch for slice 2 before it will finish.
+    appendCall(dir, { ts: new Date().toISOString(), tool: 'Agent', agentType: 'harness:gf-coder', role: 'goldfish', filePath: '', slice: '2' });
+
     // finishSlice should stage and commit without crashing on ignored tracking file
-    const res = finishSlice(dir, 'feat: finish with gitignored tracking file', { skipChecks: true, dashboardSync: () => 'Dashboard-Sync: Slice 1 Claimed' });
+    const res = finishSlice(dir, 'feat: finish with gitignored tracking file', { skipChecks: true });
     assert.equal(res.success, true);
     assert.equal(res.sliceId, '2');
 

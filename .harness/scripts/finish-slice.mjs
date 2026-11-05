@@ -8,7 +8,7 @@ import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
 import { getRefereeEngineHash, detectNaturalLull } from './referee.mjs';
 import { ensureHarnessRoot, atomicWriteFileSync } from './lib/fs-atomic.mjs';
 import { parseSliceLine } from './lib/slice-parser.mjs';
-import { syncDashboard, DASHBOARD_STAGE } from './lib/dashboard-sync.mjs';
+import { readCalls, dispatchesFor, mainSourceWrites } from './lib/telemetry.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -108,7 +108,6 @@ function filterIgnoredFiles(cwd, fileList) {
 }
 
 export function finishSlice(root, commitMsg, options = {}) {
-  const dashboardSync = options.dashboardSync || syncDashboard;
   const verify = options.verify || autoVerify;
   ensureHarnessRoot();
   root = root || resolveRoot();
@@ -209,6 +208,19 @@ export function finishSlice(root, commitMsg, options = {}) {
     }
   }
 
+  // 3b. Telemetry gate: a subagent must have done the work, and the main thread must not have written source.
+  // Runs before any write, so a refusal leaves PROGRESS.md and the tree untouched.
+  const sliceCalls = readCalls(root);
+  const dispatchCount = dispatchesFor(sliceCalls, sliceId).length;
+  if (dispatchCount === 0) {
+    throw new Error(`Telemetry gate failed: no subagent dispatch recorded for slice ${sliceId}.`);
+  }
+  const mainWrites = mainSourceWrites(sliceCalls, sliceId);
+  if (mainWrites.length > 0) {
+    const files = Array.from(new Set(mainWrites.map((c) => c.filePath))).join(', ');
+    throw new Error(`Telemetry gate failed: main thread wrote ${mainWrites.length} source file(s) for slice ${sliceId}: ${files}.`);
+  }
+
   // 4. Update PROGRESS.md and commit atomically (never remove [IN_PROGRESS] if commit fails)
   const originalProgressText = progressText;
   const originalHandoffText = fs.existsSync(handoffPath) ? fs.readFileSync(handoffPath, 'utf8') : '';
@@ -299,20 +311,13 @@ export function finishSlice(root, commitMsg, options = {}) {
     // 8. Commit with Referee-* trailers
     const trailers = [
       '--trailer', 'Referee-Verdict: VERIFIED',
-      '--trailer', `Referee-Tree: ${treeSha}`
+      '--trailer', `Referee-Tree: ${treeSha}`,
+      '--trailer', `Telemetry-Dispatches: ${dispatchCount}`,
+      '--trailer', 'Telemetry-Main-Source-Writes: 0'
     ];
     if (engineHash) {
       trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
     }
-
-    // Dashboard rule: STATE.json must record this slice before the commit is made.
-    // A failed sync throws here, so PROGRESS.md is rolled back and nothing is committed.
-    const dashboardTrailerLine = dashboardSync(root, {
-      sliceId,
-      title: activeParsed.title || activeParsed.fullTitle || `Slice ${sliceId}`,
-      stage: DASHBOARD_STAGE,
-    });
-    trailers.push('--trailer', dashboardTrailerLine);
 
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
     committed = true;

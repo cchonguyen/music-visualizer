@@ -43,6 +43,7 @@ export function listHubOwned(hubRoot) {
   walk('.harness');
   walk('.claude/agents');
   walk('.claude/commands');
+  walk('plugins/harness');
   for (const rel of ['.claude/harness-rules.md', '.harness-version', '.spec/EXTERNAL_AGENT_RULES.md']) {
     if (fs.existsSync(path.join(hubRoot, rel))) out.push(rel);
   }
