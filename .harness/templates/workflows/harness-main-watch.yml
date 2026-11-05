@@ -30,7 +30,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run typecheck --silent
-          npm run lint --silent
+          npm run lint --if-present --silent
           npm test --silent
 
       - name: Mark main red

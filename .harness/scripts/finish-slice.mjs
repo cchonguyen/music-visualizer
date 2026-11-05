@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -7,9 +8,37 @@ import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
 import { getRefereeEngineHash, detectNaturalLull } from './referee.mjs';
 import { ensureHarnessRoot, atomicWriteFileSync } from './lib/fs-atomic.mjs';
 import { parseSliceLine } from './lib/slice-parser.mjs';
+import { syncDashboard, DASHBOARD_STAGE } from './lib/dashboard-sync.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+
+/** Runs bin/verify-slice.sh when the operator's verify secret is on this machine. Never throws. */
+export function autoVerify(root) {
+  const secret = process.env.HARNESS_VERIFY_SECRET || readVerifySecret();
+  if (!secret) return { ran: false, reason: 'no verify secret on this machine, so Verified is left to verify-slice.sh on the operator machine' };
+  const script = path.join(root, 'bin', 'verify-slice.sh');
+  if (!fs.existsSync(script)) return { ran: false, reason: 'bin/verify-slice.sh not found' };
+  try {
+    execFileSync('bash', [script], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+      env: { ...process.env, HARNESS_VERIFY_SECRET: secret },
+    });
+    return { ran: true, passed: true };
+  } catch (err) {
+    return { ran: true, passed: false, reason: String(err.stderr || err.message || 'verify-slice.sh failed').trim().split('\n').slice(-3).join(' ') };
+  }
+}
+
+function readVerifySecret() {
+  try {
+    return fs.readFileSync(path.join(os.homedir(), '.config', 'vibe-command-center', 'verify-secret'), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
 
 export function parseActiveTargets(line) {
   if (!line) return [];
@@ -79,6 +108,8 @@ function filterIgnoredFiles(cwd, fileList) {
 }
 
 export function finishSlice(root, commitMsg, options = {}) {
+  const dashboardSync = options.dashboardSync || syncDashboard;
+  const verify = options.verify || autoVerify;
   ensureHarnessRoot();
   root = root || resolveRoot();
 
@@ -274,9 +305,20 @@ export function finishSlice(root, commitMsg, options = {}) {
       trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
     }
 
+    // Dashboard rule: STATE.json must record this slice before the commit is made.
+    // A failed sync throws here, so PROGRESS.md is rolled back and nothing is committed.
+    const dashboardTrailerLine = dashboardSync(root, {
+      sliceId,
+      title: activeParsed.title || activeParsed.fullTitle || `Slice ${sliceId}`,
+      stage: DASHBOARD_STAGE,
+    });
+    trailers.push('--trailer', dashboardTrailerLine);
+
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
     committed = true;
     const commitSha = gitIn(root, ['log', '-1', '--oneline']);
+    // Auto-verify: a passing run advances the card to Verified. Runs after the commit, so a failure never undoes it.
+    const verification = verify(root);
 
     // 9. Natural lull check
     const lull = detectNaturalLull(root);
@@ -287,7 +329,8 @@ export function finishSlice(root, commitMsg, options = {}) {
       nextSliceId,
       commitSha,
       treeSha,
-      lull
+      lull,
+      verification,
     };
   } catch (err) {
     if (!committed) {
@@ -312,6 +355,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const res = finishSlice(root, commitMsg);
     console.log(`✓ FINISH SLICE: ${res.sliceId} committed (${res.commitSha}). Referee-Verdict: VERIFIED.`);
+    if (res.verification && res.verification.ran) {
+      if (res.verification.passed) {
+        console.log('✓ Verify: passed, card moves to Verified.');
+      } else {
+        console.log(`✗ Verify failed, commit kept: ${res.verification.reason}`);
+      }
+    } else if (res.verification) {
+      console.log(`Verify skipped: ${res.verification.reason}`);
+    }
     if (res.lull.isLull) {
       console.log(res.lull.recommendation);
     }

@@ -7,6 +7,14 @@ import path from 'node:path';
 import { finishSlice, parseActiveTargets } from './finish-slice.mjs';
 import { startSlice } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
+import { dashboardTrailer, hasDashboardTrailer } from './lib/dashboard-sync.mjs';
+
+// Stands in for bin/update-state.mjs: records the slice in .spec/STATE.json the way the updater does.
+function fakeDashboardSync(root, { sliceId, title, stage }) {
+  fs.mkdirSync(path.join(root, '.spec'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.spec', 'STATE.json'), JSON.stringify({ activeSlices: [{ id: sliceId, title, stage }] }));
+  return dashboardTrailer(sliceId, stage);
+}
 
 function makeRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'finish-slice-test-'));
@@ -14,6 +22,8 @@ function makeRepo() {
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
   git('config', 'user.name', 'test');
+  // STATE.json is machine-local and gitignored in real repos; mirror that here.
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/STATE.json\n');
   return dir;
 }
 
@@ -38,7 +48,7 @@ test('finishSlice updates PROGRESS.md, commits with Referee trailers, and verify
   // Modify test.txt as part of the slice
   fs.writeFileSync(path.join(dir, 'test.txt'), 'updated content');
 
-  const result = finishSlice(dir, 'feat: finish slice 1', { skipChecks: true });
+  const result = finishSlice(dir, 'feat: finish slice 1', { skipChecks: true, dashboardSync: fakeDashboardSync });
   assert.equal(result.success, true);
   assert.equal(result.sliceId, '1');
 
@@ -78,7 +88,7 @@ test('finishSlice throws when a file outside Target files is modified (scope enf
   fs.writeFileSync(path.join(dir, 'unrelated.txt'), 'sneaky edit');
 
   assert.throws(
-    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
+    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true, dashboardSync: fakeDashboardSync }),
     /Scope check failed: unrelated\.txt/
   );
 
@@ -109,7 +119,7 @@ test('finishSlice throws and fails to commit when verification tests fail', () =
   fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
 
   assert.throws(
-    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: false }),
+    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: false, dashboardSync: fakeDashboardSync }),
     /Verification tests failed/
   );
 
@@ -148,7 +158,7 @@ test('finishSlice enforces scope neutrality from HEAD to prevent working-copy ta
 
   // Must reject despite working-copy PROGRESS.md claiming widened.txt is in scope
   assert.throws(
-    () => finishSlice(dir, 'feat: attempt widened slice', { skipChecks: true }),
+    () => finishSlice(dir, 'feat: attempt widened slice', { skipChecks: true, dashboardSync: fakeDashboardSync }),
     /Scope check failed: widened\.txt modified outside Target files for Slice 1/
   );
 
@@ -180,7 +190,7 @@ test('finishSlice fails closed when slice exists only in working copy and not in
   fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
 
   assert.throws(
-    () => finishSlice(dir, 'feat: finish uncommitted slice', { skipChecks: true }),
+    () => finishSlice(dir, 'feat: finish uncommitted slice', { skipChecks: true, dashboardSync: fakeDashboardSync }),
     /Scope neutrality violation: Slice 2 does not exist in HEAD:\.spec\/PROGRESS\.md/
   );
 
@@ -212,7 +222,7 @@ test('finishSlice single-commit auto-advance promotes next pending slice to [IN_
   // Modify a.txt for slice 1
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a updated');
 
-  const res = finishSlice(dir, 'feat: finish slice 1 with auto-advance', { skipChecks: true });
+  const res = finishSlice(dir, 'feat: finish slice 1 with auto-advance', { skipChecks: true, dashboardSync: fakeDashboardSync });
   assert.equal(res.success, true);
   assert.equal(res.sliceId, '1');
   assert.equal(res.nextSliceId, '2');
@@ -255,7 +265,7 @@ test('finishSlice handles last slice completion without auto-advance', () => {
 
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a finished');
 
-  const res = finishSlice(dir, 'feat: finish final slice', { skipChecks: true });
+  const res = finishSlice(dir, 'feat: finish final slice', { skipChecks: true, dashboardSync: fakeDashboardSync });
   assert.equal(res.success, true);
   assert.equal(res.sliceId, '1');
   assert.equal(res.nextSliceId, null);
@@ -285,7 +295,7 @@ test('finishSlice git staging filters gitignored tracking files and succeeds', (
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a initial');
 
   // Gitignore tracking files
-  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/STATUS_BATCH.jsonl\n');
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/STATUS_BATCH.jsonl\n.spec/STATE.json\n');
 
   git('add', '-A');
   git('commit', '-m', 'init with gitignore');
@@ -294,7 +304,7 @@ test('finishSlice git staging filters gitignored tracking files and succeeds', (
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a modified');
   fs.writeFileSync(path.join(dir, '.spec', '.session-telemetry.json'), JSON.stringify({ slicesCommitted: 0 }));
 
-  const res = finishSlice(dir, 'feat: finish with ignored telemetry', { skipChecks: true });
+  const res = finishSlice(dir, 'feat: finish with ignored telemetry', { skipChecks: true, dashboardSync: fakeDashboardSync });
   assert.equal(res.success, true);
   assert.equal(res.sliceId, '1');
 
@@ -342,5 +352,105 @@ test('startSlice anchors the first pending slice or specified slice in HEAD', ()
     /is already \[IN_PROGRESS\]/
   );
 
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice stamps a Dashboard-Sync trailer after STATE.json records the slice', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test — Target files: test.txt [IN_PROGRESS]\n');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  git('add', '-A');
+  git('commit', '-m', 'init');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+
+  finishSlice(dir, 'feat: finish slice 1', { skipChecks: true, dashboardSync: fakeDashboardSync });
+  const message = git('log', '-1', '--format=%B');
+  assert.equal(hasDashboardTrailer(message), true);
+  assert.match(message, /Dashboard-Sync: Slice 1 Claimed/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice refuses to commit when the dashboard sync fails, and keeps [IN_PROGRESS]', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test — Target files: test.txt [IN_PROGRESS]\n');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  git('add', '-A');
+  git('commit', '-m', 'init');
+  const headBefore = git('rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+
+  const failingSync = () => { throw new Error('Dashboard sync failed: simulated'); };
+  assert.throws(
+    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true, dashboardSync: failingSync }),
+    /Dashboard sync failed/
+  );
+  assert.equal(git('rev-parse', 'HEAD'), headBefore);
+  const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
+  assert.match(progressText, /\[IN_PROGRESS\]/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice fails with a clear error when bin/update-state.mjs is absent (no silent skip)', () => {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test — Target files: test.txt [IN_PROGRESS]\n');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  git('add', '-A');
+  git('commit', '-m', 'init');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+
+  assert.throws(
+    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
+    /bin\/update-state\.mjs not found/
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+function makeFinishableRepo() {
+  const dir = makeRepo();
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.harness', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.harness', 'scripts', 'referee.mjs'), '// referee');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '# Progress\n- [ ] **Slice 1** `[GREEN][CORE / DATA]`: Test — Target files: test.txt [IN_PROGRESS]\n');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'content');
+  git('add', '-A');
+  git('commit', '-m', 'init');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
+  return dir;
+}
+
+test('finishSlice reports a passing auto-verify result', () => {
+  const dir = makeFinishableRepo();
+  const result = finishSlice(dir, 'feat: finish slice 1', {
+    skipChecks: true,
+    dashboardSync: fakeDashboardSync,
+    verify: () => ({ ran: true, passed: true }),
+  });
+  assert.equal(result.verification.passed, true);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice keeps the commit when auto-verify is skipped or fails', () => {
+  const dir = makeFinishableRepo();
+  const result = finishSlice(dir, 'feat: finish slice 1', {
+    skipChecks: true,
+    dashboardSync: fakeDashboardSync,
+    verify: () => ({ ran: false, reason: 'x' }),
+  });
+  assert.equal(result.success, true);
+  const subject = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: dir, encoding: 'utf8' }).trim();
+  assert.equal(subject, 'feat: finish slice 1');
   fs.rmSync(dir, { recursive: true, force: true });
 });

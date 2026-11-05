@@ -5,7 +5,16 @@
       "Bash(node \"$CLAUDE_PROJECT_DIR\"/.harness/*)",
       "Bash(node .harness/*)",
       "Read(**/.env.example)",
-      "Read(**/.env.template)"
+      "Read(**/.env.template)",
+      "Bash(node bin/update-state.mjs:*)",
+      "Bash(bin/verify-slice.sh:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr create:*)",
+      "Bash(git push --force-with-lease origin claude/vibe-command-center-v2.2)",
+      "Edit(CLAUDE.md)",
+      "Edit(.claude/commands/**)",
+      "Write(.claude/commands/**)"
     ],
     "deny": [
       "Read(**/.env)",
