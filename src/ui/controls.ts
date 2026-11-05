@@ -185,11 +185,27 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   fsBtn.addEventListener('click', toggleFullscreen);
   if (!document.fullscreenEnabled) fsBtn.hidden = true; // never ship a dead button
 
+  // Keyboard shortcuts list (slice 6.1). A native <dialog>: Esc closes it, and a click on the backdrop closes it too.
+  const shortcutsDialog = $<HTMLDialogElement>('shortcuts');
+  const openShortcuts = () => {
+    if (!shortcutsDialog.open) shortcutsDialog.showModal();
+  };
+  $<HTMLButtonElement>('shortcuts-btn').addEventListener('click', openShortcuts);
+  $<HTMLButtonElement>('shortcuts-close').addEventListener('click', () => shortcutsDialog.close());
+  shortcutsDialog.addEventListener('click', (e) => {
+    if (e.target === shortcutsDialog) shortcutsDialog.close();
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = (e.target as HTMLElement | null)?.tagName;
     // Let form controls keep their own keys (e.g. arrows on sliders).
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    // While the list is open, only ? (close) and Esc (native) act; no other key should play or switch.
+    if (shortcutsDialog.open) {
+      if (e.key === '?') shortcutsDialog.close();
+      return;
+    }
     const media = engine.media;
     switch (e.key) {
       case ' ':
@@ -209,6 +225,9 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         engine.setVolume(v);
         break;
       }
+      case '?':
+        openShortcuts();
+        break;
       case 'f':
       case 'F':
         toggleFullscreen();

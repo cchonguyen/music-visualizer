@@ -44,6 +44,7 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [ ] **Slice 5.8: Custom shape schema and loader** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/format.ts`, `src/presets/loader.ts`, `src/presets/loader.test.ts`, `src/presets/schema.test.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.9: Custom shape renderer** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/layers/shapes.ts` [NEW], `src/render/shaders/shapes.frag.glsl` [NEW], `src/main.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.10: Custom waves** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/layers/waveform.ts`, `src/presets/layerSchemas.ts` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 6.1: Keyboard shortcuts button** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `index.html`, `src/style.css`, `src/ui/controls.ts` | Verify: npm run typecheck && npm run build
 - [ ] **Slice 5.11: Shockwave size on all presets (retroactive, PR #45)** [IN_PROGRESS] `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/presets/builtin/crown.json`, `src/presets/builtin/flight.json`, `src/render/layers/shockwave.ts` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 6 — Texture from band waveforms (Charlie, 2026-11-05: all bands, all effects, toggle per preset; default off)
