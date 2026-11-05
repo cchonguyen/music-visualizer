@@ -58,6 +58,10 @@ export class ParticleLayer implements RenderLayer {
   private uShape: WebGLUniformLocation | null = null;
   private uRotation: WebGLUniformLocation | null = null;
   private uZoom: WebGLUniformLocation | null = null;
+  private uHue: WebGLUniformLocation | null = null;
+
+  /** Hue drift clock (turns). Advances by hueDrift per second; wrapped to 0..1 when sent to the shader. */
+  private hueTurns = 0;
 
   private paletteName: string = DEFAULT_PALETTE;
   private readonly phase = new Phase();
@@ -87,6 +91,7 @@ export class ParticleLayer implements RenderLayer {
     this.uShape = gl.getUniformLocation(this.program, 'uShape');
     this.uRotation = gl.getUniformLocation(this.program, 'uRotation');
     this.uZoom = gl.getUniformLocation(this.program, 'uZoom');
+    this.uHue = gl.getUniformLocation(this.program, 'uHue');
     this.phase.reset();
     this.twinkle.reset();
     this.flash = 0;
@@ -116,6 +121,8 @@ export class ParticleLayer implements RenderLayer {
     const phase = this.phase.advance(clock.dtSec, rate);
     // Calm slows the motion, but the twinkle keeps real time (only its brightness is dimmed).
     const twinkleTime = this.twinkle.advance(clock.dtSec, 1);
+    // Hue drift (4.8): the clock only moves forward; the shader gets shift + drift wrapped to 0..1.
+    this.hueTurns += this.p.hueDrift * Math.max(0, clock.dtSec);
 
     // norm.high (track-relative): raw treble is often under 0.3 on real music, so env.high barely lit the particles.
     // Hi-hat flashes add only a little sparkle (flashSparkleScale), so the scene doesn't strobe on every hit.
@@ -148,6 +155,8 @@ export class ParticleLayer implements RenderLayer {
     // Transforms (4.7): rotation in radians, zoom (1 = none). Identity at the defaults.
     gl.uniform1f(this.uRotation, this.p.rotation);
     gl.uniform1f(this.uZoom, this.p.zoom);
+    // Colour shift (4.8): fixed offset plus drift, wrapped into 0..1 turns. Zero at the defaults.
+    gl.uniform1f(this.uHue, ((this.p.hueShift + this.hueTurns) % 1 + 1) % 1);
 
     // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
     // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
@@ -178,6 +187,8 @@ export class ParticleLayer implements RenderLayer {
     this.uShape = null;
     this.uRotation = null;
     this.uZoom = null;
+    this.uHue = null;
+    this.hueTurns = 0;
     this.uSparkle = null;
     this.uBrightness = null;
     this.uEnergy = null;

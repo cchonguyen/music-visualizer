@@ -14,8 +14,21 @@ uniform vec3 uAccentA;     // palette accentA
 uniform float uSparkle;    // 0..1: treble level plus flash, calm-scaled
 uniform float uBrightness; // default 0.6
 uniform int uShape;        // 0 streak, 1 dot, 2 star, 3 ring
+uniform float uHue;        // total hue rotation in turns (shift + drift), combined on the CPU
 
 out vec4 fragColor;
+
+// NOTE(spec): luminance-preserving hue rotation (the standard RGB rotation matrix about the grey axis).
+vec3 rotateHue(vec3 c, float angle) {
+  float ca = cos(angle);
+  float sa = sin(angle);
+  mat3 m = mat3(
+    vec3(0.213 + ca * 0.787 - sa * 0.213, 0.213 - ca * 0.213 + sa * 0.143, 0.213 - ca * 0.213 - sa * 0.787),
+    vec3(0.715 - ca * 0.715 - sa * 0.715, 0.715 + ca * 0.285 + sa * 0.140, 0.715 - ca * 0.715 + sa * 0.715),
+    vec3(0.072 - ca * 0.072 + sa * 0.928, 0.072 - ca * 0.072 - sa * 0.283, 0.072 + ca * 0.928 + sa * 0.072)
+  );
+  return clamp(m * c, 0.0, 1.0);
+}
 
 void main() {
   // Soft edge across the streak: 1 on the centre line, 0 at the sides.
@@ -44,6 +57,11 @@ void main() {
   float core = 1.0 - smoothstep(0.0, 0.6, r);
   vec3 tint = mix(uAccent, uAccentA, step(0.5, vMix));
   vec3 colour = mix(tint, vec3(1.0), core);
+
+  // NOTE(spec): hue shift is skipped at uHue == 0.0 so the default output is unchanged.
+  if (uHue != 0.0) {
+    colour = rotateHue(colour, uHue * 6.2831853);
+  }
 
   float level = clamp(uSparkle, 0.0, 1.0) * vTwinkle * vFade;
   vec3 out_colour = colour * shape * uBrightness * level;
