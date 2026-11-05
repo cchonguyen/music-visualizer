@@ -17,6 +17,28 @@ export interface LinkInputs {
 
 const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
+/** Last brightness result. A preset can ask for it many times per frame, so reuse it. */
+let brightnessCache: { frameIndex: number; spectrum: Float32Array; value: number } | null = null;
+
+/** Spectral centroid of the frame, mapped to 0..1 (0 Hz..8 kHz). Cached per frame and spectrum. */
+function brightnessOf(frame: AudioFrame): number {
+  const spectrum = frame.spectrum;
+  if (brightnessCache && brightnessCache.frameIndex === frame.frameIndex && brightnessCache.spectrum === spectrum) {
+    return brightnessCache.value;
+  }
+  const binHz = frame.sampleRate / (2 * spectrum.length);
+  let weighted = 0;
+  let total = 0;
+  for (let i = 0; i < spectrum.length; i++) {
+    const s = spectrum[i] ?? 0;
+    weighted += i * binHz * s;
+    total += s;
+  }
+  const value = total <= 0 ? 0 : clamp01((weighted / total) / 8000);
+  brightnessCache = { frameIndex: frame.frameIndex, spectrum, value };
+  return value;
+}
+
 /** A deterministic 0..1 value per time step, used by the random LFO. */
 function hash01(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
@@ -46,6 +68,16 @@ export function sourceValue(source: AudioSource, inputs: LinkInputs, rateHz: num
       return clamp01(frame.flux);
     case 'section':
       return clamp01((inputs.sectionContrast + 1) / 2);
+    case 'beatStrength':
+      return clamp01(frame.beatStrength);
+    case 'brightness':
+      return brightnessOf(frame);
+    case 'subFlux':
+      return clamp01(frame.fluxByBand.sub);
+    case 'midFlux':
+      return clamp01(frame.fluxByBand.mid);
+    case 'highFlux':
+      return clamp01(frame.fluxByBand.high);
     case 'lfoSine':
       return 0.5 + 0.5 * Math.sin(2 * Math.PI * rate * t);
     case 'lfoSaw':

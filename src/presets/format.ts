@@ -8,6 +8,7 @@ export const PRESET_VERSION = 1 as const;
 /** Every signal a setting can follow (see docs/stage4-presets-plan.md §4). Only stored here in 4.1; evaluated in E2. */
 export const AUDIO_SOURCES = [
   "sub", "bass", "mid", "high", "energy", "loudness", "beat", "onset", "section",
+  "beatStrength", "brightness", "subFlux", "midFlux", "highFlux",
   "lfoSine", "lfoSaw", "lfoRandom", "time",
 ] as const;
 export type AudioSource = (typeof AUDIO_SOURCES)[number];
