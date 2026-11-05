@@ -56,6 +56,8 @@ export class ParticleLayer implements RenderLayer {
   private uTwinkleTime: WebGLUniformLocation | null = null;
   private uCrown: WebGLUniformLocation | null = null;
   private uShape: WebGLUniformLocation | null = null;
+  private uRotation: WebGLUniformLocation | null = null;
+  private uZoom: WebGLUniformLocation | null = null;
 
   private paletteName: string = DEFAULT_PALETTE;
   private readonly phase = new Phase();
@@ -83,6 +85,8 @@ export class ParticleLayer implements RenderLayer {
     this.uTwinkleTime = gl.getUniformLocation(this.program, 'uTwinkleTime');
     this.uCrown = gl.getUniformLocation(this.program, 'uCrown[0]');
     this.uShape = gl.getUniformLocation(this.program, 'uShape');
+    this.uRotation = gl.getUniformLocation(this.program, 'uRotation');
+    this.uZoom = gl.getUniformLocation(this.program, 'uZoom');
     this.phase.reset();
     this.twinkle.reset();
     this.flash = 0;
@@ -141,6 +145,9 @@ export class ParticleLayer implements RenderLayer {
     // Particle shape (4.6): 0 streak, 1 dot, 2 star, 3 ring. Unknown names fall back to streak.
     const shapeIndex = Math.max(0, PARTICLE_SHAPES.indexOf(this.p.shape));
     gl.uniform1i(this.uShape, shapeIndex);
+    // Transforms (4.7): rotation in radians, zoom (1 = none). Identity at the defaults.
+    gl.uniform1f(this.uRotation, this.p.rotation);
+    gl.uniform1f(this.uZoom, this.p.zoom);
 
     // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
     // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
@@ -169,6 +176,8 @@ export class ParticleLayer implements RenderLayer {
     this.uAccentA = null;
     this.uSwirl = null;
     this.uShape = null;
+    this.uRotation = null;
+    this.uZoom = null;
     this.uSparkle = null;
     this.uBrightness = null;
     this.uEnergy = null;

@@ -14,6 +14,8 @@ uniform float uSwirl;       // midrange drive, 0..1 (0 in Calm)
 uniform float uEnergy;      // track-relative loudness, 0..1: sets streak length
 uniform float uTwinkleTime; // integrated seconds, drives the twinkle
 uniform vec2 uSway;         // shared figure-eight sway, clip units (same as the tunnel)
+uniform float uRotation;    // radians, turns the particle field about the screen centre (0 = none)
+uniform float uZoom;        // scale about the screen centre, divide so >1 enlarges (1 = none)
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
@@ -79,5 +81,10 @@ void main() {
   vTwinkle = tw * tw * tw * tw;
 
   // Aspect correction: x is scaled by 1/aspect so streaks keep their true shape.
-  gl_Position = vec4(point.x / uAspect, point.y, 0.0, 1.0);
+  // Transform (4.7): rotate, then zoom. Done on the height-normalised point, before the
+  // aspect divide, so the rotation is a true rotation on a wide screen. Defaults (0, 1) are identity.
+  float c = cos(uRotation);
+  float s = sin(uRotation);
+  vec2 turned = vec2(c * point.x - s * point.y, s * point.x + c * point.y) / uZoom;
+  gl_Position = vec4(turned.x / uAspect, turned.y, 0.0, 1.0);
 }
