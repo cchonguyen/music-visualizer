@@ -25,6 +25,17 @@ export function getVisualGain(): number {
   return gain;
 }
 
+/**
+ * Visual gain as a dynamics curve (owner, 2026-11-05). Bends a 0..1 reaction value
+ * around its midpoint 0.5: gain 1 is unchanged; below 1 pulls reactions toward the calm
+ * middle (less contrast); above 1 pushes them apart (more contrast, bigger reactions).
+ * Output stays 0..1.
+ */
+export function shapeReaction(x: number, g: number): number {
+  const v = Number.isFinite(x) ? x : 0;
+  return Math.min(1, Math.max(0, 0.5 + (v - 0.5) * g));
+}
+
 export function setVisualGain(v: number): number {
   gain = clampGain(v);
   try {

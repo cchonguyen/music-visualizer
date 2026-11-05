@@ -19,7 +19,8 @@ const CALM_SPARKLE_SCALE = 0.3;
 const CALM_PHASE_RATE = 0.2;
 const BASE_PHASE_RATE = 0.2;
 const ENERGY_PHASE_RATE = 0.8;
-const FLASH_SPARKLE_SCALE = 0.5;
+// Mild: hi-hat flashes add only a little sparkle, so the scene doesn't strobe on every hit.
+const FLASH_SPARKLE_SCALE = 0.2;
 
 export class ParticleLayer implements RenderLayer {
   /** Calm mode: no energy-driven density, dimmer sparkle. */

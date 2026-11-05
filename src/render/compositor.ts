@@ -34,6 +34,7 @@ export class Compositor implements RenderLayer {
   private dpr = 1;
   private limiter = new BrightnessLimiter();
   private lastNow: number | null = null;
+  private loudnessSlow = 0;
 
   constructor(scenes: Scene[]) {
     for (const s of scenes) this.scenes.set(s.name, s);
@@ -115,7 +116,10 @@ export class Compositor implements RenderLayer {
     const now = performance.now();
     const dt = this.lastNow === null ? 0 : Math.min(0.1, Math.max(0, (now - this.lastNow) / 1000));
     this.lastNow = now;
-    const cap = this.limiter.step(0.2 + 0.8 * frame.loudness, dt);
+    // The brightness target follows a slowed loudness (not each kick), so the whole
+    // screen does not dim in step with every beat. The fall still uses the C2 release.
+    this.loudnessSlow = releaseEnvelope(this.loudnessSlow, frame.loudness, dt, 0.5, 1.0);
+    const cap = this.limiter.step(0.2 + 0.8 * this.loudnessSlow, dt);
 
     // Final pass: blend the two active scenes and apply the safety rules.
     bindTarget(gl, target);

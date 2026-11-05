@@ -34,12 +34,15 @@ describe('shapeHeights', () => {
     }
   });
 
-  it('visual gain scales the heights (below the cap)', () => {
-    // 0.5 raw: expanded = 0.5, so the height is 0.3 at gain 1 and 0.6 at gain 2.
+  it('visual gain bends the curve around 0.5 (more contrast above 1, calmer below 1)', () => {
+    // 0.5 raw: the reaction is 0.3 at gain 1. Gain 2 pushes it away from 0.5 (0.1);
+    // gain 0.5 pulls it toward 0.5 (0.4).
     const g1 = shapeHeights(raw(0.5), followers(), 1 / 60, 1, false, new Float32Array(BAR_COUNT));
     const g2 = shapeHeights(raw(0.5), followers(), 1 / 60, 2, false, new Float32Array(BAR_COUNT));
+    const gHalf = shapeHeights(raw(0.5), followers(), 1 / 60, 0.5, false, new Float32Array(BAR_COUNT));
     expect(g1[0]).toBeCloseTo(0.3, 6);
-    expect(g2[0]).toBeCloseTo(0.6, 6);
+    expect(g2[0]).toBeCloseTo(0.1, 6);
+    expect(gHalf[0]).toBeCloseTo(0.4, 6);
   });
 
   it('treats non-finite input as silence', () => {

@@ -12,7 +12,7 @@ import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState, RollState } from '../tunnelState';
 import { getSway } from '../swayStore';
 import { blendAccents } from '../colourSwap';
-import { kickGrant } from './shockwave';
+import { getVisualGain } from '../gainStore';
 import { RELEASE_TAU_SEC, releaseEnvelope } from '../releaseEnvelope';
 
 const RING_DENSITY = 0.5;
@@ -22,7 +22,8 @@ function smoothstep(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
-/** Beat flash on the rings: instant attack, shared 320 ms release (C2). Beats thicken rings, never move the camera. */
+/** Beat swell on the rings: 80 ms attack (smooth, not a flash), shared 320 ms release (C2). Never moves the camera. */
+const BEAT_ATTACK_TAU_SEC = 0.08;
 const RING_CONTRAST_NORMAL = 0.5;
 const RING_CONTRAST_CALM = 0.25;
 
@@ -94,14 +95,15 @@ export class TunnelLayer implements RenderLayer {
 
     bindTarget(gl, target);
 
-    const scale = this.calm ? 1 : 1 + this.sectionContrast;
+    // Visual gain also scales movement speed (higher gain = faster flight).
+    const scale = (this.calm ? 1 : 1 + this.sectionContrast) * getVisualGain();
     const phase = this.flight.advance(clock.dtSec, frame.energy, this.calm, scale);
-    // Beat flash: jumps to 1 on a beat, then decays over BEAT_RELEASE_SEC.
-    // Calm mode turns beat-triggered visuals off entirely.
+    // Beat response: the tunnel is the main beat-reactive layer. A kick swells the rings
+    // (fast attack, shared 320 ms release). It is a swell, not a flash: the single strobe
+    // in the scene is the kick shockwave, which is governed (P6). Calm turns this off.
     const dt = Math.max(0, clock.dtSec);
-    this.beatEnv = releaseEnvelope(this.beatEnv, 0, dt, 0, RELEASE_TAU_SEC);
-    // Governed (P6): one token per kick, shared with the shockwave (kickGrant).
-    if (kickGrant(frame, clock, this.calm)) this.beatEnv = 1;
+    const beatTarget = !this.calm && frame.beatByBand.sub ? 1 : 0;
+    this.beatEnv = releaseEnvelope(this.beatEnv, beatTarget, dt, BEAT_ATTACK_TAU_SEC, RELEASE_TAU_SEC);
     // Quiet amount: 1 at silence, 0 at normal loudness (absolute loudness, so any track counts).
     const quietTarget = 1 - smoothstep(0.05, 0.35, frame.loudness);
     this.quietEnv = releaseEnvelope(this.quietEnv, quietTarget, dt, 0.05, RELEASE_TAU_SEC);
