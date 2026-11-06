@@ -12,6 +12,9 @@ uniform vec2 uRes;          // target size in pixels (sets the aspect ratio)
 uniform vec2 uCentre;       // vanishing point, aspect-corrected clip units (sway applied)
 uniform float uHeights[48]; // bar heights 0..1, from crownStore
 uniform vec3 uAccent;       // palette accent (A, or the swapped colour)
+uniform float uTexOn;      // 1 = band texture on (6.4), 0 = off: output identical to before
+uniform float uTexGain;    // 0..2: how strongly the band texture modulates
+uniform sampler2D uTexMid; // mid-band row, sampled by angle (bar brightness)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -53,6 +56,13 @@ void main() {
   light = max(light, barLight(r, theta, (bin + 1) % BARS));
   light = max(light, barLight(r, theta, (bin + BARS - 1) % BARS));
 
+  // Band texture (6.4): mid by angle scales the bar light (1.0 when off).
+  float texMul = 1.0;
+  if (uTexOn > 0.5) {
+    float midS = texture(uTexMid, vec2(theta / TAU, 0.5)).r;
+    texMul = max(0.0, 1.0 + uTexGain * (midS - 0.5));
+  }
+
   // Dim by design: the crown supports the flight, it does not compete with it.
-  outColor = vec4(uAccent * 0.6 * clamp(light, 0.0, 1.0), 1.0);
+  outColor = vec4(uAccent * 0.6 * clamp(light * texMul, 0.0, 1.0), 1.0);
 }

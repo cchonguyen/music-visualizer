@@ -7,6 +7,10 @@ import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import vertSrc from '../shaders/waveform.vert.glsl?raw';
 import fragSrc from '../shaders/waveform.frag.glsl?raw';
 import { WAVEFORM_DEFAULTS, type WaveformParams } from '../../presets/layerSchemas';
+import { BandTexture } from '../bandTexture';
+
+/** First texture unit for the band textures (sub, mid, high take the next two). */
+const BAND_UNIT = 1;
 
 export class WaveformLayer implements RenderLayer {
   private p: WaveformParams;
@@ -28,6 +32,11 @@ export class WaveformLayer implements RenderLayer {
   private uWave: WebGLUniformLocation | null = null;
   private uCount: WebGLUniformLocation | null = null;
   private uAlpha: WebGLUniformLocation | null = null;
+  private uRes: WebGLUniformLocation | null = null;
+  private uTexOn: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexHigh: WebGLUniformLocation | null = null;
+  private readonly band = new BandTexture();
   // Created lazily on first draw, because the sample count comes from the frame.
   private tex: DataTexture | null = null;
 
@@ -42,6 +51,11 @@ export class WaveformLayer implements RenderLayer {
     this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
     this.uAmp = gl.getUniformLocation(this.program, 'uAmp');
     this.uAlpha = gl.getUniformLocation(this.program, 'uAlpha');
+    this.uRes = gl.getUniformLocation(this.program, 'uRes');
+    this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
+    this.band.init(gl);
     // Empty VAO: vertices are generated from gl_VertexID, no vertex buffer.
     this.vao = gl.createVertexArray();
   }
@@ -77,6 +91,13 @@ export class WaveformLayer implements RenderLayer {
     gl.uniform1f(this.uAspect, target.width / Math.max(target.height, 1));
     gl.uniform1f(this.uAmp, this.p.amplitude);
     gl.uniform1f(this.uAlpha, 1); // layer opacity (crossfades happen in the compositor)
+    gl.uniform2f(this.uRes, target.width, target.height);
+    // Band texture (6.4): always bound so the sampler has a valid texture; updated only when on.
+    gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
+    gl.uniform1f(this.uTexGain, this.p.textureGain);
+    if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
+    const texUnit = this.band.bind(gl, BAND_UNIT);
+    gl.uniform1i(this.uTexHigh, texUnit + 2);
 
     // Blend only for this draw so other layers keep their own blend state.
     gl.enable(gl.BLEND);
@@ -93,6 +114,7 @@ export class WaveformLayer implements RenderLayer {
       if (this.tex) gl.deleteTexture(this.tex.texture);
       if (this.program) gl.deleteProgram(this.program);
       if (this.vao) gl.deleteVertexArray(this.vao);
+      this.band.dispose(gl);
     }
     this.tex = null;
     this.program = null;
@@ -100,6 +122,10 @@ export class WaveformLayer implements RenderLayer {
     this.uWave = null;
     this.uCount = null;
     this.uAlpha = null;
+    this.uRes = null;
+    this.uTexOn = null;
+    this.uTexGain = null;
+    this.uTexHigh = null;
     this.gl = null;
   }
 }

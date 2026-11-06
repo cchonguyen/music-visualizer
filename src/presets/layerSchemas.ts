@@ -78,15 +78,31 @@ export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: PARTICLE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
+export interface BassPulseParams {
+  texture: boolean; // band texture (6.4): pulse brightness from sub (angle)
+  textureGain: number; // 0..2, how strongly the band texture modulates
+}
+export const BASS_PULSE_DEFAULTS: BassPulseParams = { texture: false, textureGain: 1 };
+export const BASS_PULSE_SPECS: readonly ParamSpec[] = [
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BASS_PULSE_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BASS_PULSE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+];
+
 export interface CrownParams {
   /** How far the sway moves the crown centre, as a share of its full size (1 = full sway). */
   rimFactor: number;
+  texture: boolean; // band texture (6.4): bar light from mid (angle)
+  textureGain: number; // 0..2, how strongly the band texture modulates
 }
 export const CROWN_DEFAULTS: CrownParams = {
   rimFactor: 1 - 0.16,
+  texture: false,
+  textureGain: 1,
 };
 export const CROWN_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'rimFactor', label: 'Sway amount on rim', group: 'Position', default: CROWN_DEFAULTS.rimFactor, min: 0, max: 1, step: 0.01 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: CROWN_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: CROWN_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
 export interface RingsParams {
@@ -159,11 +175,15 @@ export const BARS_SPECS: readonly ParamSpec[] = [
 export interface WaveformParams {
   mode: string; // line | circle (V5)
   amplitude: number; // 0..1.5, how tall the wave is
+  texture: boolean; // band texture (6.4): line brightness from high (sample index / angle)
+  textureGain: number; // 0..2, how strongly the band texture modulates
 }
-export const WAVEFORM_DEFAULTS: WaveformParams = { mode: 'line', amplitude: 1 };
+export const WAVEFORM_DEFAULTS: WaveformParams = { mode: 'line', amplitude: 1, texture: false, textureGain: 1 };
 export const WAVEFORM_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'mode', label: 'Wave shape', group: 'Waveform', default: WAVEFORM_DEFAULTS.mode, options: ['line', 'circle'] },
   { type: 'float', name: 'amplitude', label: 'Amplitude', group: 'Waveform', default: WAVEFORM_DEFAULTS.amplitude, min: 0, max: 1.5, step: 0.01 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: WAVEFORM_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: WAVEFORM_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
 /** Every built-in layer's settings, keyed by layer type. Used by the loader in slice 4.3. */
