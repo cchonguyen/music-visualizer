@@ -4,11 +4,10 @@ import path from 'node:path';
 import { isTestOrBuild as matchRunner, advancesGreen } from './lib/runner-matcher.mjs';
 import { modeOf, saveCheckpoint, resolveRoot } from './lib/vibe.mjs';
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
-import { writeJsonAtomic } from '../scripts/lib/telemetry.mjs';
+import { updateTelemetry } from '../scripts/lib/telemetry-store.mjs';
 
 const root = resolveRoot();
 const stateFile = path.join(root, '.spec', '.strike-counter.json');
-const telemetryPath = path.join(root, '.spec', '.session-telemetry.json');
 const progressPath = path.join(root, '.spec', 'PROGRESS.md');
 
 let event = {};
@@ -21,7 +20,7 @@ const cmd = event.tool_input?.command || '';
 const isTestOrBuild = matchRunner(cmd);
 
 // 0. Update session telemetry & track mutating tool calls on active slice
-let telemetry = {
+const telemetryDefaults = {
   sessionId,
   startedAt: new Date().toISOString(),
   totalToolCalls: 0,
@@ -29,12 +28,6 @@ let telemetry = {
   currentSlice: '',
   slicesCommitted: 0
 };
-
-if (fs.existsSync(telemetryPath)) {
-  try {
-    telemetry = { ...telemetry, ...JSON.parse(fs.readFileSync(telemetryPath, 'utf8')) };
-  } catch {}
-}
 
 let activeSliceName = '';
 if (fs.existsSync(progressPath)) {
@@ -45,20 +38,22 @@ if (fs.existsSync(progressPath)) {
   } catch {}
 }
 
-telemetry.totalToolCalls = (telemetry.totalToolCalls || 0) + 1;
-if (activeSliceName && activeSliceName !== telemetry.currentSlice) {
-  telemetry.currentSlice = activeSliceName;
-  telemetry.mutatingCallsOnSlice = 0;
-}
-
 const isMutatingTool = ['Edit', 'Write', 'NotebookEdit'].includes(toolName) ||
   (toolName === 'Bash' && !/^\s*(cat|ls|git\s+status|git\s+diff|git\s+log|node\s+--test|npm\s+test|vitest|pytest)\b/.test(cmd));
 
-if (activeSliceName && isMutatingTool) {
-  telemetry.mutatingCallsOnSlice = (telemetry.mutatingCallsOnSlice || 0) + 1;
-}
-
-writeJsonAtomic(telemetryPath, telemetry);
+// Counters are recomputed from the latest stored object under the lock, so this write never drops a call record.
+const telemetry = updateTelemetry(root, (latest) => {
+  const next = { ...telemetryDefaults, ...latest };
+  next.totalToolCalls = (next.totalToolCalls || 0) + 1;
+  if (activeSliceName && activeSliceName !== next.currentSlice) {
+    next.currentSlice = activeSliceName;
+    next.mutatingCallsOnSlice = 0;
+  }
+  if (activeSliceName && isMutatingTool) {
+    next.mutatingCallsOnSlice = (next.mutatingCallsOnSlice || 0) + 1;
+  }
+  return next;
+});
 
 // 1. Reset strike counter for this session and queue batch telemetry when a test/build command succeeds
 if (isTestOrBuild) {
