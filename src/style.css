@@ -1,6 +1,8 @@
 :root {
-  color-scheme: dark; font-family: system-ui, sans-serif;
+  color-scheme: dark; font-family: var(--ui-font);
   /* Shared design tokens (slice 9.1). Shortcuts dialog and Studio read these. */
+  /* One UI font for the whole app (slice 11.8). Studio's Tweakpane text uses it too, not the monospace default. */
+  --ui-font: system-ui, sans-serif;
   /* Contrast (slice 11.5, WCAG AA): text 4.5:1 on its surface; borders, accent and focus 3:1 on dark surfaces. */
   --surface: #111;
   --surface-2: #222;
@@ -31,7 +33,7 @@
 html, body { margin: 0; height: 100%; background: #000; color: var(--text); overflow: hidden; }
 #stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
 .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(0,0,0,.85); text-align: center; padding: 2rem; }
-.overlay[hidden], .controls[hidden], .notice[hidden] { display: none; }
+.overlay[hidden], .controls[hidden], .notice[hidden], #playback[hidden] { display: none; }
 .warn { max-width: 34rem; line-height: 1.5; color: #ccc; }
 .hint { color: var(--muted); font-size: .9rem; }
 /* One button text rule for every surface: same size and weight as the shortcut keys. */
@@ -83,16 +85,19 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
   #seek { width: 100%; }
   /* Every range input and every button is at least 44 px tall (slice 11.5). The track keeps its 8 px look, centred. */
   .controls input[type="range"] { min-height: 44px; height: 44px; --slider-thumb-d: 28px; }
-  /* Value buttons: the three sound settings sit in one section, one full row each. Opened slider takes the full row. */
-  .value-group .value-item { flex: 1 1 100%; min-width: 0; }
-  .value-btn { width: 100%; min-height: 44px; }
-  .value-panel { position: static; min-width: 0; padding: .4rem .25rem 0; border: 0; background: none; }
+  /* Value buttons (slice 11.8): Volume, Visual gain and Beat sensitivity in three columns on one line. Name sits above the value. The opened slider drops to a full-width row below. */
+  .controls .value-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .controls .value-group > .group-label { grid-column: 1 / -1; }
+  .controls .value-group .value-item { display: contents; }
+  .value-btn { width: 100%; min-width: 0; min-height: 44px; flex-direction: column; align-items: flex-start; justify-content: center; }
+  .value-panel { grid-column: 1 / -1; order: 1; position: static; min-width: 0; padding: .4rem .25rem 0; border: 0; background: none; }
   .value-panel input[type="range"] { display: block; width: 100%; }
-  /* Calm, Render quality and Aspect correction share one row (wraps only if it must). Each control is 44 px. */
-  .display-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
-  .display-row > .group-label { flex: 0 0 100%; }
-  .display-row > label { display: flex; align-items: center; gap: .4rem; min-height: 44px; font-size: var(--ui-text-size); line-height: var(--ui-text-lh); }
-  .display-row > label input[type="checkbox"], .display-row > label select { min-height: 44px; min-width: 44px; }
+  /* Calm, Render quality and Aspect correction in three columns on one line (slice 11.8). Labels sit above each control. */
+  .controls .display-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; align-items: start; }
+  .display-row > .group-label { grid-column: 1 / -1; }
+  .display-row > label { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: .25rem; min-height: 44px; min-width: 0; font-size: var(--ui-text-size); line-height: var(--ui-text-lh); }
+  .display-row > label input[type="checkbox"] { min-height: 44px; min-width: 44px; }
+  .display-row > label select { width: 100%; min-width: 0; min-height: 44px; }
   .controls > .source { order: 99; padding: 0 .25rem; }
   /* Touch minimum: 44 by 44 CSS px for every button and popup shortcut key, so taps land on the intended key. */
   button, .btn, select { min-width: 44px; min-height: 44px; }
@@ -113,6 +118,7 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   /* Tweakpane theme, mapped to shared tokens. Tweakpane reads these from ancestors. */
   --tp-base-background-color: var(--surface);
   --tp-base-border-radius: var(--radius-md);
+  --tp-base-font-family: var(--ui-font);
   --tp-container-background-color: var(--surface-2);
   --tp-container-background-color-hover: var(--hover);
   --tp-container-background-color-focus: var(--hover);

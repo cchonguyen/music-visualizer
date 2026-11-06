@@ -304,6 +304,19 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   }, true);
   for (const btn of shortcutsDialog.querySelectorAll<HTMLButtonElement>('button.key')) {
     const key = btn.dataset.key ?? '';
+    if (key === '?') {
+      // Help key in the list: a tap closes the list (same as ? on the keyboard). It must not reopen it, so it fires no key.
+      btn.addEventListener('pointerup', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        armSwallow();
+        shortcutsDialog.close();
+      });
+      btn.addEventListener('click', (e) => {
+        if (e.detail !== 0) return; // pointer taps were handled on pointerup
+        shortcutsDialog.close();
+      });
+      continue;
+    }
     if (key !== 'A') {
       // Pointer taps fire on pointerup, which does not depend on the click event reaching the button (iOS Safari did not run the click handler). Keyboard activation (click with detail 0) still fires on click.
       btn.addEventListener('pointerup', (e) => {
