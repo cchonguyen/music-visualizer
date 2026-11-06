@@ -17,6 +17,9 @@ import starter_quiet_tunnel from './starter-quiet-tunnel.json';
 import tex_glass_tunnel from './tex-glass-tunnel.json';
 import tex_sub_bloom from './tex-sub-bloom.json';
 import tex_silk_rings from './tex-silk-rings.json';
+import tex_static_rain from './tex-static-rain.json';
+import tex_prism_bars from './tex-prism-bars.json';
+import tex_pulse_skin from './tex-pulse-skin.json';
 
 export const SCHEMAS: SchemaRegistry = { feedback: FEEDBACK_SPECS, post: POST_SPECS, layers: LAYER_SPECS };
 
@@ -38,4 +41,7 @@ export const BUILTIN_PRESETS: readonly { id: string; preset: Preset; warnings: s
   { id: 'tex-glass-tunnel', ...parsePreset(tex_glass_tunnel, SCHEMAS) },
   { id: 'tex-sub-bloom', ...parsePreset(tex_sub_bloom, SCHEMAS) },
   { id: 'tex-silk-rings', ...parsePreset(tex_silk_rings, SCHEMAS) },
+  { id: 'tex-static-rain', ...parsePreset(tex_static_rain, SCHEMAS) },
+  { id: 'tex-prism-bars', ...parsePreset(tex_prism_bars, SCHEMAS) },
+  { id: 'tex-pulse-skin', ...parsePreset(tex_pulse_skin, SCHEMAS) },
 ];

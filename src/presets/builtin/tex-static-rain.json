@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Static Rain",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.88, "fade": 0.01 },
+  "layers": [
+    { "type": "particles", "params": { "shape": "dot", "brightness": 1.4, "size": 1.2, "swirlGain": 0.6, "texture": true, "textureGain": 1.6 } },
+    { "type": "bassPulse", "params": { "texture": true, "textureGain": 0.3 } }
+  ],
+  "post": { "chroma": 0.003 }
+}
