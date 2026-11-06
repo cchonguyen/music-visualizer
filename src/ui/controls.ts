@@ -196,6 +196,44 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     if (e.target === shortcutsDialog) shortcutsDialog.close();
   });
 
+  // Tap a letter in the list to fire it (slice 8.1). The list closes, then the same events the key sends go to window.
+  const fireKey = (key: string, type: 'keydown' | 'keyup') => {
+    window.dispatchEvent(new KeyboardEvent(type, { key, repeat: false }));
+  };
+  for (const btn of shortcutsDialog.querySelectorAll<HTMLButtonElement>('button.key')) {
+    const key = btn.dataset.key ?? '';
+    if (key !== 'A') {
+      btn.addEventListener('click', () => {
+        shortcutsDialog.close();
+        fireKey(key, 'keydown');
+      });
+      continue;
+    }
+    // A is hold-to-compare: press sends keydown, release sends keyup. Keyboard activation (click with detail 0) sends both.
+    let held = false;
+    const release = () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+      if (!held) return;
+      held = false;
+      fireKey(key, 'keyup');
+    };
+    btn.addEventListener('pointerdown', () => {
+      if (held) return;
+      shortcutsDialog.close();
+      held = true;
+      window.addEventListener('pointerup', release);
+      window.addEventListener('pointercancel', release);
+      fireKey(key, 'keydown');
+    });
+    btn.addEventListener('click', (e) => {
+      if (e.detail !== 0) return; // pointer clicks were handled on pointerdown
+      shortcutsDialog.close();
+      fireKey(key, 'keydown');
+      fireKey(key, 'keyup');
+    });
+  }
+
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const tag = (e.target as HTMLElement | null)?.tagName;
