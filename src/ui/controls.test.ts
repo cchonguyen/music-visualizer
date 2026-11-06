@@ -1,8 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import indexHtml from '../../index.html?raw';
+import { isControlsBarFocusable } from './controls';
 
 // The shortcuts list is static markup, so the test reads it from index.html (no jsdom in this repo).
 const dialog = indexHtml.slice(indexHtml.indexOf('<dialog id="shortcuts"'), indexHtml.indexOf('</dialog>'));
+
+describe('controls bar focus when idle (slice 11.4)', () => {
+  it('is focusable while awake', () => {
+    expect(isControlsBarFocusable(false)).toBe(true);
+  });
+
+  it('is not focusable while faded for idleness, and returns when awake again', () => {
+    expect(isControlsBarFocusable(true)).toBe(false);
+    expect(isControlsBarFocusable(false)).toBe(true);
+  });
+});
 
 describe('shortcuts list keys (slices 8.1 and 8.7)', () => {
   it('makes every key in the list tappable: letters, digits, brackets, arrows, Space and .', () => {
