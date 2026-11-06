@@ -100,7 +100,20 @@ export class Scene {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     // Particles that follow the scene read this frame's zoom and rotation (2026-11-06).
-    advanceSceneTransform(Number(this.fb.zoom), Number(this.fb.rotate));
+    advanceSceneTransform(
+      {
+        zoom: Number(this.fb.zoom),
+        rotate: Number(this.fb.rotate),
+        centreX: Number(this.fb.centreX),
+        centreY: Number(this.fb.centreY),
+        stretchX: Number(this.fb.stretchX),
+        stretchY: Number(this.fb.stretchY),
+        warp: Number(this.fb.warp),
+        warpScale: Number(this.fb.warpScale),
+        warpSpeed: Number(this.fb.warpSpeed),
+      },
+      clock.timeSec,
+    );
 
     // 2) Layers draw on top with a MAX blend: each pixel keeps the brighter of the
     // old trail and the new light. Additive blending was tried and saturated to white

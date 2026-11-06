@@ -64,6 +64,13 @@ export class ParticleLayer implements RenderLayer {
   private uZoom: WebGLUniformLocation | null = null;
   private uFar: WebGLUniformLocation | null = null;
   private uSize: WebGLUniformLocation | null = null;
+  private uFollow: WebGLUniformLocation | null = null;
+  private uCentre: WebGLUniformLocation | null = null;
+  private uStretch: WebGLUniformLocation | null = null;
+  private uWarp: WebGLUniformLocation | null = null;
+  private uWarpScale: WebGLUniformLocation | null = null;
+  private uWarpSpeed: WebGLUniformLocation | null = null;
+  private uTime: WebGLUniformLocation | null = null;
   private uHue: WebGLUniformLocation | null = null;
   private uTexOn: WebGLUniformLocation | null = null;
   private uTexGain: WebGLUniformLocation | null = null;
@@ -103,6 +110,13 @@ export class ParticleLayer implements RenderLayer {
     this.uZoom = gl.getUniformLocation(this.program, 'uZoom');
     this.uFar = gl.getUniformLocation(this.program, 'uFar');
     this.uSize = gl.getUniformLocation(this.program, 'uSize');
+    this.uFollow = gl.getUniformLocation(this.program, 'uFollow');
+    this.uCentre = gl.getUniformLocation(this.program, 'uCentre');
+    this.uStretch = gl.getUniformLocation(this.program, 'uStretch');
+    this.uWarp = gl.getUniformLocation(this.program, 'uWarp');
+    this.uWarpScale = gl.getUniformLocation(this.program, 'uWarpScale');
+    this.uWarpSpeed = gl.getUniformLocation(this.program, 'uWarpSpeed');
+    this.uTime = gl.getUniformLocation(this.program, 'uTime');
     this.uHue = gl.getUniformLocation(this.program, 'uHue');
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
@@ -148,6 +162,9 @@ export class ParticleLayer implements RenderLayer {
     const palette: Palette = getPalette(this.paletteName);
     const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
 
+    // Follow scene transform (2026-11-06): read once per frame, used by the uniforms below.
+    const follow = this.p.followScene;
+    const scene = getSceneTransform();
     gl.useProgram(this.program);
     // Uniforms must follow useProgram, or the calls are an invalid operation.
     gl.uniform1f(this.uPhase, phase);
@@ -155,7 +172,8 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform3f(this.uAccent, accents.b[0], accents.b[1], accents.b[2]);
     gl.uniform3f(this.uAccentA, accents.a[0], accents.a[1], accents.a[2]);
     // Midrange drives a swirl, so the sparkles curve as they travel (2026-11-04).
-    gl.uniform1f(this.uSwirl, (this.calm ? 0 : Math.min(1, frame.norm.mid)) * this.p.swirlGain);
+    // Follow scene (2026-11-06): the scene's wave warp also curls the particles, so swirl follows it too.
+    gl.uniform1f(this.uSwirl, (this.calm ? 0 : Math.min(1, frame.norm.mid)) * this.p.swirlGain * (follow ? 1 + scene.warp : 1));
     // Shared sway (uv units) doubled to clip units: the spawn origin follows the tunnel rim.
     const sway = getSway();
     gl.uniform2f(this.uSway, 2 * sway.x, 2 * sway.y);
@@ -170,10 +188,15 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1i(this.uShape, shapeIndex);
     // Transforms (4.7): rotation in radians, zoom (1 = none). Identity at the defaults.
     // Follow scene transform (2026-11-06): add the scene's accumulated turn and current zoom when on.
-    const follow = this.p.followScene;
-    const scene = getSceneTransform();
     gl.uniform1f(this.uRotation, this.p.rotation + (follow ? scene.angle : 0));
     gl.uniform1f(this.uZoom, this.p.zoom * (follow ? scene.scale : 1));
+    gl.uniform1f(this.uFollow, follow ? 1 : 0);
+    gl.uniform2f(this.uCentre, follow ? scene.centreX : 0, follow ? scene.centreY : 0);
+    gl.uniform2f(this.uStretch, follow ? scene.stretchX : 1, follow ? scene.stretchY : 1);
+    gl.uniform1f(this.uWarp, follow ? scene.warp : 0);
+    gl.uniform1f(this.uWarpScale, scene.warpScale);
+    gl.uniform1f(this.uWarpSpeed, scene.warpSpeed);
+    gl.uniform1f(this.uTime, scene.timeSec);
     // Reach: far enough that the corners (distance hypot(aspect, 1) in screen heights) are covered.
     gl.uniform1f(this.uFar, Math.hypot(target.width / target.height, 1) * 1.05);
     gl.uniform1f(this.uSize, this.p.size);
@@ -221,6 +244,13 @@ export class ParticleLayer implements RenderLayer {
     this.uZoom = null;
     this.uFar = null;
     this.uSize = null;
+    this.uFollow = null;
+    this.uCentre = null;
+    this.uStretch = null;
+    this.uWarp = null;
+    this.uWarpScale = null;
+    this.uWarpSpeed = null;
+    this.uTime = null;
     this.uHue = null;
     this.hueTurns = 0;
     this.uSparkle = null;
