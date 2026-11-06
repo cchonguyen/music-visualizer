@@ -3,7 +3,7 @@ precision highp float;
 
 uniform float uAlpha; // crossfade alpha from GlHost
 uniform vec2 uRes;    // target size in pixels (6.4: maps fragments to clip space)
-uniform int uMode;    // 0 = line across the screen, 1 = closed circle (matches the vertex shader)
+uniform highp int uMode;    // 0 = line across the screen, 1 = closed circle (matches the vertex shader)
 uniform float uAspect; // width / height (6.4: undoes the circle's aspect scale)
 uniform float uTexOn;      // 1 = band texture on (6.4), 0 = off: output identical to before
 uniform float uTexGain;    // 0..2: how strongly the band texture modulates
