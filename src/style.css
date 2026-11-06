@@ -89,14 +89,10 @@ body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
   .studio::before { content: ""; display: block; width: 40px; height: 4px; margin: 8px auto 6px; border-radius: 2px; background: var(--muted); }
   .studio button, .studio select { min-width: 44px; min-height: 44px; }
   .studio input, .studio textarea { min-height: 44px; }
-  .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
-  /* Slider targets on phones (slice 10.3). Tweakpane 4.0.5 classes: .tp-sldv row, .tp-sldv_t track, .tp-sldv_k fill + knob (::before fill line, ::after knob). */
-  .studio .tp-sldv { min-height: 44px; touch-action: none; }
-  .studio .tp-sldv_t { height: 44px; margin: 0; touch-action: none; }
-  .studio .tp-sldv_t::before { height: 8px; border-radius: 4px; background-color: var(--border); }
-  .studio .tp-sldv_k { --btn-bg: var(--text); --btn-bg-h: var(--text); --btn-bg-f: var(--text); --btn-bg-a: var(--text); }
-  .studio .tp-sldv_k::before { height: 8px; border-radius: 4px; background-color: var(--accent); }
-  .studio .tp-sldv_k::after { width: 28px; height: 28px; right: -14px; border-radius: 50%; background-color: var(--text); }
+  /* Slider touch sizes on phones (slice 10.3). Colours and track look are shared (slice 10.4, below). Tweakpane 4.0.5 classes: .tp-sldv row, .tp-sldv_t track, .tp-sldv_k knob (::after). */
+  .studio .tp-sldv { min-height: 44px; }
+  .studio .tp-sldv_t { height: 44px; margin: 0; }
+  .studio .tp-sldv_k::after { width: 28px; height: 28px; right: -14px; border-radius: 50%; }
 }
 @keyframes studio-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -117,6 +113,14 @@ dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--text); outl
 .studio .studio-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
 .studio .studio-tiles > .tp-btnv { margin: 0; min-width: 0; }
 .studio .studio-tiles .tp-btnv_b { width: 100%; height: 44px; min-height: 44px; margin: 0; padding: 0 .25rem; }
+/* Shared Studio rules (slice 10.4): same look at every width. Safe on desktop: colours, track and fill only, no touch sizes. */
+.studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
+.studio .tp-sldv { touch-action: none; }
+.studio .tp-sldv_t { touch-action: none; }
+.studio .tp-sldv_t::before { height: 8px; border-radius: 4px; background-color: var(--border); }
+.studio .tp-sldv_k { --btn-bg: var(--text); --btn-bg-h: var(--text); --btn-bg-f: var(--text); --btn-bg-a: var(--text); }
+.studio .tp-sldv_k::before { height: 8px; border-radius: 4px; background-color: var(--accent); }
+.studio .tp-sldv_k::after { background-color: var(--text); }
 dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
 dialog#shortcuts #shortcuts-close { margin-top: .75rem; }
 
