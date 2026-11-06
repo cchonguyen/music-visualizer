@@ -104,6 +104,8 @@ dialog#shortcuts th { white-space: nowrap; }
 dialog#shortcuts kbd { font: inherit; font-size: .9em; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .05rem .4rem; }
 dialog#shortcuts button.key { font: inherit; font-size: .9em; color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .05rem .4rem; cursor: pointer; }
 dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+/* Studio buttons look like the shortcut keys: same surface, border, radius and font size. Touch height comes from the 599px rule above. */
+.studio .tp-btnv_b, .studio #studio-close { font: inherit; font-size: .9em; color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
 dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
 dialog#shortcuts #shortcuts-close { margin-top: .75rem; }
 
