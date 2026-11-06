@@ -40,6 +40,58 @@ export function isControlsBarFocusable(idle: boolean): boolean {
   return !idle;
 }
 
+/** Swipe-down dismiss on phone settings sheets (slice 11.6). A downward drag of this many px closes the sheet. */
+export const SWIPE_DISMISS_PX = 80;
+/** The top strip of a sheet that counts as its drag handle (px). */
+export const SWIPE_HANDLE_ZONE_PX = 32;
+
+/** Phone layout: under 600 px wide. */
+export function isPhoneSheetWidth(width: number): boolean {
+  return width < 600;
+}
+
+/** A swipe may start on the header or drag handle, or on the body only when the body is scrolled to the top. */
+export function canStartSwipe(fromHandle: boolean, bodyScrollTop: number): boolean {
+  return fromHandle || bodyScrollTop <= 0;
+}
+
+/** True when a drag that began at startY (client px) has moved down far enough to dismiss the sheet. */
+export function isSwipeDismiss(startY: number, currentY: number): boolean {
+  return currentY - startY >= SWIPE_DISMISS_PX;
+}
+
+/**
+ * Swipe down to dismiss a settings sheet on phones (slice 11.6). Pointer events, touch and pen only.
+ * The sheet is its own scroller. The swipe calls close(), the same path as the close button, so focus returns.
+ */
+export function attachSwipeDismiss(sheet: HTMLElement, close: () => void): void {
+  let pointerId: number | null = null;
+  let startY = 0;
+  const reset = () => { pointerId = null; };
+  sheet.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || !isPhoneSheetWidth(window.innerWidth)) return;
+    const target = e.target as HTMLElement;
+    // Sliders, selects and text fields keep their own drags.
+    if (target.closest('input, select, textarea, .tp-sldv')) return;
+    const top = sheet.getBoundingClientRect().top;
+    const fromHandle = !!target.closest('.sheet-head') || e.clientY - top < SWIPE_HANDLE_ZONE_PX;
+    if (!canStartSwipe(fromHandle, sheet.scrollTop)) return;
+    pointerId = e.pointerId;
+    startY = e.clientY;
+  });
+  sheet.addEventListener('pointermove', (e) => {
+    if (pointerId === null || e.pointerId !== pointerId) return;
+    if (isSwipeDismiss(startY, e.clientY)) {
+      reset();
+      close();
+    }
+  });
+  sheet.addEventListener('pointerup', (e) => {
+    if (e.pointerId === pointerId) reset();
+  });
+  sheet.addEventListener('pointercancel', reset);
+}
+
 export interface ControlsState {
   calm: boolean;
   fileName: string;
@@ -123,32 +175,28 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     }
   });
 
-  volume.addEventListener('input', () => engine.setVolume(Number(volume.value)));
+  // Volume value text on its button (slice 11.6). Kept in step with the slider and the arrow keys.
+  const volumeValue = $<HTMLSpanElement>('volume-value');
+  const syncVolumeText = () => { volumeValue.textContent = `${Math.round(Number(volume.value) * 100)}%`; };
+  syncVolumeText();
+  volume.addEventListener('input', () => {
+    engine.setVolume(Number(volume.value));
+    syncVolumeText();
+  });
   calm.addEventListener('change', () => (state.calm = calm.checked));
 
-  // Beat sensitivity: higher means more onsets are reported as beats.
-  const beatLabel = document.createElement('label');
-  beatLabel.htmlFor = 'beat-sensitivity';
-  beatLabel.append('Beat sensitivity ');
-  const beatInput = document.createElement('input');
-  beatInput.type = 'range';
-  beatInput.id = 'beat-sensitivity';
-  beatInput.min = '0';
-  beatInput.max = '100';
-  beatInput.step = '1';
+  // Beat sensitivity: higher means more onsets are reported as beats (slice 5.1). Markup is in index.html.
+  const beatInput = $<HTMLInputElement>('beat-sensitivity');
+  const beatValue = $<HTMLSpanElement>('beat-value');
   beatInput.value = String(Math.round(getBeatSensitivity() * 100));
-  beatInput.setAttribute('aria-label', 'Beat sensitivity');
-  beatInput.addEventListener('input', () => setBeatSensitivity(Number(beatInput.value) / 100));
-  beatLabel.append(beatInput);
-  controls.append(beatLabel);
+  beatValue.textContent = `${beatInput.value}%`;
+  beatInput.addEventListener('input', () => {
+    setBeatSensitivity(Number(beatInput.value) / 100);
+    beatValue.textContent = `${beatInput.value}%`;
+  });
 
-  // Render quality (slice 5.2): feedback buffer at 100, 75 or 50 percent. Saved locally.
-  const qualityLabel = document.createElement('label');
-  qualityLabel.htmlFor = 'render-quality';
-  qualityLabel.append('Render quality ');
-  const qualitySelect = document.createElement('select');
-  qualitySelect.id = 'render-quality';
-  qualitySelect.setAttribute('aria-label', 'Render quality');
+  // Render quality (slice 5.2): feedback buffer at 100, 75 or 50 percent. Saved locally. Options are built here.
+  const qualitySelect = $<HTMLSelectElement>('render-quality');
   for (const s of RENDER_SCALES) {
     const opt = document.createElement('option');
     opt.value = String(s);
@@ -157,21 +205,11 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   }
   qualitySelect.value = String(getRenderScale());
   qualitySelect.addEventListener('change', () => setRenderScale(Number(qualitySelect.value)));
-  qualityLabel.append(qualitySelect);
-  controls.append(qualityLabel);
 
   // Aspect correction (slice 5.3): keeps shapes round in non-16:9 windows. On by default; saved locally.
-  const aspectLabel = document.createElement('label');
-  aspectLabel.htmlFor = 'aspect-correct';
-  aspectLabel.append('Aspect correction ');
-  const aspectBox = document.createElement('input');
-  aspectBox.type = 'checkbox';
-  aspectBox.id = 'aspect-correct';
+  const aspectBox = $<HTMLInputElement>('aspect-correct');
   aspectBox.checked = getAspectCorrect();
-  aspectBox.setAttribute('aria-label', 'Aspect correction');
   aspectBox.addEventListener('change', () => setAspectCorrect(aspectBox.checked));
-  aspectLabel.append(aspectBox);
-  controls.append(aspectLabel);
 
   // Visual gain: how strongly visuals respond to the music (not the volume).
   const gain = $<HTMLInputElement>('gain');
@@ -182,6 +220,31 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     const v = setVisualGain(Number(gain.value));
     gainValue.textContent = `${v.toFixed(2)}×`;
   });
+
+  // Value buttons (slice 11.6): Volume, Visual gain and Beat sensitivity open their slider inline.
+  // One is open at a time. A second tap or a tap outside closes it. Escape closes it too.
+  const valueItems = [...controls.querySelectorAll<HTMLElement>('.value-item')];
+  const valueBtnOf = (item: HTMLElement) => item.querySelector<HTMLButtonElement>('.value-btn');
+  const openItem = () => valueItems.find((it) => valueBtnOf(it)?.getAttribute('aria-expanded') === 'true') ?? null;
+  const setOpenValue = (item: HTMLElement | null) => {
+    for (const it of valueItems) {
+      const open = it === item;
+      valueBtnOf(it)?.setAttribute('aria-expanded', String(open));
+      const panel = it.querySelector<HTMLElement>('.value-panel');
+      if (panel) panel.hidden = !open;
+    }
+  };
+  for (const item of valueItems) {
+    valueBtnOf(item)?.addEventListener('click', () => setOpenValue(openItem() === item ? null : item));
+  }
+  document.addEventListener('pointerdown', (e) => {
+    const open = openItem();
+    if (open && !open.contains(e.target as Node)) setOpenValue(null);
+  });
+  controls.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') setOpenValue(null);
+  });
+  setOpenValue(null);
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -217,9 +280,13 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   };
   $<HTMLButtonElement>('controls-close').addEventListener('click', () => setControlsCollapsed(true));
   controlsShow.addEventListener('click', () => setControlsCollapsed(false));
+  // Swipe down on a phone sheet closes the controls (slice 11.6). Same path as the Close button.
+  attachSwipeDismiss(controls, () => setControlsCollapsed(true));
   shortcutsDialog.addEventListener('click', (e) => {
     if (e.target === shortcutsDialog) shortcutsDialog.close();
   });
+  // Swipe down on a phone sheet closes it (slice 11.6). Same paths as the close buttons.
+  attachSwipeDismiss(shortcutsDialog, () => shortcutsDialog.close());
 
   // Tap a letter in the list to fire it (slice 8.1). The list closes, then the same events the key sends go to window.
   const fireKey = (key: string, type: 'keydown' | 'keyup') => {
@@ -309,6 +376,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         const v = Math.max(0, Math.min(1, Number(volume.value) + (e.key === 'ArrowUp' ? 0.05 : -0.05)));
         volume.value = String(v);
         engine.setVolume(v);
+        syncVolumeText();
         break;
       }
       case '?':
