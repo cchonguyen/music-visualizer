@@ -1,5 +1,6 @@
 // Log-frequency bars (Stage 2, slice 2.6). One bar per log-spaced frequency band,
 // read from frame.smoothedSpectrum. Values travel to the shader in a one-row texture.
+// Band texture (6.3): mid by bar index sets bar height, high by bar index sets brightness.
 import type { AudioFrame } from '../../audio/types';
 import { compileProgram, FULLSCREEN_VERT } from '../../gl/shader';
 import { createDataTexture, type DataTexture, updateDataTexture } from '../../gl/texture';
@@ -13,8 +14,24 @@ import { buildBarEdges, type BarEdge } from '../logScale';
 import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/bars.frag.glsl?raw';
+import { BARS_DEFAULTS, type BarsParams } from '../../presets/layerSchemas';
+import { BandTexture } from '../bandTexture';
+
+/** First texture unit for the band textures (sub, mid, high take the next two). */
+const BAND_UNIT = 1;
 
 export class BarsLayer implements RenderLayer {
+  /** Settings (6.3). Read every frame. */
+  private p: BarsParams;
+
+  constructor(params: Partial<BarsParams> = {}) {
+    this.p = { ...BARS_DEFAULTS, ...params };
+  }
+
+  setParams(params: Partial<BarsParams>): void {
+    this.p = { ...this.p, ...params };
+  }
+
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
@@ -23,6 +40,11 @@ export class BarsLayer implements RenderLayer {
   private uBase: WebGLUniformLocation | null = null;
   private uAccentA: WebGLUniformLocation | null = null;
   private uAccentB: WebGLUniformLocation | null = null;
+  private uTexOn: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexMid: WebGLUniformLocation | null = null;
+  private uTexHigh: WebGLUniformLocation | null = null;
+  private readonly band = new BandTexture();
 
   /** Bar edges are rebuilt only when the sample rate or FFT size changes. */
   private edges: BarEdge[] = [];
@@ -39,7 +61,12 @@ export class BarsLayer implements RenderLayer {
     this.uBase = gl.getUniformLocation(this.program, 'uBase');
     this.uAccentA = gl.getUniformLocation(this.program, 'uAccentA');
     this.uAccentB = gl.getUniformLocation(this.program, 'uAccentB');
+    this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
+    this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
     this.bars = createDataTexture(gl, BAR_COUNT);
+    this.band.init(gl);
     this.vao = createVao(gl);
     // Force the edges to be rebuilt after a context restore.
     this.edges = [];
@@ -80,9 +107,16 @@ export class BarsLayer implements RenderLayer {
     const palette: Palette = getPalette(getCurrentPalette());
 
     gl.useProgram(this.program);
+    // Band texture (6.3): update and bind before the bars texture goes on unit 0, so nothing clobbers it.
+    gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
+    gl.uniform1f(this.uTexGain, this.p.textureGain);
+    if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
+    const texUnit = this.band.bind(gl, BAND_UNIT);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.bars.texture);
     gl.uniform1i(this.uBars, 0); // must follow useProgram, or the call is an invalid operation
+    gl.uniform1i(this.uTexMid, texUnit + 1);
+    gl.uniform1i(this.uTexHigh, texUnit + 2);
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccentA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
     gl.uniform3f(this.uAccentB, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
@@ -98,6 +132,7 @@ export class BarsLayer implements RenderLayer {
       if (this.program) gl.deleteProgram(this.program);
       if (this.vao) gl.deleteVertexArray(this.vao);
       if (this.bars) gl.deleteTexture(this.bars.texture);
+      this.band.dispose(gl);
     }
     this.program = null;
     this.vao = null;
@@ -106,6 +141,10 @@ export class BarsLayer implements RenderLayer {
     this.uBase = null;
     this.uAccentA = null;
     this.uAccentB = null;
+    this.uTexOn = null;
+    this.uTexGain = null;
+    this.uTexMid = null;
+    this.uTexHigh = null;
     this.edges = [];
     this.edgeSampleRate = -1;
     this.edgeFftSize = -1;

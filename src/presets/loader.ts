@@ -13,7 +13,7 @@ import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import type { ParamValue } from './schema';
-import type { CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
+import type { BarsParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
 
 type LayerFactory = (params: Record<string, ParamValue>) => RenderLayer;
 
@@ -32,7 +32,7 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   crown: (p) => new CrownLayer(p as Partial<CrownParams>),
   rings: (p) => new RingsLayer(p as Partial<RingsParams>),
   shockwave: (p) => new ShockwaveLayer(p as Partial<ShockwaveParams>),
-  bars: () => new BarsLayer(),
+  bars: (p) => new BarsLayer(p as Partial<BarsParams>),
   waveform: (p) => new WaveformLayer(p as Partial<WaveformParams>),
 };
 
@@ -50,9 +50,10 @@ export function buildScene(name: string, preset: Preset): Scene {
   return scene;
 }
 
-/** Pushes plain values into a live layer. Bars have no settings, so nothing happens for them. */
+/** Pushes plain values into a live layer. */
 export function applyValues(layer: RenderLayer, values: Record<string, ParamValue>): void {
   if (layer instanceof TunnelLayer) layer.setParams(values as Partial<TunnelParams>);
+  else if (layer instanceof BarsLayer) layer.setParams(values as Partial<BarsParams>);
   else if (layer instanceof ParticleLayer) layer.setParams(values as Partial<ParticleParams>);
   else if (layer instanceof CrownLayer) layer.setParams(values as Partial<CrownParams>);
   else if (layer instanceof RingsLayer) layer.setParams(values as Partial<RingsParams>);

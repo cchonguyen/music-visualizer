@@ -1,6 +1,7 @@
 // Kick shockwave (Stage 2, P4, 2026-11-04). On a sub-band kick, a thin bright ring
 // travels from radius 0.16 to 0.95 over 350 ms and fades. It is a local ring, not a
 // full-screen flash, and it sits on the same centre as the tunnel rim.
+// Band texture (6.3): sub by angle sets the ring's edge brightness.
 import type { AudioFrame } from '../../audio/types';
 import { compileProgram, FULLSCREEN_VERT } from '../../gl/shader';
 import { createVao } from '../../gl/vao';
@@ -13,6 +14,10 @@ import { flashGovernor } from '../safety';
 import fragSrc from '../shaders/shockwave.frag.glsl?raw';
 import { getSway } from '../swayStore';
 import { SHOCKWAVE_DEFAULTS, type ShockwaveParams } from '../../presets/layerSchemas';
+import { BandTexture } from '../bandTexture';
+
+/** First texture unit for the band textures (sub, mid, high take the next two). */
+const BAND_UNIT = 1;
 
 // One kick, one flash token (P4, owner patch 2026-11-04). The tunnel's beat flash and
 // the shockwave both ask here. The first caller in a frame asks the governor and the
@@ -55,6 +60,10 @@ export class ShockwaveLayer implements RenderLayer {
   private uFade: WebGLUniformLocation | null = null;
   private uGlow: WebGLUniformLocation | null = null;
   private uAccent: WebGLUniformLocation | null = null;
+  private uTexOn: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexSub: WebGLUniformLocation | null = null;
+  private readonly band = new BandTexture();
 
   private active = false;
   private age = 0;
@@ -69,6 +78,10 @@ export class ShockwaveLayer implements RenderLayer {
     this.uFade = gl.getUniformLocation(this.program, 'uFade');
     this.uGlow = gl.getUniformLocation(this.program, 'uGlow');
     this.uAccent = gl.getUniformLocation(this.program, 'uAccent');
+    this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexSub = gl.getUniformLocation(this.program, 'uTexSub');
+    this.band.init(gl);
     this.active = false;
     this.age = 0;
     this.vao = createVao(gl);
@@ -107,6 +120,12 @@ export class ShockwaveLayer implements RenderLayer {
     gl.uniform1f(this.uFade, fade);
     gl.uniform1f(this.uGlow, this.p.style === 'glow' ? 1 : 0);
     gl.uniform3f(this.uAccent, accent[0], accent[1], accent[2]);
+    // Band texture (6.3): always bound so the sampler has a valid texture; updated only when on.
+    gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
+    gl.uniform1f(this.uTexGain, this.p.textureGain);
+    if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
+    const texUnit = this.band.bind(gl, BAND_UNIT);
+    gl.uniform1i(this.uTexSub, texUnit);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -117,6 +136,7 @@ export class ShockwaveLayer implements RenderLayer {
     if (gl) {
       if (this.program) gl.deleteProgram(this.program);
       if (this.vao) gl.deleteVertexArray(this.vao);
+      this.band.dispose(gl);
     }
     this.program = null;
     this.vao = null;
@@ -125,6 +145,9 @@ export class ShockwaveLayer implements RenderLayer {
     this.uRadius = null;
     this.uFade = null;
     this.uAccent = null;
+    this.uTexOn = null;
+    this.uTexGain = null;
+    this.uTexSub = null;
     this.active = false;
     this.gl = null;
   }
