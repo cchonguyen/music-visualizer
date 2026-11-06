@@ -7,12 +7,16 @@ uniform float uRadius;    // ring radius, in the tunnel's radius units
 uniform float uFade;      // 1 at birth, 0 at the end of the ring's life
 uniform vec3 uAccent;     // palette accent for the ring
 uniform float uGlow;      // 0 = thin ring (default), 1 = soft radial glow field (V4)
+uniform float uTexOn;     // 1 = band texture on (6.3), 0 = off: output identical to before
+uniform float uTexGain;   // 0..2: how strongly the band texture modulates
+uniform sampler2D uTexSub; // sub-band row, sampled by angle (ring edge brightness)
 
 in vec2 vUv;
 out vec4 outColor;
 
 const float CORE_WIDTH = 0.008; // thin bright line
 const float GLOW_WIDTH = 0.03;  // soft halo around it
+const float TAU = 6.2831853;
 
 void main() {
   // Same centre as the tunnel: the bend fades out toward the top and bottom rim.
@@ -24,10 +28,17 @@ void main() {
   // uRadius is in clip units (screen edge = 1.0, as the particles use), so double the tunnel radius.
   float d = abs(2.0 * length(p) - uRadius);
 
+  // Band texture (6.3): sub by angle sets the ring's edge brightness (1.0 when off).
+  float texMul = 1.0;
+  if (uTexOn > 0.5) {
+    float subS = texture(uTexSub, vec2(atan(p.y, p.x) / TAU + 0.5, 0.5)).r;
+    texMul = max(0.0, 1.0 + uTexGain * (subS - 0.5));
+  }
+
   float core = exp(-pow(d / CORE_WIDTH, 2.0));
   float glow = exp(-pow(d / GLOW_WIDTH, 2.0)) * 0.25;
   // The core is pushed toward white (a small bright feature may reach white, owner decision 2026-11-04).
-  vec3 col = mix(uAccent, vec3(1.0), 0.6) * core * uFade + uAccent * glow * uFade;
+  vec3 col = mix(uAccent, vec3(1.0), 0.6) * core * uFade * texMul + uAccent * glow * uFade;
   if (uGlow > 0.5) {
     // Glow field: a soft disc that grows to the ring radius and fades with the ring. It shares the kick's flash token.
     float disc = 1.0 - smoothstep(0.0, 1.0, 2.0 * length(p) / max(uRadius, 0.05));

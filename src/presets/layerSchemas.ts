@@ -96,6 +96,8 @@ export interface RingsParams {
   strokeNormGain: number;
   sides: number; // 0 = circles, 3..12 = polygons
   style: string; // outline | filled
+  texture: boolean; // band texture (6.3): stroke brightness from sub (angle), stroke width from mid (radius)
+  textureGain: number; // 0..2, how strongly the band texture modulates
 }
 export const RINGS_DEFAULTS: RingsParams = {
   maxRings: 6,
@@ -104,6 +106,8 @@ export const RINGS_DEFAULTS: RingsParams = {
   strokeNormGain: 0.01,
   sides: 0,
   style: 'outline',
+  texture: false,
+  textureGain: 1,
 };
 export const RINGS_SPECS: readonly ParamSpec[] = [
   // max 6: the rings shader loops MAX_RINGS = 6 times; raising this needs a shader change.
@@ -113,6 +117,8 @@ export const RINGS_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'strokeNormGain', label: 'Stroke follows spectrum', group: 'Stroke', default: RINGS_DEFAULTS.strokeNormGain, min: 0, max: 0.05, step: 0.0005 },
   { type: 'int', name: 'sides', label: 'Shape sides (0 = circle)', group: 'Shape', default: RINGS_DEFAULTS.sides, min: 0, max: 12, step: 1 },
   { type: 'enum', name: 'style', label: 'Style', group: 'Shape', default: RINGS_DEFAULTS.style, options: ['outline', 'filled'] },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: RINGS_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: RINGS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
 export interface ShockwaveParams {
@@ -120,18 +126,34 @@ export interface ShockwaveParams {
   ringEnd: number;
   ringSec: number;
   style: string; // ring | glow (V4)
+  texture: boolean; // band texture (6.3): ring edge brightness from sub (angle)
+  textureGain: number; // 0..2, how strongly the band texture modulates
 }
 export const SHOCKWAVE_DEFAULTS: ShockwaveParams = {
   ringStart: 0.16,
   ringEnd: 0.95,
   ringSec: 0.35,
   style: 'ring',
+  texture: false,
+  textureGain: 1,
 };
 export const SHOCKWAVE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'ringStart', label: 'Start radius', group: 'Size', default: SHOCKWAVE_DEFAULTS.ringStart, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'ringEnd', label: 'End radius', group: 'Size', default: SHOCKWAVE_DEFAULTS.ringEnd, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'ringSec', label: 'Travel time (s)', group: 'Timing', default: SHOCKWAVE_DEFAULTS.ringSec, min: 0.05, max: 2, step: 0.01 },
   { type: 'enum', name: 'style', label: 'Kick style', group: 'Shape', default: SHOCKWAVE_DEFAULTS.style, options: ['ring', 'glow'] },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: SHOCKWAVE_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: SHOCKWAVE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+];
+
+export interface BarsParams {
+  texture: boolean; // band texture (6.3): bar height from mid (bar index), brightness from high (bar index)
+  textureGain: number; // 0..2, how strongly the band texture modulates
+}
+export const BARS_DEFAULTS: BarsParams = { texture: false, textureGain: 1 };
+export const BARS_SPECS: readonly ParamSpec[] = [
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BARS_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BARS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
 export interface WaveformParams {
@@ -151,8 +173,7 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   crown: CROWN_SPECS,
   rings: RINGS_SPECS,
   shockwave: SHOCKWAVE_SPECS,
-  // Bars have no settings yet (their count is still in barsState.ts).
-  bars: [],
+  bars: BARS_SPECS,
   waveform: WAVEFORM_SPECS,
 };
 

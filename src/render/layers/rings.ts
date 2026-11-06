@@ -1,5 +1,6 @@
 // Concentric rings (Stage 2, slice 2.6). Ring count follows frame.energy,
-// stroke width follows frame.norm. No data texture: everything is a uniform.
+// stroke width follows frame.norm. Band texture (6.3): sub by angle sets stroke
+// brightness, mid by ring radius sets stroke width.
 import type { AudioFrame } from '../../audio/types';
 import { compileProgram, FULLSCREEN_VERT } from '../../gl/shader';
 import { createVao } from '../../gl/vao';
@@ -11,6 +12,10 @@ import { getVisualGain, shapeReaction } from '../gainStore';
 import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/rings.frag.glsl?raw';
 import { RINGS_DEFAULTS, type RingsParams } from '../../presets/layerSchemas';
+import { BandTexture } from '../bandTexture';
+
+/** First texture unit for the band textures (sub, mid, high take the next two). */
+const BAND_UNIT = 1;
 
 /** Clamp to 0..1; non-finite values count as 0. */
 function unit(x: number): number {
@@ -46,6 +51,11 @@ export class RingsLayer implements RenderLayer {
   private uAccent: WebGLUniformLocation | null = null;
   private uSides: WebGLUniformLocation | null = null;
   private uFilled: WebGLUniformLocation | null = null;
+  private uTexOn: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexSub: WebGLUniformLocation | null = null;
+  private uTexMid: WebGLUniformLocation | null = null;
+  private readonly band = new BandTexture();
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -59,6 +69,11 @@ export class RingsLayer implements RenderLayer {
     this.uAccent = gl.getUniformLocation(this.program, 'uAccent');
     this.uSides = gl.getUniformLocation(this.program, 'uSides');
     this.uFilled = gl.getUniformLocation(this.program, 'uFilled');
+    this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexSub = gl.getUniformLocation(this.program, 'uTexSub');
+    this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
+    this.band.init(gl);
     this.vao = createVao(gl);
   }
 
@@ -100,6 +115,13 @@ export class RingsLayer implements RenderLayer {
     gl.uniform1f(this.uFilled, this.p.style === 'filled' ? 1 : 0);
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccent, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
+    // Band texture (6.3): always bound so the samplers have a valid texture; updated only when on.
+    gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
+    gl.uniform1f(this.uTexGain, this.p.textureGain);
+    if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
+    const texUnit = this.band.bind(gl, BAND_UNIT);
+    gl.uniform1i(this.uTexSub, texUnit);
+    gl.uniform1i(this.uTexMid, texUnit + 1);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -110,6 +132,7 @@ export class RingsLayer implements RenderLayer {
     if (gl) {
       if (this.program) gl.deleteProgram(this.program);
       if (this.vao) gl.deleteVertexArray(this.vao);
+      this.band.dispose(gl);
     }
     this.program = null;
     this.vao = null;
@@ -119,6 +142,10 @@ export class RingsLayer implements RenderLayer {
     this.uAspect = null;
     this.uBase = null;
     this.uAccent = null;
+    this.uTexOn = null;
+    this.uTexGain = null;
+    this.uTexSub = null;
+    this.uTexMid = null;
     this.gl = null;
   }
 }
