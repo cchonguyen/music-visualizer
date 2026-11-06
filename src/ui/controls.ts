@@ -203,7 +203,14 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   for (const btn of shortcutsDialog.querySelectorAll<HTMLButtonElement>('button.key')) {
     const key = btn.dataset.key ?? '';
     if (key !== 'A') {
-      btn.addEventListener('click', () => {
+      // Pointer taps fire on pointerup, which does not depend on the click event reaching the button (iOS Safari did not run the click handler). Keyboard activation (click with detail 0) still fires on click.
+      btn.addEventListener('pointerup', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        shortcutsDialog.close();
+        fireKey(key, 'keydown');
+      });
+      btn.addEventListener('click', (e) => {
+        if (e.detail !== 0) return; // pointer taps were handled on pointerup
         shortcutsDialog.close();
         fireKey(key, 'keydown');
       });
