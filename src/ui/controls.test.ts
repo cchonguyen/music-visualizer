@@ -16,7 +16,7 @@ describe('controls bar focus when idle (slice 11.4)', () => {
   });
 });
 
-describe('phone sheet swipe down (slice 11.6)', () => {
+describe('phone sheet swipe down (slice 11.6, handle only follow-up)', () => {
   it('counts widths under 600 px as phone, and 600 px and up as desktop', () => {
     expect(isPhoneSheetWidth(360)).toBe(true);
     expect(isPhoneSheetWidth(390)).toBe(true);
@@ -25,15 +25,16 @@ describe('phone sheet swipe down (slice 11.6)', () => {
     expect(isPhoneSheetWidth(1280)).toBe(false);
   });
 
-  it('starts from the header or handle at any scroll position', () => {
-    expect(canStartSwipe(true, 240)).toBe(true);
-    expect(canStartSwipe(true, 0)).toBe(true);
+  it('starts only from the handle, never from the header or body', () => {
+    expect(canStartSwipe(true)).toBe(true);
+    expect(canStartSwipe(false)).toBe(false);
   });
 
-  it('starts from the body only when the body is scrolled to the top', () => {
-    expect(canStartSwipe(false, 0)).toBe(true);
-    expect(canStartSwipe(false, 1)).toBe(false);
-    expect(canStartSwipe(false, 180)).toBe(false);
+  it('gives every settings surface a handle at its top', () => {
+    const studio = indexHtml.slice(indexHtml.indexOf('<div id="studio"'), indexHtml.indexOf('<div class="studio-head'));
+    const controls = indexHtml.slice(indexHtml.indexOf('<nav id="controls"'), indexHtml.indexOf('<div class="sheet-head controls-head">'));
+    const shortcuts = indexHtml.slice(indexHtml.indexOf('<dialog id="shortcuts"'), indexHtml.indexOf('<div class="dialog-head sheet-head">'));
+    for (const block of [studio, controls, shortcuts]) expect(block).toContain('class="sheet-handle"');
   });
 
   it('dismisses when the downward drag reaches about 80 px, and not before', () => {

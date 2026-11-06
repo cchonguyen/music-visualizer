@@ -42,17 +42,15 @@ export function isControlsBarFocusable(idle: boolean): boolean {
 
 /** Swipe-down dismiss on phone settings sheets (slice 11.6). A downward drag of this many px closes the sheet. */
 export const SWIPE_DISMISS_PX = 80;
-/** The top strip of a sheet that counts as its drag handle (px). */
-export const SWIPE_HANDLE_ZONE_PX = 32;
 
 /** Phone layout: under 600 px wide. */
 export function isPhoneSheetWidth(width: number): boolean {
   return width < 600;
 }
 
-/** A swipe may start on the header or drag handle, or on the body only when the body is scrolled to the top. */
-export function canStartSwipe(fromHandle: boolean, bodyScrollTop: number): boolean {
-  return fromHandle || bodyScrollTop <= 0;
+/** A swipe may start only from the sheet's handle (.sheet-handle). Header and body starts are ignored. */
+export function canStartSwipe(fromHandle: boolean): boolean {
+  return fromHandle;
 }
 
 /** True when a drag that began at startY (client px) has moved down far enough to dismiss the sheet. */
@@ -73,9 +71,7 @@ export function attachSwipeDismiss(sheet: HTMLElement, close: () => void): void 
     const target = e.target as HTMLElement;
     // Sliders, selects and text fields keep their own drags.
     if (target.closest('input, select, textarea, .tp-sldv')) return;
-    const top = sheet.getBoundingClientRect().top;
-    const fromHandle = !!target.closest('.sheet-head') || e.clientY - top < SWIPE_HANDLE_ZONE_PX;
-    if (!canStartSwipe(fromHandle, sheet.scrollTop)) return;
+    if (!canStartSwipe(!!target.closest('.sheet-handle'))) return;
     pointerId = e.pointerId;
     startY = e.clientY;
   });

@@ -67,6 +67,8 @@ input[type="range"]::-moz-range-thumb { width: var(--slider-thumb-d); height: va
 .group-label { font-size: var(--ui-text-size); line-height: var(--ui-text-lh); }
 /* Sheet header: stays at the top of the sheet while its body scrolls (slice 11.6). Holds the Close button. */
 .sheet-head { position: sticky; top: 0; z-index: 2; background: var(--surface); }
+/* Swipe handle (slice 11.6 follow-up): the only place a phone settings sheet starts a swipe-down. Shown on phones only. */
+.sheet-handle { display: none; }
 input[type="checkbox"] { accent-color: var(--slider-fill); }
 /* Narrow windows (under 600px): groups wrap so every control stays reachable, no horizontal scroll. Desktop unchanged. */
 @media (max-width: 599px) {
@@ -145,8 +147,6 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
     --tp-container-unit-spacing: 6px;
   }
   .studio:not([hidden]) { animation: studio-slide-up .25s ease-out; }
-  /* Drag-handle look: centred short bar, drawn by ::before (no markup). */
-  .studio::before { content: ""; display: block; width: 40px; height: 4px; margin: 8px auto 6px; border-radius: 2px; background: var(--muted); }
   .studio button, .studio select { min-width: 44px; min-height: 44px; }
   .studio input, .studio textarea { min-height: 44px; }
   /* Slider touch sizes on phones (slice 10.3). Colours and track look are shared (slice 10.4, below). Tweakpane 4.0.5 classes: .tp-sldv row, .tp-sldv_t track, .tp-sldv_k knob (::after). */
@@ -159,6 +159,9 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   .studio .sheet-head { margin: 0 -16px; padding: 4px 16px; }
   dialog#shortcuts .sheet-head { margin: -.6rem -.6rem .25rem; padding: .6rem .6rem .25rem; }
   .sheet-head { touch-action: pan-x pan-up pinch-zoom; }
+  /* 44 px tall hit area, full width, with a visible 40x4 bar centred inside. touch-action none keeps the drag with the sheet. */
+  .sheet-handle { display: block; position: relative; flex: 0 0 auto; width: 100%; height: 44px; margin: 0; touch-action: none; cursor: grab; }
+  .sheet-handle::before { content: ""; position: absolute; left: 50%; top: 50%; width: 40px; height: 4px; margin: -2px 0 0 -20px; border-radius: 2px; background: var(--muted); }
 }
 @keyframes studio-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
