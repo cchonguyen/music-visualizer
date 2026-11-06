@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Glass Tunnel",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.9, "zoom": 1.01 },
+  "layers": [
+    { "type": "tunnel", "params": { "pattern": "spokes", "ringDensity": 0.8, "ringContrast": 0.7, "ringContrastCalm": 0.4, "texture": true, "textureGain": 1.3 } },
+    { "type": "particles", "params": { "brightness": 0.6, "texture": true, "textureGain": 0.8 } }
+  ],
+  "post": {}
+}
