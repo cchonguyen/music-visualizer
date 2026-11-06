@@ -200,12 +200,27 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const fireKey = (key: string, type: 'keydown' | 'keyup') => {
     window.dispatchEvent(new KeyboardEvent(type, { key, repeat: false }));
   };
+  // The list closes on the pointer event, so the click that follows the tap would land on the page underneath. Swallow that one click.
+  let swallowClick = false;
+  let swallowTimer = 0;
+  const armSwallow = () => {
+    swallowClick = true;
+    window.clearTimeout(swallowTimer);
+    swallowTimer = window.setTimeout(() => { swallowClick = false; }, 600);
+  };
+  window.addEventListener('click', (e) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
   for (const btn of shortcutsDialog.querySelectorAll<HTMLButtonElement>('button.key')) {
     const key = btn.dataset.key ?? '';
     if (key !== 'A') {
       // Pointer taps fire on pointerup, which does not depend on the click event reaching the button (iOS Safari did not run the click handler). Keyboard activation (click with detail 0) still fires on click.
       btn.addEventListener('pointerup', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
+        armSwallow();
         shortcutsDialog.close();
         fireKey(key, 'keydown');
       });
@@ -223,6 +238,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       window.removeEventListener('pointercancel', release);
       if (!held) return;
       held = false;
+      armSwallow();
       fireKey(key, 'keyup');
     };
     btn.addEventListener('pointerdown', () => {
