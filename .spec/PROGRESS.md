@@ -56,4 +56,4 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **Slice 10.1: Studio buttons match the shortcut keys** `[UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `src/style.css`, `src/studio/studio.ts` (class names only) | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 10.2: Studio controls on a grid** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 10.3: Bigger slider targets on phones** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
-- [ ] **Slice 10.4: Desktop uses the same Studio style** [IN_PROGRESS] `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 10.4: Desktop uses the same Studio style** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
