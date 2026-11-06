@@ -1,6 +1,6 @@
 # Spec: Mobile Studio panel with the shortcuts design language
 
-Status: draft. Nothing is built. Three decisions for Charlie are below (D1 to D3). Build waits for the single `[IN_PROGRESS]` slot, which slice 7.4 holds on main (see `.spec/specs/responsive-fit.md`).
+Status: decided 2026-11-06 by Charlie (D1 shared tokens, D2 bottom sheet, D3 Studio button at every width). Nothing is built yet. Build order: this spec first, ahead of the Stage 4 queue. `.spec/PROGRESS.md` is left as it is until Charlie says otherwise.
 
 ## Problem (verified in code, 2026-11-06)
 - **Studio is not phone-shaped.** It is a Tweakpane pane in `#studio`, fixed to the right edge at 320 px with `max-width: 90vw` (src/style.css:35). No `@media` rule covers it. The phone rules cover only the controls bar and the shortcuts dialog.
@@ -10,20 +10,13 @@ Status: draft. Nothing is built. Three decisions for Charlie are below (D1 to D3
 - **Native dialogs.** Save as uses `window.prompt` and Delete uses `window.confirm`. They look nothing like the rest of the UI and are awkward on a phone.
 - **The shortcuts language already exists.** Surface #111, control #222, border #444, text #eee, accent #2d5bd8, focus ring #ffd54a. Radii are 4, 6 and 10 px. Keys are 44 px on touch. Under 600 px the list is a three-column tile grid (src/style.css:19-64).
 
-## Decisions for Charlie
+## Decisions (answered by Charlie, 2026-11-06)
 
-**D1. How far the rounding goes.**
-- **A (recommended):** one token set (surfaces, borders, accent, radius, spacing) applied to both the shortcuts dialog and Studio in one pass. The two stay matched, and the shortcuts list gets the softer corners too.
-- **B:** only Studio adopts the tokens. Shortcuts keep their current 4 to 10 px radii. Cheaper, but the two drift apart again.
+**D1. Shared tokens (chosen).** One token set (surfaces, borders, accent, radius, spacing) applies to both the shortcuts dialog and Studio in one pass.
 
-**D2. Studio's phone layout (below 600 px).**
-- **A (recommended):** bottom sheet. Slides up from the bottom, at most 80% of the screen tall, rounded top corners, a drag handle, scrolls inside itself. Sits in thumb reach.
-- **B:** full-screen sheet with a sticky header and a Close button. More room, but hides the visuals behind it.
-- Desktop stays a right-side panel: 320 px wide, 12 px inset from the edges, rounded.
+**D2. Bottom sheet on phones (chosen).** Below 600 px, Studio slides up from the bottom, at most 80% of the screen tall, rounded top corners, a drag handle, scrolls inside itself. Desktop stays a right-side panel: 320 px wide, 12 px inset from the edges, rounded.
 
-**D3. How Studio opens.**
-- **A (recommended):** add a visible Studio button to the controls bar at every width. E still works on desktop.
-- **B:** show the button on phones only. Desktop keeps the E key alone.
+**D3. Studio button at every width (chosen).** A visible Studio button in the controls bar at every width. E still works on desktop.
 
 ## Requirements
 1. **Tokens.** Define them once on `:root` in `src/style.css`: `--surface`, `--surface-2`, `--border`, `--text`, `--muted`, `--accent`, `--focus`, and three radius steps (proposed 12 px for controls and keys, 20 px for panels and sheets, 8 px for small chips). Values are proposals for Charlie to approve by eye.
