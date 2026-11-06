@@ -18,7 +18,7 @@ describe('built-in presets', () => {
   it('all load with no warnings', () => {
     for (const b of BUILTIN_PRESETS) expect(b.warnings).toEqual([]);
     expect(BUILTIN_PRESETS.slice(0, 3).map((b) => b.id)).toEqual(['crown', 'flight', 'bars']);
-    expect(BUILTIN_PRESETS).toHaveLength(19);
+    expect(BUILTIN_PRESETS).toHaveLength(23);
   });
 
   it('their JSON values equal the schema defaults (so the look is unchanged)', () => {

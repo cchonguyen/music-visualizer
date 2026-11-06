@@ -20,6 +20,10 @@ import tex_silk_rings from './tex-silk-rings.json';
 import tex_static_rain from './tex-static-rain.json';
 import tex_prism_bars from './tex-prism-bars.json';
 import tex_pulse_skin from './tex-pulse-skin.json';
+import tex_grain_crown from './tex-grain-crown.json';
+import tex_ripple_field from './tex-ripple-field.json';
+import tex_neon_weave from './tex-neon-weave.json';
+import tex_dust_wave from './tex-dust-wave.json';
 
 export const SCHEMAS: SchemaRegistry = { feedback: FEEDBACK_SPECS, post: POST_SPECS, layers: LAYER_SPECS };
 
@@ -44,4 +48,8 @@ export const BUILTIN_PRESETS: readonly { id: string; preset: Preset; warnings: s
   { id: 'tex-static-rain', ...parsePreset(tex_static_rain, SCHEMAS) },
   { id: 'tex-prism-bars', ...parsePreset(tex_prism_bars, SCHEMAS) },
   { id: 'tex-pulse-skin', ...parsePreset(tex_pulse_skin, SCHEMAS) },
+  { id: 'tex-grain-crown', ...parsePreset(tex_grain_crown, SCHEMAS) },
+  { id: 'tex-ripple-field', ...parsePreset(tex_ripple_field, SCHEMAS) },
+  { id: 'tex-neon-weave', ...parsePreset(tex_neon_weave, SCHEMAS) },
+  { id: 'tex-dust-wave', ...parsePreset(tex_dust_wave, SCHEMAS) },
 ];
