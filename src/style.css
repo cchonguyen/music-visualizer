@@ -1,12 +1,15 @@
 :root {
   color-scheme: dark; font-family: system-ui, sans-serif;
   /* Shared design tokens (slice 9.1). Shortcuts dialog and Studio read these. */
+  /* Contrast (slice 11.5, WCAG AA): text 4.5:1 on its surface; borders, accent and focus 3:1 on dark surfaces. */
   --surface: #111;
   --surface-2: #222;
-  --border: #444;
+  --hover: #303030;
+  --border: #707070;
   --text: #eee;
-  --muted: #888;
-  --accent: #2d5bd8;
+  --muted: #9a9a9a;
+  --accent: #2a6ae0;
+  --on-accent: #fff;
   --focus: #ffd54a;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -24,12 +27,14 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); over
 .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(0,0,0,.85); text-align: center; padding: 2rem; }
 .overlay[hidden], .controls[hidden], .notice[hidden] { display: none; }
 .warn { max-width: 34rem; line-height: 1.5; color: #ccc; }
-.hint { color: #888; font-size: .9rem; }
+.hint { color: var(--muted); font-size: .9rem; }
 /* One button text rule for every surface: same size and weight as the shortcut keys. */
 button, .btn, select { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .4rem .8rem; cursor: pointer; }
-button.primary { font-size: 1.2rem; padding: .7rem 2rem; background: var(--accent); border-color: var(--accent); }
-button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+button.primary { font-size: 1.2rem; padding: .7rem 2rem; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Sliders and checkboxes show the same --focus ring as buttons (slice 11.5). */
+input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; padding: 3.25rem 1rem .75rem; background: linear-gradient(transparent, rgba(0,0,0,.8)); transition: opacity .4s; }
 .controls.idle { opacity: 0; }
 .controls.collapsed { display: none; }
@@ -54,7 +59,9 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
   .controls .group > button, .controls .group > select { flex: 1 1 auto; }
   .controls .group > button[data-source], .controls .group > button#play-btn { flex: 1 1 8rem; }
   #seek { width: 100%; }
-  /* Volume, Visual gain and Calm each take a full row. Calm stays a compact switch. */
+  /* Every range input is at least 44 px tall (slice 11.5). The track is drawn at its usual 4 px height, centred. */
+  .controls input[type="range"] { min-height: 44px; height: 44px; }
+  /* Volume, Visual gain and Calm each take a full row. Calm stays a compact switch. The label is the 44 px hit area. */
   .controls .group > label { display: flex; align-items: center; gap: .5rem; flex: 1 1 100%; min-width: 0; min-height: 44px; }
   .controls .group > label.switch { flex: 0 0 auto; }
   .controls .group > label input[type="range"] { flex: 1 1 auto; min-width: 0; min-height: 44px; }
@@ -71,9 +78,9 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
 .time, .source { font-variant-numeric: tabular-nums; color: var(--muted); }
 .notice { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); max-width: 90vw; background: #3a1d1d; border: 1px solid #a33; padding: .6rem 1rem; border-radius: 6px; }
 .notice.info { background: #1d2a3a; border-color: #36a; }
-body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
+body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px; }
 
-.toast { position: fixed; top: 1rem; right: 1rem; background: rgba(0,0,0,.6); border: 1px solid #444; padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
+.toast { position: fixed; top: 1rem; right: 1rem; background: rgba(0,0,0,.6); border: 1px solid var(--border); padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
 .toast.shown { opacity: 1; }
 /* Studio (slice 9.3). Desktop: right-side panel, 320px, 12px inset. Under 600px: bottom sheet (see media query below). */
 .studio {
@@ -83,21 +90,21 @@ body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
   --tp-base-background-color: var(--surface);
   --tp-base-border-radius: var(--radius-md);
   --tp-container-background-color: var(--surface-2);
-  --tp-container-background-color-hover: var(--border);
-  --tp-container-background-color-focus: var(--border);
-  --tp-container-background-color-active: var(--border);
+  --tp-container-background-color-hover: var(--hover);
+  --tp-container-background-color-focus: var(--hover);
+  --tp-container-background-color-active: var(--hover);
   --tp-container-foreground-color: var(--text);
   --tp-label-foreground-color: var(--muted);
   --tp-monitor-background-color: var(--surface-2);
   --tp-monitor-foreground-color: var(--muted);
   --tp-input-background-color: var(--surface-2);
-  --tp-input-background-color-hover: var(--border);
-  --tp-input-background-color-focus: var(--border);
-  --tp-input-background-color-active: var(--border);
+  --tp-input-background-color-hover: var(--hover);
+  --tp-input-background-color-focus: var(--hover);
+  --tp-input-background-color-active: var(--hover);
   --tp-input-foreground-color: var(--text);
   --tp-button-background-color: var(--surface-2);
-  --tp-button-background-color-hover: var(--border);
-  --tp-button-background-color-focus: var(--border);
+  --tp-button-background-color-hover: var(--hover);
+  --tp-button-background-color-focus: var(--hover);
   --tp-button-background-color-active: var(--accent);
   --tp-button-foreground-color: var(--text);
   --tp-groove-foreground-color: var(--border);
@@ -137,9 +144,10 @@ dialog#shortcuts th, dialog#shortcuts td { padding: .3rem .5rem .3rem 0; text-al
 dialog#shortcuts th { white-space: nowrap; }
 dialog#shortcuts kbd { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .05rem .4rem; }
 dialog#shortcuts button.key { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .05rem .4rem; cursor: pointer; }
-dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Studio buttons look like the shortcut keys: same surface, border, radius and font size. Touch height comes from the 599px rule above. */
 .studio .tp-btnv_b, .studio #studio-close { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.studio .tp-btnv_b:active { color: var(--on-accent); }
 /* Studio action buttons on a grid (slice 10.2). Three tiles per row at every width, filling the panel. Each tile is 44px tall. */
 .studio .studio-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
 .studio .studio-tiles > .tp-btnv { margin: 0; min-width: 0; }
