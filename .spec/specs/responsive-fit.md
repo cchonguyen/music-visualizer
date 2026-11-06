@@ -1,6 +1,6 @@
 # Spec: Fit the visualizer to any window size
 
-Status: draft, awaiting owner decision D1. Slice 7.3 holds the single `[IN_PROGRESS]` slot on main, so this slice is not built yet.
+Status: decided (D1 = Option A, chosen by Charlie 2026-11-06 03:04 UTC). Build waits for the `[IN_PROGRESS]` slot: slice 7.4 holds it on main as of fdedf54.
 
 ## Problem (verified in code, 2026-11-06)
 - `#stage` is `position: fixed; inset: 0; 100vw x 100vh` (src/style.css:4). The buffer follows the CSS box through ResizeObserver (src/gl/context.ts:44-45, debounced 100 ms, applySize at :111-118). The canvas already fills any window shape without CSS distortion.
@@ -11,9 +11,9 @@ Status: draft, awaiting owner decision D1. Slice 7.3 holds the single `[IN_PROGR
 - A DPR change with no CSS size change (moving the window to another monitor) fires no ResizeObserver, so the buffer keeps the old DPR.
 - Tests: src/gl/size.test.ts covers canvasSize only. Nothing covers context.ts, fit16x9, or the viewport offsets.
 
-## Decision needed (D1): what aspect correction means in a portrait window
-The toggle stays. Its current job is to hold 16:9 and letterbox.
-- **Option A (recommended):** keep the 16:9 letterbox in landscape windows. In portrait windows (aspect below 16:9) the box follows the window, so content fills the screen and layers get the portrait aspect. Portrait is never a thin strip.
+## Decision (D1): what aspect correction means in a portrait window
+Chosen: **Option A**. The toggle stays and still holds 16:9 in landscape windows.
+- **Option A (chosen):** keep the 16:9 letterbox in landscape windows. In portrait windows (aspect below 16:9) the box follows the window, so content fills the screen and layers get the portrait aspect. Portrait is never a thin strip.
 - **Option B:** the toggle keeps the 16:9 letterbox in every window, including portrait. Portrait stays a strip by default, which does not meet the request.
 
 The rest of the spec applies under both options.
