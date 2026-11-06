@@ -3,7 +3,7 @@
 // vary (randomise, mutate, lock per layer), layer stack (select, enable, add, remove, reorder),
 // settings for every enabled layer (built from the schema), and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
-import { Pane } from 'tweakpane';
+import { Pane, type ButtonApi } from 'tweakpane';
 import { LAYER_FACTORIES, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import { SCHEMAS } from '../presets/builtin';
@@ -26,6 +26,27 @@ export interface StudioOptions {
 /** Frame budget at 60 fps. The readout turns into a warning above this. */
 const FRAME_BUDGET_MS = 16.7;
 
+/** A first Delete tap stays armed for this long. A second tap inside the window deletes. */
+export const DELETE_CONFIRM_MS = 3000;
+const DELETE_LABEL = 'Delete this preset';
+const DELETE_ARMED_LABEL = 'Tap again to delete';
+
+/** Trim a typed preset name. Empty or whitespace-only names are rejected with a short message. */
+export function validatePresetName(raw: string): { ok: true; name: string } | { ok: false; message: string } {
+  const name = raw.trim();
+  if (name === '') return { ok: false, message: 'Enter a name first.' };
+  return { ok: true, name };
+}
+
+/**
+ * Two-tap Delete state. With no arm (`armedAt` null) a tap arms and returns the time it armed.
+ * A tap inside `windowMs` of the arm confirms and returns to unarmed.
+ */
+export function nextDeleteTap(armedAt: number | null, now: number, windowMs: number = DELETE_CONFIRM_MS): { confirm: boolean; armedAt: number | null } {
+  if (armedAt !== null && now - armedAt >= 0 && now - armedAt < windowMs) return { confirm: true, armedAt: null };
+  return { confirm: false, armedAt: now };
+}
+
 export class Studio {
   private pane: Pane | null = null;
   private id = '';
@@ -36,6 +57,12 @@ export class Studio {
   private monitor = { ms: 0 };
   private linkTarget = '';
   private linkMonitor = { value: 0 };
+  /** Delete two-tap state: when the first tap armed it, its timer, and the button it lives on. */
+  private deleteArmedAt: number | null = null;
+  private deleteTimer: number | undefined;
+  private deleteBtn: ButtonApi | null = null;
+  /** The in-panel "Save as" name field, when open. */
+  private saveAsField: HTMLElement | null = null;
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -51,6 +78,14 @@ export class Studio {
     container.setAttribute('aria-modal', 'false');
     container.setAttribute('aria-label', 'Studio');
     container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
+    // Any pointer or key action outside the Delete button disarms a pending Delete.
+    const disarmOnOther = (ev: Event) => {
+      if (this.deleteArmedAt === null) return;
+      if (this.deleteBtn?.element.contains(ev.target as Node)) return;
+      this.disarmDelete();
+    };
+    this.body.addEventListener('pointerdown', disarmOnOther, true);
+    this.body.addEventListener('keydown', disarmOnOther, true);
     window.setInterval(() => {
       if (!this.visible || !this.pane) return;
       this.monitor.ms = this.opts.frameMs?.() ?? 0;
@@ -86,8 +121,11 @@ export class Studio {
   /** (Re)build the panel for preset `id`. Call after every switch or structure change. */
   bind(id: string): void {
     this.id = id;
+    this.disarmDelete();
+    this.deleteBtn = null;
     this.pane?.dispose();
     this.body.replaceChildren();
+    this.saveAsField = null;
     const pane = new Pane({ container: this.body, title: 'Preset Studio' });
     this.pane = pane;
     const session = this.opts.session;
@@ -117,21 +155,14 @@ export class Studio {
     }).on('change', () => session.commit(id));
     pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 }).on('change', () => session.commit(id));
     pane.addButton({ title: `Save${dirty}` }).on('click', () => this.run(() => session.save(id), 'Saved'));
-    pane.addButton({ title: 'Save as…' }).on('click', () => {
-      const name = window.prompt('Name for the new preset', `${preset.name} copy`);
-      if (name) this.run(() => this.opts.switchTo(session.saveAs(id, name)), 'Saved as new preset');
-    });
+    pane.addButton({ title: 'Save as…' }).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
     pane.addButton({ title: 'Duplicate' }).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),
     );
     if (!entry.builtin) {
-      pane.addButton({ title: 'Delete this preset' }).on('click', () => {
-        if (!window.confirm(`Delete "${preset.name}" from this browser? Export it first to keep a copy.`)) return;
-        this.run(() => {
-          session.remove(id);
-          this.opts.switchTo('crown');
-        }, 'Deleted');
-      });
+      const del = pane.addButton({ title: DELETE_LABEL });
+      this.deleteBtn = del;
+      del.on('click', () => this.onDeleteTap(del, id));
     }
     pane.addButton({ title: 'Export .json' }).on('click', () => this.exportFile(id));
     pane.addButton({ title: 'Import .json…' }).on('click', () => this.importFile());
@@ -358,6 +389,86 @@ export class Studio {
     this.locked.clear();
     this.opts.session.rebuild(this.id);
     this.bind(this.id);
+  }
+
+  /** Show the in-panel name field for Save as. OK saves under the typed name; Cancel or Escape changes nothing. */
+  private openSaveAsField(id: string, defaultName: string): void {
+    this.closeSaveAsField();
+    const session = this.opts.session;
+    const field = document.createElement('div');
+    field.style.display = 'flex';
+    field.style.flexWrap = 'wrap';
+    field.style.gap = '6px';
+    field.style.padding = '6px';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = defaultName;
+    input.setAttribute('aria-label', 'Name for the new preset');
+    const msg = document.createElement('span');
+    msg.setAttribute('role', 'alert');
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.textContent = 'OK';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    const submit = () => {
+      const check = validatePresetName(input.value);
+      if (!check.ok) {
+        msg.textContent = check.message;
+        input.focus();
+        return;
+      }
+      this.closeSaveAsField();
+      this.run(() => this.opts.switchTo(session.saveAs(id, check.name)), 'Saved as new preset');
+    };
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        submit();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.closeSaveAsField();
+      }
+    });
+    ok.addEventListener('click', submit);
+    cancel.addEventListener('click', () => this.closeSaveAsField());
+    field.append(input, ok, cancel, msg);
+    this.body.prepend(field);
+    this.saveAsField = field;
+    input.focus();
+    input.select();
+  }
+
+  private closeSaveAsField(): void {
+    this.saveAsField?.remove();
+    this.saveAsField = null;
+  }
+
+  /** First tap arms Delete for DELETE_CONFIRM_MS. A tap inside that window deletes. */
+  private onDeleteTap(btn: ButtonApi, id: string): void {
+    const step = nextDeleteTap(this.deleteArmedAt, Date.now());
+    this.disarmDelete();
+    if (step.confirm) {
+      this.run(() => {
+        this.opts.session.remove(id);
+        this.opts.switchTo('crown');
+      }, 'Deleted');
+      return;
+    }
+    this.deleteArmedAt = step.armedAt;
+    this.deleteBtn = btn;
+    btn.title = DELETE_ARMED_LABEL;
+    this.deleteTimer = window.setTimeout(() => this.disarmDelete(), DELETE_CONFIRM_MS);
+  }
+
+  /** Return Delete to its idle state and clear the timer. */
+  private disarmDelete(): void {
+    if (this.deleteTimer !== undefined) window.clearTimeout(this.deleteTimer);
+    this.deleteTimer = undefined;
+    this.deleteArmedAt = null;
+    if (this.deleteBtn) this.deleteBtn.title = DELETE_LABEL;
   }
 
   private run(action: () => void, doneMessage: string): void {
