@@ -85,3 +85,9 @@ Order set by the owner: morphs, frame stepping, sound responsiveness, then Stage
 - [x] **Slice 9.3: Studio phone sheet and touch sizes** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 9.4: Replace native prompt and confirm** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/studio/studio.ts`, `src/studio/studio.test.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 9.5: Shorten Studio Delete label** `[UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
+
+## Stage 10 — Studio layout and controls (moved from PROGRESS.md 2026-11-06, all merged)
+- [x] **Slice 10.1: Studio buttons match the shortcut keys** `[UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `src/style.css`, `src/studio/studio.ts` (class names only) | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 10.2: Studio controls on a grid** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 10.3: Bigger slider targets on phones** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 10.4: Desktop uses the same Studio style** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
