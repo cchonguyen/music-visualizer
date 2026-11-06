@@ -384,14 +384,20 @@ function makeFinishableRepo() {
   return dir;
 }
 
-test('finishSlice refuses when no subagent dispatch is recorded for the slice', () => {
+test('finishSlice logs that the dispatch gate is disabled when no subagent dispatch is recorded', () => {
   const dir = makeFinishableRepo();
-  assert.throws(
-    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
-    /no subagent dispatch recorded for slice 1/
+  const logged = [];
+  const originalLog = console.log;
+  console.log = (...args) => { logged.push(args.join(' ')); };
+  try {
+    finishSlice(dir, 'feat: finish slice 1', { skipChecks: true });
+  } finally {
+    console.log = originalLog;
+  }
+  assert.ok(
+    logged.some((line) => line.includes('Telemetry dispatch gate disabled (owner decision 2026-11-06). See .spec/post-mortems/dispatch-telemetry-2026-11-06.md')),
+    `expected disabled-gate message, got: ${logged.join(' | ')}`
   );
-  const progressText = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
-  assert.match(progressText, /\[IN_PROGRESS\]/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

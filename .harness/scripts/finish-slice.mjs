@@ -226,7 +226,7 @@ export function finishSlice(root, commitMsg, options = {}) {
   const dispatchCount = dispatchesFor(sliceCalls, sliceId).length;
   const bootstrap = bootstrapException(sliceId, options.bootstrap);
   if (dispatchCount === 0 && !bootstrap.allowed) {
-    throw new Error(`Telemetry gate failed: no subagent dispatch recorded for slice ${sliceId}.`);
+    console.log('Telemetry dispatch gate disabled (owner decision 2026-11-06). See .spec/post-mortems/dispatch-telemetry-2026-11-06.md');
   }
   const mainWrites = mainSourceWrites(sliceCalls, sliceId);
   if (mainWrites.length > 0) {

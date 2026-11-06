@@ -31,6 +31,9 @@
         "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.mjs\" post-tool-failure.mjs" } ]
       }
     ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/run.mjs\" stop-guard.mjs" } ] }
+    ],
     "SubagentStop": [
       {
         "matcher": "harness:el-architect|el-architect",
