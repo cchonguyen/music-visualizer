@@ -16,7 +16,13 @@
     </section>
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
-    <div id="studio" class="studio" aria-label="Preset Studio" hidden></div>
+    <div id="studio" class="studio" hidden>
+      <div class="studio-head">
+        <span class="studio-title">Studio</span>
+        <button type="button" id="studio-close" aria-label="Close Studio">Close</button>
+      </div>
+      <div class="studio-body"></div>
+    </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <nav id="controls" class="controls" aria-label="Player controls" hidden>
@@ -44,6 +50,7 @@
         <label class="switch"><input id="calm" type="checkbox" /> Calm</label>
         <label>Visual gain <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" /> <span id="gain-value">1.00×</span></label>
         <button type="button" id="fs-btn" aria-label="Fullscreen (F)">Fullscreen</button>
+        <button type="button" id="studio-open" aria-haspopup="dialog" aria-controls="studio">Studio</button>
         <button type="button" id="shortcuts-btn" aria-haspopup="dialog" aria-label="Keyboard shortcuts (?)">Shortcuts</button>
       </div>
       <span id="source-label" class="source" aria-live="polite">No source</span>
