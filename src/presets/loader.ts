@@ -3,6 +3,7 @@
 import type { RenderLayer } from '../render/layer';
 import { Scene } from '../render/scene';
 import { BarsLayer } from '../render/layers/bars';
+import { BassPulseLayer } from '../render/layers/bassPulse';
 import { CrownLayer } from '../render/layers/crown';
 import { ParticleLayer } from '../render/layers/particles';
 import { RingsLayer } from '../render/layers/rings';
@@ -13,7 +14,7 @@ import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import type { ParamValue } from './schema';
-import type { BarsParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
+import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
 
 type LayerFactory = (params: Record<string, ParamValue>) => RenderLayer;
 
@@ -33,6 +34,7 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   rings: (p) => new RingsLayer(p as Partial<RingsParams>),
   shockwave: (p) => new ShockwaveLayer(p as Partial<ShockwaveParams>),
   bars: (p) => new BarsLayer(p as Partial<BarsParams>),
+  bassPulse: (p) => new BassPulseLayer(p as Partial<BassPulseParams>),
   waveform: (p) => new WaveformLayer(p as Partial<WaveformParams>),
 };
 
@@ -54,6 +56,7 @@ export function buildScene(name: string, preset: Preset): Scene {
 export function applyValues(layer: RenderLayer, values: Record<string, ParamValue>): void {
   if (layer instanceof TunnelLayer) layer.setParams(values as Partial<TunnelParams>);
   else if (layer instanceof BarsLayer) layer.setParams(values as Partial<BarsParams>);
+  else if (layer instanceof BassPulseLayer) layer.setParams(values as Partial<BassPulseParams>);
   else if (layer instanceof ParticleLayer) layer.setParams(values as Partial<ParticleParams>);
   else if (layer instanceof CrownLayer) layer.setParams(values as Partial<CrownParams>);
   else if (layer instanceof RingsLayer) layer.setParams(values as Partial<RingsParams>);
