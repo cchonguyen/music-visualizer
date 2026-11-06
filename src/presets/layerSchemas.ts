@@ -23,7 +23,7 @@ export const TUNNEL_DEFAULTS: TunnelParams = {
   pattern: 'rings',
   sides: 0,
   twist: 0,
-  texture: false,
+  texture: true,
   textureGain: 1,
 };
 export const TUNNEL_SPECS: readonly ParamSpec[] = [
@@ -61,7 +61,7 @@ export const PARTICLE_DEFAULTS: ParticleParams = {
   zoom: 1,
   hueShift: 0,
   hueDrift: 0,
-  texture: false,
+  texture: true,
   textureGain: 1,
 };
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
@@ -82,7 +82,7 @@ export interface BassPulseParams {
   texture: boolean; // band texture (6.4): pulse brightness from sub (angle)
   textureGain: number; // 0..2, how strongly the band texture modulates
 }
-export const BASS_PULSE_DEFAULTS: BassPulseParams = { texture: false, textureGain: 1 };
+export const BASS_PULSE_DEFAULTS: BassPulseParams = { texture: true, textureGain: 1 };
 export const BASS_PULSE_SPECS: readonly ParamSpec[] = [
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BASS_PULSE_DEFAULTS.texture },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BASS_PULSE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
@@ -96,7 +96,7 @@ export interface CrownParams {
 }
 export const CROWN_DEFAULTS: CrownParams = {
   rimFactor: 1 - 0.16,
-  texture: false,
+  texture: true,
   textureGain: 1,
 };
 export const CROWN_SPECS: readonly ParamSpec[] = [
@@ -122,7 +122,7 @@ export const RINGS_DEFAULTS: RingsParams = {
   strokeNormGain: 0.01,
   sides: 0,
   style: 'outline',
-  texture: false,
+  texture: true,
   textureGain: 1,
 };
 export const RINGS_SPECS: readonly ParamSpec[] = [
@@ -150,7 +150,7 @@ export const SHOCKWAVE_DEFAULTS: ShockwaveParams = {
   ringEnd: 0.95,
   ringSec: 0.35,
   style: 'ring',
-  texture: false,
+  texture: true,
   textureGain: 1,
 };
 export const SHOCKWAVE_SPECS: readonly ParamSpec[] = [
@@ -166,7 +166,7 @@ export interface BarsParams {
   texture: boolean; // band texture (6.3): bar height from mid (bar index), brightness from high (bar index)
   textureGain: number; // 0..2, how strongly the band texture modulates
 }
-export const BARS_DEFAULTS: BarsParams = { texture: false, textureGain: 1 };
+export const BARS_DEFAULTS: BarsParams = { texture: true, textureGain: 1 };
 export const BARS_SPECS: readonly ParamSpec[] = [
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BARS_DEFAULTS.texture },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BARS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
@@ -178,7 +178,7 @@ export interface WaveformParams {
   texture: boolean; // band texture (6.4): line brightness from high (sample index / angle)
   textureGain: number; // 0..2, how strongly the band texture modulates
 }
-export const WAVEFORM_DEFAULTS: WaveformParams = { mode: 'line', amplitude: 1, texture: false, textureGain: 1 };
+export const WAVEFORM_DEFAULTS: WaveformParams = { mode: 'line', amplitude: 1, texture: true, textureGain: 1 };
 export const WAVEFORM_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'mode', label: 'Wave shape', group: 'Waveform', default: WAVEFORM_DEFAULTS.mode, options: ['line', 'circle'] },
   { type: 'float', name: 'amplitude', label: 'Amplitude', group: 'Waveform', default: WAVEFORM_DEFAULTS.amplitude, min: 0, max: 1.5, step: 0.01 },
