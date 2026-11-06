@@ -15,6 +15,9 @@ uniform float uSparkle;    // 0..1: treble level plus flash, calm-scaled
 uniform float uBrightness; // default 0.6
 uniform int uShape;        // 0 streak, 1 dot, 2 star, 3 ring
 uniform float uHue;        // total hue rotation in turns (shift + drift), combined on the CPU
+uniform float uTexOn;      // 1 = band texture on (6.2), 0 = off: output identical to before
+uniform float uTexGain;    // 0..2: how strongly the band texture modulates
+uniform sampler2D uTexHigh; // high-band waveform row (6.2)
 
 out vec4 fragColor;
 
@@ -64,6 +67,11 @@ void main() {
   }
 
   float level = clamp(uSparkle, 0.0, 1.0) * vTwinkle * vFade;
+  // Band texture (6.2): the high band sets sparkle brightness. vTwinkle is the per-particle
+  // coordinate (vMix is not written by the vertex shader). Off = factor 1.0, output unchanged.
+  if (uTexOn > 0.5) {
+    level *= max(0.0, 1.0 + uTexGain * (texture(uTexHigh, vec2(vTwinkle, 0.5)).r - 0.5));
+  }
   vec3 out_colour = colour * shape * uBrightness * level;
   fragColor = vec4(min(out_colour, vec3(0.9)), 1.0);
 }

@@ -12,6 +12,8 @@ export interface TunnelParams {
   pattern: string; // rings | grid | spokes | checker | stripes
   sides: number; // 0 = classic hexagon, 3..12 = polygon
   twist: number; // spiral twist, -1..1
+  texture: boolean; // band texture (6.2): wall brightness from sub, ring contrast from mid
+  textureGain: number; // 0..2, how strongly the band texture modulates
 }
 export const TUNNEL_DEFAULTS: TunnelParams = {
   ringDensity: 0.5,
@@ -21,6 +23,8 @@ export const TUNNEL_DEFAULTS: TunnelParams = {
   pattern: 'rings',
   sides: 0,
   twist: 0,
+  texture: false,
+  textureGain: 1,
 };
 export const TUNNEL_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'ringDensity', label: 'Ring density', group: 'Walls', default: TUNNEL_DEFAULTS.ringDensity, min: 0.1, max: 2, step: 0.01 },
@@ -30,6 +34,8 @@ export const TUNNEL_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'pattern', label: 'Wall pattern', group: 'Walls', default: TUNNEL_DEFAULTS.pattern, options: ['rings', 'grid', 'spokes', 'checker', 'stripes'] },
   { type: 'int', name: 'sides', label: 'Cross-section sides (0 = classic)', group: 'Shape', default: TUNNEL_DEFAULTS.sides, min: 0, max: 12, step: 1 },
   { type: 'float', name: 'twist', label: 'Spiral twist', group: 'Shape', default: TUNNEL_DEFAULTS.twist, min: -1, max: 1, step: 0.01 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: TUNNEL_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: TUNNEL_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
 export interface ParticleParams {
@@ -42,6 +48,8 @@ export interface ParticleParams {
   zoom: number; // 0.5..2: scales the particle field about the screen centre (2 = twice as big)
   hueShift: number; // turns, 0..1: fixed hue offset applied to the particle colour
   hueDrift: number; // turns per second, -0.2..0.2: slow hue drift on top of hueShift
+  texture: boolean; // band texture (6.2): sparkle brightness from the high band
+  textureGain: number; // 0..2, how strongly the band texture modulates
 }
 export const PARTICLE_DEFAULTS: ParticleParams = {
   brightness: 1.0,
@@ -53,6 +61,8 @@ export const PARTICLE_DEFAULTS: ParticleParams = {
   zoom: 1,
   hueShift: 0,
   hueDrift: 0,
+  texture: false,
+  textureGain: 1,
 };
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01 },
@@ -64,6 +74,8 @@ export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'zoom', label: 'Zoom', group: 'Transform', default: PARTICLE_DEFAULTS.zoom, min: 0.5, max: 2, step: 0.01 },
   { type: 'float', name: 'hueShift', label: 'Hue shift (turns)', group: 'Colour', default: PARTICLE_DEFAULTS.hueShift, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'hueDrift', label: 'Hue drift (turns/s)', group: 'Colour', default: PARTICLE_DEFAULTS.hueDrift, min: -0.2, max: 0.2, step: 0.005 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: PARTICLE_DEFAULTS.texture },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: PARTICLE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
 
 export interface CrownParams {

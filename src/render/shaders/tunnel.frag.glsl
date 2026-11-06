@@ -19,6 +19,10 @@ uniform float uQuiet;        // 0..1: 1 in quiet passages, 0 when loud (smoothed
 uniform float uPattern;      // wall pattern: 0 rings, 1 grid, 2 spokes, 3 checker, 4 stripes (V1)
 uniform float uSides;        // cross-section: 0 = classic hexagon, 3..12 = polygon (V1)
 uniform float uTwist;        // spiral twist of the spokes with depth (V1)
+uniform float uTexOn;        // 1 = band texture on (6.2), 0 = off: output identical to before
+uniform float uTexGain;      // 0..2: how strongly the band texture modulates
+uniform sampler2D uTexSub;   // sub-band waveform row, sampled by wall angle (wall brightness)
+uniform sampler2D uTexMid;   // mid-band waveform row, sampled by depth (ring contrast)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -75,6 +79,16 @@ void main() {
   // hold a 12% tint, so the screen never goes fully dark. Loud passages keep the dark gaps.
   stripe = max(stripe, 0.12 * uQuiet);
 
+  // Band texture (6.2): mid sets ring contrast by depth, sub sets wall brightness by angle.
+  // Both are 1.0 when the texture is off, so the output is unchanged.
+  float texMul = 1.0;
+  if (uTexOn > 0.5) {
+    float midS = texture(uTexMid, vec2(fract(depth * 0.5), 0.5)).r;
+    float subS = texture(uTexSub, vec2(angle / TAU + 0.5, 0.5)).r;
+    stripe = clamp(0.5 + (stripe - 0.5) * (1.0 + uTexGain * (midS - 0.5)), 0.0, 1.0);
+    texMul = max(0.0, 1.0 + uTexGain * (subS - 0.5));
+  }
+
   // Full-screen pulse stays small (15%): a large whole-screen brightness swing
   // risks breaking the WCAG 2.3.1 flash limit. The strong response is on the rings only.
   float pulse = 0.85 + 0.15 * clamp(uLevel, 0.0, 1.0);
@@ -89,6 +103,7 @@ void main() {
   rings += accent * 0.45 * clamp(uBeat, 0.0, 1.0) * smoothstep(0.8, 1.0, stripe);
   // Ring response to the bass level (track-relative): crests light up with the bass.
   rings += accent * 0.5 * clamp(uSub, 0.0, 1.0) * smoothstep(0.75, 1.0, stripe);
+  rings *= texMul;
 
   // Centre mask: blend into the dim floor colour at the vanishing point.
   float mask = smoothstep(0.02, 0.18, radius);
