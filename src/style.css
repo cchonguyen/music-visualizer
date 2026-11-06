@@ -90,6 +90,13 @@ body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
   .studio button, .studio select { min-width: 44px; min-height: 44px; }
   .studio input, .studio textarea { min-height: 44px; }
   .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
+  /* Slider targets on phones (slice 10.3). Tweakpane 4.0.5 classes: .tp-sldv row, .tp-sldv_t track, .tp-sldv_k fill + knob (::before fill line, ::after knob). */
+  .studio .tp-sldv { min-height: 44px; touch-action: none; }
+  .studio .tp-sldv_t { height: 44px; margin: 0; touch-action: none; }
+  .studio .tp-sldv_t::before { height: 8px; border-radius: 4px; background-color: var(--border); }
+  .studio .tp-sldv_k { --btn-bg: var(--text); --btn-bg-h: var(--text); --btn-bg-f: var(--text); --btn-bg-a: var(--text); }
+  .studio .tp-sldv_k::before { height: 8px; border-radius: 4px; background-color: var(--accent); }
+  .studio .tp-sldv_k::after { width: 28px; height: 28px; right: -14px; border-radius: 50%; background-color: var(--text); }
 }
 @keyframes studio-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
