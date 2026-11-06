@@ -9,6 +9,7 @@ import type { RenderClock } from './clock';
 import { bindTarget, type RenderLayer } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
+import { advanceSceneTransform } from './sceneTransformStore';
 import type { ParamValue } from '../presets/schema';
 import { getRenderScale, scaledBufferSize } from '../gl/size';
 
@@ -97,6 +98,9 @@ export class Scene {
     this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+    // Particles that follow the scene read this frame's zoom and rotation (2026-11-06).
+    advanceSceneTransform(Number(this.fb.zoom), Number(this.fb.rotate));
 
     // 2) Layers draw on top with a MAX blend: each pixel keeps the brighter of the
     // old trail and the new light. Additive blending was tried and saturated to white

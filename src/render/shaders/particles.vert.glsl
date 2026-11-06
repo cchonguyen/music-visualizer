@@ -16,6 +16,8 @@ uniform float uTwinkleTime; // integrated seconds, drives the twinkle
 uniform vec2 uSway;         // shared figure-eight sway, clip units (same as the tunnel)
 uniform float uRotation;    // radians, turns the particle field about the screen centre (0 = none)
 uniform float uZoom;        // scale about the screen centre, divide so >1 enlarges (1 = none)
+uniform float uFar;         // outer radius in screen heights: hypot(aspect, 1) so the corners are reached
+uniform float uSize;        // multiplies streak length and width (2 = doubled)
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
@@ -43,9 +45,9 @@ void main() {
   float life = fract(uPhase * speed + seed);
 
   // Spawn (C3): every particle starts at the crown bar tips, r = 0.16.
-  // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/0.95, life).
+  // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/uFar, life).
   float depthNear = 1.0 / INNER_RIM;
-  float depthFar = 1.0 / 0.95;
+  float depthFar = 1.0 / uFar;
   float radius = 1.0 / mix(depthNear, depthFar, life);
   // The swirl adds a small angular turn over the life, so trails bend gently.
   float angle = angleBase + swirlDir * uSwirl * life;
@@ -61,9 +63,9 @@ void main() {
   vec2 perp = vec2(-axis.y, axis.x);
 
   // Streak length grows with energy and with life (the streak stretches as it flies out).
-  float streakLen = 0.006 + 0.025 * clamp(uEnergy, 0.0, 1.0) * life;
+  float streakLen = (0.006 + 0.025 * clamp(uEnergy, 0.0, 1.0) * life) * uSize;
   // Half-width of the streak, 0.0025..0.005 per particle.
-  float halfWidth = mix(0.0025, 0.005, seed);
+  float halfWidth = mix(0.0025, 0.005, seed) * uSize;
 
   vLocal = CORNERS[gl_VertexID];
   // Head (x = 1) sits on the particle; the tail trails behind it along -axis.

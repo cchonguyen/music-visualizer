@@ -17,6 +17,7 @@ import { getVisualGain } from '../gainStore';
 import { BandTexture } from '../bandTexture';
 
 import { PARTICLE_DEFAULTS, type ParticleParams } from '../../presets/layerSchemas';
+import { getSceneTransform } from '../sceneTransformStore';
 
 const PARTICLE_SHAPES = ['streak', 'dot', 'star', 'ring'];
 /** First texture unit for the band textures (sub, mid, high take the next two). */
@@ -61,6 +62,8 @@ export class ParticleLayer implements RenderLayer {
   private uShape: WebGLUniformLocation | null = null;
   private uRotation: WebGLUniformLocation | null = null;
   private uZoom: WebGLUniformLocation | null = null;
+  private uFar: WebGLUniformLocation | null = null;
+  private uSize: WebGLUniformLocation | null = null;
   private uHue: WebGLUniformLocation | null = null;
   private uTexOn: WebGLUniformLocation | null = null;
   private uTexGain: WebGLUniformLocation | null = null;
@@ -98,6 +101,8 @@ export class ParticleLayer implements RenderLayer {
     this.uShape = gl.getUniformLocation(this.program, 'uShape');
     this.uRotation = gl.getUniformLocation(this.program, 'uRotation');
     this.uZoom = gl.getUniformLocation(this.program, 'uZoom');
+    this.uFar = gl.getUniformLocation(this.program, 'uFar');
+    this.uSize = gl.getUniformLocation(this.program, 'uSize');
     this.uHue = gl.getUniformLocation(this.program, 'uHue');
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
@@ -164,8 +169,14 @@ export class ParticleLayer implements RenderLayer {
     const shapeIndex = Math.max(0, PARTICLE_SHAPES.indexOf(this.p.shape));
     gl.uniform1i(this.uShape, shapeIndex);
     // Transforms (4.7): rotation in radians, zoom (1 = none). Identity at the defaults.
-    gl.uniform1f(this.uRotation, this.p.rotation);
-    gl.uniform1f(this.uZoom, this.p.zoom);
+    // Follow scene transform (2026-11-06): add the scene's accumulated turn and current zoom when on.
+    const follow = this.p.followScene;
+    const scene = getSceneTransform();
+    gl.uniform1f(this.uRotation, this.p.rotation + (follow ? scene.angle : 0));
+    gl.uniform1f(this.uZoom, this.p.zoom * (follow ? scene.scale : 1));
+    // Reach: far enough that the corners (distance hypot(aspect, 1) in screen heights) are covered.
+    gl.uniform1f(this.uFar, Math.hypot(target.width / target.height, 1) * 1.05);
+    gl.uniform1f(this.uSize, this.p.size);
     // Colour shift (4.8): fixed offset plus drift, wrapped into 0..1 turns. Zero at the defaults.
     gl.uniform1f(this.uHue, ((this.p.hueShift + this.hueTurns) % 1 + 1) % 1);
     // Band texture (6.2): always bound so the sampler has a valid texture; updated only when on.
@@ -208,6 +219,8 @@ export class ParticleLayer implements RenderLayer {
     this.uShape = null;
     this.uRotation = null;
     this.uZoom = null;
+    this.uFar = null;
+    this.uSize = null;
     this.uHue = null;
     this.hueTurns = 0;
     this.uSparkle = null;
