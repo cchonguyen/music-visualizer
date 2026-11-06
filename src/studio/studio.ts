@@ -31,6 +31,11 @@ export const DELETE_CONFIRM_MS = 3000;
 const DELETE_LABEL = 'Delete';
 const DELETE_ARMED_LABEL = 'Tap again to delete';
 
+/** Text for the Delete live region: the armed prompt while armed, empty otherwise (slice 11.4). */
+export function deleteAnnouncement(armed: boolean): string {
+  return armed ? DELETE_ARMED_LABEL : '';
+}
+
 /** Trim a typed preset name. Empty or whitespace-only names are rejected with a short message. */
 export function validatePresetName(raw: string): { ok: true; name: string } | { ok: false; message: string } {
   const name = raw.trim();
@@ -61,6 +66,8 @@ export class Studio {
   private deleteArmedAt: number | null = null;
   private deleteTimer: number | undefined;
   private deleteBtn: ButtonApi | null = null;
+  /** Polite live region that announces the "Tap again" state of Delete. */
+  private readonly deleteLive: HTMLElement = document.createElement('div');
   /** The in-panel "Save as" name field, when open. */
   private saveAsField: HTMLElement | null = null;
 
@@ -77,6 +84,10 @@ export class Studio {
     container.setAttribute('role', 'dialog');
     container.setAttribute('aria-modal', 'false');
     container.setAttribute('aria-label', 'Studio');
+    this.deleteLive.setAttribute('role', 'status');
+    this.deleteLive.setAttribute('aria-live', 'polite');
+    this.deleteLive.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
+    container.append(this.deleteLive);
     container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
     // Any pointer or key action outside the Delete button disarms a pending Delete.
     const disarmOnOther = (ev: Event) => {
@@ -470,6 +481,7 @@ export class Studio {
     this.deleteArmedAt = step.armedAt;
     this.deleteBtn = btn;
     btn.title = DELETE_ARMED_LABEL;
+    this.deleteLive.textContent = deleteAnnouncement(true);
     this.deleteTimer = window.setTimeout(() => this.disarmDelete(), DELETE_CONFIRM_MS);
   }
 
@@ -479,6 +491,7 @@ export class Studio {
     this.deleteTimer = undefined;
     this.deleteArmedAt = null;
     if (this.deleteBtn) this.deleteBtn.title = DELETE_LABEL;
+    this.deleteLive.textContent = deleteAnnouncement(false);
   }
 
   private run(action: () => void, doneMessage: string): void {

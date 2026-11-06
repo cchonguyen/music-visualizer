@@ -35,6 +35,11 @@ export function sourceName(kind: SourceKind, fileName = ''): string {
   return SOURCE_NAMES[kind] ?? kind;
 }
 
+/** The controls bar is removed from the focus order while it is faded for idleness (slice 11.4). */
+export function isControlsBarFocusable(idle: boolean): boolean {
+  return !idle;
+}
+
 export interface ControlsState {
   calm: boolean;
   fileName: string;
@@ -335,14 +340,16 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   // Hide controls after 3 s without mouse movement (fullscreen viewing).
   let idleTimer = 0;
+  // A faded bar is also inert, so its controls cannot take focus until the bar wakes (slice 11.4).
+  const setBarIdle = (idle: boolean) => {
+    controls.classList.toggle('idle', idle);
+    controls.toggleAttribute('inert', !isControlsBarFocusable(idle));
+    document.body.style.cursor = idle ? 'none' : '';
+  };
   const wake = () => {
-    controls.classList.remove('idle');
-    document.body.style.cursor = '';
+    setBarIdle(false);
     clearTimeout(idleTimer);
-    idleTimer = window.setTimeout(() => {
-      controls.classList.add('idle');
-      document.body.style.cursor = 'none';
-    }, 3000);
+    idleTimer = window.setTimeout(() => setBarIdle(true), 3000);
   };
   window.addEventListener('mousemove', wake);
   window.addEventListener('keydown', wake);

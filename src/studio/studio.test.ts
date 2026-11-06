@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { DELETE_CONFIRM_MS, nextDeleteTap, validatePresetName } from './studio';
+import { DELETE_CONFIRM_MS, deleteAnnouncement, nextDeleteTap, validatePresetName } from './studio';
+
+describe('deleteAnnouncement (slice 11.4)', () => {
+  it('announces "Tap again" while Delete is armed', () => {
+    expect(deleteAnnouncement(true)).toBe('Tap again to delete');
+  });
+
+  it('is empty when Delete is idle, so nothing is announced after a disarm', () => {
+    expect(deleteAnnouncement(false)).toBe('');
+  });
+});
 
 describe('validatePresetName', () => {
   it('trims a normal name', () => {
