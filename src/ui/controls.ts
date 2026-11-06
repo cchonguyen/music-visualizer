@@ -187,11 +187,31 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   // Keyboard shortcuts list (slice 6.1). A native <dialog>: Esc closes it, and a click on the backdrop closes it too.
   const shortcutsDialog = $<HTMLDialogElement>('shortcuts');
+  // Focus returns to the opener on close (slice 11.2), the same as Studio.
+  let shortcutsOpener: HTMLElement | null = null;
   const openShortcuts = () => {
-    if (!shortcutsDialog.open) shortcutsDialog.showModal();
+    if (shortcutsDialog.open) return;
+    shortcutsOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    shortcutsDialog.showModal();
   };
+  shortcutsDialog.addEventListener('close', () => {
+    const back = shortcutsOpener;
+    shortcutsOpener = null;
+    if (back?.isConnected) back.focus();
+  });
   $<HTMLButtonElement>('shortcuts-btn').addEventListener('click', openShortcuts);
   $<HTMLButtonElement>('shortcuts-close').addEventListener('click', () => shortcutsDialog.close());
+
+  // Controls bar close (slice 11.2): collapses to a "Show controls" button. State is in memory only.
+  const controlsShow = $<HTMLButtonElement>('controls-show');
+  const setControlsCollapsed = (collapsed: boolean) => {
+    controls.classList.toggle('collapsed', collapsed);
+    controlsShow.hidden = !collapsed;
+    if (collapsed) controlsShow.focus();
+    else fileBtn.focus();
+  };
+  $<HTMLButtonElement>('controls-close').addEventListener('click', () => setControlsCollapsed(true));
+  controlsShow.addEventListener('click', () => setControlsCollapsed(false));
   shortcutsDialog.addEventListener('click', (e) => {
     if (e.target === shortcutsDialog) shortcutsDialog.close();
   });

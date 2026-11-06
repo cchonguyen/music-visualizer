@@ -30,8 +30,9 @@ button, .btn, select { font: inherit; font-size: var(--btn-font-size); font-weig
 button.primary { font-size: 1.2rem; padding: .7rem 2rem; background: var(--accent); border-color: var(--accent); }
 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; padding: .75rem 1rem; background: linear-gradient(transparent, rgba(0,0,0,.8)); transition: opacity .4s; }
+.controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; padding: 3.25rem 1rem .75rem; background: linear-gradient(transparent, rgba(0,0,0,.8)); transition: opacity .4s; }
 .controls.idle { opacity: 0; }
+.controls.collapsed { display: none; }
 .controls.idle:focus-within { opacity: 1; }
 .group { display: flex; gap: .5rem; align-items: center; }
 #seek { width: min(30vw, 22rem); }
@@ -88,6 +89,7 @@ body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
 }
 .studio :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .studio[hidden] { display: none; }
+.studio-head, dialog#shortcuts .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 @media (max-width: 599px) {
   .studio {
     top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-width: 100%; max-height: 80vh;
@@ -136,7 +138,6 @@ dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--text); outl
 .studio .tp-sldv_k::before { height: 8px; border-radius: 4px; background-color: var(--accent); }
 .studio .tp-sldv_k::after { background-color: var(--text); }
 dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
-dialog#shortcuts #shortcuts-close { margin-top: .75rem; }
 
 /* Shortcut list: long labels on desktop, short labels in phone tiles (slice 8.8). */
 dialog#shortcuts .short { display: none; }
@@ -153,5 +154,13 @@ dialog#shortcuts .short { display: none; }
   dialog#shortcuts .full { display: none; }
   dialog#shortcuts .short { display: inline; }
   dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
-  dialog#shortcuts #shortcuts-close { margin-top: .5rem; }
+}
+/* One close pattern (slice 11.2): Studio, Shortcuts and the controls bar each close with .close-btn at the top right. 44 px square under 600px. */
+.close-btn { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .4rem .8rem; cursor: pointer; flex: 0 0 auto; }
+.close-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#controls-close { position: absolute; top: .5rem; right: .5rem; }
+#controls-show { position: fixed; right: 1rem; bottom: .75rem; z-index: 6; }
+#controls-show[hidden] { display: none; }
+@media (max-width: 599px) {
+  .close-btn, #controls-close, #controls-show { min-width: 44px; min-height: 44px; }
 }
