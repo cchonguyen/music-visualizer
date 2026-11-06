@@ -45,8 +45,56 @@ body.drag-over #stage { outline: 4px dashed #2d5bd8; outline-offset: -12px; }
 
 .toast { position: fixed; top: 1rem; right: 1rem; background: rgba(0,0,0,.6); border: 1px solid #444; padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
 .toast.shown { opacity: 1; }
-.studio { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; max-width: 90vw; overflow-y: auto; z-index: 5; }
+/* Studio (slice 9.3). Desktop: right-side panel, 320px, 12px inset. Under 600px: bottom sheet (see media query below). */
+.studio {
+  position: fixed; top: 12px; right: 12px; bottom: 12px; width: 320px; max-width: 90vw; overflow-y: auto; z-index: 5;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  /* Tweakpane theme, mapped to shared tokens. Tweakpane reads these from ancestors. */
+  --tp-base-background-color: var(--surface);
+  --tp-base-border-radius: var(--radius-md);
+  --tp-container-background-color: var(--surface-2);
+  --tp-container-background-color-hover: var(--border);
+  --tp-container-background-color-focus: var(--border);
+  --tp-container-background-color-active: var(--border);
+  --tp-container-foreground-color: var(--text);
+  --tp-label-foreground-color: var(--muted);
+  --tp-monitor-background-color: var(--surface-2);
+  --tp-monitor-foreground-color: var(--muted);
+  --tp-input-background-color: var(--surface-2);
+  --tp-input-background-color-hover: var(--border);
+  --tp-input-background-color-focus: var(--border);
+  --tp-input-background-color-active: var(--border);
+  --tp-input-foreground-color: var(--text);
+  --tp-button-background-color: var(--surface-2);
+  --tp-button-background-color-hover: var(--border);
+  --tp-button-background-color-focus: var(--border);
+  --tp-button-background-color-active: var(--accent);
+  --tp-button-foreground-color: var(--text);
+  --tp-groove-foreground-color: var(--border);
+}
+.studio :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .studio[hidden] { display: none; }
+@media (max-width: 599px) {
+  .studio {
+    top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-width: 100%; max-height: 80vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0;
+    padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+    overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    /* Touch minimum 44px per Studio row (Tweakpane blade height) and per control. */
+    --tp-container-unit-size: 44px;
+    --tp-container-unit-spacing: 6px;
+  }
+  .studio:not([hidden]) { animation: studio-slide-up .25s ease-out; }
+  /* Drag-handle look: centred short bar, drawn by ::before (no markup). */
+  .studio::before { content: ""; display: block; width: 40px; height: 4px; margin: 8px auto 6px; border-radius: 2px; background: var(--muted); }
+  .studio button, .studio select { min-width: 44px; min-height: 44px; }
+  .studio input, .studio textarea { min-height: 44px; }
+  .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
+}
+@keyframes studio-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .studio:not([hidden]) { animation: none; }
+}
 dialog#shortcuts { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); max-width: min(34rem, 92vw); padding: 1rem 1.25rem; }
 dialog#shortcuts::backdrop { background: rgba(0, 0, 0, .6); }
 dialog#shortcuts h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
