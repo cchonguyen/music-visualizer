@@ -35,6 +35,8 @@ button[aria-pressed="true"] { background: var(--accent); border-color: var(--acc
 .controls.collapsed { display: none; }
 .controls.idle:focus-within { opacity: 1; }
 .group { display: flex; gap: .5rem; align-items: center; }
+/* Visible group titles show on phones only (slice 11.3). Desktop keeps the one-row bar. */
+.group-label { display: none; }
 #seek { width: min(30vw, 22rem); }
 /* Native range inputs and checkbox take the shared slider colours. No custom widgets. */
 input[type="range"] { accent-color: var(--slider-fill); }
@@ -45,9 +47,22 @@ input[type="range"]::-moz-range-thumb { background: var(--slider-thumb); border:
 input[type="checkbox"] { accent-color: var(--slider-fill); }
 /* Narrow windows (under 600px): groups wrap so every control stays reachable, no horizontal scroll. Desktop unchanged. */
 @media (max-width: 599px) {
-  .controls { gap: .5rem .75rem; }
-  .controls .group { flex-wrap: wrap; justify-content: center; }
+  /* Phone grid (slice 11.3): one column. Each group is a row with a visible title, controls wrap inside it. */
+  .controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; align-items: stretch; padding: 3.25rem .75rem calc(.6rem + env(safe-area-inset-bottom)); }
+  .controls .group { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: .5rem; min-width: 0; padding: .5rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: rgba(17, 17, 17, .6); }
+  .group-label { display: block; flex: 0 0 100%; font-size: .8rem; color: var(--muted); line-height: 1.2; }
+  .controls .group > button, .controls .group > select { flex: 1 1 auto; }
+  .controls .group > button[data-source], .controls .group > button#play-btn { flex: 1 1 8rem; }
   #seek { width: 100%; }
+  /* Volume, Visual gain and Calm each take a full row. Calm stays a compact switch. */
+  .controls .group > label { display: flex; align-items: center; gap: .5rem; flex: 1 1 100%; min-width: 0; min-height: 44px; }
+  .controls .group > label.switch { flex: 0 0 auto; }
+  .controls .group > label input[type="range"] { flex: 1 1 auto; min-width: 0; min-height: 44px; }
+  /* Beat sensitivity, Render quality and Aspect correction are added by the Controls script as direct children. Each takes a full row. */
+  .controls > label { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; min-height: 44px; padding: .25rem .5rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: rgba(17, 17, 17, .6); }
+  .controls > label input[type="range"] { flex: 1 1 10rem; min-width: 0; min-height: 44px; }
+  .controls > label select, .controls > label input[type="checkbox"] { min-height: 44px; }
+  .controls > .source { order: 99; padding: 0 .25rem; }
   /* Touch minimum: 44 by 44 CSS px for every button and popup shortcut key, so taps land on the intended key. */
   button, .btn, select { min-width: 44px; min-height: 44px; }
   dialog#shortcuts button.key { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: .25rem .5rem; }

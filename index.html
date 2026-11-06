@@ -28,6 +28,7 @@
     <nav id="controls" class="controls" aria-label="Player controls" hidden>
       <button type="button" id="controls-close" class="close-btn">Close</button>
       <div class="group" role="group" aria-label="Audio source">
+        <span class="group-label" aria-hidden="true">Source</span>
         <button type="button" id="file-btn" class="btn">File…</button>
         <input id="file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.webm,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/ogg" hidden />
         <button type="button" data-source="display">Tab / system audio</button>
@@ -42,14 +43,19 @@
         <button type="button" data-source="stop">Stop</button>
       </div>
       <div class="group" role="group" aria-label="Playback" id="playback">
+        <span class="group-label" aria-hidden="true">Playback</span>
         <button type="button" id="play-btn" aria-label="Pause (Space)">Pause</button>
         <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
         <span id="time" class="time">0:00</span>
       </div>
-      <div class="group" role="group" aria-label="Output">
+      <div class="group" role="group" aria-label="Sound and response">
+        <span class="group-label" aria-hidden="true">Sound and response</span>
         <label>Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" /></label>
-        <label class="switch"><input id="calm" type="checkbox" /> Calm</label>
         <label>Visual gain <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" /> <span id="gain-value">1.00×</span></label>
+        <label class="switch"><input id="calm" type="checkbox" /> Calm</label>
+      </div>
+      <div class="group" role="group" aria-label="View">
+        <span class="group-label" aria-hidden="true">View</span>
         <button type="button" id="fs-btn" aria-label="Fullscreen (F)">Fullscreen</button>
         <button type="button" id="studio-open" aria-haspopup="dialog" aria-controls="studio">Studio</button>
         <button type="button" id="shortcuts-btn" aria-haspopup="dialog" aria-label="Keyboard shortcuts (?)">Shortcuts</button>
