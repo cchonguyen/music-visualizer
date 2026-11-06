@@ -150,6 +150,18 @@ function start(): void {
     });
     switchTo(currentId);
     switchShown = (id) => switchTo(id, true);
+    // Studio button and E key share one toggle. Escape closes Studio unless the shortcuts dialog is open.
+    const toggleStudio = () => {
+      studio.setVisible(!studio.visible);
+      if (studio.visible) studio.bind(currentId);
+    };
+    document.getElementById('studio-open')!.addEventListener('click', toggleStudio);
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !studio.visible) return;
+      const shortcuts = document.getElementById('shortcuts');
+      if (shortcuts instanceof HTMLDialogElement && shortcuts.open) return;
+      studio.setVisible(false);
+    });
     // No automatic blend: the view changes only when a key is pressed.
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -164,8 +176,7 @@ function start(): void {
         return;
       }
       if (e.key === 'e' || e.key === 'E') {
-        studio.setVisible(!studio.visible);
-        if (studio.visible) studio.bind(currentId);
+        toggleStudio();
         return;
       }
       const step = stepForKey(e.key);
@@ -185,6 +196,9 @@ function start(): void {
       if (e.key === 'a' || e.key === 'A') liveSession.compare(currentId, false);
     });
   }
+
+  // The Studio button only works with the preset session (not the single-layer debug URLs).
+  if (!session) document.getElementById('studio-open')!.hidden = true;
 
   const state: ControlsState = {
     calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches,

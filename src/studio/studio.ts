@@ -37,10 +37,20 @@ export class Studio {
   private linkTarget = '';
   private linkMonitor = { value: 0 };
 
+  /** Where the Tweakpane pane is built (the header with Close stays in the container). */
+  private readonly body: HTMLElement;
+  /** The element that had focus before the panel opened; focus returns to it on close. */
+  private opener: HTMLElement | null = null;
+
   constructor(
     private readonly container: HTMLElement,
     private readonly opts: StudioOptions,
   ) {
+    this.body = container.querySelector<HTMLElement>('.studio-body') ?? container;
+    container.setAttribute('role', 'dialog');
+    container.setAttribute('aria-modal', 'false');
+    container.setAttribute('aria-label', 'Studio');
+    container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
     window.setInterval(() => {
       if (!this.visible || !this.pane) return;
       this.monitor.ms = this.opts.frameMs?.() ?? 0;
@@ -48,8 +58,25 @@ export class Studio {
     }, 500);
   }
 
+  /** Show or hide the panel. Opening moves focus into it (after bind); closing returns focus to the opener. */
   setVisible(visible: boolean): void {
-    this.container.hidden = !visible;
+    if (visible === this.visible) return;
+    if (visible) {
+      this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this.container.hidden = false;
+      requestAnimationFrame(() => this.focusFirst());
+    } else {
+      this.container.hidden = true;
+      const back = this.opener;
+      this.opener = null;
+      if (back?.isConnected) back.focus();
+    }
+  }
+
+  private focusFirst(): void {
+    if (!this.visible) return;
+    const first = this.body.querySelector<HTMLElement>('input:not(:disabled), button:not(:disabled), select, textarea');
+    (first ?? this.container.querySelector<HTMLElement>('#studio-close'))?.focus();
   }
 
   get visible(): boolean {
@@ -60,8 +87,8 @@ export class Studio {
   bind(id: string): void {
     this.id = id;
     this.pane?.dispose();
-    this.container.replaceChildren();
-    const pane = new Pane({ container: this.container, title: 'Preset Studio' });
+    this.body.replaceChildren();
+    const pane = new Pane({ container: this.body, title: 'Preset Studio' });
     this.pane = pane;
     const session = this.opts.session;
     const entry = session.get(id);
