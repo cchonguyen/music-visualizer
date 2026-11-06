@@ -14,6 +14,9 @@ import starter_soft_smoke from './starter-soft-smoke.json';
 import starter_circle_wave from './starter-circle-wave.json';
 import starter_ember from './starter-ember.json';
 import starter_quiet_tunnel from './starter-quiet-tunnel.json';
+import tex_glass_tunnel from './tex-glass-tunnel.json';
+import tex_sub_bloom from './tex-sub-bloom.json';
+import tex_silk_rings from './tex-silk-rings.json';
 
 export const SCHEMAS: SchemaRegistry = { feedback: FEEDBACK_SPECS, post: POST_SPECS, layers: LAYER_SPECS };
 
@@ -32,4 +35,7 @@ export const BUILTIN_PRESETS: readonly { id: string; preset: Preset; warnings: s
   { id: 'starter-circle-wave', ...parsePreset(starter_circle_wave, SCHEMAS) },
   { id: 'starter-ember', ...parsePreset(starter_ember, SCHEMAS) },
   { id: 'starter-quiet-tunnel', ...parsePreset(starter_quiet_tunnel, SCHEMAS) },
+  { id: 'tex-glass-tunnel', ...parsePreset(tex_glass_tunnel, SCHEMAS) },
+  { id: 'tex-sub-bloom', ...parsePreset(tex_sub_bloom, SCHEMAS) },
+  { id: 'tex-silk-rings', ...parsePreset(tex_silk_rings, SCHEMAS) },
 ];

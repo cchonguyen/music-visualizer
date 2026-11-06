@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Silk Rings",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.93 },
+  "layers": [
+    { "type": "rings", "params": { "maxRings": 6, "maxRingsCalm": 4, "strokeBase": 0.002, "strokeNormGain": 0.004, "sides": 0, "style": "outline", "texture": true, "textureGain": 1.2 } }
+  ],
+  "post": {}
+}

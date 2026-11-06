@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Sub Bloom",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.92 },
+  "layers": [
+    { "type": "bassPulse", "params": { "texture": true, "textureGain": 1.5 } },
+    { "type": "shockwave", "params": { "style": "glow", "texture": true, "textureGain": 0.6 } }
+  ],
+  "post": { "bloom": 0.8, "bloomThreshold": 0.5 }
+}
