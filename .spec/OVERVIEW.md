@@ -11,6 +11,8 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 ## Scope Change
 - 2026-11-04: rescoped to desktop first. iPhone and phone versions are deferred. Reason: system audio can't be captured on iPhone, and desktop allows heavier visuals.
 
+- 2026-11-06: particles will fill the whole frame, corners included, at twice their current size. A new "Follow scene transform" switch lets particles move with the scene. It is on for new presets only, so existing presets look the same.
+
 ## Where the Plan Lives
 - Working contract: `.spec/SYSTEM_SPEC.md`
 - Earlier phone-focused brief (superseded for scope): `.spec/SCOPE_BRIEF.md`
