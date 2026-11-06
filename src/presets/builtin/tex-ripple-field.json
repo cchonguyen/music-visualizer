@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Ripple Field",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.91, "warp": 0.35, "warpScale": 1.6, "warpSpeed": 1.2 },
+  "layers": [
+    { "type": "shockwave", "params": { "ringStart": 0.1, "ringEnd": 0.9, "ringSec": 0.5, "style": "ring", "texture": true, "textureGain": 1.8 } },
+    { "type": "waveform", "params": { "mode": "circle", "amplitude": 0.5, "texture": true, "textureGain": 1.1 } }
+  ],
+  "post": { "chroma": 0.002 }
+}
