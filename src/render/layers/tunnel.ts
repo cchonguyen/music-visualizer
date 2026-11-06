@@ -15,6 +15,10 @@ import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
 import { RELEASE_TAU_SEC, releaseEnvelope } from '../releaseEnvelope';
 import { TUNNEL_DEFAULTS, type TunnelParams } from '../../presets/layerSchemas';
+import { BandTexture } from '../bandTexture';
+
+/** First texture unit for the band textures (sub, mid, high take the next two). */
+const BAND_UNIT = 1;
 
 /** Wall pattern name to the shader's number (V1). Unknown names fall back to rings. */
 const PATTERNS = ['rings', 'grid', 'spokes', 'checker', 'stripes'];
@@ -61,6 +65,11 @@ export class TunnelLayer implements RenderLayer {
   private uPattern: WebGLUniformLocation | null = null;
   private uSides: WebGLUniformLocation | null = null;
   private uTwist: WebGLUniformLocation | null = null;
+  private uTexOn: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexSub: WebGLUniformLocation | null = null;
+  private uTexMid: WebGLUniformLocation | null = null;
+  private readonly band = new BandTexture();
 
   private readonly flight = new FlightState();
   private readonly roll = new RollState();
@@ -97,6 +106,11 @@ export class TunnelLayer implements RenderLayer {
     this.uDensity = gl.getUniformLocation(this.program, 'uDensity');
     this.uHue = gl.getUniformLocation(this.program, 'uHue');
     this.uQuiet = gl.getUniformLocation(this.program, 'uQuiet');
+    this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexSub = gl.getUniformLocation(this.program, 'uTexSub');
+    this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
+    this.band.init(gl);
     this.beatEnv = 0;
     this.quietEnv = 0;
     this.vao = createVao(gl);
@@ -142,6 +156,13 @@ export class TunnelLayer implements RenderLayer {
     gl.uniform1f(this.uPattern, patternIndex(this.p.pattern));
     gl.uniform1f(this.uSides, this.p.sides);
     gl.uniform1f(this.uTwist, this.p.twist);
+    // Band texture (6.2): always bound so the samplers have a valid texture; updated only when on.
+    gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
+    gl.uniform1f(this.uTexGain, this.p.textureGain);
+    if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
+    const unit = this.band.bind(gl, BAND_UNIT);
+    gl.uniform1i(this.uTexSub, unit);
+    gl.uniform1i(this.uTexMid, unit + 1);
     // Motion and colour (2026-11-04): the rings must move and change, not sit still.
     // Sway and breathing are bounded so they never jolt the view.
     const t = clock.timeSec;
@@ -163,9 +184,14 @@ export class TunnelLayer implements RenderLayer {
     if (gl) {
       if (this.program) gl.deleteProgram(this.program);
       if (this.vao) gl.deleteVertexArray(this.vao);
+      this.band.dispose(gl);
     }
     this.program = null;
     this.vao = null;
+    this.uTexOn = null;
+    this.uTexGain = null;
+    this.uTexSub = null;
+    this.uTexMid = null;
     this.uPhase = null;
     this.uSub = null;
     this.uLevel = null;

@@ -14,10 +14,13 @@ import { getSway } from '../swayStore';
 import { getCrownHeights } from '../crownStore';
 import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
+import { BandTexture } from '../bandTexture';
 
 import { PARTICLE_DEFAULTS, type ParticleParams } from '../../presets/layerSchemas';
 
 const PARTICLE_SHAPES = ['streak', 'dot', 'star', 'ring'];
+/** First texture unit for the band textures (sub, mid, high take the next two). */
+const BAND_UNIT = 1;
 
 const CALM_PHASE_RATE = 0.2;
 const BASE_PHASE_RATE = 0.2;
@@ -59,6 +62,10 @@ export class ParticleLayer implements RenderLayer {
   private uRotation: WebGLUniformLocation | null = null;
   private uZoom: WebGLUniformLocation | null = null;
   private uHue: WebGLUniformLocation | null = null;
+  private uTexOn: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexHigh: WebGLUniformLocation | null = null;
+  private readonly band = new BandTexture();
 
   /** Hue drift clock (turns). Advances by hueDrift per second; wrapped to 0..1 when sent to the shader. */
   private hueTurns = 0;
@@ -92,6 +99,10 @@ export class ParticleLayer implements RenderLayer {
     this.uRotation = gl.getUniformLocation(this.program, 'uRotation');
     this.uZoom = gl.getUniformLocation(this.program, 'uZoom');
     this.uHue = gl.getUniformLocation(this.program, 'uHue');
+    this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
+    this.band.init(gl);
     this.phase.reset();
     this.twinkle.reset();
     this.flash = 0;
@@ -157,6 +168,12 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uZoom, this.p.zoom);
     // Colour shift (4.8): fixed offset plus drift, wrapped into 0..1 turns. Zero at the defaults.
     gl.uniform1f(this.uHue, ((this.p.hueShift + this.hueTurns) % 1 + 1) % 1);
+    // Band texture (6.2): always bound so the sampler has a valid texture; updated only when on.
+    gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
+    gl.uniform1f(this.uTexGain, this.p.textureGain);
+    if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
+    const unit = this.band.bind(gl, BAND_UNIT);
+    gl.uniform1i(this.uTexHigh, unit + 2);
 
     // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
     // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
@@ -176,9 +193,13 @@ export class ParticleLayer implements RenderLayer {
     if (gl) {
       if (this.program) gl.deleteProgram(this.program);
       if (this.vao) gl.deleteVertexArray(this.vao);
+      this.band.dispose(gl);
     }
     this.program = null;
     this.vao = null;
+    this.uTexOn = null;
+    this.uTexGain = null;
+    this.uTexHigh = null;
     this.uPhase = null;
     this.uAspect = null;
     this.uAccent = null;
