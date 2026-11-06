@@ -45,3 +45,21 @@ dialog#shortcuts button.key { font: inherit; font-size: .9em; color: inherit; ba
 dialog#shortcuts button.key:focus-visible { outline: 2px solid #eee; outline-offset: 2px; }
 dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
 dialog#shortcuts #shortcuts-close { margin-top: .75rem; }
+
+/* Shortcut list: long labels on desktop, short labels in phone tiles (slice 8.8). */
+dialog#shortcuts .short { display: none; }
+@media (max-width: 599px) {
+  dialog#shortcuts { width: calc(100vw - 1rem); max-width: calc(100vw - 1rem); max-height: 92vh; overflow-y: auto; padding: .6rem .6rem .8rem; }
+  dialog#shortcuts h2 { margin: 0 0 .4rem; }
+  dialog#shortcuts table, dialog#shortcuts tbody { display: block; width: 100%; }
+  dialog#shortcuts tbody { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+  dialog#shortcuts tr { display: flex; align-items: center; gap: .35rem; min-width: 0; }
+  dialog#shortcuts tr.wide { grid-column: 1 / -1; }
+  dialog#shortcuts th, dialog#shortcuts td { display: block; padding: 0; min-width: 0; white-space: normal; font-size: .8rem; line-height: 1.15; }
+  dialog#shortcuts th { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+  dialog#shortcuts td { flex: 1 1 auto; }
+  dialog#shortcuts .full { display: none; }
+  dialog#shortcuts .short { display: inline; }
+  dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
+  dialog#shortcuts #shortcuts-close { margin-top: .5rem; }
+}
