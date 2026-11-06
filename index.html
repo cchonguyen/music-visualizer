@@ -19,13 +19,14 @@
     <div id="studio" class="studio" hidden>
       <div class="studio-head">
         <span class="studio-title">Studio</span>
-        <button type="button" id="studio-close" aria-label="Close Studio">Close</button>
+        <button type="button" id="studio-close" class="close-btn" aria-label="Close Studio">Close</button>
       </div>
       <div class="studio-body"></div>
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <nav id="controls" class="controls" aria-label="Player controls" hidden>
+      <button type="button" id="controls-close" class="close-btn">Close</button>
       <div class="group" role="group" aria-label="Audio source">
         <button type="button" id="file-btn" class="btn">File…</button>
         <input id="file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.webm,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/ogg" hidden />
@@ -55,9 +56,13 @@
       </div>
       <span id="source-label" class="source" aria-live="polite">No source</span>
     </nav>
+    <button type="button" id="controls-show" hidden>Show controls</button>
 
     <dialog id="shortcuts" aria-labelledby="shortcuts-title">
-      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+      <div class="dialog-head">
+        <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+        <button type="button" id="shortcuts-close" class="close-btn">Close</button>
+      </div>
       <table>
         <tbody>
           <tr><th scope="row"><button type="button" class="key" data-key=" " aria-label="Space: Play or pause">Space</button></th><td><span class="full">Play or pause (file)</span><span class="short">Play / pause</span></td></tr>
@@ -78,7 +83,6 @@
           <tr><th scope="row"><kbd>?</kbd></th><td><span class="full">Show this list</span><span class="short">Help</span></td></tr>
         </tbody>
       </table>
-      <button type="button" id="shortcuts-close">Close</button>
     </dialog>
 
     <script type="module" src="/src/main.ts"></script>
