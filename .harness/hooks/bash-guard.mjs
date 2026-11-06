@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { bashWriteReason, isHubOrigin } from './lib/guard-rules.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
+import { mainThreadDecision } from './lib/main-thread-guard.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
@@ -27,6 +28,13 @@ const gate = gateDecision({
 });
 if (!gate.allowed) {
   console.error(gate.reason);
+  process.exit(2);
+}
+
+// Main-thread allow-list: subagents (agent_type set) are not restricted here
+const mainThread = mainThreadDecision({ agentType: event.agent_type, toolName: 'Bash', toolInput: event.tool_input, root: doctorRoot });
+if (!mainThread.allowed) {
+  console.error(mainThread.reason);
   process.exit(2);
 }
 

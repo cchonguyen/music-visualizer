@@ -9,11 +9,12 @@ import {
   agentsBlock, colourOf, isEngineLocked, isEnginePath, isHubOrigin, nextContent,
 } from './lib/guard-rules.mjs';
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
-import { writeJsonAtomic } from '../scripts/lib/telemetry.mjs';
+import { updateTelemetry } from '../scripts/lib/telemetry-store.mjs';
 import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
+import { mainThreadDecision } from './lib/main-thread-guard.mjs';
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
@@ -261,8 +262,11 @@ if (isDirectRun) {
     return data;
   }
 
+  // Takes the counters from `data` but keeps the latest stored calls under the lock, so a concurrent
+  // PostToolUse record is never dropped by this write.
   function writeTelemetry(repoRoot, data) {
-    writeJsonAtomic(path.join(repoRoot, '.spec', '.session-telemetry.json'), data);
+    const { calls: _staleCalls, ...counters } = data;
+    updateTelemetry(repoRoot, (latest) => ({ ...latest, ...counters }));
   }
 
   function captureCheckpoint() {
@@ -367,6 +371,13 @@ if (isDirectRun) {
   });
   if (!gate.allowed) {
     console.error(gate.reason);
+    process.exit(2);
+  }
+
+  // Main-thread allow-list: subagents (agent_type set) are not restricted here
+  const mainThread = mainThreadDecision({ agentType: event.agent_type, toolName: event.tool_name, toolInput: event.tool_input, root });
+  if (!mainThread.allowed) {
+    console.error(mainThread.reason);
     process.exit(2);
   }
 

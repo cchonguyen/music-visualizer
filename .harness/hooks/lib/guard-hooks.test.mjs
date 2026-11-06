@@ -58,7 +58,7 @@ const edit = (dir, rel, extra = {}) => ({
 
 test('manager mode with no active slice blocks source edits (PLAN LOCK)', () => {
   const dir = makeRepo({ files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': '# Progress\n', 'src/app.js': 'a\n' } });
-  const r = runHook(GUARD, dir, edit(dir, 'src/app.js'));
+  const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /PLAN LOCK/);
 });
@@ -72,14 +72,15 @@ test('a new active slice resets the coordinator edit budget (regression: slice n
       '.spec/.session-telemetry.json': JSON.stringify({ sessionId: 's1', currentSlice: '3.2', coordinator_edits: 1 }),
     },
   });
-  assert.equal(runHook(GUARD, dir, edit(dir, 'src/app.js')).status, 0);
+  assert.equal(runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' }).status, 0);
 });
 
 test('manager mode with the file in an active slice is allowed', () => {
   const dir = makeRepo({
     files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': SLICE('src/app.js'), 'src/app.js': 'a\n' },
   });
-  assert.equal(runHook(GUARD, dir, edit(dir, 'src/app.js')).status, 0);
+  // Coordinator counters (coordinator_edits) are only written for the coordinator role. gf-coder resolves to goldfish.
+  assert.equal(runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'coordinator' }).status, 0);
   // The guard's telemetry write is atomic: the file parses after the run.
   const telemPath = path.join(dir, '.spec', '.session-telemetry.json');
   assert.equal(fs.existsSync(telemPath), true);
@@ -88,12 +89,12 @@ test('manager mode with the file in an active slice is allowed', () => {
 
 test('vibe mode (no harness.json) keeps the v2.2 behavior: no plan lock', () => {
   const dir = makeRepo({ files: { '.spec/PROGRESS.md': '# Progress\n', 'src/app.js': 'a\n' } });
-  assert.equal(runHook(GUARD, dir, edit(dir, 'src/app.js')).status, 0);
+  assert.equal(runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' }).status, 0);
 });
 
 test('spoke engine files are locked even in an active slice', () => {
   const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('.harness/hooks/'), '.harness/hooks/x.mjs': 'x\n' } });
-  const r = runHook(GUARD, dir, edit(dir, '.harness/hooks/x.mjs'));
+  const r = runHook(GUARD, dir, { ...edit(dir, '.harness/hooks/x.mjs'), agent_type: 'gf-coder' });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /ENGINE LOCK/);
 });
@@ -105,15 +106,15 @@ test('harness.json cannot be edited by the agent, which would switch the plan lo
 
 test('spoke rules file stays editable', () => {
   const dir = makeRepo({ files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': '# Progress\n', '.claude/project-rules.md': '# rules\n' } });
-  assert.equal(runHook(GUARD, dir, edit(dir, '.claude/project-rules.md')).status, 0);
+  assert.equal(runHook(GUARD, dir, { ...edit(dir, '.claude/project-rules.md'), agent_type: 'coordinator' }).status, 0);
 });
 
 test('AGENTS.md: text outside the harness block is editable, the block is locked', () => {
   const agents = 'My notes\n<!-- >>> harness >>> -->\nrule\n<!-- <<< harness <<< -->\n';
   const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('AGENTS.md'), 'AGENTS.md': agents } });
-  const outside = runHook(GUARD, dir, edit(dir, 'AGENTS.md', { old_string: 'My notes', new_string: 'My own notes' }));
+  const outside = runHook(GUARD, dir, { ...edit(dir, 'AGENTS.md', { old_string: 'My notes', new_string: 'My own notes' }), agent_type: 'gf-coder' });
   assert.equal(outside.status, 0);
-  const inside = runHook(GUARD, dir, edit(dir, 'AGENTS.md', { old_string: 'rule', new_string: 'changed rule' }));
+  const inside = runHook(GUARD, dir, { ...edit(dir, 'AGENTS.md', { old_string: 'rule', new_string: 'changed rule' }), agent_type: 'gf-coder' });
   assert.equal(inside.status, 2);
   assert.match(inside.stderr, /AGENTS\.md is hub-owned/);
 });
@@ -131,13 +132,13 @@ test('a file in another attached repo is judged by that repo, not the session re
   const spoke = makeRepo({ files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': '# Progress\n' } });
   const other = makeRepo({ origin: 'https://github.com/example/other.git', files: { '.spec/PROGRESS.md': '# Progress\n', 'lib/x.js': 'x\n' } });
   // The session's first repo is in manager mode with no task, but the edited file lives in a vibe-mode repo
-  assert.equal(runHook(GUARD, spoke, edit(spoke, path.relative(spoke, path.join(other, 'lib/x.js')))).status, 0);
+  assert.equal(runHook(GUARD, spoke, { ...edit(spoke, path.relative(spoke, path.join(other, 'lib/x.js'))), agent_type: 'gf-coder' }).status, 0);
 });
 
 test('bash guard blocks a redirect into an engine path in a spoke', () => {
   const dir = makeRepo({ files: { '.claude/settings.json': '{}\n' } });
   const r = spawnSync(process.execPath, [BASH], {
-    cwd: dir, input: JSON.stringify({ tool_input: { command: 'echo {} > .claude/settings.json' } }),
+    cwd: dir, input: JSON.stringify({ agent_type: 'gf-coder', tool_input: { command: 'echo {} > .claude/settings.json' } }),
     encoding: 'utf8', env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(r.status, 2);
@@ -146,14 +147,14 @@ test('bash guard blocks a redirect into an engine path in a spoke', () => {
 
 test('bash guard lets reads and the restore command through, and ignores the hub', () => {
   const dir = makeRepo({ files: { '.claude/settings.json': '{}\n' } });
-  const run = (repoDir, command) => spawnSync(process.execPath, [BASH], {
-    cwd: repoDir, input: JSON.stringify({ tool_input: { command } }), encoding: 'utf8',
+  const run = (repoDir, command, agent_type) => spawnSync(process.execPath, [BASH], {
+    cwd: repoDir, input: JSON.stringify({ agent_type, tool_input: { command } }), encoding: 'utf8',
     env: { ...process.env, ...doctorEnv(repoDir), CLAUDE_PROJECT_DIR: repoDir },
   }).status;
   assert.equal(run(dir, 'cat .claude/settings.json'), 0);
   assert.equal(run(dir, 'node .harness/hooks/pre-tool-guard.mjs --restore'), 0);
   const hub = makeRepo({ origin: 'https://github.com/cchonguyen/claude-harness-hub.git', files: { '.harness/x.mjs': 'x\n' } });
-  assert.equal(run(hub, 'echo x > .harness/x.mjs'), 0);
+  assert.equal(run(hub, 'echo x > .harness/x.mjs', 'gf-coder'), 0);
 });
 
 test('SCOUT level routing maps facts deterministically to levels and agents', () => {
@@ -234,6 +235,29 @@ test('pre-tool-guard blocks silent architect-opus unless SCOUT.md authorizes Lev
     tool_input: { subagent_type: 'architect-opus' }
   });
   assert.equal(rAllowed.status, 0);
+});
+
+test('main-thread Bash outside the allow-list is refused; the same command from a subagent is not', () => {
+  const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
+  const run = (event) => spawnSync(process.execPath, [BASH], {
+    cwd: dir, input: JSON.stringify(event), encoding: 'utf8',
+    env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
+  });
+  const command = 'npm install left-pad';
+  const main = run({ tool_name: 'Bash', tool_input: { command } });
+  assert.equal(main.status, 2);
+  assert.match(main.stderr, /Main thread Bash is limited to the allow-list/);
+  const sub = run({ agent_type: 'gf-coder', tool_name: 'Bash', tool_input: { command } });
+  assert.equal(sub.status, 0);
+});
+
+test('main-thread Edit outside .spec is refused; the same edit from a subagent is not', () => {
+  const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
+  const main = runHook(GUARD, dir, edit(dir, 'src/app.js'));
+  assert.equal(main.status, 2);
+  assert.match(main.stderr, /Main thread may edit only \.spec\//);
+  const sub = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
+  assert.equal(sub.status, 0);
 });
 
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });

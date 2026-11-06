@@ -9,6 +9,7 @@ import { getRefereeEngineHash, detectNaturalLull } from './referee.mjs';
 import { ensureHarnessRoot, atomicWriteFileSync } from './lib/fs-atomic.mjs';
 import { parseSliceLine } from './lib/slice-parser.mjs';
 import { readCalls, dispatchesFor, mainSourceWrites } from './lib/telemetry.mjs';
+import { updateTelemetry } from './lib/telemetry-store.mjs';
 
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -280,11 +281,12 @@ export function finishSlice(root, commitMsg, options = {}) {
     // 6. Update session telemetry & batch events
     if (fs.existsSync(telemetryPath)) {
       try {
-        const telem = JSON.parse(fs.readFileSync(telemetryPath, 'utf8'));
-        telem.slicesCommitted = (telem.slicesCommitted || 0) + 1;
-        telem.mutatingCallsOnSlice = 0;
-        telem.currentSlice = nextSliceId ? `Slice ${nextSliceId}` : '';
-        atomicWriteFileSync(telemetryPath, JSON.stringify(telem, null, 2), 'utf8');
+        updateTelemetry(root, (telem) => ({
+          ...telem,
+          slicesCommitted: (telem.slicesCommitted || 0) + 1,
+          mutatingCallsOnSlice: 0,
+          currentSlice: nextSliceId ? `Slice ${nextSliceId}` : '',
+        }));
       } catch {}
     }
 

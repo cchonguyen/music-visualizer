@@ -6,13 +6,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseSliceLine } from './slice-parser.mjs';
+import { updateTelemetry, writeJsonAtomic, telemetryFile } from './telemetry-store.mjs';
+
+export { writeJsonAtomic, updateTelemetry };
 
 // Matches both `- [ ] **Slice N** [IN_PROGRESS]` and `- [IN_PROGRESS] **Slice N**` (the PROGRESS.md format).
 const ACTIVE_TASK = /^\s*-\s*(\[[^\]]*\]\s*)?.*\[IN_PROGRESS\]/;
 const SOURCE_WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
 
 export function telemetryPath(root) {
-  return path.join(root, '.spec', '.session-telemetry.json');
+  return telemetryFile(root);
 }
 
 /** Same rule as isSourceFile in .harness/hooks/pre-tool-guard.mjs (copied, not imported). */
@@ -74,21 +77,6 @@ function sleepSync(ms) {
 }
 
 /**
- * Writes JSON to a temp file, then renames it over the target, so a reader never sees a partial file.
- * Best-effort: never throws. The temp file is removed when a step fails.
- */
-export function writeJsonAtomic(file, data) {
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-    fs.renameSync(tmp, file);
-  } catch {
-    try { fs.rmSync(tmp, { force: true }); } catch {}
-  }
-}
-
-/**
  * Reads the telemetry file. A missing file gives null. An empty or unparseable read is retried
  * (a writer may be mid-write) before the last text and parse result are returned.
  */
@@ -127,19 +115,12 @@ export function readCalls(root) {
  * An empty file is never copied to .bak.
  */
 export function appendCall(root, call) {
-  const p = telemetryPath(root);
-  let data = { version: 1, calls: [] };
-  const r = readWithRetry(p);
-  if (r) {
-    const parsed = r.parsed;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      data = { ...parsed, version: parsed.version ?? 1, calls: Array.isArray(parsed.calls) ? parsed.calls : [] };
-    } else if (r.text.trim() !== '') {
-      fs.writeFileSync(`${p}.bak`, r.text, 'utf8');
-    }
-  }
-  data.calls.push(call);
-  writeJsonAtomic(p, data);
+  // The lock covers the read, so a concurrent writer cannot overwrite this record with a stale copy.
+  updateTelemetry(root, (latest) => ({
+    ...latest,
+    version: latest.version ?? 1,
+    calls: [...latest.calls, call],
+  }));
 }
 
 const normPath = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.\//, '');
