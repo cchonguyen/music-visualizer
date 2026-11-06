@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Prism Bars",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.9, "hueDrift": 0.004 },
+  "layers": [
+    { "type": "bars", "params": { "texture": true, "textureGain": 1.5 } },
+    { "type": "particles", "params": { "brightness": 0.4, "hueShift": 0.5, "hueDrift": 0.02, "texture": true, "textureGain": 0.5 } }
+  ],
+  "post": { "hueShift": 1.2, "saturation": 1.3 }
+}

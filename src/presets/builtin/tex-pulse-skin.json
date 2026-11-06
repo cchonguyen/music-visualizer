@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Pulse Skin",
+  "tags": ["built-in"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": { "decay": 0.93 },
+  "layers": [
+    { "type": "bassPulse", "params": { "texture": true, "textureGain": 1.8 } },
+    { "type": "rings", "params": { "maxRings": 3, "texture": true, "textureGain": 0.4 } }
+  ],
+  "post": { "bloom": 0.6, "bloomThreshold": 0.4, "vignette": 0.2 }
+}
