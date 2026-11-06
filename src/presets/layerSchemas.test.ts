@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { assertValidSpec, defaultsFor } from "./schema";
 import {
-  BARS_DEFAULTS, BARS_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
+  BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
 } from "./layerSchemas";
 
@@ -21,6 +21,7 @@ describe("layer schemas", () => {
     expect(RINGS_DEFAULTS).toEqual({ maxRings: 6, maxRingsCalm: 3, strokeBase: 0.004, strokeNormGain: 0.01, sides: 0, style: 'outline', texture: false, textureGain: 1 });
     expect(SHOCKWAVE_DEFAULTS).toEqual({ ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35, style: 'ring', texture: false, textureGain: 1 });
     expect(BARS_DEFAULTS).toEqual({ texture: false, textureGain: 1 });
+    expect(BASS_PULSE_DEFAULTS).toEqual({ texture: false, textureGain: 1 });
   });
 
   it.each([
@@ -30,11 +31,12 @@ describe("layer schemas", () => {
     ["rings", RINGS_SPECS, RINGS_DEFAULTS],
     ["shockwave", SHOCKWAVE_SPECS, SHOCKWAVE_DEFAULTS],
     ["bars", BARS_SPECS, BARS_DEFAULTS],
+    ["bassPulse", BASS_PULSE_SPECS, BASS_PULSE_DEFAULTS],
   ])("%s: schema defaults match the layer's typed defaults", (_name, specs, defaults) => {
     expect(defaultsFor(specs)).toEqual(defaults);
   });
 
   it("every layer type is registered", () => {
-    expect(Object.keys(LAYER_SPECS).sort()).toEqual(["bars", "crown", "particles", "rings", "shockwave", "tunnel", "waveform"]);
+    expect(Object.keys(LAYER_SPECS).sort()).toEqual(["bars", "bassPulse", "crown", "particles", "rings", "shockwave", "tunnel", "waveform"]);
   });
 });

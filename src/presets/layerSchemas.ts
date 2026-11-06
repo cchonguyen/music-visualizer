@@ -194,6 +194,7 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   rings: RINGS_SPECS,
   shockwave: SHOCKWAVE_SPECS,
   bars: BARS_SPECS,
+  bassPulse: BASS_PULSE_SPECS,
   waveform: WAVEFORM_SPECS,
 };
 
