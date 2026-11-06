@@ -72,6 +72,10 @@ describe('settings layout (slice 11.6)', () => {
     for (const id of ['calm', 'render-quality', 'aspect-correct']) expect(row).toContain(`id="${id}"`);
   });
 
+  it('starts with Playback hidden, so it shows only once a file is loaded (slice 11.8)', () => {
+    expect(nav).toMatch(/<div class="group" role="group" aria-label="Playback" id="playback" hidden>/);
+  });
+
   it('keeps one sticky close header on the controls panel', () => {
     expect(nav).toContain('class="sheet-head controls-head"');
     expect(nav).toContain('id="controls-close"');
@@ -81,15 +85,13 @@ describe('settings layout (slice 11.6)', () => {
 describe('shortcuts list keys (slices 8.1 and 8.7)', () => {
   it('makes every key in the list tappable: letters, digits, brackets, arrows, Space and .', () => {
     const keys = [...dialog.matchAll(/<button type="button" class="key" data-key="([^"]+)"/g)].map((m) => m[1]);
-    const expected = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'P', 'X', ' ', '.', '[', ']', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const expected = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'P', 'X', ' ', '.', '[', ']', '?', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     expect(keys.sort()).toEqual(expected.sort());
   });
 
-  it('keeps ? and the non-key help text as plain kbd', () => {
+  it('makes the Help (?) row a tappable key (slice 11.8), not plain kbd', () => {
     const kbds = [...dialog.matchAll(/<kbd>([^<]+)<\/kbd>/g)].map((m) => m[1]);
-    expect(kbds).toContain('?');
-    for (const letter of ['F', 'P', 'K', 'C', 'B', 'X', 'E', 'A', 'D']) {
-      expect(kbds).not.toContain(letter);
-    }
+    expect(kbds).not.toContain('?');
+    expect(dialog).toContain('data-key="?"');
   });
 });
