@@ -415,6 +415,8 @@ function morphTargetFor(spec: Extract<ParamSpec, { type: 'float' | 'int' }>, val
 function defaultLayer(type: string): LayerEntry {
   const params: Settings = {};
   for (const spec of LAYER_SPECS[type] ?? []) params[spec.name] = { value: spec.default };
+  // New particle layers follow the scene by default (2026-11-06). Existing presets keep their stored value.
+  if (type === 'particles') params.followScene = { value: true };
   return { type, enabled: true, opacity: 1, blend: 'add', params };
 }
 

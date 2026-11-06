@@ -16,6 +16,15 @@ uniform float uTwinkleTime; // integrated seconds, drives the twinkle
 uniform vec2 uSway;         // shared figure-eight sway, clip units (same as the tunnel)
 uniform float uRotation;    // radians, turns the particle field about the screen centre (0 = none)
 uniform float uZoom;        // scale about the screen centre, divide so >1 enlarges (1 = none)
+uniform float uFar;         // outer radius in screen heights: hypot(aspect, 1) so the corners are reached
+uniform float uSize;        // multiplies streak length and width (2 = doubled)
+uniform float uFollow;      // 1 when the particles follow the scene (0 = off)
+uniform vec2 uCentre;       // scene drift, added after the transform (height units)
+uniform vec2 uStretch;      // scene stretch, applied after rotation (1 = none)
+uniform float uWarp;        // scene wave warp (morph), 0..1, only used when following
+uniform float uWarpScale;   // scene wave count
+uniform float uWarpSpeed;   // scene wave speed
+uniform float uTime;        // scene time in seconds
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
@@ -43,14 +52,17 @@ void main() {
   float life = fract(uPhase * speed + seed);
 
   // Spawn (C3): every particle starts at the crown bar tips, r = 0.16.
-  // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/0.95, life).
+  // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/uFar, life).
   float depthNear = 1.0 / INNER_RIM;
-  float depthFar = 1.0 / 0.95;
+  float depthFar = 1.0 / uFar;
   float radius = 1.0 / mix(depthNear, depthFar, life);
   // The swirl adds a small angular turn over the life, so trails bend gently.
   float angle = angleBase + swirlDir * uSwirl * life;
   vec2 dir = vec2(cos(angle), sin(angle));
   vec2 pos = dir * radius;
+  // Morph (follow scene): the scene's wave warp moves each particle sideways as it travels.
+  float wave = uFollow * uWarp * 0.06 * sin(uTime * uWarpSpeed + life * TAU * uWarpScale + seed * TAU);
+  pos += vec2(-dir.y, dir.x) * wave;
 
   // Motion direction = d(pos)/d(life): the radial part plus the swirl part.
   // The streak lies along this vector, so it points where the particle is going.
@@ -61,9 +73,9 @@ void main() {
   vec2 perp = vec2(-axis.y, axis.x);
 
   // Streak length grows with energy and with life (the streak stretches as it flies out).
-  float streakLen = 0.006 + 0.025 * clamp(uEnergy, 0.0, 1.0) * life;
+  float streakLen = (0.006 + 0.025 * clamp(uEnergy, 0.0, 1.0) * life) * uSize;
   // Half-width of the streak, 0.0025..0.005 per particle.
-  float halfWidth = mix(0.0025, 0.005, seed);
+  float halfWidth = mix(0.0025, 0.005, seed) * uSize;
 
   vLocal = CORNERS[gl_VertexID];
   // Head (x = 1) sits on the particle; the tail trails behind it along -axis.
@@ -85,6 +97,7 @@ void main() {
   // aspect divide, so the rotation is a true rotation on a wide screen. Defaults (0, 1) are identity.
   float c = cos(uRotation);
   float s = sin(uRotation);
-  vec2 turned = vec2(c * point.x - s * point.y, s * point.x + c * point.y) / uZoom;
+  // Follow (2026-11-06): stretch and drift from the scene are identity when the switch is off.
+  vec2 turned = (vec2(c * point.x - s * point.y, s * point.x + c * point.y) * uStretch) / uZoom + uCentre;
   gl_Position = vec4(turned.x / uAspect, turned.y, 0.0, 1.0);
 }

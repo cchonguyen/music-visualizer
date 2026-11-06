@@ -50,6 +50,8 @@ export interface ParticleParams {
   hueDrift: number; // turns per second, -0.2..0.2: slow hue drift on top of hueShift
   texture: boolean; // band texture (6.2): sparkle brightness from the high band
   textureGain: number; // 0..2, how strongly the band texture modulates
+  size: number; // 0.5..4, multiplies streak length and width (2 = doubled, the 2026-11-06 default)
+  followScene: boolean; // inherit the scene's zoom and rotation so particles blend with the trail
 }
 export const PARTICLE_DEFAULTS: ParticleParams = {
   brightness: 1.0,
@@ -63,6 +65,8 @@ export const PARTICLE_DEFAULTS: ParticleParams = {
   hueDrift: 0,
   texture: false,
   textureGain: 1,
+  size: 2,
+  followScene: false,
 };
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01 },
@@ -70,6 +74,8 @@ export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'flashSparkleScale', label: 'Sparkle on hi-hat flash', group: 'Sparkle', default: PARTICLE_DEFAULTS.flashSparkleScale, min: 0, max: 1, step: 0.01 },
   { type: 'float', name: 'swirlGain', label: 'Swirl (vortex when high)', group: 'Motion', default: PARTICLE_DEFAULTS.swirlGain, min: 0, max: 4, step: 0.01 },
   { type: 'enum', name: 'shape', label: 'Particle shape', group: 'Shape', default: PARTICLE_DEFAULTS.shape, options: ['streak', 'dot', 'star', 'ring'] },
+  { type: 'float', name: 'size', label: 'Size', group: 'Shape', default: PARTICLE_DEFAULTS.size, min: 0.5, max: 4, step: 0.01 },
+  { type: 'bool', name: 'followScene', label: 'Follow scene transform', group: 'Transform', default: PARTICLE_DEFAULTS.followScene },
   { type: 'float', name: 'rotation', label: 'Rotation (rad)', group: 'Transform', default: PARTICLE_DEFAULTS.rotation, min: -3.14, max: 3.14, step: 0.01 },
   { type: 'float', name: 'zoom', label: 'Zoom', group: 'Transform', default: PARTICLE_DEFAULTS.zoom, min: 0.5, max: 2, step: 0.01 },
   { type: 'float', name: 'hueShift', label: 'Hue shift (turns)', group: 'Colour', default: PARTICLE_DEFAULTS.hueShift, min: 0, max: 1, step: 0.01 },
