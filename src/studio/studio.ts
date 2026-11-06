@@ -28,7 +28,7 @@ const FRAME_BUDGET_MS = 16.7;
 
 /** A first Delete tap stays armed for this long. A second tap inside the window deletes. */
 export const DELETE_CONFIRM_MS = 3000;
-const DELETE_LABEL = 'Delete this preset';
+const DELETE_LABEL = 'Delete';
 const DELETE_ARMED_LABEL = 'Tap again to delete';
 
 /** Trim a typed preset name. Empty or whitespace-only names are rejected with a short message. */

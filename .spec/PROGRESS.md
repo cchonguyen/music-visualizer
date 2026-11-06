@@ -57,3 +57,4 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **Slice 9.2: Studio open and close affordance** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `index.html`, `src/main.ts`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 9.3: Studio phone sheet and touch sizes** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/style.css`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 9.4: Replace native prompt and confirm** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/studio/studio.ts`, `src/studio/studio.test.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 9.5: Shorten Studio Delete label** `[UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
