@@ -17,7 +17,8 @@
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
     <div id="studio" class="studio" hidden>
-      <div class="studio-head">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="studio-head sheet-head">
         <span class="studio-title">Studio</span>
         <button type="button" id="studio-close" class="close-btn" aria-label="Close Studio">Close</button>
       </div>
@@ -26,7 +27,10 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <nav id="controls" class="controls" aria-label="Player controls" hidden>
-      <button type="button" id="controls-close" class="close-btn">Close</button>
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-head controls-head">
+        <button type="button" id="controls-close" class="close-btn">Close</button>
+      </div>
       <div class="group" role="group" aria-label="Audio source">
         <span class="group-label" aria-hidden="true">Source</span>
         <button type="button" id="file-btn" class="btn">File…</button>
@@ -48,11 +52,32 @@
         <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
         <span id="time" class="time">0:00</span>
       </div>
-      <div class="group" role="group" aria-label="Sound and response">
+      <div class="group value-group" role="group" aria-label="Sound and response">
         <span class="group-label" aria-hidden="true">Sound and response</span>
-        <label>Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" /></label>
-        <label>Visual gain <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" /> <span id="gain-value">1.00×</span></label>
+        <div class="value-item">
+          <button type="button" class="value-btn" id="volume-btn" aria-expanded="false" aria-controls="volume-panel"><span class="value-name">Volume</span> <span class="value-val" id="volume-value">80%</span></button>
+          <div class="value-panel" id="volume-panel" hidden>
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume" />
+          </div>
+        </div>
+        <div class="value-item">
+          <button type="button" class="value-btn" id="gain-btn" aria-expanded="false" aria-controls="gain-panel"><span class="value-name">Visual gain</span> <span class="value-val" id="gain-value">1.00×</span></button>
+          <div class="value-panel" id="gain-panel" hidden>
+            <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="Visual gain" />
+          </div>
+        </div>
+        <div class="value-item">
+          <button type="button" class="value-btn" id="beat-btn" aria-expanded="false" aria-controls="beat-panel"><span class="value-name">Beat sensitivity</span> <span class="value-val" id="beat-value">50%</span></button>
+          <div class="value-panel" id="beat-panel" hidden>
+            <input id="beat-sensitivity" type="range" min="0" max="100" step="1" value="50" aria-label="Beat sensitivity" />
+          </div>
+        </div>
+      </div>
+      <div class="group display-row" role="group" aria-label="Display">
+        <span class="group-label" aria-hidden="true">Display</span>
         <label class="switch"><input id="calm" type="checkbox" /> Calm</label>
+        <label>Render quality <select id="render-quality" aria-label="Render quality"></select></label>
+        <label>Aspect correction <input id="aspect-correct" type="checkbox" aria-label="Aspect correction" /></label>
       </div>
       <div class="group" role="group" aria-label="View">
         <span class="group-label" aria-hidden="true">View</span>
@@ -65,7 +90,8 @@
     <button type="button" id="controls-show" hidden>Show controls</button>
 
     <dialog id="shortcuts" aria-labelledby="shortcuts-title">
-      <div class="dialog-head">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="dialog-head sheet-head">
         <h2 id="shortcuts-title">Keyboard shortcuts</h2>
         <button type="button" id="shortcuts-close" class="close-btn">Close</button>
       </div>

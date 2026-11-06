@@ -10,6 +10,7 @@ import { SCHEMAS } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession } from '../presets/session';
+import { attachSwipeDismiss } from '../ui/controls';
 import type { ParamSpec, ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
 
@@ -89,6 +90,8 @@ export class Studio {
     this.deleteLive.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
     container.append(this.deleteLive);
     container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
+    // Swipe down on a phone sheet closes Studio (slice 11.6). Same path as the Close button, so focus returns.
+    attachSwipeDismiss(container, () => this.setVisible(false));
     // Any pointer or key action outside the Delete button disarms a pending Delete.
     const disarmOnOther = (ev: Event) => {
       if (this.deleteArmedAt === null) return;
