@@ -154,28 +154,38 @@ export class Studio {
       options: Object.fromEntries(TRANSITION_STYLES.map((t) => [t, t])),
     }).on('change', () => session.commit(id));
     pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 }).on('change', () => session.commit(id));
-    pane.addButton({ title: `Save${dirty}` }).on('click', () => this.run(() => session.save(id), 'Saved'));
-    pane.addButton({ title: 'Save as…' }).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
-    pane.addButton({ title: 'Duplicate' }).on('click', () =>
+    // Action buttons share one grid wrapper (slice 10.2). Each button's element is collected, then moved into the wrapper below.
+    const tiles: HTMLElement[] = [];
+    const tile = <T extends ButtonApi>(btn: T): T => {
+      tiles.push(btn.element);
+      return btn;
+    };
+    tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
+    tile(pane.addButton({ title: 'Save as…' })).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
+    tile(pane.addButton({ title: 'Duplicate' })).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),
     );
     if (!entry.builtin) {
-      const del = pane.addButton({ title: DELETE_LABEL });
+      const del = tile(pane.addButton({ title: DELETE_LABEL }));
       this.deleteBtn = del;
       del.on('click', () => this.onDeleteTap(del, id));
     }
-    pane.addButton({ title: 'Export .json' }).on('click', () => this.exportFile(id));
-    pane.addButton({ title: 'Import .json…' }).on('click', () => this.importFile());
-    const undo = pane.addButton({ title: 'Undo' });
+    tile(pane.addButton({ title: 'Export .json' })).on('click', () => this.exportFile(id));
+    tile(pane.addButton({ title: 'Import .json…' })).on('click', () => this.importFile());
+    const undo = tile(pane.addButton({ title: 'Undo' }));
     undo.disabled = !session.canUndo(id);
     undo.on('click', () => this.run(() => {
       session.undo(id);
     }, 'Undone'));
-    const redo = pane.addButton({ title: 'Redo' });
+    const redo = tile(pane.addButton({ title: 'Redo' }));
     redo.disabled = !session.canRedo(id);
     redo.on('click', () => this.run(() => {
       session.redo(id);
     }, 'Redone'));
+    const tileGrid = document.createElement('div');
+    tileGrid.className = 'studio-tiles';
+    tiles[0]?.before(tileGrid);
+    tileGrid.append(...tiles);
 
     // --- Vary -----------------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
