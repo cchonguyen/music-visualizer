@@ -22,6 +22,7 @@ export class GlHost {
   private rafId = 0;
   private resizeTimer = 0;
   private observer: ResizeObserver;
+  private dprQuery: MediaQueryList | null = null;
   private size = { width: 1, height: 1, dpr: 1 };
   private clock: RenderClock = { timeSec: 0, dtSec: 0, frameIndex: 0 };
   private lastNow: number | null = null;
@@ -44,7 +45,25 @@ export class GlHost {
     this.observer = new ResizeObserver(() => this.scheduleResize());
     this.observer.observe(canvas);
     this.applySize();
+    this.watchDpr();
   }
+
+  /**
+   * Watches for a devicePixelRatio change (window moved to another monitor, browser zoom) with no
+   * CSS size change, which fires no ResizeObserver. Re-registers on each change. No-op without matchMedia.
+   */
+  private watchDpr(): void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    this.dprQuery?.removeEventListener('change', this.onDprChange);
+    const dpr = window.devicePixelRatio || 1;
+    this.dprQuery = window.matchMedia(`(resolution: ${dpr}dppx)`);
+    this.dprQuery.addEventListener('change', this.onDprChange);
+  }
+
+  private onDprChange = (): void => {
+    this.scheduleResize();
+    this.watchDpr();
+  };
 
   /** Add a layer; layers draw in the order added (first = bottom). */
   addLayer(layer: RenderLayer): void {
@@ -70,6 +89,8 @@ export class GlHost {
   dispose(): void {
     this.stop();
     this.observer.disconnect();
+    this.dprQuery?.removeEventListener('change', this.onDprChange);
+    this.dprQuery = null;
     if (!this.loss.isLost) for (const l of this.layers) l.dispose();
     this.layers = [];
   }

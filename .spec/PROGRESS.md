@@ -28,11 +28,6 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **T3** starter pack: 10 drafts (src/presets/builtin/starter-*.json), tagged draft. Keys 3–9 and [ ] reach them. Owner tunes and approves.
 - [ ] **T4** Studio in a second window: not built (optional in the plan)
 
-- [x] **Slice 4.5: Adjustable LFO rate (retroactive slice for PR #8)** `[GREEN][CORE / DATA]` worker: lead | Target files: `src/presets/format.ts`, `src/presets/links.ts`, `src/presets/links.test.ts`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
-- [x] **Slice 4.6: Particle shapes (streak, dot, star, ring)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
-- [x] **Slice 4.7: Particle transforms (rotation, zoom)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.vert.glsl` | Verify: npm run typecheck && npm test && npm run build
-- [x] **Slice 4.8: Particle colour shift (hue offset and drift)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
-
 ## projectM-inspired features (plan: /mnt/project-files/plans/projectm-ideas-implementation.md, approved 2026-11-05; contracts: .spec/PROJECTM_SPEC.md)
 - [x] **Slice 5.1: Beat sensitivity slider** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/audio/onset.ts`, `src/audio/onset.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 5.2: Render quality (buffer scale, persisted)** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/render/scene.ts`, `src/gl/size.ts`, `src/gl/size.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
@@ -59,3 +54,5 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [x] **Slice 7.5: Texture preset 10 (Dust Wave)** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/presets/builtin/tex-dust-wave.json` [NEW], `src/presets/builtin/index.ts`, `src/presets/loader.test.ts`, `src/presets/session.test.ts` | Verify: npm run typecheck && npm test && npm run build
 ## Stage 8 — Tappable shortcut popup (Charlie, 2026-11-06)
 - [x] **Slice 8.1: Tap the shortcut letters to fire them** `[UI / VISUAL]` worker: lead (Haiku) | Scope: each letter key in the popup (F, P, K, C, B, X, E, A, D) becomes a button. Tap or click runs the same handler as the key via a synthetic keydown (keyup for A), after closing the popup. Keyboard unchanged. Digits, arrows, Space and . stay plain text. Target files: `index.html`, `src/style.css`, `src/ui/controls.ts`, `src/ui/controls.test.ts` [NEW] | Verify: npm run typecheck && npm test && npm run build
+## Responsive fit (spec: .spec/specs/responsive-fit.md, Option A chosen by Charlie 2026-11-06)
+- [x] **Slice 8.2: Fit to any window size** `[UI / VISUAL]` worker: gf-coder (Haiku) | Target files: `src/style.css`, `src/render/compositor.ts`, `src/render/compositor.test.ts`, `src/gl/context.ts` | Verify: npm run typecheck && npm test && npm run build

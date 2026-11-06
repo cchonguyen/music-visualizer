@@ -59,6 +59,10 @@ Order set by the owner: morphs, frame stepping, sound responsiveness, then Stage
 - [x] **Slice S3-f: Accessibility audit (static, then notes)** [DONE] (docs/stage3-accessibility-audit.md; 2 concrete gaps listed for next slice, browser checks pending) `[GREEN][UI / VISUAL]` worker: lead | Target files: `docs/stage3-accessibility-audit.md` [NEW] | Verify: npm run typecheck && npm run build
 - [x] **Slice 4.12: Referee stamp for the Stage 3 branch (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/SESSION_HANDOFF.md` | Verify: npm test && npm run typecheck
 - [x] **Slice 4.15: Referee stamp for the PR #13 head (gate fix)** `[GREEN][CORE / DATA]` worker: lead | Target files: `.spec/PROGRESS.md` | Verify: npm run typecheck && npx vitest run
+- [x] **Slice 4.5: Adjustable LFO rate (retroactive slice for PR #8)** `[GREEN][CORE / DATA]` worker: lead | Target files: `src/presets/format.ts`, `src/presets/links.ts`, `src/presets/links.test.ts`, `src/studio/studio.ts` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 4.6: Particle shapes (streak, dot, star, ring)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 4.7: Particle transforms (rotation, zoom)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.vert.glsl` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 4.8: Particle colour shift (hue offset and drift)** `[YELLOW][UI / VISUAL]` worker: lead | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.frag.glsl` | Verify: npm run typecheck && npm test && npm run build
 
 
 ## Archived from PROGRESS.md (Stage 6, all done)

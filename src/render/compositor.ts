@@ -69,6 +69,26 @@ export function fit16x9(width: number, height: number): { width: number; height:
   return { width: w, height: Math.min(h, Math.max(1, Math.round((w * 9) / 16))) };
 }
 
+/**
+ * Where the scene is drawn inside the canvas (slice 8.2). Landscape (width > height) with aspect
+ * correction on: the largest 16:9 box, centred (letterbox or pillarbox). Portrait, square, or
+ * correction off: the full canvas at offset 0. Offsets are whole pixels.
+ */
+export function aspectBox(
+  width: number,
+  height: number,
+  correct: boolean,
+): { width: number; height: number; offX: number; offY: number } {
+  if (!correct || height >= width) return { width, height, offX: 0, offY: 0 };
+  const box = fit16x9(width, height);
+  return {
+    width: box.width,
+    height: box.height,
+    offX: Math.floor((width - box.width) / 2),
+    offY: Math.floor((height - box.height) / 2),
+  };
+}
+
 export class Compositor implements RenderLayer {
   private scenes = new Map<string, Scene>();
   // `weights` is what is drawn now; `targets` is what the last key press asked for.
@@ -215,18 +235,11 @@ export class Compositor implements RenderLayer {
     this.rawW = width;
     this.rawH = height;
     this.dpr = dpr;
-    this.offX = 0;
-    this.offY = 0;
-    if (aspectCorrect) {
-      const box = fit16x9(width, height);
-      this.w = box.width;
-      this.h = box.height;
-      this.offX = Math.floor((width - box.width) / 2);
-      this.offY = Math.floor((height - box.height) / 2);
-    } else {
-      this.w = width;
-      this.h = height;
-    }
+    const box = aspectBox(width, height, aspectCorrect);
+    this.w = box.width;
+    this.h = box.height;
+    this.offX = box.offX;
+    this.offY = box.offY;
     this.appliedAspect = aspectCorrect;
     this.full?.resize(this.w, this.h);
     this.half?.resize(Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
