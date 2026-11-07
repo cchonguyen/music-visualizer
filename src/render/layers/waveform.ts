@@ -94,9 +94,6 @@ export class WaveformLayer implements RenderLayer {
     bindTarget(gl, target);
 
     gl.useProgram(this.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.tex.texture);
-    gl.uniform1i(this.uWave, 0);
     gl.uniform1i(this.uCount, n);
     gl.uniform1i(this.uMode, mode);
     gl.uniform1f(this.uAspect, target.width / Math.max(target.height, 1));
@@ -105,12 +102,16 @@ export class WaveformLayer implements RenderLayer {
     const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
     gl.uniform1f(this.uAlpha, opacity); // layer opacity
     gl.uniform2f(this.uRes, target.width, target.height);
-    // Band texture (6.4): always bound so the sampler has a valid texture; updated only when on.
+    // Band texture (6.4): update and bind before the wave texture goes on unit 0, so nothing clobbers it.
     gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
     gl.uniform1f(this.uTexGain, this.p.textureGain);
     if (this.p.texture) this.band.update(gl, frame.bandWaveforms);
     const texUnit = this.band.bind(gl, BAND_UNIT);
     gl.uniform1i(this.uTexHigh, texUnit + 2);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.tex.texture);
+    gl.uniform1i(this.uWave, 0);
 
     gl.bindVertexArray(this.vao);
     const vertexCount = mode === 3 ? 1024 : (mode === 1 || mode === 2) ? n + 1 : n;
