@@ -16,7 +16,7 @@ import { getVisualGain, shapeReaction } from './render/gainStore';
 import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
-import { BUILTIN_PRESETS, SCHEMAS } from './presets/builtin';
+import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
 import { applyLinkedPreset, hasCrownLayer, hasLinks } from './presets/loader';
 import { LinkRunner } from './presets/links';
@@ -127,7 +127,7 @@ function start(): void {
     compositor = comp;
     host.addLayer(comp);
     session = new PresetSession(comp, SCHEMAS, safeStorage());
-    for (const b of BUILTIN_PRESETS) session.addBuiltin(b.id, b.preset);
+    for (const b of ALL_PRESETS) session.addBuiltin(b.id, b.preset);
     for (const problem of session.loadUserPresets()) console.warn('Saved preset skipped:', problem);
     const liveSession = session;
     const order = () => liveSession.list().map((e) => e.id);
