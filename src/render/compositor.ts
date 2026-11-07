@@ -111,6 +111,7 @@ export class Compositor implements RenderLayer {
   private h = 1;
   private dpr = 1;
   private limiter = new BrightnessLimiter();
+  calm = false;
   private lastNow: number | null = null;
   private loudnessSlow = 0;
   // How long a scene switch takes to fade (seconds). Each preset can ask for its own (slice 4.4).
@@ -169,6 +170,28 @@ export class Compositor implements RenderLayer {
       if (typeof v === 'number') next[key] = v;
     }
     this.post = next;
+  }
+
+  /** Calm mode toggle. Scales contrast excursions and caps peak saturation. */
+  setCalm(calm: boolean): void {
+    this.calm = calm;
+    this.limiter.calm = calm;
+  }
+
+  getCalm(): boolean {
+    return this.limiter.calm;
+  }
+
+  get calmFactor(): number {
+    return this.limiter.calmFactor;
+  }
+
+  get reversalDamp(): number {
+    return this.limiter.reversalDamp;
+  }
+
+  get brightnessLimiter(): BrightnessLimiter {
+    return this.limiter;
   }
 
   /** Uniform location for `name` in `prog`, looked up once and cached. */
@@ -279,12 +302,18 @@ export class Compositor implements RenderLayer {
     for (const name of active) this.scenes.get(name)!.draw(frame, clock);
 
     // Estimated brightness target: loudness-driven, with a dim floor (the limiter enforces the floor).
+    const isCalm =
+      this.calm ||
+      (typeof document !== 'undefined' &&
+        Boolean((document.getElementById('calm') as HTMLInputElement | null)?.checked));
+    this.limiter.calm = isCalm;
+
     const now = performance.now();
     const dt = this.lastNow === null ? 0 : Math.min(0.1, Math.max(0, (now - this.lastNow) / 1000));
     this.lastNow = now;
     // The brightness target follows a slowed loudness, so the screen does not dim with every beat.
     this.loudnessSlow = releaseEnvelope(this.loudnessSlow, frame.loudness, dt, 0.5, 1.0);
-    const cap = this.limiter.step(0.2 + 0.8 * this.loudnessSlow, dt);
+    const cap = this.limiter.step(0.2 + 0.8 * this.loudnessSlow, dt, isCalm);
 
     const a = active[0];
     const b = active[1];
@@ -356,6 +385,8 @@ export class Compositor implements RenderLayer {
     gl.uniform1f(this.u(prog, 'uWB'), wB);
     gl.uniform1f(this.u(prog, 'uCap'), cap);
     gl.uniform1f(this.u(prog, 'uSafety'), safety);
+    gl.uniform1f(this.u(prog, 'uCalm'), this.limiter.calm ? 1.0 : 0.0);
+    gl.uniform1f(this.u(prog, 'uReversalDamp'), this.limiter.reversalDamp);
     gl.uniform1i(this.u(prog, 'uStyle'), this.transition);
     const sum = wA + wB;
     gl.uniform1f(this.u(prog, 'uT'), sum > 0 ? wB / sum : 0);
