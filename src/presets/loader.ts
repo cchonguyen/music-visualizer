@@ -13,10 +13,11 @@ import { WaveformLayer } from '../render/layers/waveform';
 import { MoireLayer } from '../render/layers/moire';
 import { SpectralTerrainLayer } from '../render/layers/spectralTerrain';
 import { ChladniSandLayer } from '../render/layers/chladniSand';
+import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
-import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type ParamSpec, type ParamValue } from './schema';
+import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
 
 // Register moire and spectralTerrain in LAYER_SPECS for loader consumers
@@ -28,6 +29,9 @@ if (!LAYER_SPECS.spectralTerrain) {
 }
 if (!LAYER_SPECS.chladniSand) {
   (LAYER_SPECS as Record<string, readonly ParamSpec[]>).chladniSand = CHLADNI_SPECS;
+}
+if (!LAYER_SPECS.ferrofluid) {
+  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).ferrofluid = FERROFLUID_SPECS;
 }
 if (LAYER_SPECS.particles && !LAYER_SPECS.particles.some((s) => s.name === 'mode')) {
   (LAYER_SPECS.particles as ParamSpec[]).push(PARTICLE_MODE_SPEC);
@@ -63,6 +67,7 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   moire: (p) => new MoireLayer(p as Partial<MoireParams>),
   spectralTerrain: (p) => new SpectralTerrainLayer(p as Partial<SpectralTerrainParams>),
   chladniSand: (p) => new ChladniSandLayer(p as Partial<ChladniSandParams>),
+  ferrofluid: (p) => new FerrofluidLayer(p as Partial<FerrofluidParams>),
 };
 
 /** Builds a scene with fresh layers. Disabled layers are skipped. */
@@ -97,6 +102,7 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof MoireLayer) layer.setParams(values as Partial<MoireParams>);
   else if (layer instanceof SpectralTerrainLayer) layer.setParams(values as Partial<SpectralTerrainParams>);
   else if (layer instanceof ChladniSandLayer) layer.setParams(values as Partial<ChladniSandParams>);
+  else if (layer instanceof FerrofluidLayer) layer.setParams(values as Partial<FerrofluidParams>);
 }
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */
