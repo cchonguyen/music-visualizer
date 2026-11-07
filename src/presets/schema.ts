@@ -422,5 +422,43 @@ export const FERROFLUID_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "fresnelGain", label: "Fresnel halo", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.fresnelGain, min: 0.0, max: 4.0, step: 0.1 },
 ];
 
+/** Reaction-diffusion simulation and rendering parameters (Slice 7.17). */
+export interface ReactionDiffusionParams {
+  speed: number;
+  feed: number;
+  kill: number;
+  du: number;
+  dv: number;
+  brightness: number;
+  colorPink: string;
+  colorCobalt: string;
+  specular: number;
+}
+
+export const REACTION_DIFFUSION_DEFAULTS: ReactionDiffusionParams = {
+  speed: 1.0,
+  feed: 0.042,
+  kill: 0.062,
+  du: 0.16,
+  dv: 0.08,
+  brightness: 1.25,
+  colorPink: '#ff2a8d',
+  colorCobalt: '#0044ff',
+  specular: 1.0,
+};
+
+export const REACTION_DIFFUSION_SPECS: readonly ParamSpec[] = [
+  { type: "float", name: "speed", label: "Simulation speed", group: "Simulation", default: REACTION_DIFFUSION_DEFAULTS.speed, min: 0.1, max: 3.0, step: 0.05 },
+  { type: "float", name: "feed", label: "Base feed rate", group: "Simulation", default: REACTION_DIFFUSION_DEFAULTS.feed, min: 0.01, max: 0.09, step: 0.001 },
+  { type: "float", name: "kill", label: "Base kill rate", group: "Simulation", default: REACTION_DIFFUSION_DEFAULTS.kill, min: 0.04, max: 0.08, step: 0.001 },
+  { type: "float", name: "du", label: "Diffusion rate U", group: "Simulation", default: REACTION_DIFFUSION_DEFAULTS.du, min: 0.05, max: 0.3, step: 0.01 },
+  { type: "float", name: "dv", label: "Diffusion rate V", group: "Simulation", default: REACTION_DIFFUSION_DEFAULTS.dv, min: 0.02, max: 0.2, step: 0.01 },
+  { type: "float", name: "brightness", label: "Brightness", group: "Appearance", default: REACTION_DIFFUSION_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05 },
+  { type: "colour", name: "colorPink", label: "Coral pink", group: "Colour", default: REACTION_DIFFUSION_DEFAULTS.colorPink },
+  { type: "colour", name: "colorCobalt", label: "Cobalt blue", group: "Colour", default: REACTION_DIFFUSION_DEFAULTS.colorCobalt },
+  { type: "float", name: "specular", label: "Specular gain", group: "Appearance", default: REACTION_DIFFUSION_DEFAULTS.specular, min: 0.0, max: 3.0, step: 0.05 },
+];
+
+
 
 
