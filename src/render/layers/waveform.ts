@@ -13,10 +13,15 @@ import { BandTexture } from '../bandTexture';
 const BAND_UNIT = 1;
 
 export class WaveformLayer implements RenderLayer {
+  opacity = 1.0;
   private p: WaveformParams;
 
   constructor(params: Partial<WaveformParams> = {}) {
     this.p = { ...WAVEFORM_DEFAULTS, ...params };
+  }
+
+  setOpacity(opacity: number): void {
+    this.opacity = opacity;
   }
 
   setParams(params: Partial<WaveformParams>): void {
@@ -64,7 +69,7 @@ export class WaveformLayer implements RenderLayer {
     // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, _clock: RenderClock, target: RenderTarget): void {
+  draw(frame: AudioFrame, _clock: RenderClock, target: RenderTarget, options?: { opacity?: number; uLayerOpacity?: number }): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('WaveformLayer: draw before init');
 
@@ -90,7 +95,8 @@ export class WaveformLayer implements RenderLayer {
     gl.uniform1i(this.uMode, circle ? 1 : 0);
     gl.uniform1f(this.uAspect, target.width / Math.max(target.height, 1));
     gl.uniform1f(this.uAmp, this.p.amplitude);
-    gl.uniform1f(this.uAlpha, 1); // layer opacity (crossfades happen in the compositor)
+    const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
+    gl.uniform1f(this.uAlpha, opacity); // layer opacity
     gl.uniform2f(this.uRes, target.width, target.height);
     // Band texture (6.4): always bound so the sampler has a valid texture; updated only when on.
     gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
@@ -99,13 +105,9 @@ export class WaveformLayer implements RenderLayer {
     const texUnit = this.band.bind(gl, BAND_UNIT);
     gl.uniform1i(this.uTexHigh, texUnit + 2);
 
-    // Blend only for this draw so other layers keep their own blend state.
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.LINE_STRIP, 0, circle ? n + 1 : n);
     gl.bindVertexArray(null);
-    gl.disable(gl.BLEND);
   }
 
   dispose(): void {

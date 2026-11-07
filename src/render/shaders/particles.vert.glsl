@@ -44,6 +44,8 @@ float hash01(float index, float salt) {
 void main() {
   float id = float(gl_InstanceID);
   float seed = hash01(id, 0.0);                    // spawn offset along the life cycle
+  vec2 aSeed = vec2(seed, hash01(id, 6.0));
+  vMix = aSeed.y;
   float speed = mix(0.06, 0.16, hash01(id, 1.0));  // per-particle life rate
   float angleBase = hash01(id, 2.0) * TAU;         // starting direction
   float swirlDir = mix(-1.2, 1.2, hash01(id, 3.0)); // curl direction, sign varies per particle

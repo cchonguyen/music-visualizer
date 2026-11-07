@@ -561,9 +561,14 @@ function linkTargets(preset: Preset): { key: string; label: string; setting: Set
     const setting = preset.feedback[spec.name];
     if (setting) out.push({ key: `F.${spec.name}`, label: `Feedback · ${spec.label}`, setting, meterKey: `F.${spec.name}`, spec });
   }
+  for (const spec of POST_NUMBERS) {
+    const setting = preset.post[spec.name];
+    if (setting) out.push({ key: `P.${spec.name}`, label: `Post · ${spec.label}`, setting, meterKey: `P.${spec.name}`, spec });
+  }
   return out;
 }
 const FEEDBACK_NUMBERS = SCHEMAS.feedback.filter((s) => s.type === 'float' || s.type === 'int');
+const POST_NUMBERS = SCHEMAS.post.filter((s) => s.type === 'float' || s.type === 'int');
 
 /** Default morph end: a quarter of the range away from the value, on whichever side has room, kept in range. */
 function morphTargetFor(spec: Extract<ParamSpec, { type: 'float' | 'int' }>, value: ParamValue): number {

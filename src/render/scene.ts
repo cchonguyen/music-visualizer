@@ -6,7 +6,7 @@ import { PingPong } from '../gl/fbo';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { createVao } from '../gl/vao';
 import type { RenderClock } from './clock';
-import { bindTarget, type RenderLayer } from './layer';
+import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
 import { advanceSceneTransform } from './sceneTransformStore';
@@ -18,9 +18,17 @@ const UNIFORMS = [
   'uTime', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
 ] as const;
 
+export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
+
+export interface SceneLayerConfig {
+  opacity?: number;
+  blend?: BlendMode;
+}
+
 export class Scene {
   readonly name: string;
   readonly layers: RenderLayer[];
+  private layerConfigs: { opacity: number; blend: BlendMode }[] = [];
   private gl: WebGL2RenderingContext | null = null;
   private pp: PingPong | null = null;
   private prog: WebGLProgram | null = null;
@@ -33,9 +41,32 @@ export class Scene {
   private fb: Record<string, number | string> = { ...FEEDBACK_DEFAULTS };
   private uni = new Map<string, WebGLUniformLocation | null>();
 
-  constructor(name: string, layers: RenderLayer[]) {
+  constructor(name: string, layers: RenderLayer[], configs: SceneLayerConfig[] = []) {
     this.name = name;
     this.layers = layers;
+    this.layerConfigs = layers.map((_, i) => ({
+      opacity: configs[i]?.opacity ?? 1.0,
+      blend: configs[i]?.blend ?? 'max',
+    }));
+  }
+
+  setLayerConfigs(configs: SceneLayerConfig[]): void {
+    this.layerConfigs = this.layers.map((_, i) => ({
+      opacity: configs[i]?.opacity ?? 1.0,
+      blend: configs[i]?.blend ?? 'max',
+    }));
+  }
+
+  setLayerConfig(index: number, config: Partial<SceneLayerConfig>): void {
+    if (!this.layerConfigs[index]) {
+      this.layerConfigs[index] = { opacity: 1.0, blend: 'max' };
+    }
+    if (config.opacity !== undefined) this.layerConfigs[index].opacity = config.opacity;
+    if (config.blend !== undefined) this.layerConfigs[index].blend = config.blend;
+  }
+
+  getLayerConfigs(): readonly { opacity: number; blend: BlendMode }[] {
+    return this.layerConfigs;
   }
 
   /** Sets the trail motion and colour settings. Read on the next frame. */
@@ -115,17 +146,53 @@ export class Scene {
       clock.timeSec,
     );
 
-    // 2) Layers draw on top with a MAX blend: each pixel keeps the brighter of the
-    // old trail and the new light. Additive blending was tried and saturated to white
-    // within a second, because the trail re-adds the light every frame (browser check, 2026-11-04).
-    // Each layer gets the MAX blend set again before its draw. Some layers (particles,
-    // waveform) switch blending off or to another mode when they finish; without this reset,
-    // a later full-screen layer (the kick shockwave) would overwrite the trail with black.
-    for (const layer of this.layers) {
+    // 2) Layers draw on top. Scene is the sole owner of GL blend state before each
+    // layer draw, restoring MAX blend immediately after each layer draw (Slice 7.8).
+    for (let i = 0; i < this.layers.length; i++) {
+      const layer = this.layers[i];
+      if (!layer) continue;
+      const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max' };
+      const opacity = cfg.opacity ?? 1.0;
+      const blend = cfg.blend ?? 'max';
+
       gl.enable(gl.BLEND);
+      switch (blend) {
+        case 'alpha':
+          gl.blendEquation(gl.FUNC_ADD);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          break;
+        case 'add':
+          gl.blendEquation(gl.FUNC_ADD);
+          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+          break;
+        case 'screen':
+          gl.blendEquation(gl.FUNC_ADD);
+          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR);
+          break;
+        case 'max':
+        default:
+          gl.blendEquation(gl.MAX);
+          gl.blendFunc(gl.ONE, gl.ONE);
+          break;
+      }
+
+      if ('opacity' in layer) {
+        (layer as unknown as { opacity: number }).opacity = opacity;
+      }
+      if (typeof (layer as unknown as { setOpacity?: (o: number) => void }).setOpacity === 'function') {
+        (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(opacity);
+      }
+
+      (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: { opacity: number; uLayerOpacity: number }) => void)(
+        frame,
+        clock,
+        target,
+        { opacity, uLayerOpacity: opacity },
+      );
+
+      // Restore default GL blend state immediately after each layer draw
       gl.blendEquation(gl.MAX);
       gl.blendFunc(gl.ONE, gl.ONE);
-      layer.draw(frame, clock, target);
     }
     gl.disable(gl.BLEND);
     gl.blendEquation(gl.FUNC_ADD);
