@@ -166,6 +166,16 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
 **What's cheap to change later:** visual styles, colors, shader math, UI layout.
 **What's expensive to change later (so we set it now):** the audio data shape, who owns the GPU context, the feedback-buffer capability, resize and pixel-ratio logic, and context-loss recovery.
 
+**Stage 7 — Compositing, Stencil Alpha & Reactivity Contracts (decided 2026-11-07):**
+- **Stencil Alpha & Layer Blend State:** Every layer accepts `options?: { uLayerOpacity?: number }` in `draw(frame, clock, options)` and emits `alpha = 0` on dark/empty gaps (inter-ring space, Moiré troughs, Terrain sky) so underlying layers peek through cleanly. Default layer blend mode is `'max'` (`gl.MAX`); `'add'` and `'screen'` auto-attenuate opacity by `1.0 - decay * 0.82` when feedback trails are active.
+- **Per-Layer `trails: boolean` Dual-Pass Pipeline:** `Scene.draw()` splits active layers into two passes:
+  1. `trails !== false` (default `true`): rendered into the feedback write FBO before ping-pong swap so their pixels feed recursive warp trails.
+  2. `trails === false`: rendered after the feedback swap (and before post/bloom) so foreground geometry stays razor-sharp over trippy feedback backgrounds.
+- **Dark-Floor Safety Invariant:** `composite.frag.glsl` and `safety.ts` (`uCalm`, `uReversalDamp`) must attenuate luminance downward via multiplicative scaling and never mix dark pixels (`0.0`) toward `vec3(0.5)` mid-grey.
+- **Macro Phrase vs. Micro Transient Reactivity:** Macro structural symmetries (Chladni `(n, m)` modes, Mandala fold count, Phyllotaxis golden divergence, Möbius dipole polarity, Tunnel flight direction) hold steady across musical phrases (6–8s cooldown; 18s cooldown for Tunnel breakdown reversal) and morph smoothly over 2–3s on section changes, with a Studio dropdown for manual lock. Micro transients (`kickEnv`, `kickPulse`, `sub`, `high`) drive phase-integrated speed, ripples, and grain sparkle—never raw position multipliers that snap backward.
+- **Shared Terrain Heightfield (`TEXTURE5`):** When `SpectralTerrainLayer` is active, it publishes its `128 × 64` `R32F` history texture to `terrainStore` (`TEXTURE5`) so companion layers (`Particles`, `Waveform`) can displace vertices over the 3D spectral ridges (`terrainDisplace`), while `Scene` can advect feedback trails along the mountain perspective (`terrainFlow`).
+
+
 ## 8. Deferred (phone and iPhone notes, for later)
 
 - iPhone Safari has no system-audio capture. File input is the only audio source there. Use an explicit list of audio file types; `accept="audio/*"` greys out music files on iOS.
