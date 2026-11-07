@@ -35,9 +35,13 @@ void main() {
   // Lit from the bottom up to 80% of the bar's height.
   float lit = (vUv.y < height * 0.8 && inBar > 0.5) ? 1.0 : 0.0;
 
+  if (lit <= 0.0) {
+    outColor = vec4(0.0);
+    return;
+  }
+
   vec3 bar = mix(uAccentA, uAccentB, x) * 0.7 * brightMul;
-  vec3 col = mix(uBase, bar, lit);
   // Keep the bars dim: never above 0.7 per channel.
-  col = min(col, vec3(0.7));
+  vec3 col = min(bar, vec3(0.7));
   outColor = vec4(col, 1.0);
 }

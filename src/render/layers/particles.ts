@@ -6,7 +6,8 @@ import { compileProgram } from '../../gl/shader';
 import { createVao } from '../../gl/vao';
 import { Phase, type RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
-import { DEFAULT_PALETTE, getPalette, type Palette } from '../palette';
+import { getPalette, type Palette } from '../palette';
+import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
@@ -28,6 +29,7 @@ const BASE_PHASE_RATE = 0.2;
 const ENERGY_PHASE_RATE = 0.8;
 
 export class ParticleLayer implements RenderLayer {
+  opacity = 1.0;
   /** Calm mode: no energy-driven density, dimmer sparkle. */
   calm = false;
   /** Section contrast (P4): negative slows the particle stream, positive speeds it up. Ignored in calm. */
@@ -39,6 +41,10 @@ export class ParticleLayer implements RenderLayer {
 
   constructor(params: Partial<ParticleParams> = {}) {
     this.p = { ...PARTICLE_DEFAULTS, ...params };
+  }
+
+  setOpacity(opacity: number): void {
+    this.opacity = opacity;
   }
 
   setParams(params: Partial<ParticleParams>): void {
@@ -80,7 +86,7 @@ export class ParticleLayer implements RenderLayer {
   /** Hue drift clock (turns). Advances by hueDrift per second; wrapped to 0..1 when sent to the shader. */
   private hueTurns = 0;
 
-  private paletteName: string = DEFAULT_PALETTE;
+  private paletteName: string = getCurrentPalette();
   private readonly phase = new Phase();
   // Twinkle clock: advances at 1 per second (real time), so twinkle rate is in rad/s.
   private readonly twinkle = new Phase();
@@ -132,7 +138,7 @@ export class ParticleLayer implements RenderLayer {
     // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
+  draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget, options?: { opacity?: number; uLayerOpacity?: number }): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('ParticleLayer: draw before init');
 
@@ -178,7 +184,8 @@ export class ParticleLayer implements RenderLayer {
     const sway = getSway();
     gl.uniform2f(this.uSway, 2 * sway.x, 2 * sway.y);
     gl.uniform1f(this.uSparkle, sparkle);
-    gl.uniform1f(this.uBrightness, this.p.brightness);
+    const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
+    gl.uniform1f(this.uBrightness, this.p.brightness * opacity);
     gl.uniform1f(this.uEnergy, clamp01(frame.energy));
     gl.uniform1f(this.uTwinkleTime, twinkleTime);
     // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).
@@ -209,17 +216,9 @@ export class ParticleLayer implements RenderLayer {
     const unit = this.band.bind(gl, BAND_UNIT);
     gl.uniform1i(this.uTexHigh, unit + 2);
 
-    // Particles must ADD onto the tunnel. Inside a scene the blend equation is MAX
-    // (a tunnel-brightness pass), where quiet sparkles were invisible (measured
-    // 2026-11-04). So switch to ADD for this draw only, then restore MAX.
-    gl.enable(gl.BLEND);
-    gl.blendEquation(gl.FUNC_ADD);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, POOL_SIZE);
     gl.bindVertexArray(null);
-    gl.blendEquation(gl.MAX);
-    gl.disable(gl.BLEND);
   }
 
   dispose(): void {

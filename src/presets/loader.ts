@@ -1,7 +1,7 @@
 // Loader (slice 4.3): turns a validated Preset into a Scene. The layer registry maps a
 // layer type name ("tunnel") to the class that draws it. Adding a layer type = one line here.
 import type { RenderLayer } from '../render/layer';
-import { Scene } from '../render/scene';
+import { Scene, type BlendMode, type SceneLayerConfig } from '../render/scene';
 import { BarsLayer } from '../render/layers/bars';
 import { BassPulseLayer } from '../render/layers/bassPulse';
 import { CrownLayer } from '../render/layers/crown';
@@ -41,13 +41,18 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
 /** Builds a scene with fresh layers. Disabled layers are skipped. */
 export function buildScene(name: string, preset: Preset): Scene {
   const layers: RenderLayer[] = [];
+  const configs: SceneLayerConfig[] = [];
   for (const entry of preset.layers) {
     if (!entry.enabled) continue;
     const factory = LAYER_FACTORIES[entry.type];
     if (!factory) throw new Error(`buildScene: no factory for layer "${entry.type}"`);
     layers.push(factory(valuesOf(entry.params)));
+    configs.push({
+      opacity: entry.opacity ?? 1.0,
+      blend: (entry.blend as BlendMode) ?? 'max',
+    });
   }
-  const scene = new Scene(name, layers);
+  const scene = new Scene(name, layers, configs);
   scene.setFeedback(valuesOf(preset.feedback));
   return scene;
 }
@@ -71,6 +76,10 @@ export function applyPresetToScene(preset: Preset, scene: Scene): void {
   live.forEach((entry, k) => {
     const layer = scene.layers[k];
     if (layer) applyValues(layer, valuesOf(entry.params));
+    scene.setLayerConfig(k, {
+      opacity: entry.opacity ?? 1.0,
+      blend: (entry.blend as BlendMode) ?? 'max',
+    });
   });
 }
 
@@ -91,6 +100,15 @@ export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunn
     const layer = scene.layers[k];
     if (!layer) return;
     applyValues(layer, runner.resolve(`${scope}L${k}`, entry.params, LAYER_SPECS[entry.type] ?? [], inputs, dtSec));
+    scene.setLayerConfig(k, {
+      opacity: entry.opacity ?? 1.0,
+      blend: (entry.blend as BlendMode) ?? 'max',
+    });
   });
   return runner.resolve(`${scope}P`, preset.post, POST_SPECS, inputs, dtSec);
+}
+
+/** True when preset contains an enabled layer with type === 'crown'. */
+export function hasCrownLayer(preset?: { layers: { type: string; enabled?: boolean }[] } | null): boolean {
+  return Boolean(preset?.layers?.some((l) => l.enabled !== false && l.type === 'crown'));
 }

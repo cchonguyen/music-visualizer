@@ -59,10 +59,13 @@ void main() {
     }
   }
 
+  if (ink <= 0.0) {
+    outColor = vec4(0.0);
+    return;
+  }
+
   // Louder norm makes the strokes a little brighter; the ceiling keeps them dim.
   float brightness = 0.6 + 0.4 * clamp(uNorm, 0.0, 1.0);
-  vec3 col = mix(uBase, uAccent * brightness * texMul, ink);
-  // Keep the rings dim: never above 0.7 per channel.
-  col = min(col, vec3(0.7));
-  outColor = vec4(col, 1.0);
+  vec3 col = min(uAccent * brightness * texMul, vec3(0.7));
+  outColor = vec4(col, ink);
 }

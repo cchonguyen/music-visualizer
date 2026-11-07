@@ -18,7 +18,7 @@ import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { BUILTIN_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
-import { applyLinkedPreset, hasLinks } from './presets/loader';
+import { applyLinkedPreset, hasCrownLayer, hasLinks } from './presets/loader';
 import { LinkRunner } from './presets/links';
 import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
@@ -137,7 +137,7 @@ function start(): void {
       currentId = id;
       cycler.reset();
       liveSession.show(id);
-      crownOn = id === 'crown';
+      crownOn = hasCrownLayer(liveSession.get(id)?.preset);
       storePresetId(id);
       if (announce) showToast(liveSession.get(id)!.preset.name);
       if (studio.visible) studio.bind(id);
@@ -288,6 +288,7 @@ function start(): void {
     const shown = session?.shownId;
     if (session && shown) {
       const entry = session.get(shown);
+      if (entry) crownOn = hasCrownLayer(entry.preset);
       if (entry && hasLinks(entry.preset)) {
         const post = applyLinkedPreset(entry.preset, session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec);
         compositor?.setPost(post);
@@ -297,6 +298,10 @@ function start(): void {
   });
 }
 
-const problems = browserSupportProblems();
-if (problems.length) showNotice(problems.join(' '), 'error', 0);
-document.getElementById('start-btn')!.addEventListener('click', start, { once: true });
+export { hasCrownLayer };
+
+if (typeof window !== 'undefined') {
+  const problems = browserSupportProblems();
+  if (problems.length) showNotice(problems.join(' '), 'error', 0);
+  document.getElementById('start-btn')?.addEventListener('click', start, { once: true });
+}
