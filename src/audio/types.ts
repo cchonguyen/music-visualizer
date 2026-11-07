@@ -43,6 +43,8 @@ export interface AudioFrame {
   beat: boolean; // sub-band onset fired this frame (same as beatByBand.sub)
   beatByBand: BandFlags; // per-band onsets (treble particles use .high)
   beatStrength: number; // 0..1 for the sub-band onset
+  kickEnv: number; // 0..1, sub-band kick envelope with frame-rate independent exponential decay
+  kickPulse: boolean; // true only on the frame when beatByBand.sub triggers
   waveform: Float32Array; // time-domain samples, -1..1, length = fftSize
   bandWaveforms: BandWaveforms; // waveform split into sub / mid / high, each length = fftSize
   spectrum: Float32Array; // raw magnitude per bin, 0..1, length = fftSize/2

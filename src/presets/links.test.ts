@@ -11,6 +11,7 @@ function frame(over: Partial<AudioFrame> = {}): AudioFrame {
     raw: { ...bands }, env: { ...bands, sub: 0.3 }, norm: { ...bands, sub: 0.6, mid: 0.2, high: 0.9 },
     loudness: 0.4, energy: 0.7, flux: 0.1, fluxByBand: { ...bands }, beat: false,
     beatByBand: { sub: false, mid: false, high: false }, beatStrength: 0,
+    kickEnv: 0, kickPulse: false,
     waveform: new Float32Array(0),
     bandWaveforms: { sub: new Float32Array(0), mid: new Float32Array(0), high: new Float32Array(0) },
     spectrum: new Float32Array(0), smoothedSpectrum: new Float32Array(0), sampleRate: 48000,
@@ -58,9 +59,26 @@ describe('new sources (4.11)', () => {
     expect(sourceValue('midFlux', inputs({ frame: f }))).toBe(0.2);
   });
 
-  it('brightness is 0 for an all-zero spectrum', () => {
+  it('brightness and centroid hold 0.5 for an all-zero spectrum (silence freeze)', () => {
     const f = frame({ spectrum: new Float32Array(64), frameIndex: 100 });
-    expect(sourceValue('brightness', inputs({ frame: f }))).toBe(0);
+    expect(sourceValue('brightness', inputs({ frame: f }))).toBe(0.5);
+    expect(sourceValue('centroid', inputs({ frame: f }))).toBe(0.5);
+  });
+
+  it('AUDIO_SOURCES lists kickEnv and centroid', () => {
+    expect(AUDIO_SOURCES).toContain('kickEnv');
+    expect(AUDIO_SOURCES).toContain('centroid');
+  });
+
+  it('kickEnv passes through from frame.kickEnv', () => {
+    expect(sourceValue('kickEnv', inputs({ frame: frame({ kickEnv: 0.72 }) }))).toBeCloseTo(0.72, 3);
+  });
+
+  it('centroid aliases to silence-safe spectral centroid', () => {
+    const high = new Float32Array(64);
+    high[60] = 1;
+    const f = frame({ spectrum: high, frameIndex: 400 });
+    expect(sourceValue('centroid', inputs({ frame: f }))).toBe(sourceValue('brightness', inputs({ frame: f })));
   });
 
   it('brightness is higher for high-bin energy than low-bin energy, both in 0..1', () => {

@@ -1,17 +1,11 @@
 // Preset format: the shape of a preset as a JSON file, and the checker that turns
 // any JSON (hand-edited, imported, or saved by an older version) into a safe Preset.
-import { coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec } from "./schema";
+import { AUDIO_SOURCES, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec } from "./schema";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
 export const PRESET_VERSION = 1 as const;
 
-/** Every signal a setting can follow (see docs/stage4-presets-plan.md §4). Only stored here in 4.1; evaluated in E2. */
-export const AUDIO_SOURCES = [
-  "sub", "bass", "mid", "high", "energy", "loudness", "beat", "onset", "section",
-  "beatStrength", "brightness", "subFlux", "midFlux", "highFlux",
-  "lfoSine", "lfoSaw", "lfoRandom", "time",
-] as const;
-export type AudioSource = (typeof AUDIO_SOURCES)[number];
+export { AUDIO_SOURCES, type AudioSource };
 
 export const TRANSITION_STYLES = ["crossfade", "wipe", "dissolve", "zoom"] as const;
 export type Transition = (typeof TRANSITION_STYLES)[number];

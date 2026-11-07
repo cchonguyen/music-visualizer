@@ -113,6 +113,7 @@ export class FrameBuilder {
   private hasPrevSpectrum = false;
   private frameIndex = 0;
   private prevTime: number | null = null;
+  private kickEnv = 0;
 
   constructor(sampleRate: number, fftSize: number) {
     this.sampleRate = sampleRate;
@@ -169,6 +170,8 @@ export class FrameBuilder {
       beat: false,
       beatByBand: makeFlags(),
       beatStrength: 0,
+      kickEnv: 0,
+      kickPulse: false,
       waveform: this.waveform,
       bandWaveforms: this.bandWaveforms,
       spectrum: this.spectrum,
@@ -275,6 +278,15 @@ export class FrameBuilder {
     frame.beat = subOnset.beat;
     frame.beatStrength = subOnset.strength;
 
+    if (subOnset.beat) {
+      this.kickEnv = 1.0;
+      frame.kickPulse = true;
+    } else {
+      frame.kickPulse = false;
+      this.kickEnv *= Math.pow(0.88, dtSec * 60);
+    }
+    frame.kickEnv = this.kickEnv;
+
     this.smoothSpectrum(dtSec);
 
     // Save this spectrum for the next frame's flux calculation.
@@ -300,6 +312,10 @@ export class FrameBuilder {
     this.subDetector.reset();
     this.midDetector.reset();
     this.highDetector.reset();
+
+    this.kickEnv = 0;
+    this.frame.kickEnv = 0;
+    this.frame.kickPulse = false;
 
     this.spectrum.fill(0);
     this.prevSpectrum.fill(0);

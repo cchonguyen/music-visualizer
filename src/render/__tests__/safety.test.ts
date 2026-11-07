@@ -98,6 +98,8 @@ function makeMockFrame(): AudioFrame {
     beat: false,
     beatByBand: { sub: false, mid: false, high: false },
     beatStrength: 0,
+    kickEnv: 0,
+    kickPulse: false,
     waveform: new Float32Array(16),
     bandWaveforms: {
       sub: new Float32Array(16),
