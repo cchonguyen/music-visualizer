@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "name": "Curl Fluid Warp",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "warpMode": "curl",
+    "decay": 0.97,
+    "decayRgb": [0.99, 0.97, 1.0]
+  },
+  "layers": [
+    {
+      "type": "waveform",
+      "params": {
+        "mode": "line",
+        "amplitude": { "value": 0.85, "link": { "source": "sub", "amount": 0.35, "smooth": 0.15 } },
+        "texture": true,
+        "textureGain": { "value": 1.0, "link": { "source": "mid", "amount": 0.4, "smooth": 0.2 } }
+      }
+    }
+  ],
+  "post": {}
+}

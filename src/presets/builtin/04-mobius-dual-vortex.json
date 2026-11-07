@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "name": "Möbius Dual Vortex",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "warpMode": "mobius",
+    "decay": 0.96
+  },
+  "layers": [
+    {
+      "type": "rings",
+      "opacity": 0.15,
+      "blend": "alpha",
+      "params": {
+        "mode": "polarGrid",
+        "strokeBase": 0.003
+      }
+    },
+    {
+      "type": "particles",
+      "params": {
+        "shape": "dot",
+        "swirlGain": 2.5,
+        "zoom": 1.2,
+        "brightness": 1.2
+      }
+    }
+  ],
+  "post": {}
+}

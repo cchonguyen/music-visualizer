@@ -1,6 +1,7 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
-import { parsePreset, type Preset, type SchemaRegistry } from '../format';
+import { BLEND_MODES, parsePreset, type Preset, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
+import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, type ParamSpec, type EnumSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
 import bars from './bars.json';
@@ -24,6 +25,44 @@ import tex_grain_crown from './tex-grain-crown.json';
 import tex_ripple_field from './tex-ripple-field.json';
 import tex_neon_weave from './tex-neon-weave.json';
 import tex_dust_wave from './tex-dust-wave.json';
+import preset01 from './01-curl-fluid-warp.json';
+import preset02 from './02-kaleidoscopic-mandala.json';
+import preset03 from './03-solarized-contour-rings.json';
+import preset04 from './04-mobius-dual-vortex.json';
+import preset05 from './05-rgb-aberration-vortex.json';
+import preset06 from './06-lissajous-vector-crt.json';
+
+// Support 'alpha' and 'screen' in layer blend specification
+if (!BLEND_MODES.includes('alpha' as any)) {
+  (BLEND_MODES as unknown as string[]).push('alpha', 'screen');
+}
+
+// Extend FEEDBACK_SPECS with opt-in feedback warp parameters
+for (const spec of FEEDBACK_WARP_SPECS) {
+  if (!FEEDBACK_SPECS.some((s) => s.name === spec.name)) {
+    (FEEDBACK_SPECS as ParamSpec[]).push(spec);
+  }
+}
+
+// Extend rings schema with shape/mode option
+const ringsSpecs = LAYER_SPECS.rings;
+if (ringsSpecs && !ringsSpecs.some((s) => s.name === 'mode')) {
+  (ringsSpecs as ParamSpec[]).push(RINGS_MODE_SPEC);
+}
+
+// Extend waveform schema mode with star7 and lissajous
+const waveformSpecs = LAYER_SPECS.waveform;
+const waveformModeSpec = waveformSpecs?.find((s) => s.name === 'mode') as EnumSpec | undefined;
+if (waveformModeSpec && !waveformModeSpec.options.includes('star7')) {
+  waveformModeSpec.options = [...waveformModeSpec.options, 'star7', 'lissajous'];
+}
+
+// Extend post schema with CRT scanlines and barrel distortion
+for (const spec of POST_CRT_SPECS) {
+  if (!POST_SPECS.some((s) => s.name === spec.name)) {
+    (POST_SPECS as ParamSpec[]).push(spec);
+  }
+}
 
 export const SCHEMAS: SchemaRegistry = { feedback: FEEDBACK_SPECS, post: POST_SPECS, layers: LAYER_SPECS };
 
@@ -53,3 +92,17 @@ export const BUILTIN_PRESETS: readonly { id: string; preset: Preset; warnings: s
   { id: 'tex-neon-weave', ...parsePreset(tex_neon_weave, SCHEMAS) },
   { id: 'tex-dust-wave', ...parsePreset(tex_dust_wave, SCHEMAS) },
 ];
+
+/** Flagship Presets 01–06 (Slice 7.12). */
+export const FLAGSHIP_PRESETS: readonly { id: string; preset: Preset; warnings: string[] }[] = [
+  { id: '01-curl-fluid-warp', ...parsePreset(preset01, SCHEMAS) },
+  { id: '02-kaleidoscopic-mandala', ...parsePreset(preset02, SCHEMAS) },
+  { id: '03-solarized-contour-rings', ...parsePreset(preset03, SCHEMAS) },
+  { id: '04-mobius-dual-vortex', ...parsePreset(preset04, SCHEMAS) },
+  { id: '05-rgb-aberration-vortex', ...parsePreset(preset05, SCHEMAS) },
+  { id: '06-lissajous-vector-crt', ...parsePreset(preset06, SCHEMAS) },
+];
+
+(BUILTIN_PRESETS as any).flagship = FLAGSHIP_PRESETS;
+export const ALL_PRESETS = [...BUILTIN_PRESETS, ...FLAGSHIP_PRESETS];
+
