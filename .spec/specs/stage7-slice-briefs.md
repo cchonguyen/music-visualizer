@@ -2,11 +2,11 @@
 
 Status: saved 2026-11-06 at Charlie's request. Not built. No slice is `[IN_PROGRESS]`, and none of these slices are in `.spec/PROGRESS.md` yet.
 
-Numbering warning: the slice IDs below (7.1–7.10) partly collide with IDs already used in `.spec/PROGRESS.md` for the texture presets (7.2–7.5, done). Do not add these lines to PROGRESS.md until Charlie confirms the numbering. Architecture plan: `.spec/specs/stage7-architecture-plan.md`.
+Numbering: Charlie chose (2026-11-07) to renumber these briefs to 7.8–7.17, so the texture-preset slices 7.2–7.5 already in `.spec/PROGRESS.md` keep their IDs. Architecture plan: `.spec/specs/stage7-architecture-plan.md`.
 
 ---
 
-## Slice 7.1: Fix the 6 audited layer/blend bugs and centralize GL blend state ownership in Scene.draw()
+## Slice 7.8: Fix the 6 audited layer/blend bugs and centralize GL blend state ownership in Scene.draw()
 
 ### Target Files
 - `src/main.ts`
@@ -53,7 +53,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.2: Wire the Calm safety switch into the composite pass and add GPU-side bidirectional luminance and high-frequency stripe damping
+## Slice 7.9: Wire the Calm safety switch into the composite pass and add GPU-side bidirectional luminance and high-frequency stripe damping
 
 ### Target Files
 - `src/render/safety.ts`
@@ -88,7 +88,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.3: Add kickEnv and kickPulse to AudioFrame, add silence freeze to spectral centroid, and extend bandTexture with waveform + log-spectrum rows
+## Slice 7.10: Add kickEnv and kickPulse to AudioFrame, add silence freeze to spectral centroid, and extend bandTexture with waveform + log-spectrum rows
 
 ### Target Files
 - `src/audio/types.ts`
@@ -128,7 +128,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.4: Extend fullscreen per-pixel feedback shader with curl, polarFold, mobius, rgbSplit, sobel edge-detect, and solarize modes
+## Slice 7.11: Extend fullscreen per-pixel feedback shader with curl, polarFold, mobius, rgbSplit, sobel edge-detect, and solarize modes
 
 ### Target Files
 - `src/render/shaders/feedback.frag.glsl`
@@ -173,7 +173,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.5: Add orbit_triangles to RingsLayer, star7 and lissajous 3D knot modes to WaveformLayer, CRT scanlines to post, and Flagship Presets 01–06
+## Slice 7.12: Add orbit_triangles to RingsLayer, star7 and lissajous 3D knot modes to WaveformLayer, CRT scanlines to post, and Flagship Presets 01–06
 
 ### Target Files
 - `src/render/layers/rings.ts`
@@ -222,7 +222,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.6: Build MoireLayer and SpectralTerrainLayer, and author Flagship Presets 07 (Moiré Interference Loom) and 08 (Spectral Ridge Terrain)
+## Slice 7.13: Build MoireLayer and SpectralTerrainLayer, and author Flagship Presets 07 (Moiré Interference Loom) and 08 (Spectral Ridge Terrain)
 
 ### Target Files
 - `src/render/layers/moire.ts`
@@ -264,7 +264,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.7: Build ChladniSandLayer, add phyllotaxis spiral mode to ParticleLayer, and author Flagship Presets 09 and 10
+## Slice 7.14: Build ChladniSandLayer, add phyllotaxis spiral mode to ParticleLayer, and author Flagship Presets 09 and 10
 
 ### Target Files
 - `src/render/layers/chladniSand.ts`
@@ -305,7 +305,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.8: Build FerrofluidLayer using a 4-subdivision icosahedron mesh with 3D curl displacement and MatCap shading, and author Flagship Preset 11
+## Slice 7.15: Build FerrofluidLayer using a 4-subdivision icosahedron mesh with 3D curl displacement and MatCap shading, and author Flagship Preset 11
 
 ### Target Files
 - `src/render/layers/ferrofluid.ts`
@@ -340,7 +340,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.9: Add ghost-free seeded-feedback morph transition to Compositor and organize the preset library into Flagship, Textures, Classics, and Archive groups
+## Slice 7.16: Add ghost-free seeded-feedback morph transition to Compositor and organize the preset library into Flagship, Textures, Classics, and Archive groups
 
 ### Target Files
 - `src/render/compositor.ts`
@@ -364,7 +364,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
    - Add a `3.0s` max-wait fallback timeout to beat-synced preset switching so auto-cycle still advances smoothly during beatless ambient breakdowns.
 3. **`src/presets/builtin/index.ts` & `src/ui/controls.ts`**:
    - Group built-in presets with metadata `group: 'flagship' | 'textures' | 'classic' | 'archive'`:
-     - `'flagship'`: Presets `01` through `11` (and `12` in Slice 7.10).
+     - `'flagship'`: Presets `01` through `11` (and `12` in Slice 7.17).
      - `'textures'`: All 12 `tex-*` presets from Slice 6.2.
      - `'classic'`: `crown`, `flight`, `bars`.
      - `'archive'`: The 10 `starter-*` draft presets (excluded from primary default auto-cycle rotation, but still accessible by ID).
@@ -380,7 +380,7 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 
 ---
 
-## Slice 7.10: Build ReactionDiffusionLayer with an isolated 256x256 ping-pong chemical state FBO and author Flagship Preset 12 (Reaction-Diffusion Coral)
+## Slice 7.17: Build ReactionDiffusionLayer with an isolated 256x256 ping-pong chemical state FBO and author Flagship Preset 12 (Reaction-Diffusion Coral)
 
 ### Target Files
 - `src/render/layers/reactionDiffusion.ts`
