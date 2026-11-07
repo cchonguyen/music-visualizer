@@ -295,6 +295,15 @@ declare module "./layerSchemas" {
     jitter: number;
     color: string;
   }
+  interface FerrofluidParams {
+    radius: number;
+    spikeAmp: number;
+    spikeFreq: number;
+    spikeSharp: number;
+    rotSpeed: number;
+    brightness: number;
+    fresnelGain: number;
+  }
 }
 
 /** Moire parameters and schema (Slice 7.13). */
@@ -380,6 +389,37 @@ export const CHLADNI_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "attraction", label: "Nodal attraction", group: "Sand", default: CHLADNI_DEFAULTS.attraction, min: 0.1, max: 3.0, step: 0.05 },
   { type: "float", name: "jitter", label: "Kick jitter", group: "Sand", default: CHLADNI_DEFAULTS.jitter, min: 0.0, max: 3.0, step: 0.05 },
   { type: "colour", name: "color", label: "Sand colour", group: "Colour", default: CHLADNI_DEFAULTS.color },
+];
+
+/** Ferrofluid parameters and schema (Slice 7.15). */
+export interface FerrofluidParams {
+  radius: number;
+  spikeAmp: number;
+  spikeFreq: number;
+  spikeSharp: number;
+  rotSpeed: number;
+  brightness: number;
+  fresnelGain: number;
+}
+
+export const FERROFLUID_DEFAULTS: FerrofluidParams = {
+  radius: 0.48,
+  spikeAmp: 0.35,
+  spikeFreq: 1.0,
+  spikeSharp: 3.5,
+  rotSpeed: 0.3,
+  brightness: 1.2,
+  fresnelGain: 1.5,
+};
+
+export const FERROFLUID_SPECS: readonly ParamSpec[] = [
+  { type: "float", name: "radius", label: "Base radius", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.radius, min: 0.2, max: 1.2, step: 0.01 },
+  { type: "float", name: "spikeAmp", label: "Spike amplitude", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeAmp, min: 0.0, max: 1.0, step: 0.01 },
+  { type: "float", name: "spikeFreq", label: "Spike frequency", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeFreq, min: 0.2, max: 3.0, step: 0.05 },
+  { type: "float", name: "spikeSharp", label: "Spike sharpness", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeSharp, min: 1.0, max: 8.0, step: 0.1 },
+  { type: "float", name: "rotSpeed", label: "Rotation speed", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.rotSpeed, min: -2.0, max: 2.0, step: 0.05 },
+  { type: "float", name: "brightness", label: "Brightness", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.brightness, min: 0.2, max: 3.0, step: 0.05 },
+  { type: "float", name: "fresnelGain", label: "Fresnel halo", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.fresnelGain, min: 0.0, max: 4.0, step: 0.1 },
 ];
 
 
