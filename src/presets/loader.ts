@@ -1,7 +1,7 @@
 // Loader (slice 4.3): turns a validated Preset into a Scene. The layer registry maps a
 // layer type name ("tunnel") to the class that draws it. Adding a layer type = one line here.
 import type { RenderLayer } from '../render/layer';
-import { Scene, type BlendMode, type SceneLayerConfig } from '../render/scene';
+import { Scene, type BlendMode, type SceneLayerConfig, FEEDBACK_WARP_DEFAULTS } from '../render/scene';
 import { BarsLayer } from '../render/layers/bars';
 import { BassPulseLayer } from '../render/layers/bassPulse';
 import { CrownLayer } from '../render/layers/crown';
@@ -17,7 +17,7 @@ import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
-import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
+import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
 
@@ -57,6 +57,28 @@ export function valuesOf(settings: Settings): Record<string, ParamValue> {
   return out;
 }
 
+/** Reads and normalises feedback settings from a preset or settings object (Slice 7.22). */
+export function readFeedbackSettings(feedbackOrPreset: Preset | Settings | Record<string, unknown>): Record<string, ParamValue> {
+  const raw = (feedbackOrPreset && typeof feedbackOrPreset === 'object' && 'feedback' in feedbackOrPreset)
+    ? (feedbackOrPreset as Preset).feedback
+    : (feedbackOrPreset as Settings | Record<string, unknown>);
+  const values: Record<string, ParamValue> = {};
+  if (raw && typeof raw === 'object') {
+    for (const [name, val] of Object.entries(raw)) {
+      if (val && typeof val === 'object' && 'value' in val) {
+        values[name] = (val as { value: ParamValue }).value;
+      } else {
+        values[name] = val as ParamValue;
+      }
+    }
+  }
+  return {
+    ...FEEDBACK_DEFAULTS,
+    ...FEEDBACK_WARP_DEFAULTS,
+    ...values,
+  };
+}
+
 // Values come from parsePreset, which has already checked every name and range against
 // layerSchemas.ts. The casts below rely on that check.
 export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
@@ -91,7 +113,7 @@ export function buildScene(name: string, preset: Preset): Scene {
     });
   }
   const scene = new Scene(name, layers, configs);
-  scene.setFeedback(valuesOf(preset.feedback));
+  scene.setFeedback(readFeedbackSettings(preset));
   return scene;
 }
 
@@ -116,7 +138,7 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */
 export function applyPresetToScene(preset: Preset, scene: Scene, _gl?: WebGL2RenderingContext): void {
-  scene.setFeedback(valuesOf(preset.feedback));
+  scene.setFeedback(readFeedbackSettings(preset));
   const live = preset.layers.filter((l) => l.enabled);
   live.forEach((entry, k) => {
     const layer = scene.layers[k];

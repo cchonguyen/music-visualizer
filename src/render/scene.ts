@@ -31,7 +31,22 @@ export const FEEDBACK_WARP_DEFAULTS = {
   decayRgb: [1.0, 1.0, 1.0] as [number, number, number],
   sobel: 0.0,
   solarize: 0.0,
-  mobiusPoleOffset: 0.35,
+  mobiusPoleOffset: 0.48,
+  curlOctaves: 2,
+  curlTurbulence: 0.45,
+  curlFlowPattern: 'plumes',
+  radialFold: 0.0,
+  mandalaTile: 0.0,
+  mandalaCounterSpin: 0.25,
+  mandalaKickFlare: 0.35,
+  mandalaPattern: 'auto',
+  contourFreq: 7.85,
+  contourWidth: 0.45,
+  colorSpread: 0.65,
+  mobiusFlow: 0.85,
+  mobiusSwirl: 0.65,
+  mobiusWander: 0.55,
+  mobiusMode: 'auto',
 };
 
 const UNIFORMS = [
@@ -39,6 +54,11 @@ const UNIFORMS = [
   'uTime', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
   'uWarpMode', 'uKaleidoN', 'uPortalRadius', 'uRgbSplit', 'uDecayRgb', 'uSobel', 'uSolarize',
   'uSolarizePhase', 'uMobiusPoleOffset', 'uMobiusPolePolarity', 'uWarpAmp',
+  'uCurlOctaves', 'uCurlTurbulence', 'uCurlFlowPattern',
+  'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin', 'uMandalaKickFlare',
+  'uContourFreq', 'uContourWidth', 'uColorSpread',
+  'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl',
+  'uKick', 'uSub', 'uHigh',
 ] as const;
 
 export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
@@ -90,6 +110,10 @@ export class Scene {
   /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
   private fb: Record<string, ParamValue> = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS };
   private mobiusPolePolarity = 1.0;
+  private poleOrbitPhase = 0.0;
+  private screenDriftPhase = 0.0;
+  private lastPoleA: [number, number] = [-0.48, 0.0];
+  private lastPoleB: [number, number] = [0.48, 0.0];
   private uni = new Map<string, WebGLUniformLocation | null>();
   private foregroundOpacity = 1.0;
   private outputTex: WebGLTexture | null = null;
@@ -215,9 +239,22 @@ export class Scene {
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 
-    if (frame?.kickPulse) {
-      this.mobiusPolePolarity = -this.mobiusPolePolarity;
-    }
+    const dt = typeof frame?.dtSec === 'number' && Number.isFinite(frame.dtSec) && frame.dtSec > 0 ? frame.dtSec : 1 / 60;
+    const normMid = frame?.norm?.mid ?? (frame?.env?.mid ?? 0.5);
+    const normSub = frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5);
+    this.poleOrbitPhase += dt * (0.28 + normMid * 0.45);
+    this.screenDriftPhase += dt * (0.19 + normSub * 0.35);
+
+    const mobiusWander = Number(this.fb.mobiusWander ?? FEEDBACK_WARP_DEFAULTS.mobiusWander);
+    const centerX = Math.sin(this.screenDriftPhase) * 0.24 * mobiusWander;
+    const centerY = Math.cos(this.screenDriftPhase * 0.77) * 0.16 * mobiusWander;
+    const poleOffset = Number(this.fb.mobiusPoleOffset ?? FEEDBACK_WARP_DEFAULTS.mobiusPoleOffset);
+    const sep = poleOffset * (1.0 + 0.28 * mobiusWander * (Math.sin(this.poleOrbitPhase * 0.63) * 0.5 + (normSub - 0.3) * 0.6));
+    const ang = this.poleOrbitPhase * 0.45 * mobiusWander;
+    const cosAng = Math.cos(ang);
+    const sinAng = Math.sin(ang);
+    this.lastPoleA = [centerX - sep * cosAng, centerY - sep * sinAng];
+    this.lastPoleB = [centerX + sep * cosAng, centerY + sep * sinAng];
 
     const target = {
       kind: 'fbo' as const,
@@ -233,7 +270,7 @@ export class Scene {
     gl.useProgram(this.prog);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
-    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height);
+    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -358,7 +395,7 @@ export class Scene {
     }
   }
 
-  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number): void {
+  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number, frame?: AudioFrame): void {
     const n = (key: string) => Number(this.fb[key]);
     const u = (name: string) => this.uni.get(name) ?? null;
     gl.uniform1i(u('uPrev'), 0);
@@ -390,7 +427,12 @@ export class Scene {
     const warpModeInt = WARP_MODES[modeKey] ?? 0;
     gl.uniform1i?.(u('uWarpMode')!, warpModeInt);
 
-    gl.uniform1f?.(u('uKaleidoN')!, n('kaleidoN') || 6);
+    let kaleidoFolds = n('kaleidoN') || 6;
+    if (this.fb.mandalaPattern && this.fb.mandalaPattern !== 'auto') {
+      const parsed = parseInt(String(this.fb.mandalaPattern), 10);
+      if (!Number.isNaN(parsed) && parsed > 0) kaleidoFolds = parsed;
+    }
+    gl.uniform1f?.(u('uKaleidoN')!, kaleidoFolds);
     gl.uniform1f?.(u('uPortalRadius')!, n('portalRadius') || 0.0);
     gl.uniform1f?.(u('uRgbSplit')!, n('rgbSplit') || 0.0);
 
@@ -405,9 +447,43 @@ export class Scene {
     gl.uniform1f?.(u('uSolarize')!, n('solarize') || 0.0);
     gl.uniform1f?.(u('uSolarizePhase')!, timeSec * 2.0);
     const poleOffset = n('mobiusPoleOffset');
-    gl.uniform1f?.(u('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.35);
+    gl.uniform1f?.(u('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.48);
     gl.uniform1f?.(u('uMobiusPolePolarity')!, this.mobiusPolePolarity);
     gl.uniform1f?.(u('uWarpAmp')!, n('warp') || 0.0);
+
+    // Slice 7.22 Curl uniforms:
+    gl.uniform1i?.(u('uCurlOctaves')!, Math.max(1, Math.min(3, Math.round(n('curlOctaves') || 2))));
+    gl.uniform1f?.(u('uCurlTurbulence')!, Number(this.fb.curlTurbulence ?? 0.45));
+    const CURL_PATTERNS: Record<string, number> = {
+      plumes: 0,
+      eddies: 1,
+      outflow: 2,
+      inflow: 3,
+    };
+    const flowKey = String(this.fb.curlFlowPattern ?? 'plumes');
+    gl.uniform1i?.(u('uCurlFlowPattern')!, CURL_PATTERNS[flowKey] ?? 0);
+
+    // Slice 7.22 Mandala uniforms:
+    gl.uniform1f?.(u('uRadialFold')!, Number(this.fb.radialFold ?? 0.0));
+    gl.uniform1f?.(u('uMandalaTile')!, Number(this.fb.mandalaTile ?? 0.0));
+    gl.uniform1f?.(u('uMandalaCounterSpin')!, Number(this.fb.mandalaCounterSpin ?? 0.25));
+    gl.uniform1f?.(u('uMandalaKickFlare')!, Number(this.fb.mandalaKickFlare ?? 0.35));
+
+    // Slice 7.22 Solarize uniforms:
+    gl.uniform1f?.(u('uContourFreq')!, Number(this.fb.contourFreq ?? 7.85));
+    gl.uniform1f?.(u('uContourWidth')!, Number(this.fb.contourWidth ?? 0.45));
+    gl.uniform1f?.(u('uColorSpread')!, Number(this.fb.colorSpread ?? 0.65));
+
+    // Slice 7.22 Möbius dipole uniforms:
+    gl.uniform2f?.(u('uMobiusPoleA')!, this.lastPoleA[0], this.lastPoleA[1]);
+    gl.uniform2f?.(u('uMobiusPoleB')!, this.lastPoleB[0], this.lastPoleB[1]);
+    gl.uniform1f?.(u('uMobiusFlow')!, Number(this.fb.mobiusFlow ?? 0.85));
+    gl.uniform1f?.(u('uMobiusSwirl')!, Number(this.fb.mobiusSwirl ?? 0.65));
+
+    // Audio modulations:
+    gl.uniform1f?.(u('uKick')!, frame?.kickEnv ?? (frame?.raw?.sub ?? 0.0));
+    gl.uniform1f?.(u('uSub')!, frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5));
+    gl.uniform1f?.(u('uHigh')!, frame?.norm?.high ?? (frame?.env?.high ?? 0.5));
   }
 
   dispose(): void {

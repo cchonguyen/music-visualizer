@@ -4,7 +4,7 @@ import feedbackSrc from '../shaders/feedback.frag.glsl?raw';
 import { FULLSCREEN_VERT, compileProgram } from '../../gl/shader';
 import { assertValidSpec, coerceValue, defaultsFor, FEEDBACK_WARP_SPECS } from '../../presets/schema';
 import { FEEDBACK_SPECS } from '../../presets/layerSchemas';
-import { valuesOf, buildScene } from '../../presets/loader';
+import { valuesOf, buildScene, readFeedbackSettings } from '../../presets/loader';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { Preset } from '../../presets/format';
@@ -104,7 +104,7 @@ function makeMockFrame(overrides: Partial<AudioFrame> = {}): AudioFrame {
     },
     spectrum: new Float32Array(4),
     smoothedSpectrum: new Float32Array(4),
-    sampleRate: 44100,
+    sampleRate: 48000,
     ...overrides,
   };
 }
@@ -115,7 +115,7 @@ const mockClock: RenderClock = {
   dtSec: 0.016,
 };
 
-describe('Feedback Warp Modes (Slice 7.11)', () => {
+describe('Feedback Warp Overhaul (Slice 7.22)', () => {
   describe('Schema & Defaults', () => {
     it('all feedback warp specs are valid according to assertValidSpec', () => {
       for (const spec of FEEDBACK_WARP_SPECS) {
@@ -123,7 +123,7 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
       }
     });
 
-    it('defaults match the Slice 7.11 specification', () => {
+    it('defaults match the Slice 7.22 specification', () => {
       const defaults = defaultsFor(FEEDBACK_WARP_SPECS);
       expect(defaults.warpMode).toBe('classic');
       expect(defaults.kaleidoN).toBe(6);
@@ -132,7 +132,24 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
       expect(defaults.decayRgb).toEqual([1.0, 1.0, 1.0]);
       expect(defaults.sobel).toBe(0.0);
       expect(defaults.solarize).toBe(0.0);
-      expect(defaults.mobiusPoleOffset).toBe(0.35);
+      expect(defaults.mobiusPoleOffset).toBe(0.48);
+
+      // Slice 7.22 additions:
+      expect(defaults.curlOctaves).toBe(2);
+      expect(defaults.curlTurbulence).toBe(0.45);
+      expect(defaults.curlFlowPattern).toBe('plumes');
+      expect(defaults.radialFold).toBe(0.0);
+      expect(defaults.mandalaTile).toBe(0.0);
+      expect(defaults.mandalaCounterSpin).toBe(0.25);
+      expect(defaults.mandalaKickFlare).toBe(0.35);
+      expect(defaults.mandalaPattern).toBe('auto');
+      expect(defaults.contourFreq).toBe(7.85);
+      expect(defaults.contourWidth).toBe(0.45);
+      expect(defaults.colorSpread).toBe(0.65);
+      expect(defaults.mobiusFlow).toBe(0.85);
+      expect(defaults.mobiusSwirl).toBe(0.65);
+      expect(defaults.mobiusWander).toBe(0.55);
+      expect(defaults.mobiusMode).toBe('auto');
     });
 
     it('FEEDBACK_WARP_DEFAULTS matches typed defaults', () => {
@@ -144,7 +161,22 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
         decayRgb: [1.0, 1.0, 1.0],
         sobel: 0.0,
         solarize: 0.0,
-        mobiusPoleOffset: 0.35,
+        mobiusPoleOffset: 0.48,
+        curlOctaves: 2,
+        curlTurbulence: 0.45,
+        curlFlowPattern: 'plumes',
+        radialFold: 0.0,
+        mandalaTile: 0.0,
+        mandalaCounterSpin: 0.25,
+        mandalaKickFlare: 0.35,
+        mandalaPattern: 'auto',
+        contourFreq: 7.85,
+        contourWidth: 0.45,
+        colorSpread: 0.65,
+        mobiusFlow: 0.85,
+        mobiusSwirl: 0.65,
+        mobiusWander: 0.55,
+        mobiusMode: 'auto',
       });
     });
 
@@ -157,6 +189,14 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
       expect(coerceValue(kaleidoSpec, 10).value).toBe(10);
       expect(coerceValue(kaleidoSpec, 2).value).toBe(4); // clamped min
       expect(coerceValue(kaleidoSpec, 20).value).toBe(16); // clamped max
+
+      const curlFlowSpec = FEEDBACK_WARP_SPECS.find((s) => s.name === 'curlFlowPattern')!;
+      expect(coerceValue(curlFlowSpec, 'eddies').value).toBe('eddies');
+      expect(coerceValue(curlFlowSpec, 'invalid').value).toBe('plumes');
+
+      const mobiusModeSpec = FEEDBACK_WARP_SPECS.find((s) => s.name === 'mobiusMode')!;
+      expect(coerceValue(mobiusModeSpec, 'figureEight').value).toBe('figureEight');
+      expect(coerceValue(mobiusModeSpec, 'invalid').value).toBe('auto');
 
       const decayRgbSpec = FEEDBACK_WARP_SPECS.find((s) => s.name === 'decayRgb')!;
       expect(coerceValue(decayRgbSpec, [0.99, 0.95, 1.0]).value).toEqual([0.99, 0.95, 1.0]);
@@ -182,6 +222,13 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
         sobel: { value: 0.5 },
         solarize: { value: 0.6 },
         mobiusPoleOffset: { value: 0.4 },
+        curlOctaves: { value: 3 },
+        curlTurbulence: { value: 0.6 },
+        curlFlowPattern: { value: 'eddies' },
+        radialFold: { value: 0.5 },
+        mandalaTile: { value: 0.3 },
+        contourFreq: { value: 8.5 },
+        mobiusFlow: { value: 1.2 },
       };
       const values = valuesOf(settings);
       expect(values.warpMode).toBe('curl');
@@ -192,6 +239,34 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
       expect(values.sobel).toBe(0.5);
       expect(values.solarize).toBe(0.6);
       expect(values.mobiusPoleOffset).toBe(0.4);
+      expect(values.curlOctaves).toBe(3);
+      expect(values.curlTurbulence).toBe(0.6);
+      expect(values.curlFlowPattern).toBe('eddies');
+      expect(values.radialFold).toBe(0.5);
+      expect(values.mandalaTile).toBe(0.3);
+      expect(values.contourFreq).toBe(8.5);
+      expect(values.mobiusFlow).toBe(1.2);
+    });
+
+    it('readFeedbackSettings normalises and defaults all feedback fields', () => {
+      const partialPreset: Preset = {
+        version: 1,
+        name: 'test-loader-fb',
+        tags: [],
+        transition: { style: 'crossfade', seconds: 0.5 },
+        feedback: {
+          warpMode: { value: 'curl' },
+          curlOctaves: { value: 3 },
+        },
+        layers: [],
+        post: {},
+      };
+      const fb = readFeedbackSettings(partialPreset);
+      expect(fb.warpMode).toBe('curl');
+      expect(fb.curlOctaves).toBe(3);
+      expect(fb.curlTurbulence).toBe(0.45);
+      expect(fb.mobiusPoleOffset).toBe(0.48);
+      expect(fb.contourFreq).toBe(7.85);
     });
 
     it('buildScene applies feedback settings from preset', () => {
@@ -216,18 +291,27 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
     it('contains all required warp modes and algorithms', () => {
       // Warp modes
       expect(feedbackSrc).toContain('uWarpMode');
-      expect(feedbackSrc).toContain('curlField');
+      expect(feedbackSrc).toContain('snoise');
+      expect(feedbackSrc).toContain('curlNoise');
+      expect(feedbackSrc).toContain('uCurlFlowPattern');
+      expect(feedbackSrc).toContain('uMandalaTile');
+      expect(feedbackSrc).toContain('uRadialFold');
       expect(feedbackSrc).toContain('abs(mod(theta, TWO_PI / uKaleidoN) - PI / uKaleidoN)');
       expect(feedbackSrc).toContain('smoothstep(0.0, uPortalRadius, r)');
-      expect(feedbackSrc).toContain('uMobiusPolePolarity');
-      expect(feedbackSrc).toContain('max(denomMag, 1e-4)');
-      expect(feedbackSrc).toContain('vec2(-p.y, p.x) / max(length(p), 0.05)');
+      expect(feedbackSrc).toContain('uMobiusPoleA');
+      expect(feedbackSrc).toContain('uMobiusPoleB');
+      expect(feedbackSrc).toContain('cDiv');
+      expect(feedbackSrc).toContain('cLog');
+      expect(feedbackSrc).toContain('cExp');
 
-      // Post-fetch transforms
+      // Luminance-gated solarize
       expect(feedbackSrc).toContain('uSobel');
       expect(feedbackSrc).toContain('uSolarize');
-      expect(feedbackSrc).toContain('0.5 + 0.5 * sin');
-      expect(feedbackSrc).toContain('uDecay * uDecayRgb');
+      expect(feedbackSrc).toContain('smoothstep(0.035, 0.14, lum)');
+      expect(feedbackSrc).toContain('dot(c, vec3(0.299, 0.587, 0.114))');
+      expect(feedbackSrc).toContain('uContourFreq');
+      expect(feedbackSrc).toContain('uContourWidth');
+      expect(feedbackSrc).toContain('uColorSpread');
     });
 
     it('compiles cleanly via compileProgram with mock WebGL', () => {
@@ -286,54 +370,95 @@ describe('Feedback Warp Modes (Slice 7.11)', () => {
       expect(decayRgbCall![3]).toBeCloseTo(1.0);
     });
 
-    it('binds sobel, solarize, and geometric warp uniforms', () => {
+    it('binds all Curl, Mandala, Solarize, and Möbius uniforms correctly', () => {
       const gl = createMockGl();
       const scene = new Scene('test', []);
       scene.init(gl);
       scene.setFeedback({
-        kaleidoN: 8,
-        portalRadius: 0.15,
-        rgbSplit: 0.04,
-        sobel: 0.75,
-        solarize: 0.65,
-        mobiusPoleOffset: 0.45,
+        curlOctaves: 3,
+        curlTurbulence: 0.75,
+        curlFlowPattern: 'outflow',
+        radialFold: 0.65,
+        mandalaTile: 0.45,
+        mandalaCounterSpin: 0.35,
+        mandalaKickFlare: 0.55,
+        contourFreq: 10.5,
+        contourWidth: 0.6,
+        colorSpread: 0.8,
+        mobiusFlow: 1.1,
+        mobiusSwirl: -0.4,
+        mobiusPoleOffset: 0.52,
+        mobiusWander: 0.65,
       });
       scene.draw(makeMockFrame(), mockClock);
 
+      const uniform1iMock = gl.uniform1i as unknown as { mock: { calls: [unknown, number][] } };
       const uniform1fMock = gl.uniform1f as unknown as { mock: { calls: [unknown, number][] } };
-      const findFloat = (name: string) => uniform1fMock.mock.calls.find(([loc]) => (loc as { name: string })?.name === name)?.[1];
+      const uniform2fMock = gl.uniform2f as unknown as { mock: { calls: [unknown, number, number][] } };
 
-      expect(findFloat('uKaleidoN')).toBe(8);
-      expect(findFloat('uPortalRadius')).toBe(0.15);
-      expect(findFloat('uRgbSplit')).toBe(0.04);
-      expect(findFloat('uSobel')).toBe(0.75);
-      expect(findFloat('uSolarize')).toBe(0.65);
-      expect(findFloat('uMobiusPoleOffset')).toBe(0.45);
+      const findInt = (name: string) => uniform1iMock.mock.calls.find(([loc]) => (loc as { name: string })?.name === name)?.[1];
+      const findFloat = (name: string) => uniform1fMock.mock.calls.find(([loc]) => (loc as { name: string })?.name === name)?.[1];
+      const findVec2 = (name: string) => {
+        const c = uniform2fMock.mock.calls.find(([loc]) => (loc as { name: string })?.name === name);
+        return c ? [c[1], c[2]] : undefined;
+      };
+
+      expect(findInt('uCurlOctaves')).toBe(3);
+      expect(findFloat('uCurlTurbulence')).toBe(0.75);
+      expect(findInt('uCurlFlowPattern')).toBe(2); // outflow = 2
+
+      expect(findFloat('uRadialFold')).toBe(0.65);
+      expect(findFloat('uMandalaTile')).toBe(0.45);
+      expect(findFloat('uMandalaCounterSpin')).toBe(0.35);
+      expect(findFloat('uMandalaKickFlare')).toBe(0.55);
+
+      expect(findFloat('uContourFreq')).toBe(10.5);
+      expect(findFloat('uContourWidth')).toBe(0.6);
+      expect(findFloat('uColorSpread')).toBe(0.8);
+
+      expect(findFloat('uMobiusFlow')).toBe(1.1);
+      expect(findFloat('uMobiusSwirl')).toBe(-0.4);
+
+      const poleA = findVec2('uMobiusPoleA');
+      const poleB = findVec2('uMobiusPoleB');
+      expect(poleA).toBeDefined();
+      expect(poleB).toBeDefined();
+      // Poles must be separated symmetrically around center
+      expect(poleA![0]).not.toBe(poleB![0]);
     });
 
-    it('flips mobius pole polarity when kickPulse triggers', () => {
+    it('ensures smooth Möbius dipole continuity (no sign-flip on kick, dynamic pole drift)', () => {
       const gl = createMockGl();
       const scene = new Scene('test', []);
       scene.init(gl);
 
-      const uniform1fMock = gl.uniform1f as unknown as { mock: { calls: [unknown, number][] } };
-      const getPolarity = () => uniform1fMock.mock.calls.filter(([loc]) => (loc as { name: string })?.name === 'uMobiusPolePolarity').pop()?.[1];
+      const uniform2fMock = gl.uniform2f as unknown as { mock: { calls: [unknown, number, number][] } };
+      const getPoles = () => {
+        const calls = uniform2fMock.mock.calls;
+        const poleA = calls.filter(([loc]) => (loc as { name: string })?.name === 'uMobiusPoleA').pop();
+        const poleB = calls.filter(([loc]) => (loc as { name: string })?.name === 'uMobiusPoleB').pop();
+        return { poleA: [poleA?.[1], poleA?.[2]], poleB: [poleB?.[1], poleB?.[2]] };
+      };
 
-      // Draw 1: normal frame without kickPulse -> initial polarity +1
-      scene.draw(makeMockFrame({ kickPulse: false }), mockClock);
-      expect(getPolarity()).toBe(1.0);
+      // Frame 1
+      scene.draw(makeMockFrame({ dtSec: 0.016, kickPulse: false }), mockClock);
+      const f1 = getPoles();
 
-      // Draw 2: kickPulse triggers -> flips polarity to -1
-      scene.draw(makeMockFrame({ kickPulse: true }), mockClock);
-      expect(getPolarity()).toBe(-1.0);
+      // Frame 2: kickPulse fires!
+      scene.draw(makeMockFrame({ dtSec: 0.016, kickPulse: true }), mockClock);
+      const f2 = getPoles();
 
-      // Draw 3: normal frame -> stays -1
-      scene.draw(makeMockFrame({ kickPulse: false }), mockClock);
-      expect(getPolarity()).toBe(-1.0);
+      // Poles should move smoothly (small delta across 1 frame, NOT a sign flip!)
+      const deltaAx = Math.abs(Number(f2.poleA[0]) - Number(f1.poleA[0]));
+      const deltaAy = Math.abs(Number(f2.poleA[1]) - Number(f1.poleA[1]));
+      expect(deltaAx).toBeLessThan(0.05); // Smooth motion, not jump
+      expect(deltaAy).toBeLessThan(0.05);
 
-      // Draw 4: kickPulse triggers again -> flips back to +1
-      scene.draw(makeMockFrame({ kickPulse: true }), mockClock);
-      expect(getPolarity()).toBe(1.0);
+      // Frame 3: additional drift over time
+      scene.draw(makeMockFrame({ dtSec: 0.5, kickPulse: false }), mockClock);
+      const f3 = getPoles();
+      // Poles should have moved noticeably with dt = 0.5s
+      expect(f3.poleA[0]).not.toBe(f2.poleA[0]);
     });
   });
 });
