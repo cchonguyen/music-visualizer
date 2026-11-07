@@ -87,12 +87,15 @@ export function buildScene(name: string, preset: Preset): Scene {
     configs.push({
       opacity: entry.opacity ?? 1.0,
       blend: (entry.blend as BlendMode) ?? 'max',
+      trails: entry.trails ?? true,
     });
   }
   const scene = new Scene(name, layers, configs);
   scene.setFeedback(valuesOf(preset.feedback));
   return scene;
 }
+
+export const buildSceneFromPreset = buildScene;
 
 /** Pushes plain values into a live layer. */
 export function applyValues(layer: RenderLayer, values: Record<string, ParamValue>): void {
@@ -112,7 +115,7 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
 }
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */
-export function applyPresetToScene(preset: Preset, scene: Scene): void {
+export function applyPresetToScene(preset: Preset, scene: Scene, _gl?: WebGL2RenderingContext): void {
   scene.setFeedback(valuesOf(preset.feedback));
   const live = preset.layers.filter((l) => l.enabled);
   live.forEach((entry, k) => {
@@ -121,6 +124,7 @@ export function applyPresetToScene(preset: Preset, scene: Scene): void {
     scene.setLayerConfig(k, {
       opacity: entry.opacity ?? 1.0,
       blend: (entry.blend as BlendMode) ?? 'max',
+      trails: entry.trails ?? true,
     });
   });
 }
@@ -145,6 +149,7 @@ export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunn
     scene.setLayerConfig(k, {
       opacity: entry.opacity ?? 1.0,
       blend: (entry.blend as BlendMode) ?? 'max',
+      trails: entry.trails ?? true,
     });
   });
   return runner.resolve(`${scope}P`, preset.post, POST_SPECS, inputs, dtSec);

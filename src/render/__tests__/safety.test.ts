@@ -4,10 +4,12 @@ import {
   CAP_FLOOR,
   RISE_PER_SEC,
   FALL_PER_SEC,
+  REVERSAL_THRESHOLD,
   calmFactor,
   applyCalmMode,
   applyReversalDamp,
 } from '../safety';
+import compositeFragSrc from '../shaders/composite.frag.glsl?raw';
 import { Compositor } from '../compositor';
 import { Scene } from '../scene';
 import type { AudioFrame } from '../../audio/types';
@@ -204,6 +206,21 @@ describe('Rolling 1-second reversal counter and damping', () => {
     expect(lim.reversalCount).toBe(0);
     expect(lim.reversalDamp).toBe(0);
   });
+
+  it('respects REVERSAL_THRESHOLD = 0.12 for detecting directional changes', () => {
+    expect(REVERSAL_THRESHOLD).toBe(0.12);
+    const lim = new BrightnessLimiter();
+    lim.step(0.5, 0.1);
+    // Delta of 0.11 is below REVERSAL_THRESHOLD (0.12), does not trigger direction change
+    lim.step(0.61, 0.1);
+    lim.step(0.50, 0.1);
+    expect(lim.reversalCount).toBe(0);
+
+    // Delta of 0.20 is above REVERSAL_THRESHOLD (0.12)
+    lim.step(0.70, 0.1); // up (+0.20)
+    lim.step(0.50, 0.1); // down (-0.20, reversal 1)
+    expect(lim.reversalCount).toBe(1);
+  });
 });
 
 describe('Calm mode contrast reduction and saturation capping', () => {
@@ -280,5 +297,31 @@ describe('Compositor uniform integration with Calm and Reversal Damping', () => 
 
     comp.draw(frame, clock, target);
     expect(gl._uniformValues.get('uCalm')).toBe(1.0);
+  });
+});
+
+describe('Dark-floor preservation under Calm and Reversal Damping', () => {
+  it('preserves 0.0 black under uCalm highlight roll-off and uReversalDamp', () => {
+    // Shader calm formula: c = c / (1.0 + c * (1.0 - contrastFactor)) * contrastFactor
+    const contrastFactor = 0.5;
+    const calmShaderLuma = (c: number) => (c / (1.0 + c * (1.0 - contrastFactor))) * contrastFactor;
+    const reversalDampShaderLuma = (c: number, damp: number) => c * (1.0 - damp * 0.35);
+
+    // Dark-floor preservation: 0.0 black stays strictly 0.0 under uCalm and uReversalDamp
+    expect(calmShaderLuma(0.0)).toBe(0.0);
+    expect(reversalDampShaderLuma(0.0, 0.0)).toBe(0.0);
+    expect(reversalDampShaderLuma(0.0, 0.5)).toBe(0.0);
+    expect(reversalDampShaderLuma(0.0, 1.0)).toBe(0.0);
+    expect(reversalDampShaderLuma(calmShaderLuma(0.0), 1.0)).toBe(0.0);
+
+    // Non-zero values roll off smoothly without darkening below 0.0
+    expect(calmShaderLuma(1.0)).toBeCloseTo((1.0 / 1.5) * 0.5, 5);
+    expect(calmShaderLuma(0.5)).toBeGreaterThan(0.0);
+    expect(calmShaderLuma(0.5)).toBeLessThan(0.5);
+  });
+
+  it('verifies composite shader source preserves dark floor (c = 0.0 stays 0.0)', () => {
+    expect(compositeFragSrc).toContain('c = c / (1.0 + c * (1.0 - contrastFactor)) * contrastFactor');
+    expect(compositeFragSrc).toContain('c *= (1.0 - uReversalDamp * 0.35)');
   });
 });

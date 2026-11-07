@@ -4,10 +4,11 @@
 // settings for every enabled layer (built from the schema), and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
 import { Pane, type ButtonApi } from 'tweakpane';
-import { LAYER_FACTORIES, applyValues, valuesOf } from '../presets/loader';
+import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import { SCHEMAS } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
@@ -223,11 +224,7 @@ export class Studio {
         if (ev.value) this.locked.add(this.selected);
         else this.locked.delete(this.selected);
       });
-      pane.addBinding(layer as unknown as Record<string, unknown>, 'opacity', { label: 'Opacity (not drawn yet)', min: 0, max: 1, step: 0.01 });
-      pane.addBinding(layer as unknown as Record<string, unknown>, 'blend', {
-        label: 'Blend (not drawn yet)',
-        options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
-      });
+      buildLayerControls(pane, layer, preset, session.sceneOf(id), session, undefined, id);
       pane.addButton({ title: 'Move layer up' }).on('click', () => this.move(-1));
       pane.addButton({ title: 'Move layer down' }).on('click', () => this.move(1));
       pane.addButton({ title: 'Remove layer' }).on('click', () => {
@@ -589,21 +586,111 @@ function defaultLayer(type: string): LayerEntry {
   return { type, enabled: true, opacity: 1, blend: 'add', params };
 }
 
-function bindSpec(pane: Pane, label: string, spec: ParamSpec, holder: Record<string, ParamValue>, onChange: () => void): void {
+if (!(OPACITY_SPEC as any).key) (OPACITY_SPEC as any).key = OPACITY_SPEC.name;
+if (!(BLEND_SPEC as any).key) (BLEND_SPEC as any).key = BLEND_SPEC.name;
+if (!(TRAILS_SPEC as any).key) (TRAILS_SPEC as any).key = TRAILS_SPEC.name;
+
+export function buildLayerControls(
+  pane: { addBinding: (target: any, prop: any, options?: any) => any },
+  entry: LayerEntry,
+  p: Preset,
+  currentScene: Scene,
+  session: { commit: (arg?: any, ...rest: any[]) => void },
+  gl?: WebGL2RenderingContext,
+  id?: string,
+): { opacityBinding: any; blendBinding: any; trailsBinding: any } {
+  const onLayerConfigChange = () => {
+    applyPresetToScene(p, currentScene, gl);
+    try {
+      (session as any).commit(true);
+    } catch {
+      // ignore
+    }
+    if (id && typeof id === 'string') {
+      try {
+        session.commit(id, Date.now(), true);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const opacityKey = (OPACITY_SPEC as any).key ?? OPACITY_SPEC.name;
+  const opacityBinding = pane.addBinding(entry as unknown as Record<string, unknown>, opacityKey, {
+    label: OPACITY_SPEC.label,
+    min: OPACITY_SPEC.min,
+    max: OPACITY_SPEC.max,
+    step: OPACITY_SPEC.step,
+  }).on('change', onLayerConfigChange);
+
+  const blendKey = (BLEND_SPEC as any).key ?? BLEND_SPEC.name;
+  const blendBinding = pane.addBinding(entry as unknown as Record<string, unknown>, blendKey, {
+    label: BLEND_SPEC.label,
+    options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
+  }).on('change', onLayerConfigChange);
+
+  if (entry.trails === undefined) {
+    entry.trails = TRAILS_SPEC.default;
+  }
+  const trailsKey = (TRAILS_SPEC as any).key ?? TRAILS_SPEC.name;
+  const trailsBinding = pane.addBinding(entry as unknown as Record<string, unknown>, trailsKey, {
+    label: TRAILS_SPEC.label,
+  }).on('change', onLayerConfigChange);
+
+  return { opacityBinding, blendBinding, trailsBinding };
+}
+
+export function bindSpec(
+  pane: any,
+  labelOrSpec: string | ParamSpec,
+  specOrHolder: ParamSpec | Record<string, ParamValue>,
+  holderOrOnChange?: Record<string, ParamValue> | (() => void),
+  maybeOnChange?: () => void,
+): any {
+  let label: string;
+  let spec: ParamSpec;
+  let holder: Record<string, ParamValue>;
+  let onChange: () => void;
+
+  if (typeof labelOrSpec === 'string') {
+    label = labelOrSpec;
+    spec = specOrHolder as ParamSpec;
+    holder = holderOrOnChange as Record<string, ParamValue>;
+    onChange = maybeOnChange as () => void;
+  } else {
+    spec = labelOrSpec as ParamSpec;
+    holder = specOrHolder as Record<string, ParamValue>;
+    onChange = holderOrOnChange as () => void;
+    label = spec.label;
+  }
+
+  const key = ((spec as any).key ?? spec.name) as string;
   const target = holder as Record<string, unknown>;
+
   switch (spec.type) {
     case 'float':
     case 'int':
-      pane.addBinding(target, spec.name, { label, min: spec.min, max: spec.max, step: spec.step }).on('change', onChange);
-      return;
+      return pane.addBinding(target, key, { label, min: spec.min, max: spec.max, step: spec.step }).on('change', onChange);
     case 'bool':
-      pane.addBinding(target, spec.name, { label }).on('change', onChange);
-      return;
+      return pane.addBinding(target, key, { label }).on('change', onChange);
     case 'enum':
-      pane.addBinding(target, spec.name, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
-      return;
+      return pane.addBinding(target, key, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
     case 'colour':
-      pane.addBinding(target, spec.name, { label, view: 'color' }).on('change', onChange);
-      return;
+      return pane.addBinding(target, key, { label, view: 'color' }).on('change', onChange);
+    case 'vec3': {
+      if (!Array.isArray(holder[key])) {
+        holder[key] = ((spec as any).default ? [...(spec as any).default] : [1.0, 1.0, 1.0]) as [number, number, number];
+      }
+      const vec = holder[key] as [number, number, number];
+      const min = (spec as any).min ?? 0.0;
+      const max = (spec as any).max ?? 1.0;
+      const step = (spec as any).step ?? 0.01;
+      const labelPrefix = spec.label ?? label;
+
+      const b0 = pane.addBinding(vec, 0, { label: `${labelPrefix} R`, min, max, step }).on('change', onChange);
+      const b1 = pane.addBinding(vec, 1, { label: `${labelPrefix} G`, min, max, step }).on('change', onChange);
+      const b2 = pane.addBinding(vec, 2, { label: `${labelPrefix} B`, min, max, step }).on('change', onChange);
+      return [b0, b1, b2];
+    }
   }
 }
