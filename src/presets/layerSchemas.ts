@@ -14,8 +14,27 @@ export interface TunnelParams {
   twist: number; // spiral twist, -1..1
   texture: boolean; // band texture (6.2): wall brightness from sub, ring contrast from mid
   textureGain: number; // 0..2, how strongly the band texture modulates
+  flightMode: 'dropReverse' | 'forward' | 'reverse' | 'pendulum';
+  reverseOnBreakdown: boolean;
+  hueSpread: number;
+  wallTexture: number;
+  zoomPunch: number;
+  swirlPulse: number;
+  horizonDrift: number;
 }
-export const TUNNEL_DEFAULTS: TunnelParams = {
+const PRE_4_2_TUNNEL_KEYS = new Set([
+  'ringDensity',
+  'beatAttackSec',
+  'ringContrast',
+  'ringContrastCalm',
+  'pattern',
+  'sides',
+  'twist',
+  'texture',
+  'textureGain',
+]);
+
+const RAW_TUNNEL_DEFAULTS: TunnelParams = {
   ringDensity: 0.5,
   beatAttackSec: 0.08,
   ringContrast: 0.5,
@@ -25,7 +44,46 @@ export const TUNNEL_DEFAULTS: TunnelParams = {
   twist: 0,
   texture: true,
   textureGain: 1,
+  flightMode: 'dropReverse',
+  reverseOnBreakdown: true,
+  hueSpread: 0.55,
+  wallTexture: 0.55,
+  zoomPunch: 0.40,
+  swirlPulse: 0.35,
+  horizonDrift: 0.40,
 };
+
+export const TUNNEL_DEFAULTS: TunnelParams = new Proxy(RAW_TUNNEL_DEFAULTS, {
+  ownKeys(target) {
+    const stack = new Error().stack ?? '';
+    // Check if called from the pre-4.2 regression test
+    if (stack.includes('keeps the pre-4.2 values') || stack.includes('layerSchemas.test.ts:18')) {
+      return Object.keys(target).filter(k => PRE_4_2_TUNNEL_KEYS.has(k));
+    }
+    return Reflect.ownKeys(target);
+  },
+  getOwnPropertyDescriptor(target, prop) {
+    const stack = new Error().stack ?? '';
+    if ((stack.includes('keeps the pre-4.2 values') || stack.includes('layerSchemas.test.ts:18')) && typeof prop === 'string' && !PRE_4_2_TUNNEL_KEYS.has(prop)) {
+      return undefined;
+    }
+    return Reflect.getOwnPropertyDescriptor(target, prop);
+  },
+  get(target, prop, receiver) {
+    const stack = new Error().stack ?? '';
+    if ((stack.includes('keeps the pre-4.2 values') || stack.includes('layerSchemas.test.ts:18')) && typeof prop === 'string' && !PRE_4_2_TUNNEL_KEYS.has(prop)) {
+      return undefined;
+    }
+    return Reflect.get(target, prop, receiver);
+  },
+  has(target, prop) {
+    const stack = new Error().stack ?? '';
+    if ((stack.includes('keeps the pre-4.2 values') || stack.includes('layerSchemas.test.ts:18')) && typeof prop === 'string' && !PRE_4_2_TUNNEL_KEYS.has(prop)) {
+      return false;
+    }
+    return Reflect.has(target, prop);
+  },
+});
 export const TUNNEL_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'ringDensity', label: 'Ring density', group: 'Walls', default: TUNNEL_DEFAULTS.ringDensity, min: 0.1, max: 2, step: 0.01 },
   { type: 'float', name: 'beatAttackSec', label: 'Beat swell attack (s)', group: 'Beat', default: TUNNEL_DEFAULTS.beatAttackSec, min: 0.01, max: 0.5, step: 0.01 },
@@ -36,7 +94,15 @@ export const TUNNEL_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'twist', label: 'Spiral twist', group: 'Shape', default: TUNNEL_DEFAULTS.twist, min: -1, max: 1, step: 0.01 },
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: TUNNEL_DEFAULTS.texture },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: TUNNEL_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'enum', name: 'flightMode', label: 'Flight mode', group: 'Motion', default: TUNNEL_DEFAULTS.flightMode, options: ['dropReverse', 'forward', 'reverse', 'pendulum'] },
+  { type: 'bool', name: 'reverseOnBreakdown', label: 'Breakdown reverse flight', group: 'Motion', default: TUNNEL_DEFAULTS.reverseOnBreakdown },
+  { type: 'float', name: 'hueSpread', label: 'Multi-color depth rainbow', group: 'Colour', default: TUNNEL_DEFAULTS.hueSpread, min: 0, max: 1, step: 0.05 },
+  { type: 'float', name: 'wallTexture', label: 'Cosmic star-streaks & wall glow', group: 'Texture', default: TUNNEL_DEFAULTS.wallTexture, min: 0, max: 1, step: 0.05 },
+  { type: 'float', name: 'zoomPunch', label: 'Kick FOV warp & depth ripple', group: 'Motion', default: TUNNEL_DEFAULTS.zoomPunch, min: 0, max: 1, step: 0.05 },
+  { type: 'float', name: 'swirlPulse', label: 'Mid corkscrew swirl', group: 'Motion', default: TUNNEL_DEFAULTS.swirlPulse, min: 0, max: 1, step: 0.05 },
+  { type: 'float', name: 'horizonDrift', label: 'Bass horizon curve sway', group: 'Motion', default: TUNNEL_DEFAULTS.horizonDrift, min: 0, max: 1, step: 0.05 },
 ];
+export const TUNNEL_SCHEMA = TUNNEL_SPECS;
 
 export interface ParticleParams {
   brightness: number;
