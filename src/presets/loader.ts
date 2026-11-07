@@ -10,11 +10,21 @@ import { RingsLayer } from '../render/layers/rings';
 import { ShockwaveLayer } from '../render/layers/shockwave';
 import { TunnelLayer } from '../render/layers/tunnel';
 import { WaveformLayer } from '../render/layers/waveform';
+import { MoireLayer } from '../render/layers/moire';
+import { SpectralTerrainLayer } from '../render/layers/spectralTerrain';
 import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
-import { FEEDBACK_WARP_SPECS, type ParamSpec, type ParamValue } from './schema';
+import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, type MoireParams, type SpectralTerrainParams, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
+
+// Register moire and spectralTerrain in LAYER_SPECS for loader consumers
+if (!LAYER_SPECS.moire) {
+  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).moire = MOIRE_SPECS;
+}
+if (!LAYER_SPECS.spectralTerrain) {
+  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).spectralTerrain = SPECTRAL_TERRAIN_SPECS;
+}
 
 // Extend FEEDBACK_SPECS with opt-in feedback warp parameters (Slice 7.11)
 for (const spec of FEEDBACK_WARP_SPECS) {
@@ -43,6 +53,8 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   bars: (p) => new BarsLayer(p as Partial<BarsParams>),
   bassPulse: (p) => new BassPulseLayer(p as Partial<BassPulseParams>),
   waveform: (p) => new WaveformLayer(p as Partial<WaveformParams>),
+  moire: (p) => new MoireLayer(p as Partial<MoireParams>),
+  spectralTerrain: (p) => new SpectralTerrainLayer(p as Partial<SpectralTerrainParams>),
 };
 
 /** Builds a scene with fresh layers. Disabled layers are skipped. */
@@ -74,6 +86,8 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof RingsLayer) layer.setParams(values as Partial<RingsParams>);
   else if (layer instanceof ShockwaveLayer) layer.setParams(values as Partial<ShockwaveParams>);
   else if (layer instanceof WaveformLayer) layer.setParams(values as Partial<WaveformParams>);
+  else if (layer instanceof MoireLayer) layer.setParams(values as Partial<MoireParams>);
+  else if (layer instanceof SpectralTerrainLayer) layer.setParams(values as Partial<SpectralTerrainParams>);
 }
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */

@@ -1,7 +1,7 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
 import { BLEND_MODES, parsePreset, type Preset, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
-import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, type ParamSpec, type EnumSpec } from '../schema';
+import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
 import bars from './bars.json';
@@ -31,6 +31,8 @@ import preset03 from './03-solarized-contour-rings.json';
 import preset04 from './04-mobius-dual-vortex.json';
 import preset05 from './05-rgb-aberration-vortex.json';
 import preset06 from './06-lissajous-vector-crt.json';
+import preset07 from './07-moire-interference-loom.json';
+import preset08 from './08-spectral-ridge-terrain.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -64,7 +66,21 @@ for (const spec of POST_CRT_SPECS) {
   }
 }
 
-export const SCHEMAS: SchemaRegistry = { feedback: FEEDBACK_SPECS, post: POST_SPECS, layers: LAYER_SPECS };
+// Allow low decay values down to 0.0 for flagships (07 uses 0.25, 08 uses 0.15)
+const decaySpec = FEEDBACK_SPECS.find((s) => s.name === 'decay') as NumberSpec | undefined;
+if (decaySpec) {
+  decaySpec.min = 0.0;
+}
+
+export const SCHEMAS: SchemaRegistry = {
+  feedback: FEEDBACK_SPECS,
+  post: POST_SPECS,
+  layers: {
+    ...LAYER_SPECS,
+    moire: MOIRE_SPECS,
+    spectralTerrain: SPECTRAL_TERRAIN_SPECS,
+  },
+};
 
 /** Built-in presets in key order. The first three keep the old keys 0 / 1 / 2; the starter pack follows (drafts to tune). */
 export const BUILTIN_PRESETS: readonly { id: string; preset: Preset; warnings: string[] }[] = [
@@ -104,5 +120,13 @@ export const FLAGSHIP_PRESETS: readonly { id: string; preset: Preset; warnings: 
 ];
 
 (BUILTIN_PRESETS as any).flagship = FLAGSHIP_PRESETS;
-export const ALL_PRESETS = [...BUILTIN_PRESETS, ...FLAGSHIP_PRESETS];
+
+/** Flagship Presets 07–08 (Slice 7.13). */
+export const FLAGSHIP_PRESETS_07_08: readonly { id: string; preset: Preset; warnings: string[] }[] = [
+  { id: '07-moire-interference-loom', ...parsePreset(preset07, SCHEMAS) },
+  { id: '08-spectral-ridge-terrain', ...parsePreset(preset08, SCHEMAS) },
+];
+
+export const ALL_PRESETS = [...BUILTIN_PRESETS, ...FLAGSHIP_PRESETS, ...FLAGSHIP_PRESETS_07_08];
+
 

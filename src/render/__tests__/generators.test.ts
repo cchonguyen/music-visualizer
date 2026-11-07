@@ -1,0 +1,464 @@
+import { describe, it, expect, vi } from 'vitest';
+import { MoireLayer } from '../layers/moire';
+import { SpectralTerrainLayer, TERRAIN_HISTORY_UNIT, TERRAIN_BINS, TERRAIN_RIDGES } from '../layers/spectralTerrain';
+import moireFragSrc from '../shaders/moire.frag.glsl?raw';
+import terrainVertSrc from '../shaders/spectralTerrain.vert.glsl?raw';
+import terrainFragSrc from '../shaders/spectralTerrain.frag.glsl?raw';
+import {
+  assertValidSpec,
+  MOIRE_SPECS,
+  MOIRE_DEFAULTS,
+  SPECTRAL_TERRAIN_SPECS,
+  SPECTRAL_TERRAIN_DEFAULTS,
+} from '../../presets/schema';
+import { LAYER_FACTORIES, applyValues, buildScene } from '../../presets/loader';
+import { FLAGSHIP_PRESETS_07_08, ALL_PRESETS } from '../../presets/builtin';
+import { PRESET_VERSION } from '../../presets/format';
+import { BrightnessLimiter } from '../safety';
+import type { AudioFrame } from '../../audio/types';
+import type { RenderClock } from '../clock';
+import type { RenderTarget } from '../layer';
+
+function createMockGl(): WebGL2RenderingContext {
+  const activeTextures: number[] = [];
+  const boundTextures: Map<number, any> = new Map();
+  let currentActiveUnit = 0x84c0; // TEXTURE0
+
+  const gl = {
+    MAX: 0x8008,
+    FUNC_ADD: 0x8006,
+    ONE: 1,
+    SRC_ALPHA: 0x0302,
+    ONE_MINUS_SRC_ALPHA: 0x0303,
+    BLEND: 0x0be2,
+    TRIANGLES: 4,
+    TRIANGLE_STRIP: 5,
+    LINE_STRIP: 3,
+    TEXTURE0: 0x84c0,
+    TEXTURE1: 0x84c1,
+    TEXTURE2: 0x84c2,
+    TEXTURE3: 0x84c3,
+    TEXTURE4: 0x84c4,
+    TEXTURE5: 0x84c5,
+    TEXTURE_2D: 0x0de1,
+    FRAMEBUFFER: 0x8d40,
+    COLOR_ATTACHMENT0: 0x8ce0,
+    FRAMEBUFFER_COMPLETE: 0x8cd5,
+    RGBA: 0x1908,
+    UNSIGNED_BYTE: 0x1401,
+    NEAREST: 0x2600,
+    LINEAR: 0x2601,
+    R32F: 0x822e,
+    RED: 0x1903,
+    FLOAT: 0x1406,
+    ARRAY_BUFFER: 0x8892,
+    STATIC_DRAW: 0x88e4,
+    TEXTURE_MIN_FILTER: 0x2801,
+    TEXTURE_MAG_FILTER: 0x2800,
+    TEXTURE_WRAP_S: 0x2802,
+    TEXTURE_WRAP_T: 0x2803,
+    CLAMP_TO_EDGE: 0x812f,
+    VERTEX_SHADER: 0x8b31,
+    FRAGMENT_SHADER: 0x8b30,
+    COMPILE_STATUS: 0x8b81,
+    LINK_STATUS: 0x8b82,
+
+    enable: vi.fn(),
+    disable: vi.fn(),
+    blendFunc: vi.fn(),
+    blendEquation: vi.fn(),
+    viewport: vi.fn(),
+    compileShader: vi.fn(),
+    shaderSource: vi.fn(),
+    attachShader: vi.fn(),
+    deleteShader: vi.fn(),
+    linkProgram: vi.fn(),
+    deleteProgram: vi.fn(),
+    getShaderParameter: vi.fn().mockReturnValue(true),
+    getProgramParameter: vi.fn().mockReturnValue(true),
+    getShaderInfoLog: vi.fn().mockReturnValue(''),
+    getProgramInfoLog: vi.fn().mockReturnValue(''),
+    createShader: vi.fn().mockReturnValue({}),
+    createProgram: vi.fn().mockReturnValue({}),
+    createVertexArray: vi.fn().mockReturnValue({}),
+    deleteVertexArray: vi.fn(),
+    createBuffer: vi.fn().mockReturnValue({}),
+    deleteBuffer: vi.fn(),
+    bindBuffer: vi.fn(),
+    bufferData: vi.fn(),
+    enableVertexAttribArray: vi.fn(),
+    vertexAttribPointer: vi.fn(),
+    createTexture: vi.fn().mockReturnValue({}),
+    deleteTexture: vi.fn(),
+    bindTexture: vi.fn((_target: number, tex: any) => {
+      boundTextures.set(currentActiveUnit, tex);
+    }),
+    activeTexture: vi.fn((unit: number) => {
+      currentActiveUnit = unit;
+      activeTextures.push(unit);
+    }),
+    texParameteri: vi.fn(),
+    texImage2D: vi.fn(),
+    texSubImage2D: vi.fn(),
+    createFramebuffer: vi.fn().mockReturnValue({}),
+    deleteFramebuffer: vi.fn(),
+    bindFramebuffer: vi.fn(),
+    bindVertexArray: vi.fn(),
+    useProgram: vi.fn(),
+    getUniformLocation: vi.fn().mockImplementation((_prog, name) => ({ name })),
+    uniform1f: vi.fn(),
+    uniform1i: vi.fn(),
+    uniform2f: vi.fn(),
+    uniform3f: vi.fn(),
+    uniform3fv: vi.fn(),
+    uniformMatrix4fv: vi.fn(),
+    drawArrays: vi.fn(),
+  };
+
+  (gl as any)._activeTextures = activeTextures;
+  (gl as any)._boundTextures = boundTextures;
+  return gl as unknown as WebGL2RenderingContext;
+}
+
+function createDummyAudioFrame(): AudioFrame {
+  const spectrum = new Float32Array(512);
+  for (let i = 0; i < spectrum.length; i++) spectrum[i] = Math.sin(i * 0.1) * 0.5 + 0.5;
+  return {
+    waveform: new Float32Array(512),
+    spectrum,
+    sampleRate: 48000,
+    bands: { sub: 0.7, bass: 0.6, mid: 0.5, high: 0.4 },
+    norm: { sub: 0.65, bass: 0.55, mid: 0.45, high: 0.35 },
+    beatByBand: { sub: false, bass: false, mid: false, high: false },
+    energy: 0.5,
+    loudness: 0.6,
+    brightness: 0.5,
+    kickEnv: 0.85,
+    centroid: 1200,
+  } as unknown as AudioFrame;
+}
+
+const dummyClock: RenderClock = {
+  frameIndex: 1,
+  timeSec: 2.5,
+  dtSec: 0.016,
+};
+
+const dummyTarget: RenderTarget = {
+  kind: 'canvas',
+  width: 1280,
+  height: 720,
+};
+
+describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
+  it('instantiates with defaults and accepts parameter overrides', () => {
+    const layer = new MoireLayer();
+    expect(layer).toBeDefined();
+
+    const custom = new MoireLayer({ scale: 45, speed: 1.2, lineWidth: 0.6, brightness: 1.5 });
+    expect(custom).toBeDefined();
+  });
+
+  it('updates parameters via setParams', () => {
+    const layer = new MoireLayer();
+    layer.setParams({ scale: 50.0, speed: 0.8 });
+    expect(layer).toBeDefined();
+  });
+
+  it('initializes program, VAO, and uniforms without throwing', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer();
+    layer.init(gl);
+
+    expect(gl.createProgram).toHaveBeenCalled();
+    expect(gl.createVertexArray).toHaveBeenCalled();
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uScale');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_mid');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_sub');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_kickEnv');
+  });
+
+  it('draws fullscreen quad and passes audio/kickEnv uniforms', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer({ scale: 32 });
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.useProgram).toHaveBeenCalled();
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
+
+    // Uniform calls verification
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_mid' }), frame.norm.mid);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_sub' }), frame.norm.sub);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_kickEnv' }), frame.kickEnv);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uScale' }), 32);
+  });
+
+  it('enforces fwidth derivative anti-aliasing and spatial frequency caps in moire.frag.glsl (SYSTEM_SPEC.md:94)', () => {
+    // Must contain fwidth anti-aliasing
+    expect(moireFragSrc).toContain('fwidth');
+    // Must contain spatial frequency cap (SYSTEM_SPEC.md:94)
+    expect(moireFragSrc).toMatch(/MAX_SPATIAL_FREQ|MAX_FREQ|clamp\(uScale/);
+    // Must contain smoothed XOR combination abs(grid1 - grid2)
+    expect(moireFragSrc).toContain('abs(grid1 - grid2)');
+    // Must modulate frequency delta <= 0.08 with u_sub
+    expect(moireFragSrc).toMatch(/0\.08/);
+    // Must include radial phase inversion ring driven by kickEnv
+    expect(moireFragSrc).toContain('u_kickEnv');
+  });
+
+  it('disposes resources cleanly', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer();
+    layer.init(gl);
+    layer.dispose();
+
+    expect(gl.deleteProgram).toHaveBeenCalled();
+    expect(gl.deleteVertexArray).toHaveBeenCalled();
+  });
+});
+
+describe('Slice 7.13: SpectralTerrainLayer and shaders', () => {
+  it('instantiates with defaults and accepts parameter overrides', () => {
+    const layer = new SpectralTerrainLayer();
+    expect(layer).toBeDefined();
+
+    const custom = new SpectralTerrainLayer({
+      elevation: 0.8,
+      width: 1.5,
+      horizonY: 0.4,
+      foregroundY: -0.6,
+      brightness: 1.5,
+    });
+    expect(custom).toBeDefined();
+  });
+
+  it('initializes 128x64 R32F history ring buffer and line/skirt VAOs', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    // History texture 128x64 R32F
+    expect(gl.createTexture).toHaveBeenCalled();
+    expect(gl.texImage2D).toHaveBeenCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      gl.R32F,
+      TERRAIN_BINS,
+      TERRAIN_RIDGES,
+      0,
+      gl.RED,
+      gl.FLOAT,
+      null,
+    );
+
+    // 2 VAOs (line + skirt)
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(2);
+    expect(gl.createBuffer).toHaveBeenCalledTimes(2);
+  });
+
+  it('strictly binds private history texture to TEXTURE5 (never TEXTURE0–4)', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    const activeUnits = (gl as any)._activeTextures;
+    // Verify TEXTURE5 (0x84c5) was bound
+    expect(activeUnits).toContain(gl.TEXTURE0 + TERRAIN_HISTORY_UNIT);
+
+    // Verify uniform uHistoryTex was set to 5
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uHistoryTex' }),
+      TERRAIN_HISTORY_UNIT,
+    );
+  });
+
+  it('updates ring buffer once per frame via texSubImage2D and advances headRow', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    expect(layer.getHeadRow()).toBe(0);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+    expect(gl.texSubImage2D).toHaveBeenCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      0, // row 0
+      TERRAIN_BINS,
+      1,
+      gl.RED,
+      gl.FLOAT,
+      expect.any(Float32Array),
+      0,
+    );
+    expect(layer.getHeadRow()).toBe(1);
+
+    // Draw second frame
+    layer.draw(frame, dummyClock, dummyTarget);
+    expect(gl.texSubImage2D).toHaveBeenCalledWith(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      1, // row 1
+      TERRAIN_BINS,
+      1,
+      gl.RED,
+      gl.FLOAT,
+      expect.any(Float32Array),
+      0,
+    );
+    expect(layer.getHeadRow()).toBe(2);
+  });
+
+  it('renders 64 ridges back-to-front with occlusion skirt (TRIANGLE_STRIP) and line (LINE_STRIP)', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    // 64 ridges * 2 draw calls each = 128 draw calls
+    expect(gl.drawArrays).toHaveBeenCalledTimes(TERRAIN_RIDGES * 2);
+
+    // Occlusion skirt draw calls: TRIANGLE_STRIP with 256 vertices
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
+
+    // Line draw calls: LINE_STRIP with 128 vertices
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.LINE_STRIP, 0, TERRAIN_BINS);
+
+    // Blending enabled with SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+    expect(gl.enable).toHaveBeenCalledWith(gl.BLEND);
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  });
+
+  it('disposes all buffers, textures, and program', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+    layer.dispose();
+
+    expect(gl.deleteProgram).toHaveBeenCalled();
+    expect(gl.deleteTexture).toHaveBeenCalled();
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(2);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Slice 7.13: Schema and Loader registration', () => {
+  it('validates all MOIRE_SPECS and SPECTRAL_TERRAIN_SPECS', () => {
+    expect(MOIRE_DEFAULTS.scale).toBe(30.0);
+    expect(SPECTRAL_TERRAIN_DEFAULTS.elevation).toBe(0.6);
+    for (const spec of MOIRE_SPECS) {
+      expect(() => assertValidSpec(spec)).not.toThrow();
+    }
+    for (const spec of SPECTRAL_TERRAIN_SPECS) {
+      expect(() => assertValidSpec(spec)).not.toThrow();
+    }
+  });
+
+  it('verifies shader structures for terrain and moire', () => {
+    expect(terrainVertSrc).toContain('uHistoryTex');
+    expect(terrainVertSrc).toContain('uIsSkirtPass');
+    expect(terrainFragSrc).toContain('outColor = vColor');
+  });
+
+  it('LAYER_FACTORIES creates MoireLayer and SpectralTerrainLayer', () => {
+    const moireLayer = LAYER_FACTORIES.moire!({ scale: 28 });
+    expect(moireLayer).toBeInstanceOf(MoireLayer);
+
+    const terrainLayer = LAYER_FACTORIES.spectralTerrain!({ elevation: 0.5 });
+    expect(terrainLayer).toBeInstanceOf(SpectralTerrainLayer);
+  });
+
+  it('applyValues sets parameters on MoireLayer and SpectralTerrainLayer', () => {
+    const moireLayer = new MoireLayer();
+    const terrainLayer = new SpectralTerrainLayer();
+
+    applyValues(moireLayer, { scale: 40, brightness: 1.8 });
+    applyValues(terrainLayer, { elevation: 1.1, width: 1.8 });
+
+    expect(moireLayer).toBeDefined();
+    expect(terrainLayer).toBeDefined();
+  });
+});
+
+describe('Slice 7.13: Flagship Presets 07 and 08', () => {
+  it('registers Presets 07 and 08 in FLAGSHIP_PRESETS_07_08 and ALL_PRESETS', () => {
+    expect(FLAGSHIP_PRESETS_07_08).toHaveLength(2);
+    const ids = FLAGSHIP_PRESETS_07_08.map((p) => p.id);
+    expect(ids).toEqual(['07-moire-interference-loom', '08-spectral-ridge-terrain']);
+
+    const inAll = ALL_PRESETS.filter((p) => ids.includes(p.id));
+    expect(inAll).toHaveLength(2);
+  });
+
+  it('all presets pass schema validation with zero warnings', () => {
+    for (const entry of FLAGSHIP_PRESETS_07_08) {
+      expect(entry.warnings).toEqual([]);
+      expect(entry.preset.version).toBe(PRESET_VERSION);
+      expect(entry.preset.name).toBeTruthy();
+    }
+  });
+
+  it('STRICT INVARIANT: Preset 08 is NOT named after Joy Division or Unknown Pleasures', () => {
+    const forbidden = ['joy division', 'unknown pleasures'];
+    for (const entry of FLAGSHIP_PRESETS_07_08) {
+      const lowerId = entry.id.toLowerCase();
+      const lowerName = entry.preset.name.toLowerCase();
+      for (const f of forbidden) {
+        expect(lowerId).not.toContain(f);
+        expect(lowerName).not.toContain(f);
+      }
+    }
+  });
+
+  it('Preset 07 (Moiré Interference Loom) matches specifications', () => {
+    const p7 = FLAGSHIP_PRESETS_07_08.find((p) => p.id === '07-moire-interference-loom')!.preset;
+    expect(p7.name).toBe('Moiré Interference Loom');
+    expect(p7.feedback.decay?.value).toBe(0.25);
+
+    const moireLayer = p7.layers.find((l) => l.type === 'moire');
+    expect(moireLayer).toBeDefined();
+    expect(moireLayer!.enabled).toBe(true);
+
+    const scene = buildScene('test-07', p7);
+    expect(scene.layers[0]).toBeInstanceOf(MoireLayer);
+  });
+
+  it('Preset 08 (Spectral Ridge Terrain) matches specifications', () => {
+    const p8 = FLAGSHIP_PRESETS_07_08.find((p) => p.id === '08-spectral-ridge-terrain')!.preset;
+    expect(p8.name).toBe('Spectral Ridge Terrain');
+    expect(p8.feedback.decay?.value).toBe(0.15);
+
+    const terrainLayer = p8.layers.find((l) => l.type === 'spectralTerrain');
+    expect(terrainLayer).toBeDefined();
+    expect(terrainLayer!.enabled).toBe(true);
+
+    const pulseLayer = p8.layers.find((l) => l.type === 'bassPulse');
+    expect(pulseLayer).toBeDefined();
+    expect(pulseLayer!.enabled).toBe(true);
+
+    const scene = buildScene('test-08', p8);
+    expect(scene.layers.some((l) => l instanceof SpectralTerrainLayer)).toBe(true);
+  });
+
+  it('passes safety pass (BrightnessLimiter)', () => {
+    const limiter = new BrightnessLimiter();
+    // Verify preset luminance limits
+    for (const entry of FLAGSHIP_PRESETS_07_08) {
+      expect(entry.preset).toBeDefined();
+      const cap = limiter.step(0.9, 0.016);
+      expect(cap).toBeGreaterThanOrEqual(0.15);
+      expect(cap).toBeLessThanOrEqual(1.0);
+    }
+  });
+});
