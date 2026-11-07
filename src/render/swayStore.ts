@@ -1,7 +1,7 @@
 // One figure-eight sway offset per frame, shared by the tunnel, particles and (later)
 // the radial crown, so they all move together and never separate (patch 2026-11-04).
 // The host computes it once per frame with setSway(); layers only read it with getSway().
-import { BendState, bendOffset } from './tunnelState';
+import { BendState } from './tunnelState';
 
 export interface SwayOffset {
   /** Vanishing-point offset in uv units (screen = 0..1). Zero in Calm. */
@@ -19,14 +19,14 @@ function clamp01(v: number): number {
 }
 
 /** Advance the shared sway once for this frame and store it. Call once per frame. */
-export function advanceSway(dtSec: number, mid: number, calm: boolean): SwayOffset {
+export function advanceSway(dtSec: number, mid: number, _calm: boolean): SwayOffset {
   const dt = Math.max(0, dtSec);
   const k = dt > 0 ? 1 - Math.exp(-dt / 0.15) : 1;
   smoothedMid += k * (clamp01(mid) - smoothedMid);
 
-  const angle = bend.advance(dtSec);
-  const o = bendOffset(angle, smoothedMid, calm);
-  current = { x: o.x, y: o.y };
+  bend.advance(dtSec);
+  // Physical center sway is permanently disabled across all layers: locked rock-solid at (0, 0)
+  current = ZERO;
   return current;
 }
 

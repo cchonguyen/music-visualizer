@@ -11,7 +11,6 @@ import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
 import { highFlash, POOL_SIZE } from '../particleState';
-import { getSway } from '../swayStore';
 import { getCrownHeights } from '../crownStore';
 import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
@@ -325,9 +324,8 @@ export class ParticleLayer implements RenderLayer {
     const rawMid = frame.norm?.mid ?? 0;
     this.slewSwirl += (rawMid - this.slewSwirl) * (1 - Math.exp(-dt / 0.15));
     gl.uniform1f(this.uSwirl, (this.calm ? 0 : this.slewSwirl) * this.p.swirlGain * (follow ? 1 + scene.warp : 1));
-    // Shared sway (uv units) doubled to clip units: the spawn origin follows the tunnel rim.
-    const sway = getSway();
-    gl.uniform2f(this.uSway, 2 * sway.x, 2 * sway.y);
+    // Particle origins locked dead-center: zero sway
+    gl.uniform2f(this.uSway, 0.0, 0.0);
     gl.uniform1f(this.uSparkle, sparkle);
     const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
     gl.uniform1f(this.uBrightness, this.p.brightness * opacity);
@@ -367,7 +365,7 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uRotation, this.p.rotation + (follow ? scene.angle : 0));
     gl.uniform1f(this.uZoom, this.p.zoom * (follow ? scene.scale : 1));
     gl.uniform1f(this.uFollow, follow ? 1 : 0);
-    gl.uniform2f(this.uCentre, follow ? scene.centreX : 0, follow ? scene.centreY : 0);
+    gl.uniform2f(this.uCentre, 0.0, 0.0);
     gl.uniform2f(this.uStretch, follow ? scene.stretchX : 1, follow ? scene.stretchY : 1);
     gl.uniform1f(this.uWarp, follow ? scene.warp : 0);
     gl.uniform1f(this.uWarpScale, scene.warpScale);

@@ -12,7 +12,6 @@ import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import { flashGovernor } from '../safety';
 import fragSrc from '../shaders/shockwave.frag.glsl?raw';
-import { getSway } from '../swayStore';
 import { SHOCKWAVE_DEFAULTS, type ShockwaveParams } from '../../presets/layerSchemas';
 import { BandTexture } from '../bandTexture';
 
@@ -117,12 +116,12 @@ export class ShockwaveLayer implements RenderLayer {
     const fade = (1 - k) * (1 - k);
     const palette: Palette = getPalette(getCurrentPalette());
     const accent = blendAccents(palette.accentA, palette.accentB, this.accentSwap).a;
-    const sway = getSway();
 
     gl.useProgram(this.program);
     // Uniforms must follow useProgram, or the calls are an invalid operation.
     gl.uniform2f(this.uRes, target.width, target.height);
-    gl.uniform2f(this.uCenter, sway.x, sway.y);
+    // Shockwave emanates from exact center (0, 0)
+    gl.uniform2f(this.uCenter, 0.0, 0.0);
     gl.uniform1f(this.uRadius, radius);
     gl.uniform1f(this.uFade, fade);
     gl.uniform1f(this.uGlow, this.p.style === 'glow' ? 1 : 0);

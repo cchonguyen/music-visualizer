@@ -200,8 +200,9 @@ export function stepTunnel(
   state.reverseCooldownSec += dtSec;
   state.horizonSwayPhase += dtSec * (0.45 + sub * 0.85);
 
-  const horizonDrift = params.horizonDrift ?? 0.40;
-  state.vanishX += Math.sin(state.horizonSwayPhase) * 0.22 * horizonDrift;
+  // Horizontal and vertical vanishing-point sway disabled: rock-solid dead-center
+  state.vanishX = 0;
+  state.vanishY = 0;
 
   const flightMode = params.flightMode ?? 'dropReverse';
   const reverseOnBreakdown = params.reverseOnBreakdown !== false;

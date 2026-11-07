@@ -10,7 +10,6 @@ import { getCrownHeights } from '../crownStore';
 import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import { blendAccents } from '../colourSwap';
-import { getSway } from '../swayStore';
 import fragSrc from '../shaders/crown.frag.glsl?raw';
 import { CROWN_DEFAULTS, type CrownParams } from '../../presets/layerSchemas';
 import { BandTexture } from '../bandTexture';
@@ -80,14 +79,12 @@ export class CrownLayer implements RenderLayer {
 
     const palette: Palette = getPalette(getCurrentPalette());
     const accent = blendAccents(palette.accentA, palette.accentB, this.accentSwap).a;
-    // Sway (uv units) to aspect-corrected clip units: x times 2 times aspect, y times 2.
-    const aspect = target.width / target.height;
-    const sway = getSway();
 
     gl.useProgram(this.program);
     // Uniforms must follow useProgram, or the calls are an invalid operation.
     gl.uniform2f(this.uRes, target.width, target.height);
-    gl.uniform2f(this.uCentre, 2 * sway.x * aspect * this.p.rimFactor, 2 * sway.y * this.p.rimFactor);
+    // Crown center is permanently locked dead-center (0, 0)
+    gl.uniform2f(this.uCentre, 0.0, 0.0);
     gl.uniform1fv(this.uHeights, getCrownHeights());
     gl.uniform3f(this.uAccent, accent[0], accent[1], accent[2]);
     gl.uniform1f(this.uSize, this.p.size ?? 2.0);

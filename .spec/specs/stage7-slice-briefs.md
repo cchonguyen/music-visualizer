@@ -1467,3 +1467,46 @@ Output ONLY a 1-line receipt upon completion.
 
 ### Communication Rule
 Output ONLY a 1-line receipt upon completion.
+
+
+---
+
+## Slice 7.41: Disable all physical center sway, vanishing-point wobble, and position displacement across all layers
+
+### Target Files
+- `src/render/swayStore.ts`
+- `src/render/tunnelState.ts`
+- `src/render/layers/tunnel.ts`
+- `src/render/layers/particles.ts`
+- `src/render/layers/crown.ts`
+- `src/render/layers/shockwave.ts`
+- `src/render/shaders/moire.frag.glsl`
+- `src/render/__tests__/swayStore.test.ts`
+
+### Strict Invariants & Boundaries
+- All effects (Crown, Tunnel, Particles, Shockwave, Moiré) must remain dead-centered and rock-solid at `(0, 0)` with zero physical center twitching or vanishing-point wobble.
+- Keep audio-reactive colors, palettes, and smooth flow intact while completely removing center/origin displacement.
+
+### Implementation Steps
+1. **`src/render/swayStore.ts`**:
+   - In `advanceSway(dtSec, mid, calm)`: lock return value to `{ x: 0, y: 0 }`.
+2. **`src/render/tunnelState.ts` & `src/render/layers/tunnel.ts`**:
+   - In `tunnelState.ts`: disable horizontal sway accumulation into `state.vanishX` (`state.vanishX = 0; state.vanishY = 0;`).
+   - In `tunnel.ts`: upload `gl.uniform2f(this.uCenter, 0.0, 0.0);`.
+3. **`src/render/layers/particles.ts`**:
+   - Upload `gl.uniform2f(this.uSway, 0.0, 0.0);` so particle origins are locked dead-center.
+4. **`src/render/layers/crown.ts`**:
+   - Upload `gl.uniform2f(this.uCentre, 0.0, 0.0);` so the crown ring sits perfectly centered.
+5. **`src/render/layers/shockwave.ts`**:
+   - Upload `gl.uniform2f(this.uCenter, 0.0, 0.0);` so shockwaves emanate from exact center `(0, 0)`.
+6. **`src/render/shaders/moire.frag.glsl`**:
+   - Zero out `midOffset` and freeze `sep` so Moiré interference centers don't wobble or jitter.
+7. **`src/render/__tests__/swayStore.test.ts`**:
+   - Update tests to verify zeroed rock-solid sway.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.

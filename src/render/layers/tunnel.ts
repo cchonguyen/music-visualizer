@@ -10,7 +10,6 @@ import { getCurrentPalette } from '../paletteStore';
 import { SlowFollower } from '../dynamics';
 import fragSrc from '../shaders/tunnel.frag.glsl?raw';
 import { FlightState, RollState, TunnelState, stepTunnel } from '../tunnelState';
-import { getSway } from '../swayStore';
 import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
 import { RELEASE_TAU_SEC, releaseEnvelope } from '../releaseEnvelope';
@@ -164,9 +163,8 @@ export class TunnelLayer implements RenderLayer {
     // Visual gain also scales movement speed (higher gain = faster flight).
     const scale = (this.calm ? 1 : 1 + this.sectionContrast) * getVisualGain();
 
-    const sway = getSway();
-    this.state.vanishX = sway.x;
-    this.state.vanishY = sway.y;
+    this.state.vanishX = 0;
+    this.state.vanishY = 0;
 
     const { forwardPhase } = stepTunnel(
       this.state,
@@ -250,10 +248,10 @@ export class TunnelLayer implements RenderLayer {
     if (this.uZoomPunch) gl.uniform1f(this.uZoomPunch, this.p.zoomPunch);
     if (this.uSwirlPulse) gl.uniform1f(this.uSwirlPulse, this.p.swirlPulse);
 
-    // Motion and colour: vanishing point swayed with bassline banking
+    // Vanishing point locked dead-center: no wobble or position displacement
     const t = clock.timeSec;
     const highSlow = this.highAvg.step(frame.norm.high, clock.dtSec);
-    gl.uniform2f(this.uCenter, this.state.vanishX, this.state.vanishY);
+    gl.uniform2f(this.uCenter, 0.0, 0.0);
     const rollVal = this.roll.advance(clock.dtSec, frame.energy, this.calm);
     gl.uniform1f(this.uRoll, rollVal);
     if (this.uRollPhase) gl.uniform1f(this.uRollPhase, rollVal);

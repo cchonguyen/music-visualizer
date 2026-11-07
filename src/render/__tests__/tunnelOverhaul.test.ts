@@ -265,11 +265,12 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
       expect(state.velocityMultiplier).toBeCloseTo(1.0 + (-0.75 - 1.0) * (1 - Math.exp(-1)), 3);
     });
 
-    it('computes vanishing point sway with horizonDrift banking', () => {
+    it('locks vanishing point dead-center with zero drift', () => {
       const state = new TunnelState({ vanishX: 0 });
       stepTunnel(state, { norm: { sub: 0.5 } }, 0.5, { horizonDrift: 0.6 });
       expect(state.horizonSwayPhase).toBeCloseTo(0.5 * (0.45 + 0.5 * 0.85), 3);
-      expect(state.vanishX).toBeCloseTo(Math.sin(state.horizonSwayPhase) * 0.22 * 0.6, 3);
+      expect(state.vanishX).toBe(0);
+      expect(state.vanishY).toBe(0);
     });
   });
 

@@ -65,12 +65,9 @@ void main() {
   float freq1 = baseFreq;
   float freq2 = baseFreq * (1.0 + effDelta);
 
-  // Bass center sweep: u_sub visibly sweeps center separation apart
-  float sep = 0.18 + 0.25 * uAudioWarp * u_sub;
-  vec2 midOffset = vec2(
-    sin(t * 0.6) * 0.1 + cos(t * 0.3) * 0.05,
-    cos(t * 0.5) * 0.1 + sin(t * 0.4) * 0.05
-  ) * clamp(u_mid * 0.6, 0.0, 0.25);
+  // Centers locked: frozen separation and zeroed midOffset so interference centers don't wobble or jitter
+  float sep = 0.18;
+  vec2 midOffset = vec2(0.0);
 
   vec2 c1 = vec2(-sep, 0.0) + midOffset;
   vec2 c2 = vec2(sep, 0.0) - midOffset;
