@@ -203,14 +203,14 @@ void main() {
 
     if (uCurlFlowPattern == 0) {
       // 0 ('plumes'): slowly precessing, breathing flow vector
-      vec2 flowVec = vec2(sin(uTime * 0.22 + p.y * 2.5), cos(uTime * 0.17 + p.x * 2.5)) * 0.22 + radial * (0.18 * sin(uTime * 0.31) + uSub * 0.25);
+      vec2 flowVec = vec2(sin(uTime * 0.22 + p.y * 2.5), cos(uTime * 0.17 + p.x * 2.5)) * 0.22 + radial * (0.18 * sin(uTime * 0.31));
       vel = vel * 0.75 + flowVec;
     } else if (uCurlFlowPattern == 1) {
       // 1 ('eddies'): balanced stationary whirlpools
       vel = vel * 1.1;
     } else if (uCurlFlowPattern == 2) {
-      // 2 ('outflow'): radial bass-driven outward expansion
-      vel = vel * 0.5 + radial * (0.85 + uSub * 0.75);
+      // 2 ('outflow'): radial outward expansion
+      vel = vel * 0.5 + radial * 0.85;
     } else if (uCurlFlowPattern == 3) {
       // 3 ('inflow'): inward vortex suction
       vec2 tang = vec2(-radial.y, radial.x);
@@ -232,7 +232,7 @@ void main() {
     }
 
     float r = length(p);
-    float theta = atan(p.y, p.x) + uTime * uMandalaCounterSpin * 0.5 + uKick * uMandalaKickFlare * 0.25;
+    float theta = atan(p.y, p.x) + uTime * uMandalaCounterSpin * 0.5;
     float foldedTheta = abs(mod(theta, TWO_PI / uKaleidoN) - PI / uKaleidoN);
 
     // Concentric radial accordion folding
@@ -295,7 +295,7 @@ void main() {
   } else if (uWarpMode == 4) {
     // 'rgbSplit': Tangential curl with temporal swirl wave
     p.x *= uAspect;
-    float swirlWave = 1.0 + 0.45 * sin(length(p) * 6.0 - uTime * uWarpSpeed * 1.2) + uSub * 0.4;
+    float swirlWave = 1.0 + 0.45 * sin(length(p) * 6.0 - uTime * uWarpSpeed * 1.2);
     vec2 tang = vec2(-p.y, p.x) / max(length(p), 0.05);
     p += tang * ((uRgbSplit > 0.0 ? uRgbSplit * 0.5 : 0.01) * swirlWave);
     p.x /= uAspect;

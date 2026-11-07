@@ -283,9 +283,14 @@ export class Scene {
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 
-    const prevTerrain = getTerrainState(gl);
-    clearTerrainState(gl);
-    const terrainFlow = prevTerrain.active && prevTerrain.terrainFlow > 0 ? prevTerrain.terrainFlow : 0;
+    const hasTerrain = this.layers.some(
+      (layer) => Boolean(layer && (('type' in layer && (layer as unknown as { type: string }).type === 'spectralTerrain') || layer.constructor?.name === 'SpectralTerrainLayer'))
+    );
+    const prevTerrain = hasTerrain ? getTerrainState(gl) : null;
+    if (hasTerrain) {
+      clearTerrainState(gl);
+    }
+    const terrainFlow = prevTerrain && prevTerrain.active && prevTerrain.terrainFlow > 0 ? prevTerrain.terrainFlow : 0;
     const terrainBiasDriftY = terrainFlow > 0 ? -0.012 * terrainFlow : 0;
 
     const dt = typeof frame?.dtSec === 'number' && Number.isFinite(frame.dtSec) && frame.dtSec > 0 ? frame.dtSec : 1 / 60;
@@ -298,7 +303,7 @@ export class Scene {
     const centerX = Math.sin(this.screenDriftPhase) * 0.24 * mobiusWander;
     const centerY = Math.cos(this.screenDriftPhase * 0.77) * 0.16 * mobiusWander;
     const poleOffset = Number(this.fb.mobiusPoleOffset ?? FEEDBACK_WARP_DEFAULTS.mobiusPoleOffset);
-    const sep = poleOffset * (1.0 + 0.28 * mobiusWander * (Math.sin(this.poleOrbitPhase * 0.63) * 0.5 + (normSub - 0.3) * 0.6));
+    const sep = poleOffset * (1.0 + 0.18 * mobiusWander * Math.sin(this.poleOrbitPhase * 0.63));
     const ang = this.poleOrbitPhase * 0.45 * mobiusWander;
     const cosAng = Math.cos(ang);
     const sinAng = Math.sin(ang);

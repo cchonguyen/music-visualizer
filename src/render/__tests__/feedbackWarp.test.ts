@@ -8,6 +8,8 @@ import { valuesOf, buildScene, readFeedbackSettings } from '../../presets/loader
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { Preset } from '../../presets/format';
+import { SpectralTerrainLayer } from '../layers/spectralTerrain';
+import { clearTerrainState } from '../terrainStore';
 
 function createMockGl(): WebGL2RenderingContext {
   const gl = {
@@ -31,6 +33,8 @@ function createMockGl(): WebGL2RenderingContext {
     R32F: 0x822e,
     RED: 0x1903,
     FLOAT: 0x1406,
+    ARRAY_BUFFER: 0x8892,
+    STATIC_DRAW: 0x88e4,
     TEXTURE_MIN_FILTER: 0x2801,
     TEXTURE_MAG_FILTER: 0x2800,
     TEXTURE_WRAP_S: 0x2802,
@@ -47,6 +51,12 @@ function createMockGl(): WebGL2RenderingContext {
     createShader: vi.fn().mockReturnValue({}),
     createProgram: vi.fn().mockReturnValue({}),
     createVertexArray: vi.fn().mockReturnValue({}),
+    createBuffer: vi.fn().mockReturnValue({}),
+    deleteBuffer: vi.fn(),
+    bindBuffer: vi.fn(),
+    bufferData: vi.fn(),
+    enableVertexAttribArray: vi.fn(),
+    vertexAttribPointer: vi.fn(),
     createTexture: vi.fn().mockReturnValue({}),
     createFramebuffer: vi.fn().mockReturnValue({}),
     bindTexture: vi.fn(),
@@ -69,6 +79,8 @@ function createMockGl(): WebGL2RenderingContext {
     uniform1f: vi.fn(),
     uniform2f: vi.fn(),
     uniform3f: vi.fn(),
+    uniform3fv: vi.fn(),
+    uniformMatrix4fv: vi.fn(),
     uniform1fv: vi.fn(),
     deleteProgram: vi.fn(),
     deleteShader: vi.fn(),
@@ -491,6 +503,82 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       const f3 = getPoles();
       // Poles should have moved noticeably with dt = 0.5s
       expect(f3.poleA[0]).not.toBe(f2.poleA[0]);
+    });
+
+    describe('Slice 7.42: Eliminate feedback trail loop jitter and crossfade terrain drift', () => {
+      it('removes raw audio snaps from feedback shader', () => {
+        expect(feedbackSrc).not.toContain('uSub * 0.25');
+        expect(feedbackSrc).not.toContain('uSub * 0.75');
+        expect(feedbackSrc).not.toContain('uKick * uMandalaKickFlare');
+        expect(feedbackSrc).not.toContain('uSub * 0.4');
+      });
+
+      it('maintains smooth Möbius pole separation regardless of sub transients', () => {
+        const gl = createMockGl();
+        const scene = new Scene('test', []);
+        scene.init(gl);
+
+        const uniform2fMock = gl.uniform2f as unknown as { mock: { calls: [unknown, number, number][] } };
+        const getDistance = () => {
+          const calls = uniform2fMock.mock.calls;
+          const poleA = calls.filter(([loc]) => (loc as { name: string })?.name === 'uMobiusPoleA').pop()!;
+          const poleB = calls.filter(([loc]) => (loc as { name: string })?.name === 'uMobiusPoleB').pop()!;
+          const dx = Number(poleB[1]) - Number(poleA[1]);
+          const dy = Number(poleB[2]) - Number(poleA[2]);
+          return Math.sqrt(dx * dx + dy * dy);
+        };
+
+        // Frame with sub = 0.0
+        scene.draw(makeMockFrame({ dtSec: 0.0001, norm: { sub: 0.0, mid: 0.5, high: 0.5 } }), mockClock);
+        const dist1 = getDistance();
+
+        // Frame immediately after with sub jumping to 1.0
+        scene.draw(makeMockFrame({ dtSec: 0.0001, norm: { sub: 1.0, mid: 0.5, high: 0.5 } }), mockClock);
+        const dist2 = getDistance();
+
+        // Separation distance should be identical or within minimal phase progression (sub does not jump sep!)
+        expect(Math.abs(dist2 - dist1)).toBeLessThan(0.001);
+      });
+
+      it('preserves terrain drift across multiple frames and does not contaminate non-terrain scenes', () => {
+        const gl = createMockGl();
+        clearTerrainState(gl);
+
+        const terrainLayer = new SpectralTerrainLayer({ terrainFlow: 0.5 });
+        const sceneWithTerrain = new Scene('terrainScene', [terrainLayer]);
+        sceneWithTerrain.init(gl);
+
+        const sceneWithoutTerrain = new Scene('cleanScene', []);
+        sceneWithoutTerrain.init(gl);
+
+        const uniform2fMock = gl.uniform2f as unknown as { mock: { calls: [unknown, number, number][] } };
+        const getDriftY = () => {
+          const calls = uniform2fMock.mock.calls;
+          const driftCall = calls.filter(([loc]) => (loc as { name: string })?.name === 'uDrift').pop();
+          return driftCall ? Number(driftCall[2]) : 0;
+        };
+
+        const frame = makeMockFrame();
+
+        // Simulate alternating crossfade frames between sceneWithTerrain and sceneWithoutTerrain
+        // Frame 1: terrain scene runs and sets state
+        sceneWithTerrain.draw(frame, mockClock);
+        // Clean scene runs: must NOT clear terrainState and must NOT receive terrain bias drift
+        sceneWithoutTerrain.draw(frame, mockClock);
+        expect(getDriftY()).toBe(0); // Clean scene has 0 drift
+
+        // Frame 2: terrain scene runs again - must have terrain bias drift (-0.006)
+        sceneWithTerrain.draw(frame, mockClock);
+        expect(getDriftY()).toBeCloseTo(-0.006, 4);
+
+        // Clean scene runs again
+        sceneWithoutTerrain.draw(frame, mockClock);
+        expect(getDriftY()).toBe(0);
+
+        // Frame 3: terrain scene still receives continuous terrain bias drift without alternating drops
+        sceneWithTerrain.draw(frame, mockClock);
+        expect(getDriftY()).toBeCloseTo(-0.006, 4);
+      });
     });
   });
 });

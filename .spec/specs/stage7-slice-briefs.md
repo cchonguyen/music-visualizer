@@ -1510,3 +1510,37 @@ Output ONLY a 1-line receipt upon completion.
 
 ### Communication Rule
 Output ONLY a 1-line receipt upon completion.
+
+
+---
+
+## Slice 7.42: Eliminate feedback trail loop jitter (smooth Möbius pole separation, remove Mandala angle kick snaps, remove raw uSub jumps from Curl & RGB Vortex UV displacements, fix crossfade terrain drift)
+
+### Target Files
+- `src/render/scene.ts`
+- `src/render/shaders/feedback.frag.glsl`
+- `src/render/__tests__/feedbackWarp.test.ts`
+
+### Strict Invariants & Boundaries
+- Feedback UV sampling must be completely free of instantaneous frame-to-frame position/angle jumps.
+- Preserve organic fluid curl, kaleidoscopic polar folding, and Möbius conformal flow while removing the raw audio noise that caused shuddering.
+
+### Implementation Steps
+1. **`src/render/scene.ts`**:
+   - In `updateMobiusPoles()` (around line 301): remove raw `(normSub - 0.3) * 0.6` from `sep` calculation:
+     `const sep = poleOffset * (1.0 + 0.18 * mobiusWander * Math.sin(this.poleOrbitPhase * 0.63));`
+     Poles now orbit smoothly without jumping distances on raw sub transients.
+   - In `Scene.draw()`: do not blindly wipe `terrainStore` in a way that toggles `terrainBiasDriftY` between `sceneA` and `sceneB` on alternating frames.
+2. **`src/render/shaders/feedback.frag.glsl`**:
+   - In `polarFold` (around line 235): remove instantaneous `+ uKick * uMandalaKickFlare * 0.25` from `theta`. Let rotation be smooth and monotonic: `float theta = atan(p.y, p.x) + uTime * uMandalaCounterSpin * 0.5;`.
+   - In `curlNoise` / `uWarpMode == 1` (around lines 206, 213): remove raw `uSub * 0.25` and `uSub * 0.75` from displacement velocity vectors. Fluid advection now flows along smooth continuous curl noise streamlines.
+   - In `rgbSplit` / `uWarpMode == 4` (around line 298): remove raw `+ uSub * 0.4` from `swirlWave`.
+3. **`src/render/__tests__/feedbackWarp.test.ts`**:
+   - Verify shader compilation and stable uniform binding with zero errors.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
