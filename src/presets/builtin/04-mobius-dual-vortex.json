@@ -5,13 +5,20 @@
   "transition": { "style": "crossfade", "seconds": 0.32 },
   "feedback": {
     "warpMode": "mobius",
-    "decay": 0.96
+    "warp": 0.55,
+    "mobiusFlow": 0.9,
+    "mobiusSwirl": 0.75,
+    "mobiusPoleOffset": 0.46,
+    "mobiusWander": 0.60,
+    "mobiusMode": "auto",
+    "decay": 0.90,
+    "decayRgb": [0.92, 0.91, 0.96]
   },
   "layers": [
     {
       "type": "rings",
-      "opacity": 0.15,
-      "blend": "alpha",
+      "blend": "max",
+      "trails": true,
       "params": {
         "mode": "polarGrid",
         "strokeBase": 0.003
@@ -19,6 +26,8 @@
     },
     {
       "type": "particles",
+      "blend": "max",
+      "opacity": 0.7,
       "params": {
         "shape": "dot",
         "swirlGain": 2.5,

@@ -6,17 +6,36 @@
   "feedback": {
     "warpMode": "polarFold",
     "kaleidoN": 8,
-    "portalRadius": 0.08,
-    "decay": 0.95
+    "mandalaPattern": "auto",
+    "radialFold": 0.48,
+    "mandalaTile": 0.35,
+    "mandalaCounterSpin": 0.3,
+    "mandalaKickFlare": 0.4,
+    "zoom": 1.038,
+    "rotate": 0.015,
+    "decay": 0.88,
+    "decayRgb": [0.92, 0.90, 0.96]
   },
   "layers": [
     {
       "type": "rings",
+      "blend": "max",
+      "trails": true,
       "params": {
         "mode": "orbitTriangles",
+        "maxRings": 6,
         "strokeBase": 0.005,
         "texture": true,
         "textureGain": 1.2
+      }
+    },
+    {
+      "type": "waveform",
+      "blend": "max",
+      "trails": false,
+      "params": {
+        "mode": "star7",
+        "colorMode": "palette"
       }
     }
   ],
