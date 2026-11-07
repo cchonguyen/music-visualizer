@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "Moiré Interference Loom",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.25
+  },
+  "layers": [
+    {
+      "type": "moire",
+      "params": {
+        "scale": 32.0,
+        "speed": 0.45,
+        "lineWidth": 0.5,
+        "brightness": 1.2
+      }
+    }
+  ],
+  "post": {}
+}

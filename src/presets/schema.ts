@@ -271,5 +271,66 @@ declare module "./layerSchemas" {
   interface RingsParams {
     mode?: string;
   }
+  interface MoireParams {
+    scale: number;
+    speed: number;
+    lineWidth: number;
+    brightness: number;
+  }
+  interface SpectralTerrainParams {
+    elevation: number;
+    width: number;
+    horizonY: number;
+    foregroundY: number;
+    brightness: number;
+  }
 }
+
+/** Moire parameters and schema (Slice 7.13). */
+export interface MoireParams {
+  scale: number;
+  speed: number;
+  lineWidth: number;
+  brightness: number;
+}
+
+export const MOIRE_DEFAULTS: MoireParams = {
+  scale: 30.0,
+  speed: 0.5,
+  lineWidth: 0.5,
+  brightness: 1.0,
+};
+
+export const MOIRE_SPECS: readonly ParamSpec[] = [
+  { type: "float", name: "scale", label: "Grid scale", group: "Moiré", default: MOIRE_DEFAULTS.scale, min: 4.0, max: 75.0, step: 0.5 },
+  { type: "float", name: "speed", label: "Animation speed", group: "Moiré", default: MOIRE_DEFAULTS.speed, min: 0.0, max: 3.0, step: 0.05 },
+  { type: "float", name: "lineWidth", label: "Line width", group: "Moiré", default: MOIRE_DEFAULTS.lineWidth, min: 0.1, max: 0.9, step: 0.05 },
+  { type: "float", name: "brightness", label: "Brightness", group: "Moiré", default: MOIRE_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05 },
+];
+
+/** Spectral terrain parameters and schema (Slice 7.13). */
+export interface SpectralTerrainParams {
+  elevation: number;
+  width: number;
+  horizonY: number;
+  foregroundY: number;
+  brightness: number;
+}
+
+export const SPECTRAL_TERRAIN_DEFAULTS: SpectralTerrainParams = {
+  elevation: 0.6,
+  width: 1.3,
+  horizonY: 0.35,
+  foregroundY: -0.55,
+  brightness: 1.2,
+};
+
+export const SPECTRAL_TERRAIN_SPECS: readonly ParamSpec[] = [
+  { type: "float", name: "elevation", label: "Peak elevation", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.elevation, min: 0.1, max: 2.0, step: 0.01 },
+  { type: "float", name: "width", label: "Terrain width", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.width, min: 0.5, max: 2.5, step: 0.01 },
+  { type: "float", name: "horizonY", label: "Horizon Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.horizonY, min: -0.5, max: 0.8, step: 0.01 },
+  { type: "float", name: "foregroundY", label: "Foreground Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.foregroundY, min: -0.9, max: 0.2, step: 0.01 },
+  { type: "float", name: "brightness", label: "Ridge brightness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.01 },
+];
+
 
