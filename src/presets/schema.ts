@@ -424,6 +424,11 @@ declare module "./layerSchemas" {
     speed: number;
     lineWidth: number;
     brightness: number;
+    contrast?: number;
+    waveShape?: number;
+    colorSpread?: number;
+    patternMode?: 'starburstLoom' | 'twinCircles' | 'doubleSpirals' | 'warpedCrossGrid';
+    audioWarp?: number;
   }
   interface SpectralTerrainParams {
     elevation: number;
@@ -451,19 +456,31 @@ declare module "./layerSchemas" {
   }
 }
 
-/** Moire parameters and schema (Slice 7.13). */
+/** Moire parameters and schema (Slice 7.13, Slice 7.25). */
+export type LoomPatternMode = 'starburstLoom' | 'twinCircles' | 'doubleSpirals' | 'warpedCrossGrid';
+
 export interface MoireParams {
   scale: number;
   speed: number;
   lineWidth: number;
   brightness: number;
+  contrast?: number;
+  waveShape?: number;
+  colorSpread?: number;
+  patternMode?: LoomPatternMode;
+  audioWarp?: number;
 }
 
-export const MOIRE_DEFAULTS: MoireParams = {
+export const MOIRE_DEFAULTS: Required<MoireParams> = {
   scale: 30.0,
   speed: 0.5,
   lineWidth: 0.5,
   brightness: 1.0,
+  contrast: 0.60,
+  waveShape: 0.25,
+  colorSpread: 0.80,
+  patternMode: 'starburstLoom',
+  audioWarp: 0.65,
 };
 
 export const MOIRE_SPECS: readonly ParamSpec[] = [
@@ -471,7 +488,14 @@ export const MOIRE_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "speed", label: "Animation speed", group: "Moiré", default: MOIRE_DEFAULTS.speed, min: 0.0, max: 3.0, step: 0.05 },
   { type: "float", name: "lineWidth", label: "Line width", group: "Moiré", default: MOIRE_DEFAULTS.lineWidth, min: 0.1, max: 0.9, step: 0.05 },
   { type: "float", name: "brightness", label: "Brightness", group: "Moiré", default: MOIRE_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05 },
+  { type: "float", name: "contrast", label: "Contrast", group: "Moiré", default: MOIRE_DEFAULTS.contrast, min: 0.1, max: 1.0, step: 0.05 },
+  { type: "float", name: "waveShape", label: "Edge softness / sharpness", group: "Moiré", default: MOIRE_DEFAULTS.waveShape, min: 0.0, max: 1.0, step: 0.05 },
+  { type: "float", name: "colorSpread", label: "Two-tone color gradient", group: "Colour", default: MOIRE_DEFAULTS.colorSpread, min: 0.0, max: 1.0, step: 0.05 },
+  { type: "enum", name: "patternMode", label: "Loom pattern style", group: "Moiré", default: MOIRE_DEFAULTS.patternMode, options: ["starburstLoom", "twinCircles", "doubleSpirals", "warpedCrossGrid"] },
+  { type: "float", name: "audioWarp", label: "Bass center sweep & kick ripple", group: "Moiré", default: MOIRE_DEFAULTS.audioWarp, min: 0.0, max: 1.0, step: 0.05 },
 ];
+
+export const MOIRE_SCHEMA = MOIRE_SPECS;
 
 /** Spectral terrain parameters and schema (Slice 7.13). */
 export interface SpectralTerrainParams {

@@ -176,6 +176,14 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_mid');
     expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_sub');
     expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_kickEnv');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uContrast');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uWaveShape');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uColorSpread');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uPatternMode');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uAudioWarp');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uLayerOpacity');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uColorA');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uColorB');
   });
 
   it('draws fullscreen quad and passes audio/kickEnv uniforms', () => {
@@ -184,7 +192,7 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     layer.init(gl);
 
     const frame = createDummyAudioFrame();
-    layer.draw(frame, dummyClock, dummyTarget);
+    layer.draw(frame, dummyClock, dummyTarget, { uLayerOpacity: 0.85 });
 
     expect(gl.useProgram).toHaveBeenCalled();
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
@@ -194,6 +202,30 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_sub' }), frame.norm.sub);
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_kickEnv' }), frame.kickEnv);
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uScale' }), 32);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uContrast' }), 0.60);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uWaveShape' }), 0.25);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uColorSpread' }), 0.80);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uAudioWarp' }), 0.65);
+    expect(gl.uniform1i).toHaveBeenCalledWith(expect.objectContaining({ name: 'uPatternMode' }), 0);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uLayerOpacity' }), 0.85);
+  });
+
+  it('supports all 4 Loom pattern modes and maps patternMode to integer uniforms', () => {
+    const gl = createMockGl();
+    const modes = [
+      { mode: 'starburstLoom' as const, expected: 0 },
+      { mode: 'twinCircles' as const, expected: 1 },
+      { mode: 'doubleSpirals' as const, expected: 2 },
+      { mode: 'warpedCrossGrid' as const, expected: 3 },
+    ];
+
+    const frame = createDummyAudioFrame();
+    for (const { mode, expected } of modes) {
+      const layer = new MoireLayer({ patternMode: mode });
+      layer.init(gl);
+      layer.draw(frame, dummyClock, dummyTarget);
+      expect(gl.uniform1i).toHaveBeenCalledWith(expect.objectContaining({ name: 'uPatternMode' }), expected);
+    }
   });
 
   it('enforces fwidth derivative anti-aliasing and spatial frequency caps in moire.frag.glsl (SYSTEM_SPEC.md:94)', () => {
@@ -207,6 +239,15 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(moireFragSrc).toMatch(/0\.08/);
     // Must include radial phase inversion ring driven by kickEnv
     expect(moireFragSrc).toContain('u_kickEnv');
+    // Slice 7.25: stencil alpha and loom parameters
+    expect(moireFragSrc).toContain('uPatternMode');
+    expect(moireFragSrc).toContain('uLayerOpacity');
+    expect(moireFragSrc).toContain('uContrast');
+    expect(moireFragSrc).toContain('uWaveShape');
+    expect(moireFragSrc).toContain('uColorSpread');
+    expect(moireFragSrc).toContain('uAudioWarp');
+    expect(moireFragSrc).toMatch(/clamp\(moire \* uContrast,\s*0\.0,\s*1\.0\)\s*\* uLayerOpacity/);
+    expect(moireFragSrc).toContain('fragColor = vec4(col * a, a)');
   });
 
   it('disposes resources cleanly', () => {
@@ -429,6 +470,13 @@ describe('Slice 7.13: Flagship Presets 07 and 08', () => {
     const moireLayer = p7.layers.find((l) => l.type === 'moire');
     expect(moireLayer).toBeDefined();
     expect(moireLayer!.enabled).toBe(true);
+    expect(moireLayer!.blend).toBe('max');
+    expect(moireLayer!.trails).toBe(false);
+    expect(moireLayer!.params.patternMode?.value).toBe('starburstLoom');
+    expect(moireLayer!.params.contrast?.value).toBe(0.65);
+    expect(moireLayer!.params.waveShape?.value).toBe(0.35);
+    expect(moireLayer!.params.colorSpread?.value).toBe(0.85);
+    expect(moireLayer!.params.audioWarp?.value).toBe(0.70);
 
     const scene = buildScene('test-07', p7);
     expect(scene.layers[0]).toBeInstanceOf(MoireLayer);

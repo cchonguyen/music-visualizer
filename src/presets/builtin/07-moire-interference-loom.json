@@ -9,11 +9,28 @@
   "layers": [
     {
       "type": "moire",
+      "blend": "max",
+      "trails": false,
       "params": {
         "scale": 32.0,
         "speed": 0.45,
         "lineWidth": 0.5,
-        "brightness": 1.2
+        "brightness": 1.2,
+        "contrast": 0.65,
+        "waveShape": 0.35,
+        "colorSpread": 0.85,
+        "patternMode": "starburstLoom",
+        "audioWarp": 0.70
+      }
+    },
+    {
+      "type": "bassPulse",
+      "opacity": 0.25,
+      "blend": "screen",
+      "trails": true,
+      "params": {
+        "texture": true,
+        "textureGain": 0.8
       }
     }
   ],
