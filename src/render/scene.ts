@@ -10,6 +10,7 @@ import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
 import { advanceSceneTransform } from './sceneTransformStore';
+import { clearTerrainState, getTerrainState } from './terrainStore';
 import type { ParamValue } from '../presets/schema';
 import { getRenderScale, scaledBufferSize } from '../gl/size';
 
@@ -239,6 +240,11 @@ export class Scene {
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 
+    const prevTerrain = getTerrainState(gl);
+    clearTerrainState(gl);
+    const terrainFlow = prevTerrain.active && prevTerrain.terrainFlow > 0 ? prevTerrain.terrainFlow : 0;
+    const terrainBiasDriftY = terrainFlow > 0 ? -0.012 * terrainFlow : 0;
+
     const dt = typeof frame?.dtSec === 'number' && Number.isFinite(frame.dtSec) && frame.dtSec > 0 ? frame.dtSec : 1 / 60;
     const normMid = frame?.norm?.mid ?? (frame?.env?.mid ?? 0.5);
     const normSub = frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5);
@@ -270,7 +276,7 @@ export class Scene {
     gl.useProgram(this.prog);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
-    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame);
+    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame, terrainBiasDriftY);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -395,12 +401,12 @@ export class Scene {
     }
   }
 
-  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number, frame?: AudioFrame): void {
+  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number, frame?: AudioFrame, terrainBiasDriftY = 0): void {
     const n = (key: string) => Number(this.fb[key]);
     const u = (name: string) => this.uni.get(name) ?? null;
     gl.uniform1i(u('uPrev'), 0);
     gl.uniform2f(u('uCentre'), n('centreX'), n('centreY'));
-    gl.uniform2f(u('uDrift'), n('driftX'), n('driftY'));
+    gl.uniform2f(u('uDrift'), n('driftX'), n('driftY') + terrainBiasDriftY);
     gl.uniform2f(u('uStretch'), n('stretchX'), n('stretchY'));
     gl.uniform1f(u('uZoom'), n('zoom'));
     gl.uniform1f(u('uRot'), n('rotate'));

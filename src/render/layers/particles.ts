@@ -19,6 +19,22 @@ import { BandTexture } from '../bandTexture';
 
 import { PARTICLE_DEFAULTS, type ParticleParams } from '../../presets/layerSchemas';
 import { getSceneTransform } from '../sceneTransformStore';
+import { getTerrainState } from '../terrainStore';
+
+export interface ParticleLayerParams extends ParticleParams {
+  terrainDisplace?: number;
+}
+
+export const PARTICLE_DISPLACE_SPEC = {
+  type: 'float' as const,
+  name: 'terrainDisplace',
+  label: 'Ride spectral terrain',
+  group: 'Motion',
+  default: 0.0,
+  min: 0.0,
+  max: 1.0,
+  step: 0.05,
+};
 
 const PARTICLE_SHAPES = ['streak', 'dot', 'star', 'ring'];
 /** First texture unit for the band textures (sub, mid, high take the next two). */
@@ -37,17 +53,17 @@ export class ParticleLayer implements RenderLayer {
   /** Accent swap mix from ColourSwap (P4): 0 = normal, 1 = A and B exchanged. */
   accentSwap = 0;
   /** Settings (slice 4.2). Read every frame. */
-  private p: ParticleParams;
+  private p: ParticleLayerParams;
 
-  constructor(params: Partial<ParticleParams> = {}) {
-    this.p = { ...PARTICLE_DEFAULTS, ...params };
+  constructor(params: Partial<ParticleLayerParams> = {}) {
+    this.p = { ...PARTICLE_DEFAULTS, terrainDisplace: 0.0, ...params };
   }
 
   setOpacity(opacity: number): void {
     this.opacity = opacity;
   }
 
-  setParams(params: Partial<ParticleParams>): void {
+  setParams(params: Partial<ParticleLayerParams>): void {
     this.p = { ...this.p, ...params };
   }
 
@@ -84,6 +100,9 @@ export class ParticleLayer implements RenderLayer {
   private uMode: WebGLUniformLocation | null = null;
   private uSubTwist: WebGLUniformLocation | null = null;
   private uFlowSpeed: WebGLUniformLocation | null = null;
+  private uTerrainTex: WebGLUniformLocation | null = null;
+  private uTerrainDisplace: WebGLUniformLocation | null = null;
+  private uTerrainWriteRow: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
 
   /** Hue drift clock (turns). Advances by hueDrift per second; wrapped to 0..1 when sent to the shader. */
@@ -133,6 +152,9 @@ export class ParticleLayer implements RenderLayer {
     this.uMode = gl.getUniformLocation(this.program, 'uMode');
     this.uSubTwist = gl.getUniformLocation(this.program, 'uSubTwist');
     this.uFlowSpeed = gl.getUniformLocation(this.program, 'uFlowSpeed');
+    this.uTerrainTex = gl.getUniformLocation(this.program, 'uTerrainTex');
+    this.uTerrainDisplace = gl.getUniformLocation(this.program, 'uTerrainDisplace');
+    this.uTerrainWriteRow = gl.getUniformLocation(this.program, 'uTerrainWriteRow');
     this.band.init(gl);
     this.phase.reset();
     this.twinkle.reset();
@@ -226,6 +248,19 @@ export class ParticleLayer implements RenderLayer {
     const unit = this.band.bind(gl, BAND_UNIT);
     gl.uniform1i(this.uTexHigh, unit + 2);
 
+    const terrain = getTerrainState(gl);
+    const terrainDisplace = this.p.terrainDisplace ?? 0;
+    if (terrain.active && terrainDisplace > 0 && terrain.historyTex) {
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, terrain.historyTex);
+      gl.uniform1i(this.uTerrainTex, 5);
+      gl.uniform1f(this.uTerrainDisplace, terrainDisplace);
+      gl.uniform1f(this.uTerrainWriteRow, terrain.writeRow);
+      gl.activeTexture(gl.TEXTURE0);
+    } else {
+      gl.uniform1f(this.uTerrainDisplace, 0.0);
+    }
+
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, POOL_SIZE);
     gl.bindVertexArray(null);
@@ -246,6 +281,9 @@ export class ParticleLayer implements RenderLayer {
     this.uMode = null;
     this.uSubTwist = null;
     this.uFlowSpeed = null;
+    this.uTerrainTex = null;
+    this.uTerrainDisplace = null;
+    this.uTerrainWriteRow = null;
     this.uPhase = null;
     this.uAspect = null;
     this.uAccent = null;

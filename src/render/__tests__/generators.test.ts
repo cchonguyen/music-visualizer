@@ -18,6 +18,9 @@ import { BrightnessLimiter } from '../safety';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderTarget } from '../layer';
+import { getTerrainState, setTerrainState, clearTerrainState } from '../terrainStore';
+import { ParticleLayer } from '../layers/particles';
+import { Scene } from '../scene';
 
 function createMockGl(): WebGL2RenderingContext {
   const activeTextures: number[] = [];
@@ -107,11 +110,16 @@ function createMockGl(): WebGL2RenderingContext {
     useProgram: vi.fn(),
     getUniformLocation: vi.fn().mockImplementation((_prog, name) => ({ name })),
     uniform1f: vi.fn(),
+    uniform1fv: vi.fn(),
     uniform1i: vi.fn(),
     uniform2f: vi.fn(),
     uniform3f: vi.fn(),
     uniform3fv: vi.fn(),
     uniformMatrix4fv: vi.fn(),
+    getExtension: vi.fn().mockReturnValue(null),
+    checkFramebufferStatus: vi.fn().mockReturnValue(0x8cd5),
+    framebufferTexture2D: vi.fn(),
+    drawArraysInstanced: vi.fn(),
     drawArrays: vi.fn(),
   };
 
@@ -126,6 +134,11 @@ function createDummyAudioFrame(): AudioFrame {
   return {
     waveform: new Float32Array(512),
     spectrum,
+    bandWaveforms: {
+      sub: new Float32Array(128),
+      mid: new Float32Array(128),
+      high: new Float32Array(128),
+    },
     sampleRate: 48000,
     bands: { sub: 0.7, bass: 0.6, mid: 0.5, high: 0.4 },
     norm: { sub: 0.65, bass: 0.55, mid: 0.45, high: 0.35 },
@@ -508,5 +521,132 @@ describe('Slice 7.13: Flagship Presets 07 and 08', () => {
       expect(cap).toBeGreaterThanOrEqual(0.15);
       expect(cap).toBeLessThanOrEqual(1.0);
     }
+  });
+});
+
+describe('Slice 7.27: Spectral Terrain Option A & Option B (terrainStore + displacement)', () => {
+  it('manages terrainStore get/set/clear per WebGL context', () => {
+    const gl = createMockGl();
+    const defaultState = getTerrainState(gl);
+    expect(defaultState.active).toBe(false);
+    expect(defaultState.historyTex).toBeNull();
+    expect(defaultState.writeRow).toBe(0);
+    expect(defaultState.rows).toBe(64);
+
+    const dummyTex = {} as WebGLTexture;
+    setTerrainState(gl, {
+      active: true,
+      historyTex: dummyTex,
+      writeRow: 12,
+      rows: 64,
+      terrainFlow: 0.45,
+    });
+
+    const activeState = getTerrainState(gl);
+    expect(activeState.active).toBe(true);
+    expect(activeState.historyTex).toBe(dummyTex);
+    expect(activeState.writeRow).toBe(12);
+    expect(activeState.terrainFlow).toBe(0.45);
+
+    clearTerrainState(gl);
+    const clearedState = getTerrainState(gl);
+    expect(clearedState.active).toBe(false);
+    expect(clearedState.historyTex).toBeNull();
+  });
+
+  it('SpectralTerrainLayer publishes active state to terrainStore on draw', () => {
+    const gl = createMockGl();
+    clearTerrainState(gl);
+    const layer = new SpectralTerrainLayer({ terrainFlow: 0.42 });
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    const state = getTerrainState(gl);
+    expect(state.active).toBe(true);
+    expect(state.historyTex).toBe(layer.getHistoryTexture());
+    expect(state.writeRow).toBe(layer.writeRow);
+    expect(state.rows).toBe(64);
+    expect(state.terrainFlow).toBe(0.42);
+  });
+
+  it('Scene biases feedback driftY downhill when terrain is active in previous frame (Option A)', () => {
+    const gl = createMockGl();
+    const terrainLayer = new SpectralTerrainLayer({ terrainFlow: 0.5 });
+    const scene = new Scene('terrainScene', [terrainLayer]);
+    scene.init(gl);
+
+    const frame = createDummyAudioFrame();
+    // Frame 1: terrain draws and publishes terrainState
+    scene.draw(frame, dummyClock);
+
+    // After Frame 1 draw, terrainStore has active: true and terrainFlow: 0.5
+    expect(getTerrainState(gl).active).toBe(true);
+
+    // Frame 2: Scene.draw reads previous frame's terrainState and clears it,
+    // applying downhill drift bias driftY -= 0.012 * terrainFlow = -0.006
+    scene.draw(frame, dummyClock);
+
+    expect(gl.uniform2f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uDrift' }),
+      0, // driftX
+      -0.006, // driftY biased by -0.012 * 0.5
+    );
+  });
+
+  it('ParticleLayer binds TEXTURE5 and uploads displacement uniforms when terrainDisplace > 0 (Option B)', () => {
+    const gl = createMockGl();
+    clearTerrainState(gl);
+
+    const mockTex = { id: 'terrainHistoryTex' } as unknown as WebGLTexture;
+    setTerrainState(gl, {
+      active: true,
+      historyTex: mockTex,
+      writeRow: 15,
+      rows: 64,
+      terrainFlow: 0.4,
+    });
+
+    const particles = new ParticleLayer({ terrainDisplace: 0.5 });
+    particles.init(gl);
+
+    const frame = createDummyAudioFrame();
+    particles.draw(frame, dummyClock, dummyTarget);
+
+    // Verify TEXTURE5 (0x84c5) was bound to terrain history texture
+    const activeUnits = (gl as any)._activeTextures;
+    expect(activeUnits).toContain(gl.TEXTURE5);
+    expect((gl as any)._boundTextures.get(gl.TEXTURE5)).toBe(mockTex);
+
+    // Verify uniforms
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainTex' }),
+      5,
+    );
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainDisplace' }),
+      0.5,
+    );
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainWriteRow' }),
+      15,
+    );
+  });
+
+  it('ParticleLayer uploads uTerrainDisplace = 0 when terrain is inactive or terrainDisplace is 0', () => {
+    const gl = createMockGl();
+    clearTerrainState(gl);
+
+    const particles = new ParticleLayer({ terrainDisplace: 0.0 });
+    particles.init(gl);
+
+    const frame = createDummyAudioFrame();
+    particles.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainDisplace' }),
+      0.0,
+    );
   });
 });

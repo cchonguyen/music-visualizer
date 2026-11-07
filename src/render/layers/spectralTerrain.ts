@@ -12,6 +12,7 @@ import { computeLogSpectrum } from '../bandTexture';
 import vertSrc from '../shaders/spectralTerrain.vert.glsl?raw';
 import fragSrc from '../shaders/spectralTerrain.frag.glsl?raw';
 import { SPECTRAL_TERRAIN_DEFAULTS, type SpectralTerrainParams } from '../../presets/schema';
+import { setTerrainState } from '../terrainStore';
 
 export const TERRAIN_BINS = 128;
 export const TERRAIN_RIDGES = 64;
@@ -52,6 +53,11 @@ export class SpectralTerrainLayer implements RenderLayer {
 
   private historyTex: WebGLTexture | null = null;
   private headRow = 0;
+  private lastWriteRow = 0;
+
+  get writeRow(): number {
+    return this.lastWriteRow;
+  }
   private readonly currentBins = new Float32Array(TERRAIN_BINS);
 
   private uHistoryTex: WebGLUniformLocation | null = null;
@@ -221,7 +227,16 @@ export class SpectralTerrainLayer implements RenderLayer {
     gl.bindTexture(gl.TEXTURE_2D, null);
 
     const activeHeadRow = this.headRow;
+    this.lastWriteRow = activeHeadRow;
     this.headRow = (this.headRow + 1) % TERRAIN_RIDGES;
+
+    setTerrainState(gl, {
+      active: true,
+      historyTex: this.historyTex,
+      writeRow: this.writeRow,
+      rows: 64,
+      terrainFlow: this.p.terrainFlow ?? 0.35,
+    });
 
     gl.useProgram(this.program);
 

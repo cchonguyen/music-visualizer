@@ -28,6 +28,9 @@ uniform float uTime;        // scene time in seconds
 uniform int uMode;          // 0 = radial (default), 1 = phyllotaxis
 uniform float uSubTwist;    // sub-bass twist for phyllotaxis
 uniform float uFlowSpeed;   // wave flow speed
+uniform sampler2D uTerrainTex;
+uniform float uTerrainDisplace;
+uniform float uTerrainWriteRow;
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
@@ -66,7 +69,16 @@ void main() {
     float quadSize = mix(0.008, 0.018, hash01(id, 1.0)) * uSize * scaleWave * (0.8 + 0.4 * clamp(uEnergy, 0.0, 1.0));
 
     vec2 origin = vec2(uSway.x * uAspect, uSway.y) * 0.2;
-    vec2 point = origin + pos + (dir * vLocal.x + perp * vLocal.y) * quadSize;
+    vec2 center = origin + pos;
+    if (uTerrainDisplace > 0.001) {
+      float uCoord = clamp(center.x * 0.5 + 0.5, 0.0, 1.0);
+      float tDepth = clamp((0.35 - center.y) / 0.9, 0.0, 1.0);
+      float row = mod(mod(uTerrainWriteRow - (1.0 - tDepth) * 64.0, 64.0) + 64.0, 64.0);
+      float vCoord = (row + 0.5) / 64.0;
+      float terrainHeight = texture(uTerrainTex, vec2(uCoord, vCoord)).r;
+      center.y += terrainHeight * uTerrainDisplace * 0.42;
+    }
+    vec2 point = center + (dir * vLocal.x + perp * vLocal.y) * quadSize;
 
     vFade = smoothstep(0.0, 0.04, r) * (1.0 - smoothstep(0.65 * uFar, 1.05 * uFar, r));
 
@@ -122,7 +134,16 @@ void main() {
   // Head (x = 1) sits on the particle; the tail trails behind it along -axis.
   float t = vLocal.x * 0.5 + 0.5;
   vec2 origin = vec2(uSway.x * uAspect, uSway.y) * (1.0 - INNER_RIM);
-  vec2 point = origin + pos - axis * streakLen * (1.0 - t) + perp * vLocal.y * halfWidth;
+  vec2 center = origin + pos;
+  if (uTerrainDisplace > 0.001) {
+    float uCoord = clamp(center.x * 0.5 + 0.5, 0.0, 1.0);
+    float tDepth = clamp((0.35 - center.y) / 0.9, 0.0, 1.0);
+    float row = mod(mod(uTerrainWriteRow - (1.0 - tDepth) * 64.0, 64.0) + 64.0, 64.0);
+    float vCoord = (row + 0.5) / 64.0;
+    float terrainHeight = texture(uTerrainTex, vec2(uCoord, vCoord)).r;
+    center.y += terrainHeight * uTerrainDisplace * 0.42;
+  }
+  vec2 point = center - axis * streakLen * (1.0 - t) + perp * vLocal.y * halfWidth;
 
   // Fade in and out over the life, so streaks appear near the centre and vanish at the edge.
   vFade = sin(life * PI);
