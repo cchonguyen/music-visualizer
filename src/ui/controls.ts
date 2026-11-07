@@ -449,3 +449,20 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     },
   };
 }
+
+export type PresetGroup = 'flagship' | 'textures' | 'classic' | 'archive';
+export const PRESET_GROUPS: readonly PresetGroup[] = ['flagship', 'textures', 'classic', 'archive'] as const;
+
+export function filterPresetsByGroup<T extends { group?: PresetGroup }>(presets: readonly T[], group: PresetGroup): T[] {
+  return presets.filter((p) => p.group === group);
+}
+
+export function presetGroupLabel(group: PresetGroup): string {
+  switch (group) {
+    case 'flagship': return 'Flagship';
+    case 'textures': return 'Textures';
+    case 'classic': return 'Classics';
+    case 'archive': return 'Archive';
+  }
+}
+

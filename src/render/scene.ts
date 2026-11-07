@@ -13,6 +13,16 @@ import { advanceSceneTransform } from './sceneTransformStore';
 import type { ParamValue } from '../presets/schema';
 import { getRenderScale, scaledBufferSize } from '../gl/size';
 
+const BLIT_FRAG = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform sampler2D uSrc;
+out vec4 fragColor;
+void main() {
+  fragColor = texture(uSrc, vUv);
+}
+`;
+
 export const FEEDBACK_WARP_DEFAULTS = {
   warpMode: 'classic',
   kaleidoN: 6,
@@ -45,6 +55,7 @@ export class Scene {
   private gl: WebGL2RenderingContext | null = null;
   private pp: PingPong | null = null;
   private prog: WebGLProgram | null = null;
+  private blitProg: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
   private w = 1;
   private h = 1;
@@ -54,6 +65,7 @@ export class Scene {
   private fb: Record<string, ParamValue> = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS };
   private mobiusPolePolarity = 1.0;
   private uni = new Map<string, WebGLUniformLocation | null>();
+  private foregroundOpacity = 1.0;
 
   constructor(name: string, layers: RenderLayer[], configs: SceneLayerConfig[] = []) {
     this.name = name;
@@ -86,6 +98,41 @@ export class Scene {
   /** Sets the trail motion and colour settings. Read on the next frame. */
   setFeedback(values: Record<string, ParamValue>): void {
     this.fb = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS, ...values };
+  }
+
+  /** Sets foreground layer opacity multiplier (0..1) for morph transitions. */
+  setForegroundOpacity(opacity: number): void {
+    this.foregroundOpacity = Math.max(0, Math.min(1, opacity));
+  }
+
+  getForegroundOpacity(): number {
+    return this.foregroundOpacity;
+  }
+
+  /**
+   * Seeds the feedback loop by blitting sourceTex directly into this scene's read FBO (Slice 7.16).
+   * Allows incoming scene's feedback warp to immediately inherit and advect outgoing trails.
+   */
+  seedFromTexture(sourceTex: WebGLTexture): void {
+    const gl = this.gl;
+    const pp = this.pp;
+    if (!gl || !pp || !this.vao) return;
+    if (!this.blitProg) {
+      this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pp.read.framebuffer);
+    gl.viewport(0, 0, pp.width, pp.height);
+    gl.disable(gl.BLEND);
+    gl.useProgram(this.blitProg);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sourceTex);
+    const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+    if (uSrc !== null) gl.uniform1i(uSrc, 0);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
   init(gl: WebGL2RenderingContext): void {
@@ -170,7 +217,7 @@ export class Scene {
       const layer = this.layers[i];
       if (!layer) continue;
       const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max' };
-      const opacity = cfg.opacity ?? 1.0;
+      const opacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
       const blend = cfg.blend ?? 'max';
 
       gl.enable(gl.BLEND);
@@ -278,11 +325,14 @@ export class Scene {
     this.pp?.dispose();
     if (gl) {
       if (this.prog) gl.deleteProgram(this.prog);
+      if (this.blitProg) gl.deleteProgram(this.blitProg);
       if (this.vao) gl.deleteVertexArray(this.vao);
     }
     this.pp = null;
     this.prog = null;
+    this.blitProg = null;
     this.vao = null;
     this.gl = null;
+    this.foregroundOpacity = 1.0;
   }
 }

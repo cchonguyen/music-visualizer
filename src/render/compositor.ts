@@ -29,7 +29,7 @@ export const POST_IDENTITY = {
 };
 type PostValues = typeof POST_IDENTITY;
 
-export const TRANSITIONS = ['crossfade', 'wipe', 'dissolve', 'zoom'] as const;
+export const TRANSITIONS = ['crossfade', 'wipe', 'dissolve', 'zoom', 'morph'] as const;
 
 // Aspect correction (slice 5.3): on by default. The scene is drawn into the largest 16:9 box that
 // fits the window, centred, so shapes keep the proportions they were designed with. Off: the scene
@@ -106,7 +106,10 @@ export class Compositor implements RenderLayer {
   // Uniform locations, cached per program (a name can be missing from one program and present in another).
   private locs = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
   private post: PostValues = { ...POST_IDENTITY };
-  private transition = 0; // 0 crossfade, 1 wipe, 2 dissolve, 3 zoom-through (T1)
+  private transition = 0; // 0 crossfade, 1 wipe, 2 dissolve, 3 zoom-through (T1), 4 morph (Slice 7.16)
+  private morphing = false;
+  private morphElapsed = 0;
+  private morphScene: Scene | null = null;
   private w = 1;
   private h = 1;
   private dpr = 1;
@@ -159,7 +162,20 @@ export class Compositor implements RenderLayer {
 
   /** Transition style for scene switches (T1). Applies while two scenes blend. */
   setTransition(style: string): void {
-    this.transition = Math.max(0, TRANSITIONS.indexOf(style as (typeof TRANSITIONS)[number]));
+    const idx = TRANSITIONS.indexOf(style as (typeof TRANSITIONS)[number]);
+    this.transition = Math.max(0, idx >= 0 ? idx : 0);
+  }
+
+  getTransition(): (typeof TRANSITIONS)[number] {
+    return TRANSITIONS[this.transition] ?? 'crossfade';
+  }
+
+  isMorphing(): boolean {
+    return this.morphing;
+  }
+
+  getWeight(name: string): number {
+    return this.weights.get(name) ?? 0;
   }
 
   /** Post chain settings from the shown preset (E4, E5). Missing keys keep their identity value. */
@@ -283,8 +299,69 @@ export class Compositor implements RenderLayer {
     // The setting was toggled since the buffers were sized: re-fit them (slice 5.3).
     if (aspectCorrect !== this.appliedAspect) this.resize(this.rawW, this.rawH, this.dpr);
 
-    // Bring scenes up and down with their weights (eased toward the key-press targets).
-    this.easeWeights(clock.dtSec);
+    const isMorph = TRANSITIONS[this.transition] === 'morph';
+
+    if (isMorph) {
+      // Find outgoing scene (weight > 0, target == 0) and incoming scene (target > 0)
+      const outgoingEntry = [...this.weights.entries()].find(([name, w]) => w > 0 && (this.targets.get(name) ?? 0) === 0);
+      const incomingEntry = [...this.targets.entries()].find(([name, t]) => t > 0 && (this.weights.get(name) ?? 0) < t);
+
+      if (outgoingEntry && incomingEntry) {
+        const outName = outgoingEntry[0];
+        const inName = incomingEntry[0];
+        const outScene = this.scenes.get(outName);
+        const inScene = this.scenes.get(inName);
+
+        if (inScene && !this.ready.has(inName)) {
+          inScene.init(gl);
+          inScene.resize(this.w, this.h, this.dpr);
+          this.ready.add(inName);
+        }
+
+        if (outScene && inScene && this.ready.has(outName)) {
+          inScene.seedFromTexture(outScene.outputTexture());
+        }
+
+        // Retire outgoing scene cleanly
+        this.weights.set(outName, 0);
+        outScene?.dispose();
+        this.ready.delete(outName);
+
+        // Incoming scene takes over immediately
+        this.weights.set(inName, incomingEntry[1]);
+
+        // Start foreground layer ramp 0.0 -> 1.0 over 0.6s
+        this.morphing = true;
+        this.morphElapsed = 0;
+        this.morphScene = inScene ?? null;
+        inScene?.setForegroundOpacity(0.0);
+      } else if (!outgoingEntry && incomingEntry) {
+        const inName = incomingEntry[0];
+        const inScene = this.scenes.get(inName);
+        if (inScene && !this.ready.has(inName)) {
+          inScene.init(gl);
+          inScene.resize(this.w, this.h, this.dpr);
+          this.ready.add(inName);
+        }
+        this.weights.set(inName, incomingEntry[1]);
+        inScene?.setForegroundOpacity(1.0);
+      }
+
+      if (this.morphing && this.morphScene) {
+        this.morphElapsed += clock.dtSec;
+        const progress = Math.min(1.0, this.morphElapsed / 0.6);
+        this.morphScene.setForegroundOpacity(progress);
+        if (progress >= 1.0) {
+          this.morphing = false;
+          this.morphScene = null;
+        }
+      }
+    } else {
+      this.morphing = false;
+      this.morphScene = null;
+      // Bring scenes up and down with their weights (eased toward the key-press targets).
+      this.easeWeights(clock.dtSec);
+    }
     const active: string[] = [];
     for (const [name, weight] of this.weights) {
       if (weight > 0) {
@@ -437,6 +514,8 @@ export class Compositor implements RenderLayer {
   }
 
   dispose(): void {
+    this.morphing = false;
+    this.morphScene = null;
     for (const name of this.ready) this.scenes.get(name)?.dispose();
     this.ready.clear();
     this.full?.dispose();
