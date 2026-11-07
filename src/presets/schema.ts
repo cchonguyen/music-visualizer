@@ -452,6 +452,10 @@ declare module "./layerSchemas" {
     attraction: number;
     jitter: number;
     color: string;
+    plateMode?: ChladniPlateMode;
+    harmonyMode?: ChladniHarmonyMode;
+    nodalSharpness?: number;
+    grainWarmth?: number;
   }
   interface FerrofluidParams {
     radius: number;
@@ -569,7 +573,10 @@ export const PARTICLE_MODE_SPEC: EnumSpec = {
   options: ["radial", "phyllotaxis"],
 };
 
-/** Chladni sand parameters and schema (Slice 7.14). */
+/** Chladni sand parameters and schema (Slice 7.14, Slice 7.28). */
+export type ChladniPlateMode = 'fullscreen' | 'isometricPlate' | 'radialMandala';
+export type ChladniHarmonyMode = 'auto' | '1:2' | '2:3' | '3:4' | '3:5' | '4:5' | '5:7' | '6:8';
+
 export interface ChladniSandParams {
   scale: number;
   brightness: number;
@@ -577,15 +584,23 @@ export interface ChladniSandParams {
   attraction: number;
   jitter: number;
   color: string;
+  plateMode?: ChladniPlateMode;
+  harmonyMode?: ChladniHarmonyMode;
+  nodalSharpness?: number;
+  grainWarmth?: number;
 }
 
-export const CHLADNI_DEFAULTS: ChladniSandParams = {
+export const CHLADNI_DEFAULTS: Required<ChladniSandParams> = {
   scale: 1.0,
   brightness: 1.2,
   pointSize: 1.0,
   attraction: 1.0,
   jitter: 1.0,
   color: "#f0c558",
+  plateMode: 'fullscreen',
+  harmonyMode: 'auto',
+  nodalSharpness: 1.25,
+  grainWarmth: 0.75,
 };
 
 export const CHLADNI_SPECS: readonly ParamSpec[] = [
@@ -595,7 +610,14 @@ export const CHLADNI_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "attraction", label: "Nodal attraction", group: "Sand", default: CHLADNI_DEFAULTS.attraction, min: 0.1, max: 3.0, step: 0.05 },
   { type: "float", name: "jitter", label: "Kick jitter", group: "Sand", default: CHLADNI_DEFAULTS.jitter, min: 0.0, max: 3.0, step: 0.05 },
   { type: "colour", name: "color", label: "Sand colour", group: "Colour", default: CHLADNI_DEFAULTS.color },
+  { type: "enum", name: "plateMode", label: "Plate geometry", group: "Sand", default: CHLADNI_DEFAULTS.plateMode, options: ["fullscreen", "isometricPlate", "radialMandala"] },
+  { type: "enum", name: "harmonyMode", label: "Harmonic mode (n:m)", group: "Sand", default: CHLADNI_DEFAULTS.harmonyMode, options: ["auto", "1:2", "2:3", "3:4", "3:5", "4:5", "5:7", "6:8"] },
+  { type: "float", name: "nodalSharpness", label: "Nodal line sharpness", group: "Sand", default: CHLADNI_DEFAULTS.nodalSharpness, min: 0.2, max: 2.0, step: 0.05 },
+  { type: "float", name: "grainWarmth", label: "Amber/cyan color mix", group: "Colour", default: CHLADNI_DEFAULTS.grainWarmth, min: 0.0, max: 1.0, step: 0.05 },
 ];
+
+export const CHLADNI_SAND_SCHEMA = CHLADNI_SPECS;
+export const CHLADNI_SCHEMA = CHLADNI_SPECS;
 
 /** Ferrofluid parameters and schema (Slice 7.15). */
 export interface FerrofluidParams {

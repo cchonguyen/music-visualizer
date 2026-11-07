@@ -10,6 +10,11 @@
     {
       "type": "chladniSand",
       "params": {
+        "plateMode": "fullscreen",
+        "harmonyMode": "auto",
+        "nodalSharpness": 1.35,
+        "grainWarmth": 0.78,
+        "scale": 1.0,
         "pointSize": 2.0,
         "brightness": 1.2
       }
