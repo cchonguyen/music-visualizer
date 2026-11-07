@@ -8,6 +8,8 @@ import vertSrc from '../shaders/waveform.vert.glsl?raw';
 import fragSrc from '../shaders/waveform.frag.glsl?raw';
 import { WAVEFORM_DEFAULTS, type WaveformParams } from '../../presets/layerSchemas';
 import { BandTexture } from '../bandTexture';
+import { getPalette, type Palette } from '../palette';
+import { getCurrentPalette } from '../paletteStore';
 
 /** First texture unit for the band textures (sub, mid, high take the next two). */
 const BAND_UNIT = 1;
@@ -39,10 +41,15 @@ export class WaveformLayer implements RenderLayer {
   private uWave: WebGLUniformLocation | null = null;
   private uCount: WebGLUniformLocation | null = null;
   private uAlpha: WebGLUniformLocation | null = null;
+  private uLayerOpacity: WebGLUniformLocation | null = null;
   private uRes: WebGLUniformLocation | null = null;
   private uTexOn: WebGLUniformLocation | null = null;
   private uTexGain: WebGLUniformLocation | null = null;
   private uTexHigh: WebGLUniformLocation | null = null;
+  private uColorMode: WebGLUniformLocation | null = null;
+  private uColorA: WebGLUniformLocation | null = null;
+  private uColorB: WebGLUniformLocation | null = null;
+  private uTime: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
   // Created lazily on first draw, because the sample count comes from the frame.
   private tex: DataTexture | null = null;
@@ -59,10 +66,15 @@ export class WaveformLayer implements RenderLayer {
     this.uAmp = gl.getUniformLocation(this.program, 'uAmp');
     this.uDelta = gl.getUniformLocation(this.program, 'uDelta');
     this.uAlpha = gl.getUniformLocation(this.program, 'uAlpha');
+    this.uLayerOpacity = gl.getUniformLocation(this.program, 'uLayerOpacity');
     this.uRes = gl.getUniformLocation(this.program, 'uRes');
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
     this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
+    this.uColorMode = gl.getUniformLocation(this.program, 'uColorMode');
+    this.uColorA = gl.getUniformLocation(this.program, 'uColorA');
+    this.uColorB = gl.getUniformLocation(this.program, 'uColorB');
+    this.uTime = gl.getUniformLocation(this.program, 'uTime');
     this.band.init(gl);
     // Empty VAO: vertices are generated from gl_VertexID, no vertex buffer.
     this.vao = gl.createVertexArray();
@@ -101,6 +113,13 @@ export class WaveformLayer implements RenderLayer {
     gl.uniform1f(this.uDelta, this.delta);
     const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
     gl.uniform1f(this.uAlpha, opacity); // layer opacity
+    if (this.uLayerOpacity) gl.uniform1f(this.uLayerOpacity, opacity);
+    const palette: Palette = getPalette(getCurrentPalette());
+    const colorModeInt = this.p.colorMode === 'palette' ? 1 : this.p.colorMode === 'gradient' ? 2 : 0;
+    if (this.uColorMode) gl.uniform1i(this.uColorMode, colorModeInt);
+    if (this.uColorA) gl.uniform3f(this.uColorA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
+    if (this.uColorB) gl.uniform3f(this.uColorB, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
+    if (this.uTime) gl.uniform1f(this.uTime, _clock.timeSec);
     gl.uniform2f(this.uRes, target.width, target.height);
     // Band texture (6.4): update and bind before the wave texture goes on unit 0, so nothing clobbers it.
     gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
@@ -137,10 +156,15 @@ export class WaveformLayer implements RenderLayer {
     this.uAmp = null;
     this.uDelta = null;
     this.uAlpha = null;
+    this.uLayerOpacity = null;
     this.uRes = null;
     this.uTexOn = null;
     this.uTexGain = null;
     this.uTexHigh = null;
+    this.uColorMode = null;
+    this.uColorA = null;
+    this.uColorB = null;
+    this.uTime = null;
     this.gl = null;
   }
 }

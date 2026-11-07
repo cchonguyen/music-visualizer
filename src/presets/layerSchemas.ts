@@ -186,6 +186,7 @@ export interface RingsParams {
   style: string; // outline | filled
   texture: boolean; // band texture (6.3): stroke brightness from sub (angle), stroke width from mid (radius)
   textureGain: number; // 0..2, how strongly the band texture modulates
+  mode?: string; // rings | orbitTriangles | polarGrid
 }
 export const RINGS_DEFAULTS: RingsParams = {
   maxRings: 6,
@@ -249,14 +250,23 @@ export interface WaveformParams {
   amplitude: number; // 0..1.5, how tall the wave is
   texture: boolean; // band texture (6.4): line brightness from high (sample index / angle)
   textureGain: number; // 0..2, how strongly the band texture modulates
+  colorMode: 'white' | 'palette' | 'gradient';
 }
-export const WAVEFORM_DEFAULTS: WaveformParams = { mode: 'line', amplitude: 1, texture: true, textureGain: 1 };
+export const WAVEFORM_DEFAULTS: WaveformParams = {
+  mode: 'line',
+  amplitude: 1,
+  texture: true,
+  textureGain: 1,
+  colorMode: 'white',
+};
 export const WAVEFORM_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'mode', label: 'Wave shape', group: 'Waveform', default: WAVEFORM_DEFAULTS.mode, options: ['line', 'circle'] },
   { type: 'float', name: 'amplitude', label: 'Amplitude', group: 'Waveform', default: WAVEFORM_DEFAULTS.amplitude, min: 0, max: 1.5, step: 0.01 },
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: WAVEFORM_DEFAULTS.texture },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: WAVEFORM_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'enum', name: 'colorMode', label: 'Ink color mode', group: 'Colour', default: WAVEFORM_DEFAULTS.colorMode, options: ['white', 'palette', 'gradient'] },
 ];
+export const WAVEFORM_SCHEMA = WAVEFORM_SPECS;
 
 /** Every built-in layer's settings, keyed by layer type. Used by the loader in slice 4.3. */
 export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
