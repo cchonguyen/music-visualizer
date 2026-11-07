@@ -436,6 +436,14 @@ declare module "./layerSchemas" {
     horizonY: number;
     foregroundY: number;
     brightness: number;
+    lineThickness?: number;
+    ridgeShape?: 'smooth' | 'rounded' | 'pointed' | 'stepped';
+    layoutMode?: 'fullHorizon' | 'centerPeak' | 'canyon';
+    gridCols?: number;
+    skirtOpacity?: number;
+    colorSpread?: number;
+    invertColors?: boolean;
+    terrainFlow?: number;
   }
   interface ChladniSandParams {
     scale: number;
@@ -497,21 +505,40 @@ export const MOIRE_SPECS: readonly ParamSpec[] = [
 
 export const MOIRE_SCHEMA = MOIRE_SPECS;
 
-/** Spectral terrain parameters and schema (Slice 7.13). */
+/** Spectral terrain parameters and schema (Slice 7.13, Slice 7.26). */
+export type SpectralTerrainRidgeShape = 'smooth' | 'rounded' | 'pointed' | 'stepped';
+export type SpectralTerrainLayoutMode = 'fullHorizon' | 'centerPeak' | 'canyon';
+
 export interface SpectralTerrainParams {
   elevation: number;
   width: number;
   horizonY: number;
   foregroundY: number;
   brightness: number;
+  lineThickness?: number;
+  ridgeShape?: SpectralTerrainRidgeShape;
+  layoutMode?: SpectralTerrainLayoutMode;
+  gridCols?: number;
+  skirtOpacity?: number;
+  colorSpread?: number;
+  invertColors?: boolean;
+  terrainFlow?: number;
 }
 
-export const SPECTRAL_TERRAIN_DEFAULTS: SpectralTerrainParams = {
+export const SPECTRAL_TERRAIN_DEFAULTS: Required<SpectralTerrainParams> = {
   elevation: 0.6,
   width: 1.3,
   horizonY: 0.35,
   foregroundY: -0.55,
   brightness: 1.2,
+  lineThickness: 1.8,
+  ridgeShape: 'smooth',
+  layoutMode: 'fullHorizon',
+  gridCols: 16,
+  skirtOpacity: 0.90,
+  colorSpread: 0.85,
+  invertColors: false,
+  terrainFlow: 0.35,
 };
 
 export const SPECTRAL_TERRAIN_SPECS: readonly ParamSpec[] = [
@@ -520,7 +547,17 @@ export const SPECTRAL_TERRAIN_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "horizonY", label: "Horizon Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.horizonY, min: -0.5, max: 0.8, step: 0.01 },
   { type: "float", name: "foregroundY", label: "Foreground Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.foregroundY, min: -0.9, max: 0.2, step: 0.01 },
   { type: "float", name: "brightness", label: "Ridge brightness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.01 },
+  { type: "float", name: "lineThickness", label: "Line thickness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.lineThickness, min: 0.5, max: 4.0, step: 0.1 },
+  { type: "enum", name: "ridgeShape", label: "Ridge profile", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.ridgeShape, options: ["smooth", "rounded", "pointed", "stepped"] },
+  { type: "enum", name: "layoutMode", label: "Mountain layout", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.layoutMode, options: ["fullHorizon", "centerPeak", "canyon"] },
+  { type: "int", name: "gridCols", label: "3D front-to-back grid lines", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.gridCols, min: 0, max: 32, step: 4 },
+  { type: "float", name: "skirtOpacity", label: "Mountain fill opacity", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.skirtOpacity, min: 0.0, max: 1.0, step: 0.05 },
+  { type: "float", name: "colorSpread", label: "Cyan-to-magenta gradient", group: "Colour", default: SPECTRAL_TERRAIN_DEFAULTS.colorSpread, min: 0.0, max: 1.0, step: 0.05 },
+  { type: "bool", name: "invertColors", label: "Invert colors", group: "Colour", default: SPECTRAL_TERRAIN_DEFAULTS.invertColors },
+  { type: "float", name: "terrainFlow", label: "Downhill trail drift", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.terrainFlow, min: 0.0, max: 1.0, step: 0.05 },
 ];
+
+export const SPECTRAL_TERRAIN_SCHEMA = SPECTRAL_TERRAIN_SPECS;
 
 /** Particle layout mode options (Slice 7.14). */
 export const PARTICLE_MODE_SPEC: EnumSpec = {
