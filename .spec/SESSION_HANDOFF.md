@@ -1,5 +1,13 @@
 # Session Handoff
 
+## Session 2026-11-07 (PROGRESS cleanup thread, branch claude/project-thread-7st07h)
+- **Last Active Platform:** Claude Code (cloud thread, branch claude/project-thread-7st07h)
+- **Active Branch / State:** claude/project-thread-7st07h from main at 1712082. Docs only: finished projectM slices (5.1, 5.2, 5.3, 6.1 keyboard, 5.11) moved from PROGRESS.md to HISTORY.md. Duplicate Stage 6 block removed from HISTORY.md. No slice started.
+- **Files Modified in Last Turn:** .spec/PROGRESS.md, .spec/HISTORY.md, .spec/SESSION_HANDOFF.md
+- **Verification Status:** Typecheck and node tests run on this branch (see PR). No code changed. The slice gate is red by design: this is not a slice commit.
+- **Immediate Next Step for Charlie:** review and merge the cleanup PR. Next build work is Slice 5.4 (projectM, pending) or Stage 7 slices 7.8 to 7.17 (queued, not started), per the owner's order.
+
+## Earlier state (before 2026-11-07)
 - **Last Active Platform:** Claude Code (cloud thread, branch claude/project-thread-3d7ebg)
 - **Active Branch / State:** claude/project-thread-3d7ebg, stacked on PR #8 (branch claude/project-thread-87opk1). PR #8 itself is untouched. This branch adds slices 4.9 to S3-f. The new PR's base is claude/project-thread-87opk1, so its diff shows only the new commits.
 - **Branch Owner:** claude
