@@ -15,6 +15,7 @@ uniform vec3 uAccent;       // palette accent (A, or the swapped colour)
 uniform float uTexOn;      // 1 = band texture on (6.4), 0 = off: output identical to before
 uniform float uTexGain;    // 0..2: how strongly the band texture modulates
 uniform sampler2D uTexMid; // mid-band row, sampled by angle (bar brightness)
+uniform float uLayerOpacity;
 
 in vec2 vUv;
 out vec4 outColor;
@@ -44,7 +45,7 @@ void main() {
   vec2 q = (vUv * 2.0 - 1.0) * vec2(aspect, 1.0) - uCentre;
   float r = length(q);
   if (r < R0 - 0.02 || r > R0 + MAX_LEN + 0.02) {
-    outColor = vec4(0.0, 0.0, 0.0, 1.0);
+    outColor = vec4(0.0, 0.0, 0.0, 0.0);
     return;
   }
   float theta = atan(q.y, q.x);
@@ -64,5 +65,8 @@ void main() {
   }
 
   // Dim by design: the crown supports the flight, it does not compete with it.
-  outColor = vec4(uAccent * 0.6 * clamp(light * texMul, 0.0, 1.0), 1.0);
+  vec3 col = uAccent * 0.6 * clamp(light * texMul, 0.0, 1.0);
+  col *= uLayerOpacity;
+  float a = clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0);
+  outColor = vec4(col, a);
 }

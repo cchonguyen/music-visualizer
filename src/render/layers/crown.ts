@@ -42,6 +42,7 @@ export class CrownLayer implements RenderLayer {
   private uTexOn: WebGLUniformLocation | null = null;
   private uTexGain: WebGLUniformLocation | null = null;
   private uTexMid: WebGLUniformLocation | null = null;
+  private uLayerOpacity: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
 
   init(gl: WebGL2RenderingContext): void {
@@ -55,6 +56,7 @@ export class CrownLayer implements RenderLayer {
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
     this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
+    this.uLayerOpacity = gl.getUniformLocation(this.program, 'uLayerOpacity');
     this.band.init(gl);
     this.vao = createVao(gl);
   }
@@ -63,7 +65,12 @@ export class CrownLayer implements RenderLayer {
     // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, _clock: RenderClock, target: RenderTarget): void {
+  draw(
+    frame: AudioFrame,
+    _clock: RenderClock,
+    target: RenderTarget,
+    options?: { opacity?: number; uLayerOpacity?: number },
+  ): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('CrownLayer: draw before init');
 
@@ -81,6 +88,8 @@ export class CrownLayer implements RenderLayer {
     gl.uniform2f(this.uCentre, 2 * sway.x * aspect * this.p.rimFactor, 2 * sway.y * this.p.rimFactor);
     gl.uniform1fv(this.uHeights, getCrownHeights());
     gl.uniform3f(this.uAccent, accent[0], accent[1], accent[2]);
+    const layerOpacity = options?.uLayerOpacity ?? options?.opacity ?? 1.0;
+    gl.uniform1f(this.uLayerOpacity, layerOpacity);
     // Band texture (6.4): always bound so the sampler has a valid texture; updated only when on.
     gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
     gl.uniform1f(this.uTexGain, this.p.textureGain);
@@ -108,6 +117,7 @@ export class CrownLayer implements RenderLayer {
     this.uTexOn = null;
     this.uTexGain = null;
     this.uTexMid = null;
+    this.uLayerOpacity = null;
     this.gl = null;
   }
 }

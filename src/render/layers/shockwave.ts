@@ -63,6 +63,7 @@ export class ShockwaveLayer implements RenderLayer {
   private uTexOn: WebGLUniformLocation | null = null;
   private uTexGain: WebGLUniformLocation | null = null;
   private uTexSub: WebGLUniformLocation | null = null;
+  private uLayerOpacity: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
 
   private active = false;
@@ -81,6 +82,7 @@ export class ShockwaveLayer implements RenderLayer {
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
     this.uTexSub = gl.getUniformLocation(this.program, 'uTexSub');
+    this.uLayerOpacity = gl.getUniformLocation(this.program, 'uLayerOpacity');
     this.band.init(gl);
     this.active = false;
     this.age = 0;
@@ -91,7 +93,12 @@ export class ShockwaveLayer implements RenderLayer {
     // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
+  draw(
+    frame: AudioFrame,
+    clock: RenderClock,
+    target: RenderTarget,
+    options?: { opacity?: number; uLayerOpacity?: number },
+  ): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('ShockwaveLayer: draw before init');
 
@@ -120,6 +127,8 @@ export class ShockwaveLayer implements RenderLayer {
     gl.uniform1f(this.uFade, fade);
     gl.uniform1f(this.uGlow, this.p.style === 'glow' ? 1 : 0);
     gl.uniform3f(this.uAccent, accent[0], accent[1], accent[2]);
+    const layerOpacity = options?.uLayerOpacity ?? options?.opacity ?? 1.0;
+    gl.uniform1f(this.uLayerOpacity, layerOpacity);
     // Band texture (6.3): always bound so the sampler has a valid texture; updated only when on.
     gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
     gl.uniform1f(this.uTexGain, this.p.textureGain);
@@ -148,6 +157,7 @@ export class ShockwaveLayer implements RenderLayer {
     this.uTexOn = null;
     this.uTexGain = null;
     this.uTexSub = null;
+    this.uLayerOpacity = null;
     this.active = false;
     this.gl = null;
   }

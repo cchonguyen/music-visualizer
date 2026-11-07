@@ -10,6 +10,7 @@ uniform float uGlow;      // 0 = thin ring (default), 1 = soft radial glow field
 uniform float uTexOn;     // 1 = band texture on (6.3), 0 = off: output identical to before
 uniform float uTexGain;   // 0..2: how strongly the band texture modulates
 uniform sampler2D uTexSub; // sub-band row, sampled by angle (ring edge brightness)
+uniform float uLayerOpacity;
 
 in vec2 vUv;
 out vec4 outColor;
@@ -44,5 +45,8 @@ void main() {
     float disc = 1.0 - smoothstep(0.0, 1.0, 2.0 * length(p) / max(uRadius, 0.05));
     col += uAccent * 0.45 * disc * uFade;
   }
-  outColor = vec4(col, 1.0);
+  float ring = max(col.r, max(col.g, col.b));
+  col *= uLayerOpacity;
+  float a = clamp(ring, 0.0, 1.0) * uLayerOpacity;
+  outColor = vec4(col, a);
 }
