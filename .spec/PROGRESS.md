@@ -29,9 +29,6 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [ ] **T4** Studio in a second window: not built (optional in the plan)
 
 ## projectM-inspired features (plan: /mnt/project-files/plans/projectm-ideas-implementation.md, approved 2026-11-05; contracts: .spec/PROJECTM_SPEC.md)
-- [x] **Slice 5.1: Beat sensitivity slider** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/audio/onset.ts`, `src/audio/onset.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
-- [x] **Slice 5.2: Render quality (buffer scale, persisted)** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/render/scene.ts`, `src/gl/size.ts`, `src/gl/size.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
-- [x] **Slice 5.3: Aspect correction toggle** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/compositor.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm run build
 - [ ] **Slice 5.4: Display time vs blend time** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/format.ts`, `src/presets/format.test.ts`, `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.5: Hard-cut beat mode** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.6: Transition styles (T1)** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/compositor.ts`, `src/render/shaders/transition.frag.glsl` [NEW], `src/presets/format.ts` | Verify: npm run typecheck && npm test && npm run build
@@ -39,8 +36,6 @@ Status 2026-11-05: all slices built in code. Typecheck, 297 tests and build pass
 - [ ] **Slice 5.8: Custom shape schema and loader** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/format.ts`, `src/presets/loader.ts`, `src/presets/loader.test.ts`, `src/presets/schema.test.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.9: Custom shape renderer** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/layers/shapes.ts` [NEW], `src/render/shaders/shapes.frag.glsl` [NEW], `src/main.ts` | Verify: npm run typecheck && npm test && npm run build
 - [ ] **Slice 5.10: Custom waves** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `src/render/layers/waveform.ts`, `src/presets/layerSchemas.ts` | Verify: npm run typecheck && npm test && npm run build
-- [x] **Slice 6.1: Keyboard shortcuts button** `[UI / VISUAL]` worker: lead (Haiku) | Target files: `index.html`, `src/style.css`, `src/ui/controls.ts` | Verify: npm run typecheck && npm run build
-- [x] **Slice 5.11: Shockwave size on all presets (retroactive, PR #45)** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/presets/layerSchemas.ts`, `src/presets/layerSchemas.test.ts`, `src/presets/builtin/crown.json`, `src/presets/builtin/flight.json`, `src/render/layers/shockwave.ts` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 7 — Slice briefs (.spec/specs/stage7-slice-briefs.md; renumbered 2026-11-07)
 - [ ] **Slice 7.8: Fix the 6 audited layer/blend bugs and centralize GL blend state** `[CORE / DATA]` worker: lead (Haiku) | Target files: `src/main.ts`, `src/render/scene.ts`, `src/presets/loader.ts`, `src/render/layers/waveform.ts`, `src/render/layers/particles.ts`, `src/render/shaders/particles.vert.glsl`, `src/render/shaders/rings.frag.glsl`, `src/render/shaders/bars.frag.glsl`, `src/studio/studio.ts`, `src/render/__tests__/scene.test.ts` | Verify: npm run typecheck && npm test && npm run build

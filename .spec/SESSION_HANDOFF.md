@@ -1,5 +1,13 @@
 # Session Handoff
 
+## Session 2026-11-07 (PROGRESS cleanup thread, branch claude/project-thread-7st07h, PR #131)
+- **Last Active Platform:** Claude Code (cloud thread, branch claude/project-thread-7st07h)
+- **Active Branch / State:** PR #131 (docs only, not merged). Finished projectM slices (5.1, 5.2, 5.3, 6.1 keyboard, 5.11) moved from PROGRESS.md to HISTORY.md. Duplicate Stage 6 block removed from HISTORY.md. OVERVIEW.md build status updated (from PR #132). PROGRESS.md is 50 lines. PRs #45 and #46 are merged. No slice started.
+- **Files Modified in Last Turn:** .spec/PROGRESS.md, .spec/HISTORY.md, .spec/OVERVIEW.md, .spec/SESSION_HANDOFF.md
+- **Verification Status:** Typecheck and node tests ran green on the branch before the OVERVIEW.md change. The OVERVIEW.md change is docs only. The `Harness slice gate` check is red by design: this PR is not a slice commit.
+- **Immediate Next Step for Charlie:** merge PR #131 or ask for a gate exemption for docs-only commits. Then choose the next build: slice 5.4 (projectM, pending) or Stage 7 slices 7.8 to 7.17 (queued). Stage 4 needs owner visual sign-off.
+
+## Earlier state (before 2026-11-07)
 - **Last Active Platform:** Claude Code (cloud thread, branch claude/project-thread-3d7ebg)
 - **Active Branch / State:** claude/project-thread-3d7ebg, stacked on PR #8 (branch claude/project-thread-87opk1). PR #8 itself is untouched. This branch adds slices 4.9 to S3-f. The new PR's base is claude/project-thread-87opk1, so its diff shows only the new commits.
 - **Branch Owner:** claude
