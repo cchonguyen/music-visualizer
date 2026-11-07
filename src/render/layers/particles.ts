@@ -23,7 +23,21 @@ import { getTerrainState } from '../terrainStore';
 
 export interface ParticleLayerParams extends ParticleParams {
   terrainDisplace?: number;
+  seedShape?: 'orb' | 'petal' | 'star';
+  phylloPattern?: 'auto' | 'golden137.5' | 'lucas99.5' | 'fibonacci137.6' | 'rosette137.3' | 'starburst144';
+  petalStretch?: number;
+  flowSpeed?: number;
+  subTwist?: number;
 }
+
+const PHYLLO_PATTERNS: Record<string, number> = {
+  'golden137.5': 2.3999632,       // 137.508°
+  'lucas99.5': 1.7366025,         // 99.5°
+  'fibonacci137.6': 2.4016,       // 137.6°
+  'rosette137.3': 2.3963,         // 137.3°
+  'starburst144': 2.513274,       // 144.0°
+};
+const CURATED_AUTO_ANGLES = [2.3999632, 2.4016, 2.3963];
 
 export const PARTICLE_DISPLACE_SPEC = {
   type: 'float' as const,
@@ -56,7 +70,16 @@ export class ParticleLayer implements RenderLayer {
   private p: ParticleLayerParams;
 
   constructor(params: Partial<ParticleLayerParams> = {}) {
-    this.p = { ...PARTICLE_DEFAULTS, terrainDisplace: 0.0, ...params };
+    this.p = {
+      ...PARTICLE_DEFAULTS,
+      terrainDisplace: 0.0,
+      seedShape: 'petal',
+      phylloPattern: 'auto',
+      petalStretch: 1.65,
+      flowSpeed: 1.0,
+      subTwist: 1.0,
+      ...params,
+    };
   }
 
   setOpacity(opacity: number): void {
@@ -100,10 +123,37 @@ export class ParticleLayer implements RenderLayer {
   private uMode: WebGLUniformLocation | null = null;
   private uSubTwist: WebGLUniformLocation | null = null;
   private uFlowSpeed: WebGLUniformLocation | null = null;
+  private uFlowPhase: WebGLUniformLocation | null = null;
+  private uTwistPhase: WebGLUniformLocation | null = null;
+  private uDivergenceAngle: WebGLUniformLocation | null = null;
+  private uPetalStretch: WebGLUniformLocation | null = null;
+  private uSeedShape: WebGLUniformLocation | null = null;
+  private uKickEnv: WebGLUniformLocation | null = null;
   private uTerrainTex: WebGLUniformLocation | null = null;
   private uTerrainDisplace: WebGLUniformLocation | null = null;
   private uTerrainWriteRow: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
+
+  /** Monotonic phase accumulators and phrase-locked divergence angle state (Slice 7.29) */
+  private flowPhase: number = 0;
+  private twistPhase: number = 0;
+  private phylloCooldownSec: number = 7.0;
+  private phylloCurrentAngleIdx: number = 0;
+  private phylloNextAngleIdx: number = 0;
+  private phylloMorphProgress: number = 1.0;
+  private divergenceAngle: number = 2.3999632;
+
+  getFlowPhase(): number {
+    return this.flowPhase;
+  }
+
+  getTwistPhase(): number {
+    return this.twistPhase;
+  }
+
+  getDivergenceAngle(): number {
+    return this.divergenceAngle;
+  }
 
   /** Hue drift clock (turns). Advances by hueDrift per second; wrapped to 0..1 when sent to the shader. */
   private hueTurns = 0;
@@ -152,6 +202,12 @@ export class ParticleLayer implements RenderLayer {
     this.uMode = gl.getUniformLocation(this.program, 'uMode');
     this.uSubTwist = gl.getUniformLocation(this.program, 'uSubTwist');
     this.uFlowSpeed = gl.getUniformLocation(this.program, 'uFlowSpeed');
+    this.uFlowPhase = gl.getUniformLocation(this.program, 'uFlowPhase');
+    this.uTwistPhase = gl.getUniformLocation(this.program, 'uTwistPhase');
+    this.uDivergenceAngle = gl.getUniformLocation(this.program, 'uDivergenceAngle');
+    this.uPetalStretch = gl.getUniformLocation(this.program, 'uPetalStretch');
+    this.uSeedShape = gl.getUniformLocation(this.program, 'uSeedShape');
+    this.uKickEnv = gl.getUniformLocation(this.program, 'uKickEnv');
     this.uTerrainTex = gl.getUniformLocation(this.program, 'uTerrainTex');
     this.uTerrainDisplace = gl.getUniformLocation(this.program, 'uTerrainDisplace');
     this.uTerrainWriteRow = gl.getUniformLocation(this.program, 'uTerrainWriteRow');
@@ -159,6 +215,13 @@ export class ParticleLayer implements RenderLayer {
     this.phase.reset();
     this.twinkle.reset();
     this.flash = 0;
+    this.flowPhase = 0;
+    this.twistPhase = 0;
+    this.phylloCooldownSec = 7.0;
+    this.phylloCurrentAngleIdx = 0;
+    this.phylloNextAngleIdx = 0;
+    this.phylloMorphProgress = 1.0;
+    this.divergenceAngle = 2.3999632;
     this.vao = createVao(gl);
   }
 
@@ -176,6 +239,47 @@ export class ParticleLayer implements RenderLayer {
     // Not governed (patch 2026-11-04): a sparkle covers under 1% of the screen, so it
     // does not use the flash budget and cannot block a kick shockwave.
     this.flash = highFlash(this.flash, frame.beatByBand.high, clock.dtSec);
+
+    const dt = clock.dtSec > 0 ? clock.dtSec : 0.016;
+
+    // Maintain two monotonic phase accumulators:
+    const flowSpeed = this.p.flowSpeed ?? 1.0;
+    const subNorm = frame.norm?.sub ?? 0;
+    const kickEnv = frame.kickEnv ?? 0;
+    this.flowPhase += dt * flowSpeed * (0.45 + subNorm * 1.15 + kickEnv * 1.4);
+
+    const midNorm = frame.norm?.mid ?? 0;
+    const subTwist = this.p.subTwist ?? 1.0;
+    this.twistPhase += dt * (0.12 + midNorm * 0.35 * subTwist);
+
+    // Maintain phrase-locked divergence angle morphing (minimum 7.0s cooldown in 'auto' mode, morphing over 2.5s)
+    const pattern = this.p.phylloPattern ?? 'auto';
+    if (pattern === 'auto') {
+      this.phylloCooldownSec += dt;
+      const isPhraseBoundary =
+        (frame as any).sectionContrast > 0.05 ||
+        Boolean((frame as any).kickPulse) ||
+        kickEnv > 0.6;
+
+      if (this.phylloCooldownSec >= 7.0 && isPhraseBoundary) {
+        this.phylloCooldownSec = 0.0;
+        this.phylloCurrentAngleIdx = this.phylloNextAngleIdx;
+        this.phylloNextAngleIdx = (this.phylloCurrentAngleIdx + 1) % CURATED_AUTO_ANGLES.length;
+        this.phylloMorphProgress = 0.0;
+      }
+
+      if (this.phylloMorphProgress < 1.0) {
+        this.phylloMorphProgress = Math.min(1.0, this.phylloMorphProgress + dt / 2.5);
+      }
+      const a1 = CURATED_AUTO_ANGLES[this.phylloCurrentAngleIdx]!;
+      const a2 = CURATED_AUTO_ANGLES[this.phylloNextAngleIdx]!;
+      const t = this.phylloMorphProgress * this.phylloMorphProgress * (3 - 2 * this.phylloMorphProgress);
+      this.divergenceAngle = a1 + (a2 - a1) * t;
+    } else {
+      this.divergenceAngle = PHYLLO_PATTERNS[pattern] ?? 2.3999632;
+      this.phylloCooldownSec = 7.0;
+      this.phylloMorphProgress = 1.0;
+    }
 
     // Density rises with energy only in loud sections; phase never decreases.
     const section = this.calm ? 1 : Math.max(0, 1 + this.sectionContrast);
@@ -218,13 +322,29 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uTwinkleTime, twinkleTime);
     // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).
     gl.uniform1fv(this.uCrown, getCrownHeights());
-    // Particle shape (4.6): 0 streak, 1 dot, 2 star, 3 ring. Unknown names fall back to streak.
-    const shapeIndex = Math.max(0, PARTICLE_SHAPES.indexOf(this.p.shape));
-    gl.uniform1i(this.uShape, shapeIndex);
+
     const isPhyllotaxis = this.p.mode === 'phyllotaxis';
     gl.uniform1i(this.uMode, isPhyllotaxis ? 1 : 0);
     gl.uniform1f(this.uSubTwist, (this.calm ? 0 : (frame.norm?.sub ?? 0)) * 5.0);
-    gl.uniform1f(this.uFlowSpeed, 2.5);
+    gl.uniform1f(this.uFlowSpeed, this.p.flowSpeed ?? 2.5);
+
+    // Seed shape (0 = orb, 1 = petal, 2 = star)
+    const seedShape = this.p.seedShape ?? 'petal';
+    let seedShapeInt = 1;
+    if (seedShape === 'orb') seedShapeInt = 0;
+    else if (seedShape === 'star') seedShapeInt = 2;
+    else if (seedShape === 'petal') seedShapeInt = 1;
+    gl.uniform1i(this.uSeedShape, seedShapeInt);
+
+    // Particle shape (4.6): 0 streak, 1 dot, 2 star, 3 ring. Unknown names fall back to streak.
+    let shapeIndex = Math.max(0, PARTICLE_SHAPES.indexOf(this.p.shape));
+    if (isPhyllotaxis) {
+      if (seedShapeInt === 0) shapeIndex = 1; // dot (orb)
+      else if (seedShapeInt === 1) shapeIndex = 0; // streak (petal)
+      else if (seedShapeInt === 2) shapeIndex = 2; // star
+    }
+    gl.uniform1i(this.uShape, shapeIndex);
+
     // Transforms (4.7): rotation in radians, zoom (1 = none). Identity at the defaults.
     // Follow scene transform (2026-11-06): add the scene's accumulated turn and current zoom when on.
     gl.uniform1f(this.uRotation, this.p.rotation + (follow ? scene.angle : 0));
@@ -237,7 +357,14 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uWarpSpeed, scene.warpSpeed);
     gl.uniform1f(this.uTime, scene.timeSec);
     // Reach: far enough that the corners (distance hypot(aspect, 1) in screen heights) are covered.
-    gl.uniform1f(this.uFar, Math.hypot(target.width / target.height, 1) * 1.05);
+    const aspect = target.width / target.height;
+    const far = Math.hypot(aspect, 1.0) * 1.05;
+    gl.uniform1f(this.uFar, far);
+    gl.uniform1f(this.uFlowPhase, this.flowPhase);
+    gl.uniform1f(this.uTwistPhase, this.twistPhase);
+    gl.uniform1f(this.uDivergenceAngle, this.divergenceAngle);
+    gl.uniform1f(this.uPetalStretch, this.p.petalStretch ?? 1.65);
+    gl.uniform1f(this.uKickEnv, kickEnv);
     gl.uniform1f(this.uSize, this.p.size);
     // Colour shift (4.8): fixed offset plus drift, wrapped into 0..1 turns. Zero at the defaults.
     gl.uniform1f(this.uHue, ((this.p.hueShift + this.hueTurns) % 1 + 1) % 1);
@@ -281,6 +408,12 @@ export class ParticleLayer implements RenderLayer {
     this.uMode = null;
     this.uSubTwist = null;
     this.uFlowSpeed = null;
+    this.uFlowPhase = null;
+    this.uTwistPhase = null;
+    this.uDivergenceAngle = null;
+    this.uPetalStretch = null;
+    this.uSeedShape = null;
+    this.uKickEnv = null;
     this.uTerrainTex = null;
     this.uTerrainDisplace = null;
     this.uTerrainWriteRow = null;

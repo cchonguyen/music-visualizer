@@ -4,13 +4,18 @@
   "tags": ["built-in", "flagship"],
   "transition": { "style": "crossfade", "seconds": 0.35 },
   "feedback": {
-    "decay": 0.88
+    "decay": 0.86
   },
   "layers": [
     {
       "type": "particles",
+      "blend": "max",
       "params": {
         "mode": "phyllotaxis",
+        "seedShape": "petal",
+        "phylloPattern": "auto",
+        "petalStretch": 1.75,
+        "flowSpeed": 1.1,
         "shape": "dot",
         "size": 2.2,
         "brightness": 1.4

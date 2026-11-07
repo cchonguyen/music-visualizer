@@ -412,12 +412,19 @@ export const POST_CRT_SPECS: readonly ParamSpec[] = [
   },
 ];
 
+import { LAYER_SPECS } from "./layerSchemas";
+
 declare module "./layerSchemas" {
   interface RingsParams {
     mode?: string;
   }
   interface ParticleParams {
     mode?: 'radial' | 'phyllotaxis';
+    seedShape?: 'orb' | 'petal' | 'star';
+    phylloPattern?: 'auto' | 'golden137.5' | 'lucas99.5' | 'fibonacci137.6' | 'rosette137.3' | 'starburst144';
+    petalStretch?: number;
+    flowSpeed?: number;
+    subTwist?: number;
   }
   interface MoireParams {
     scale: number;
@@ -572,6 +579,86 @@ export const PARTICLE_MODE_SPEC: EnumSpec = {
   default: "radial",
   options: ["radial", "phyllotaxis"],
 };
+
+/** Particle seed shape, phyllotaxis pattern, and petal stretch options (Slice 7.29). */
+export type ParticleSeedShape = 'orb' | 'petal' | 'star';
+export type ParticlePhylloPattern = 'auto' | 'golden137.5' | 'lucas99.5' | 'fibonacci137.6' | 'rosette137.3' | 'starburst144';
+
+export const PARTICLE_SEED_SHAPE_SPEC: EnumSpec = {
+  type: "enum",
+  name: "seedShape",
+  label: "Seed shape",
+  group: "Shape",
+  default: "petal",
+  options: ["orb", "petal", "star"],
+};
+
+export const PARTICLE_PHYLLO_PATTERN_SPEC: EnumSpec = {
+  type: "enum",
+  name: "phylloPattern",
+  label: "Spiral divergence",
+  group: "Shape",
+  default: "auto",
+  options: ["auto", "golden137.5", "lucas99.5", "fibonacci137.6", "rosette137.3", "starburst144"],
+};
+
+export const PARTICLE_PETAL_STRETCH_SPEC: NumberSpec = {
+  type: "float",
+  name: "petalStretch",
+  label: "Petal elongation",
+  group: "Shape",
+  default: 1.65,
+  min: 0.5,
+  max: 3.0,
+  step: 0.05,
+};
+
+export const PARTICLE_FLOW_SPEED_SPEC: NumberSpec = {
+  type: "float",
+  name: "flowSpeed",
+  label: "Bloom flow speed",
+  group: "Motion",
+  default: 1.0,
+  min: 0.1,
+  max: 4.0,
+  step: 0.05,
+};
+
+export const PARTICLE_SUB_TWIST_SPEC: NumberSpec = {
+  type: "float",
+  name: "subTwist",
+  label: "Bass spin coupling",
+  group: "Motion",
+  default: 1.0,
+  min: 0.0,
+  max: 4.0,
+  step: 0.05,
+};
+
+export const PHYLLOTAXIS_SPECS: readonly ParamSpec[] = [
+  PARTICLE_SEED_SHAPE_SPEC,
+  PARTICLE_PHYLLO_PATTERN_SPEC,
+  PARTICLE_PETAL_STRETCH_SPEC,
+  PARTICLE_FLOW_SPEED_SPEC,
+  PARTICLE_SUB_TWIST_SPEC,
+];
+
+export const PARTICLES_SCHEMA: readonly ParamSpec[] = [
+  PARTICLE_MODE_SPEC,
+  ...PHYLLOTAXIS_SPECS,
+];
+
+if (LAYER_SPECS && LAYER_SPECS.particles) {
+  const existingNames = new Set(LAYER_SPECS.particles.map((s) => s.name));
+  const newSpecs = [
+    PARTICLE_MODE_SPEC,
+    ...PHYLLOTAXIS_SPECS,
+  ].filter((s) => !existingNames.has(s.name));
+  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).particles = [
+    ...LAYER_SPECS.particles,
+    ...newSpecs,
+  ];
+}
 
 /** Chladni sand parameters and schema (Slice 7.14, Slice 7.28). */
 export type ChladniPlateMode = 'fullscreen' | 'isometricPlate' | 'radialMandala';

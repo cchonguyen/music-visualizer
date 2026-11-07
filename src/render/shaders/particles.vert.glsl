@@ -28,6 +28,12 @@ uniform float uTime;        // scene time in seconds
 uniform int uMode;          // 0 = radial (default), 1 = phyllotaxis
 uniform float uSubTwist;    // sub-bass twist for phyllotaxis
 uniform float uFlowSpeed;   // wave flow speed
+uniform float uFlowPhase;
+uniform float uTwistPhase;
+uniform float uDivergenceAngle; // divergence angle (e.g. 2.3999632 golden angle)
+uniform float uPetalStretch;
+uniform int uSeedShape;     // 0 = orb, 1 = petal, 2 = star
+uniform float uKickEnv;
 uniform sampler2D uTerrainTex;
 uniform float uTerrainDisplace;
 uniform float uTerrainWriteRow;
@@ -51,22 +57,41 @@ void main() {
   float id = float(gl_InstanceID);
 
   if (uMode == 1) {
-    // Phyllotaxis spiral bloom (Slice 7.14)
-    // Golden angle polar coordinates r = c * sqrt(i), theta = i * (2.3999632 + uSubTwist * 0.0015)
-    float wave = sin(id * 0.06 - uTime * uFlowSpeed);
-    vMix = clamp(0.5 + 0.5 * wave, 0.0, 1.0);
+    // Phyllotaxis spiral bloom (Slice 7.14, Slice 7.29)
+    // Continuous outward index: seeds continuously birth at the center and bloom outward
+    float uIdx = mod(id + uFlowPhase * 24.0, 600.0);
+    float normR = sqrt(uIdx / 600.0);
 
-    float c = 0.038 * min(uFar, 1.25);
-    float r = c * sqrt(id + 1.0);
-    float theta = id * (2.3999632 + uSubTwist * 0.0015);
-    vec2 pos = vec2(cos(theta), sin(theta)) * r;
+    // Travelling kick ripple wave
+    float kickWave = sin(normR * 12.0 - uFlowPhase * 4.0) * uKickEnv;
 
-    vec2 dir = (r > 0.001) ? pos / r : vec2(0.0, 1.0);
+    // Full-viewport radius: hypot(aspect, 1.0) * 1.05 with outward kick wave ripple
+    float r = normR * uFar * (1.0 + 0.08 * kickWave);
+
+    // Spiral angle with smooth mid twist and subtle radial distortion
+    float theta = uIdx * uDivergenceAngle + uTwistPhase + 0.06 * sin(normR * 8.0 - uFlowPhase * 2.0);
+    vec2 dir = vec2(cos(theta), sin(theta));
     vec2 perp = vec2(-dir.y, dir.x);
+    vec2 pos = dir * r;
 
     vLocal = CORNERS[gl_VertexID];
-    float scaleWave = 0.7 + 0.5 * wave;
-    float quadSize = mix(0.008, 0.018, hash01(id, 1.0)) * uSize * scaleWave * (0.8 + 0.4 * clamp(uEnergy, 0.0, 1.0));
+
+    // Base quad size
+    float quadSize = mix(0.010, 0.022, hash01(id, 1.0)) * uSize * (0.8 + 0.4 * clamp(uEnergy, 0.0, 1.0));
+
+    // Shape and orient each instanced quad according to uSeedShape:
+    // 0 (orb): isotropic circular quad.
+    // 1 (petal): radially oriented seed stretched along (cos(theta), sin(theta)) by uPetalStretch.
+    // 2 (star): 4-pointed star flare.
+    vec2 quadOffset = vec2(0.0);
+    if (uSeedShape == 0) {
+      quadOffset = (vec2(1.0, 0.0) * vLocal.x + vec2(0.0, 1.0) * vLocal.y) * quadSize;
+    } else if (uSeedShape == 1) {
+      quadOffset = (dir * (vLocal.x * uPetalStretch) + perp * vLocal.y) * quadSize;
+    } else {
+      float starScale = 1.0 + 0.25 * kickWave;
+      quadOffset = (dir * vLocal.x + perp * vLocal.y) * quadSize * starScale;
+    }
 
     vec2 origin = vec2(uSway.x * uAspect, uSway.y) * 0.2;
     vec2 center = origin + pos;
@@ -78,9 +103,13 @@ void main() {
       float terrainHeight = texture(uTerrainTex, vec2(uCoord, vCoord)).r;
       center.y += terrainHeight * uTerrainDisplace * 0.42;
     }
-    vec2 point = center + (dir * vLocal.x + perp * vLocal.y) * quadSize;
+    vec2 point = center + quadOffset;
 
-    vFade = smoothstep(0.0, 0.04, r) * (1.0 - smoothstep(0.65 * uFar, 1.05 * uFar, r));
+    // Smooth fade at birth and outer edge
+    vFade = smoothstep(0.0, 0.05, normR) * (1.0 - smoothstep(0.88, 1.0, normR));
+
+    // vMix maps warm golden-amber core to electric cyan/emerald at outer petals
+    vMix = clamp(normR * 0.82 + 0.18 * kickWave, 0.0, 1.0);
 
     float twRate = mix(4.0, 12.0, hash01(id, 4.0));
     float twPhase = hash01(id, 5.0) * TAU;
