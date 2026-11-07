@@ -2,6 +2,15 @@
 // The preset loader, the Preset Studio sliders and the randomiser all read these entries,
 // so they always agree on each setting's name, default and safe range.
 
+/** Every signal a setting can follow. Evaluated in links.ts. */
+export const AUDIO_SOURCES = [
+  "sub", "bass", "mid", "high", "energy", "loudness", "beat", "onset", "section",
+  "beatStrength", "brightness", "subFlux", "midFlux", "highFlux",
+  "lfoSine", "lfoSaw", "lfoRandom", "time",
+  "kickEnv", "centroid",
+] as const;
+export type AudioSource = (typeof AUDIO_SOURCES)[number];
+
 export type ParamValue = number | boolean | string;
 
 interface BaseSpec {

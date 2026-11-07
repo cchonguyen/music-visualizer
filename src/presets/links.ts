@@ -20,7 +20,9 @@ const clamp01 = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v))
 /** Last brightness result. A preset can ask for it many times per frame, so reuse it. */
 let brightnessCache: { frameIndex: number; spectrum: Float32Array; value: number } | null = null;
 
-/** Spectral centroid of the frame, mapped to 0..1 (0 Hz..8 kHz). Cached per frame and spectrum. */
+const CENTROID_NOISE_FLOOR = 1e-4;
+
+/** Spectral centroid of the frame, mapped to 0..1 (0 Hz..8 kHz). Cached per frame and spectrum. Holds 0.5 on silence. */
 function brightnessOf(frame: AudioFrame): number {
   const spectrum = frame.spectrum;
   if (brightnessCache && brightnessCache.frameIndex === frame.frameIndex && brightnessCache.spectrum === spectrum) {
@@ -34,7 +36,7 @@ function brightnessOf(frame: AudioFrame): number {
     weighted += i * binHz * s;
     total += s;
   }
-  const value = total <= 0 ? 0 : clamp01((weighted / total) / 8000);
+  const value = total <= CENTROID_NOISE_FLOOR ? 0.5 : clamp01((weighted / total) / 8000);
   brightnessCache = { frameIndex: frame.frameIndex, spectrum, value };
   return value;
 }
@@ -71,7 +73,10 @@ export function sourceValue(source: AudioSource, inputs: LinkInputs, rateHz: num
     case 'beatStrength':
       return clamp01(frame.beatStrength);
     case 'brightness':
+    case 'centroid':
       return brightnessOf(frame);
+    case 'kickEnv':
+      return clamp01(frame.kickEnv);
     case 'subFlux':
       return clamp01(frame.fluxByBand.sub);
     case 'midFlux':
