@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertValidSpec, coerceValue, defaultsFor, type ParamSpec } from "./schema";
+import { assertValidSpec, coerceValue, defaultsFor, isSpecVisible, type ParamSpec } from "./schema";
 
 const density: ParamSpec = { type: "float", name: "density", label: "Density", group: "Wall", default: 0.5, min: 0, max: 1, step: 0.01 };
 const sides: ParamSpec = { type: "int", name: "sides", label: "Sides", group: "Shape", default: 4, min: 3, max: 12, step: 1 };
@@ -75,3 +75,87 @@ describe("defaultsFor", () => {
     expect(defaultsFor([density, sides, invert])).toEqual({ density: 0.5, sides: 4, invert: false });
   });
 });
+
+describe("isSpecVisible", () => {
+  it("returns true when spec has no showWhen condition", () => {
+    expect(isSpecVisible(density, {})).toBe(true);
+    expect(isSpecVisible(density, { baseShape: "polygon" })).toBe(true);
+  });
+
+  it("evaluates single scalar equality condition", () => {
+    const starOnlySpec: ParamSpec = {
+      type: "float",
+      name: "starInner",
+      label: "Star inner ratio",
+      group: "Base",
+      default: 0.5,
+      min: 0.2,
+      max: 0.9,
+      step: 0.05,
+      showWhen: { baseShape: "star" },
+    };
+
+    expect(isSpecVisible(starOnlySpec, { baseShape: "star" })).toBe(true);
+    expect(isSpecVisible(starOnlySpec, { baseShape: "circle" })).toBe(false);
+    expect(isSpecVisible(starOnlySpec, {})).toBe(false);
+  });
+
+  it("evaluates array inclusion condition", () => {
+    const sidesSpec: ParamSpec = {
+      type: "int",
+      name: "sides",
+      label: "Sides",
+      group: "Base",
+      default: 6,
+      min: 3,
+      max: 12,
+      step: 1,
+      showWhen: { baseShape: ["polygon", "star"] },
+    };
+
+    expect(isSpecVisible(sidesSpec, { baseShape: "polygon" })).toBe(true);
+    expect(isSpecVisible(sidesSpec, { baseShape: "star" })).toBe(true);
+    expect(isSpecVisible(sidesSpec, { baseShape: "circle" })).toBe(false);
+    expect(isSpecVisible(sidesSpec, {})).toBe(false);
+  });
+
+  it("evaluates multiple conditions with logical AND", () => {
+    const complexSpec: ParamSpec = {
+      type: "float",
+      name: "specialWarp",
+      label: "Special warp",
+      group: "Warp",
+      default: 0.5,
+      min: 0,
+      max: 1,
+      step: 0.05,
+      showWhen: {
+        baseShape: ["polygon", "star"],
+        effectType: "bars",
+      },
+    };
+
+    expect(isSpecVisible(complexSpec, { baseShape: "polygon", effectType: "bars" })).toBe(true);
+    expect(isSpecVisible(complexSpec, { baseShape: "polygon", effectType: "waveform" })).toBe(false);
+    expect(isSpecVisible(complexSpec, { baseShape: "circle", effectType: "bars" })).toBe(false);
+    expect(isSpecVisible(complexSpec, { baseShape: "circle", effectType: "waveform" })).toBe(false);
+  });
+
+  it("unwraps values when provided as Setting objects ({ value: ... })", () => {
+    const starOnlySpec: ParamSpec = {
+      type: "float",
+      name: "starInner",
+      label: "Star inner ratio",
+      group: "Base",
+      default: 0.5,
+      min: 0.2,
+      max: 0.9,
+      step: 0.05,
+      showWhen: { baseShape: "star" },
+    };
+
+    expect(isSpecVisible(starOnlySpec, { baseShape: { value: "star" } } as any)).toBe(true);
+    expect(isSpecVisible(starOnlySpec, { baseShape: { value: "circle" } } as any)).toBe(false);
+  });
+});
+

@@ -1544,3 +1544,87 @@ Output ONLY a 1-line receipt upon completion.
 
 ### Communication Rule
 Output ONLY a 1-line receipt upon completion.
+
+
+---
+
+## Slice 7.43: Overhaul Tunnel Flight Mechanics — Rock-solid geometric depth, smooth flight velocity inertia, and zero-stutter continuous soaring
+
+### Target Files
+- `src/render/shaders/tunnel.frag.glsl`
+- `src/render/tunnelState.ts`
+- `src/render/layers/tunnel.ts`
+- `src/presets/layerSchemas.ts`
+- `src/render/__tests__/tunnelOverhaul.test.ts`
+
+### Strict Invariants & Boundaries
+- 3D ring depth $z$ must be monotonically advancing with clean perspective $z = 0.28 / r + forwardPhase$ with ZERO kick displacement, zero sine ripple, and zero 180° phase inversion jumping.
+- Flight speed must have smooth inertia/momentum (250ms exponential smoothing on energy) rather than stuttering on raw frame-to-frame audio energy spikes.
+- Eliminate angular twist whipping by decoupling angle $a$ from the contracting radius divisor.
+- Ensure the flight feels like soaring smoothly through a deep, endless sci-fi space tube.
+
+### Implementation Steps
+1. **`src/render/shaders/tunnel.frag.glsl`**:
+   - In lines 68–74:
+     - Compute clean radius $r$ and depth $z$:
+       `float z = 0.28 / max(r, 0.025) + forwardPhase;`
+       (Remove $uKick \times uZoomPunch$ depth contraction and sine wave ripple from $z$ completely!).
+     - Compute smooth angle $a$:
+       `float a = atan(q.y, q.x) + rollPhase + spiral * (0.28 / max(r, 0.08));`
+       (Remove raw $uMid$ divisor twitching).
+     - If kick reaction is desired, pulse ring brightness / rim glow subtly (`rings += chosenAccent * 0.25 * uBeat * uBeatReactivity;`) without altering ring geometric depth $z$.
+2. **`src/render/tunnelState.ts`**:
+   - In `stepTunnel()`:
+     - Smooth `energy` for `flightRate` using a 250ms inertia follower (`slewEnergy += (energy - slewEnergy) * (1 - Math.exp(-dtSec / 0.25));`) so velocity accelerates and glides smoothly with true camera momentum.
+3. **`src/presets/layerSchemas.ts`**:
+   - Set `TUNNEL_DEFAULTS.texture = false` (preventing raw waveform 60Hz flicker on walls by default).
+4. **`src/render/__tests__/tunnelOverhaul.test.ts`**:
+   - Update tests to verify monotonic continuous depth and smooth flight rate integration.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+
+---
+
+## Slice 7.44: Rock-Solid Kick & Beat Detection — Absolute energy & prominence gating, 220ms refractory cooldown, strict hysteresis re-arming, and clean zero floor
+
+### Target Files
+- `src/audio/onset.ts`
+- `src/audio/frameBuilder.ts`
+- `src/audio/onset.test.ts`
+- `src/audio/frameBuilder.test.ts`
+
+### Strict Invariants & Boundaries
+- Kicks must ONLY trigger on actual prominent drum/transient hits. False triggers on background room noise, mic hiss, or continuous sub rumble must be completely eliminated.
+- Refractory cooldown of 220ms (max 270 BPM) prevents bassline flutter from double-triggering.
+- When there is silence or no audio playing, `kickEnv` must snap cleanly to `0.0`.
+
+### Implementation Steps
+1. **`src/audio/onset.ts`**:
+   - Update `DEFAULT_COOLDOWN_MS = 220` (from 150) so sub onsets cannot re-trigger 7 times a second.
+   - Set `DEFAULT_RELEASE_RATIO = 0.95` (from 1.05) so flux must drop below the baseline before re-arming.
+   - Raise `DEFAULT_FLUX_FLOOR = 0.035` (from 0.02) to reject low-level noise floor flutter.
+2. **`src/audio/frameBuilder.ts`**:
+   - In `buildAudioFrame()`:
+     - Only register a sub onset when real sub energy is present:
+       `const hasSubEnergy = frame.raw.sub > 0.08 && frame.norm.sub > 0.30 && (frame.loudness?.isSignal ?? true);`
+       `const isKick = subOnset.beat && hasSubEnergy;`
+       `frame.beatByBand.sub = isKick;`
+       `frame.beat = isKick;`
+     - When `isKick`: `this.kickEnv = 1.0; frame.kickPulse = true;`.
+     - When `!isKick`: `this.kickEnv *= Math.pow(0.88, dtSec * 60); if (this.kickEnv < 0.01) this.kickEnv = 0.0;`.
+     - `frame.kickEnv = this.kickEnv;`.
+3. **Tests**:
+   - Update `onset.test.ts` and `frameBuilder.test.ts` to verify the 220ms cooldown and energy gating.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.

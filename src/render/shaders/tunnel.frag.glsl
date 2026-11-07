@@ -65,12 +65,11 @@ void main() {
     r = length(q) * cos(seg * 0.5) / cos(aSeg);
   }
 
-  // Kick FOV warp jump + travelling shockwave ripple (uZoomPunch)
-  float rMod = max(r * (1.0 - uKick * uZoomPunch * 0.22), 0.025);
-  float z = 0.28 / rMod + forwardPhase + uKick * uZoomPunch * 0.35 * sin(0.28 / rMod * 3.0 - forwardPhase * 4.0);
+  // Clean geometric depth: rings stay geometrically fixed in 3D perspective space
+  float z = 0.28 / max(r, 0.025) + forwardPhase;
 
-  // Mid-band corkscrew swirl & twist (uSwirlPulse) (spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.08)
-  float a = atan(q.y, q.x) + rollPhase + (spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.28);
+  // Smooth angle: corkscrew twist decoupled from contracting radius divisor
+  float a = atan(q.y, q.x) + rollPhase + spiral * (0.28 / max(r, 0.08));
 
   // Seamless angular wrapping
   float aNorm = fract(a / 6.2831853);
@@ -102,7 +101,7 @@ void main() {
   else if (pattern == 4) wave = streakWave;
 
   float sharp = mix(2.5, 4.0, clamp(uRingContrast * 2.0, 0.0, 1.0));
-  float expo = mix(sharp * 1.5, sharp * 0.6, smoothstep(0.1, 0.6, rMod));
+  float expo = mix(sharp * 1.5, sharp * 0.6, smoothstep(0.1, 0.6, r));
   float stripe = pow(wave, expo);
   stripe = max(stripe, 0.12 * smoothstep(0.5, 0.9, wave));
   stripe = max(stripe, 0.12 * uQuiet);
@@ -123,7 +122,7 @@ void main() {
   vec3 rings = mix(uBase * stripe, chosenAccent, stripe * stripeGain) * pulse;
   rings += uAccentB * 0.15 * smoothstep(0.85, 1.0, stripe);
   // Soft ambient rim glow on beat swell instead of harsh strobe
-  rings += chosenAccent * 0.30 * clamp(uBeat, 0.0, 1.0) * (smoothstep(0.4, 1.0, stripe) * 0.6 + smoothstep(0.15, 0.85, rim) * 0.4);
+  rings += chosenAccent * (0.30 * clamp(uBeat, 0.0, 1.0) + 0.15 * uKick * uZoomPunch) * (smoothstep(0.4, 1.0, stripe) * 0.6 + smoothstep(0.15, 0.85, rim) * 0.4);
   rings += chosenAccent * 0.5 * clamp(uSub, 0.0, 1.0) * smoothstep(0.75, 1.0, stripe);
   rings *= texMul;
 

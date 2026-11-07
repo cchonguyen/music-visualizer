@@ -15,11 +15,17 @@ export type Vec3 = [number, number, number];
 
 export type ParamValue = number | boolean | string | Vec3 | undefined;
 
-interface BaseSpec {
+export type ShowWhenCondition = Record<string, ParamValue | readonly ParamValue[]>;
+
+export interface ParamSpecBase {
   name: string; // stable key used in preset files, e.g. "density"
   label: string; // text shown in the Studio, e.g. "Ring density"
   group: string; // section in the Studio, e.g. "Wall pattern"
+  /** Optional declarative visibility rule: blade is visible only when every key in showWhen matches the current layer/section settings. */
+  showWhen?: ShowWhenCondition;
 }
+
+type BaseSpec = ParamSpecBase;
 
 export interface NumberSpec extends BaseSpec {
   type: "float" | "int";
@@ -90,6 +96,28 @@ export function assertValidSpec(spec: ParamSpec): void {
       }
       return;
   }
+}
+
+/**
+ * Evaluates whether a parameter blade should be visible given current settings values.
+ * If spec.showWhen is undefined, returns true (always visible).
+ * If spec.showWhen is specified, every key must match the current value (or match one of the array elements).
+ * Supports both raw values dictionary and Settings dictionary ({ value: ... }).
+ */
+export function isSpecVisible(spec: ParamSpec, values: Record<string, ParamValue | any>): boolean {
+  if (!spec.showWhen) return true;
+  for (const [depKey, expected] of Object.entries(spec.showWhen)) {
+    const raw = values[depKey];
+    const actual = (raw !== null && typeof raw === 'object' && 'value' in raw && !Array.isArray(raw))
+      ? (raw as { value: ParamValue }).value
+      : (raw as ParamValue);
+    if (Array.isArray(expected)) {
+      if (!expected.includes(actual as never)) return false;
+    } else if (actual !== expected) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export interface CoerceResult {

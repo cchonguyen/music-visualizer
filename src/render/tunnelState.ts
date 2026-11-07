@@ -176,6 +176,7 @@ export class TunnelState {
   vanishX: number = 0;
   vanishY: number = 0;
   forwardPhase: number = 0;
+  slewEnergy: number = 0;
 
   constructor(init?: Partial<TunnelState>) {
     if (init) Object.assign(this, init);
@@ -242,10 +243,15 @@ export function stepTunnel(
   const alpha = dtSec > 0 ? 1 - Math.exp(-dtSec / 1.4) : 0;
   state.velocityMultiplier += (target - state.velocityMultiplier) * alpha;
 
+  // Smooth energy for flightRate with a 250ms inertia follower so forward speed accelerates and coasts smoothly
+  const rawEnergy = clamp01(frame?.energy ?? 0);
+  const energyAlpha = dtSec > 0 ? 1 - Math.exp(-dtSec / 0.25) : 0;
+  state.slewEnergy = (state.slewEnergy ?? 0) + (rawEnergy - (state.slewEnergy ?? 0)) * energyAlpha;
+
   // Multiply forward delta by state.velocityMultiplier
   const calm = params.calm ?? false;
   const scale = params.scale ?? 1;
-  const baseRate = flightRate(frame?.energy ?? 0, calm, scale);
+  const baseRate = flightRate(state.slewEnergy, calm, scale);
   const forwardDelta = dtSec * baseRate * state.velocityMultiplier;
   state.forwardPhase += forwardDelta;
 

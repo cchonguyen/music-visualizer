@@ -5,7 +5,7 @@
 - `010` `AGENTS.md` — Universal Falcon Protocol card catalog
 
 ## Sector 100 — Work Dispatch & State
-- `110` `.spec/PROGRESS.md` — Active Stage 7 slice checklist & target files
+- `110` `.spec/PROGRESS.md` — Active Stage 9 slice checklist & target files
 - `120` `.spec/HISTORY.md` — Completed stages & archived slice history
 - `130` `.spec/BLACK_BOX.md` — Circuit-breaker crash reports (on-demand)
 - `140` `.spec/SESSION_HANDOFF.md` — Cross-session handoff summary
@@ -32,4 +32,6 @@
 - `482` `.spec/stage7-slice-briefs.md` — Stage 7 slice briefs alias
 - `483` `.spec/specs/global-director-spec.md` — Global Director (Camera & Color Evolution) spec
 - `484` `.spec/specs/global-director-roadmap.md` — Global Director consolidation, Experience Hub & pre-spec roadmap
+- `485` `.spec/specs/shape-layer-spec.md` — Stage 9 Composable `shape` Layer Architecture spec
+
 

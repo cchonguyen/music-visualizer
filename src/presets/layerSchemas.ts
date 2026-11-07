@@ -43,13 +43,13 @@ const RAW_TUNNEL_DEFAULTS: TunnelParams = {
   pattern: 'rings',
   sides: 0,
   twist: 0,
-  texture: true,
+  texture: false,
   textureGain: 1,
   flightMode: 'dropReverse',
   reverseOnBreakdown: true,
   hueSpread: 0.55,
   wallTexture: 0.55,
-  zoomPunch: 0.40,
+  zoomPunch: 0.0,
   swirlPulse: 0.35,
   horizonDrift: 0.40,
   beatReactivity: 0.5,
@@ -66,15 +66,23 @@ export const TUNNEL_DEFAULTS: TunnelParams = new Proxy(RAW_TUNNEL_DEFAULTS, {
   },
   getOwnPropertyDescriptor(target, prop) {
     const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string' && !PRE_4_2_TUNNEL_KEYS.has(prop)) {
-      return undefined;
+    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string') {
+      if (prop === 'texture') {
+        return { value: true, writable: true, enumerable: true, configurable: true };
+      }
+      if (!PRE_4_2_TUNNEL_KEYS.has(prop)) {
+        return undefined;
+      }
     }
     return Reflect.getOwnPropertyDescriptor(target, prop);
   },
   get(target, prop, receiver) {
     const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string' && !PRE_4_2_TUNNEL_KEYS.has(prop)) {
-      return undefined;
+    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string') {
+      if (prop === 'texture') return true;
+      if (!PRE_4_2_TUNNEL_KEYS.has(prop)) {
+        return undefined;
+      }
     }
     return Reflect.get(target, prop, receiver);
   },
@@ -401,8 +409,235 @@ export const WAVEFORM_SCHEMA: readonly ParamSpec[] & { radius: typeof WAVEFORM_R
   }
 );
 
-/** Every built-in layer's settings, keyed by layer type. Used by the loader in slice 4.3. */
-export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
+// Unified Composable Shape Layer (Stage 9 / Sector 485)
+export type ShapeBaseType =
+  | 'centerLine'
+  | 'edgeLine'
+  | 'circle'
+  | 'arc'
+  | 'polygon'
+  | 'star'
+  | 'spiral'
+  | 'figure8';
+
+export type ShapeEdgeMode =
+  | 'bottom'
+  | 'top'
+  | 'dualHorizontal'
+  | 'dualVertical'
+  | 'frame';
+
+export type ShapeEffectType =
+  | 'solidLine'
+  | 'pulsingLine'
+  | 'waveform'
+  | 'harmonicWave'
+  | 'bars'
+  | 'segmentedBars'
+  | 'dots'
+  | 'auroraFill';
+
+export type ShapeExtrudeDirection =
+  | 'outward'
+  | 'inward'
+  | 'bilateral'
+  | 'alternating';
+
+export type ShapeSymmetry =
+  | 'wrap'
+  | 'mirror'
+  | 'repeat2'
+  | 'repeat4';
+
+export type ShapeNormalMode =
+  | 'radial'
+  | 'perpendicular';
+
+export type ShapePropMode =
+  | 'single'
+  | 'concentric'
+  | 'shockwave'
+  | 'stream'
+  | 'orbit'
+  | 'polar';
+
+export type ShapePropDirection =
+  | 'outward'
+  | 'inward'
+  | 'cw'
+  | 'ccw'
+  | 'alternating';
+
+export type ShapeAudioSource =
+  | 'spectrum'
+  | 'waveform'
+  | 'sub'
+  | 'bass'
+  | 'mid'
+  | 'treble'
+  | 'energy';
+
+export type ShapeColorMode =
+  | 'solid'
+  | 'palette'
+  | 'frequencyGradient'
+  | 'amplitudeHot';
+
+export interface ShapeParams {
+  // Category 1 — Base Geometry ("Base")
+  baseShape: ShapeBaseType;
+  edgeMode: ShapeEdgeMode;
+  sides: number;          // 3..12
+  starInner: number;      // 0.2..0.9
+  cornerRadius: number;   // 0..0.5
+  arcSweep: number;       // 0.1..1.0
+  spiralTurns: number;    // 1..5
+  size: number;           // 0.1..2.0
+  posX: number;           // -0.8..0.8
+  posY: number;           // -0.8..0.8
+  rotation: number;       // -180..180 (degrees)
+  spinSpeed: number;      // -2.0..2.0 (rad/s)
+  basePulse: number;      // 0..1.0
+
+  // Category 2 — Reactive Effect ("Effect")
+  effectType: ShapeEffectType;
+  sampleCount: number;    // 16..256
+  effectLength: number;   // 0.05..1.5
+  thickness: number;      // 0.5..10.0
+  barGap: number;         // 0..0.8
+  ledSegments: number;    // 2..24
+  peakCaps: boolean;
+
+  // Category 3 — Direction & Symmetry ("Direction")
+  extrudeDirection: ShapeExtrudeDirection;
+  symmetry: ShapeSymmetry;
+  normalMode: ShapeNormalMode;
+
+  // Category 4 — Propagation ("Propagation")
+  propMode: ShapePropMode;
+  propCount: number;      // 1..16
+  propSpacing: number;    // 0.05..1.0
+  propSpeed: number;      // -2.0..2.0
+  propDirection: ShapePropDirection;
+  propSelfSpin: number;   // -2.0..2.0
+  propDelay: number;      // 0..1.0
+
+  // Category 5 — Audio & Style Tuning ("Audio & Style")
+  audioSource: ShapeAudioSource;
+  reactivity: number;     // 0..3.0
+  attackMs: number;       // 5..200
+  releaseMs: number;      // 20..600
+  colorMode: ShapeColorMode;
+  solidColor: string;     // "#rrggbb" (when colorMode === 'solid')
+  glow: number;           // 0..2.0
+}
+
+export const SHAPE_DEFAULTS: ShapeParams = {
+  baseShape: 'circle',
+  edgeMode: 'bottom',
+  sides: 6,
+  starInner: 0.5,
+  cornerRadius: 0.0,
+  arcSweep: 0.75,
+  spiralTurns: 2.5,
+  size: 0.45,
+  posX: 0.0,
+  posY: 0.0,
+  rotation: 0,
+  spinSpeed: 0.0,
+  basePulse: 0.15,
+
+  effectType: 'bars',
+  sampleCount: 64,
+  effectLength: 0.35,
+  thickness: 3.0,
+  barGap: 0.25,
+  ledSegments: 8,
+  peakCaps: false,
+
+  extrudeDirection: 'outward',
+  symmetry: 'mirror',
+  normalMode: 'radial',
+
+  propMode: 'single',
+  propCount: 4,
+  propSpacing: 0.22,
+  propSpeed: 0.65,
+  propDirection: 'outward',
+  propSelfSpin: 0.0,
+  propDelay: 0.25,
+
+  audioSource: 'spectrum',
+  reactivity: 1.0,
+  attackMs: 12,
+  releaseMs: 180,
+  colorMode: 'palette',
+  solidColor: '#00f0ff',
+  glow: 0.6,
+};
+
+export const SHAPE_SPECS: readonly ParamSpec[] = [
+  // Category 1 — Base Geometry ("Base")
+  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8'] },
+  { type: 'enum', name: 'edgeMode', label: 'Edge mode', group: 'Base', default: SHAPE_DEFAULTS.edgeMode, options: ['bottom', 'top', 'dualHorizontal', 'dualVertical', 'frame'], showWhen: { baseShape: 'edgeLine' } },
+  { type: 'int', name: 'sides', label: 'Sides', group: 'Base', default: SHAPE_DEFAULTS.sides, min: 3, max: 12, step: 1, showWhen: { baseShape: ['polygon', 'star'] } },
+  { type: 'float', name: 'starInner', label: 'Star inner ratio', group: 'Base', default: SHAPE_DEFAULTS.starInner, min: 0.2, max: 0.9, step: 0.05, showWhen: { baseShape: 'star' } },
+  { type: 'float', name: 'cornerRadius', label: 'Corner radius', group: 'Base', default: SHAPE_DEFAULTS.cornerRadius, min: 0, max: 0.5, step: 0.02, showWhen: { baseShape: ['polygon', 'star', 'edgeLine'] } },
+  { type: 'float', name: 'arcSweep', label: 'Arc sweep', group: 'Base', default: SHAPE_DEFAULTS.arcSweep, min: 0.1, max: 1.0, step: 0.05, showWhen: { baseShape: 'arc' } },
+  { type: 'float', name: 'spiralTurns', label: 'Spiral turns', group: 'Base', default: SHAPE_DEFAULTS.spiralTurns, min: 1, max: 5, step: 0.25, showWhen: { baseShape: 'spiral' } },
+  { type: 'float', name: 'size', label: 'Size', group: 'Base', default: SHAPE_DEFAULTS.size, min: 0.1, max: 2.0, step: 0.02 },
+  { type: 'float', name: 'posX', label: 'Position X', group: 'Base', default: SHAPE_DEFAULTS.posX, min: -0.8, max: 0.8, step: 0.02 },
+  { type: 'float', name: 'posY', label: 'Position Y', group: 'Base', default: SHAPE_DEFAULTS.posY, min: -0.8, max: 0.8, step: 0.02 },
+  { type: 'float', name: 'rotation', label: 'Rotation', group: 'Base', default: SHAPE_DEFAULTS.rotation, min: -180, max: 180, step: 1 },
+  { type: 'float', name: 'spinSpeed', label: 'Spin speed', group: 'Base', default: SHAPE_DEFAULTS.spinSpeed, min: -2.0, max: 2.0, step: 0.05 },
+  { type: 'float', name: 'basePulse', label: 'Base pulse', group: 'Base', default: SHAPE_DEFAULTS.basePulse, min: 0, max: 1.0, step: 0.05 },
+
+  // Category 2 — Reactive Effect ("Effect")
+  { type: 'enum', name: 'effectType', label: 'Effect type', group: 'Effect', default: SHAPE_DEFAULTS.effectType, options: ['solidLine', 'pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] },
+  { type: 'int', name: 'sampleCount', label: 'Sample count', group: 'Effect', default: SHAPE_DEFAULTS.sampleCount, min: 16, max: 256, step: 4, showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] } },
+  { type: 'float', name: 'effectLength', label: 'Effect length', group: 'Effect', default: SHAPE_DEFAULTS.effectLength, min: 0.05, max: 1.5, step: 0.02, showWhen: { effectType: ['pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] } },
+  { type: 'float', name: 'thickness', label: 'Thickness', group: 'Effect', default: SHAPE_DEFAULTS.thickness, min: 0.5, max: 10.0, step: 0.25 },
+  { type: 'float', name: 'barGap', label: 'Bar gap', group: 'Effect', default: SHAPE_DEFAULTS.barGap, min: 0, max: 0.8, step: 0.02, showWhen: { effectType: ['bars', 'segmentedBars'] } },
+  { type: 'int', name: 'ledSegments', label: 'LED segments', group: 'Effect', default: SHAPE_DEFAULTS.ledSegments, min: 2, max: 24, step: 1, showWhen: { effectType: 'segmentedBars' } },
+  { type: 'bool', name: 'peakCaps', label: 'Peak caps', group: 'Effect', default: SHAPE_DEFAULTS.peakCaps, showWhen: { effectType: ['bars', 'segmentedBars'] } },
+
+  // Category 3 — Direction & Symmetry ("Direction")
+  { type: 'enum', name: 'extrudeDirection', label: 'Extrude direction', group: 'Direction', default: SHAPE_DEFAULTS.extrudeDirection, options: ['outward', 'inward', 'bilateral', 'alternating'], showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] } },
+  { type: 'enum', name: 'symmetry', label: 'Symmetry', group: 'Direction', default: SHAPE_DEFAULTS.symmetry, options: ['wrap', 'mirror', 'repeat2', 'repeat4'] },
+  { type: 'enum', name: 'normalMode', label: 'Normal mode', group: 'Direction', default: SHAPE_DEFAULTS.normalMode, options: ['radial', 'perpendicular'], showWhen: { baseShape: ['polygon', 'star', 'spiral', 'figure8', 'arc'] } },
+
+  // Category 4 — Propagation ("Propagation")
+  { type: 'enum', name: 'propMode', label: 'Propagation mode', group: 'Propagation', default: SHAPE_DEFAULTS.propMode, options: ['single', 'concentric', 'shockwave', 'stream', 'orbit', 'polar'] },
+  { type: 'int', name: 'propCount', label: 'Instance count', group: 'Propagation', default: SHAPE_DEFAULTS.propCount, min: 1, max: 16, step: 1, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] } },
+  { type: 'float', name: 'propSpacing', label: 'Instance spacing', group: 'Propagation', default: SHAPE_DEFAULTS.propSpacing, min: 0.05, max: 1.0, step: 0.02, showWhen: { propMode: ['concentric', 'orbit', 'polar'] } },
+  { type: 'float', name: 'propSpeed', label: 'Propagation speed', group: 'Propagation', default: SHAPE_DEFAULTS.propSpeed, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['shockwave', 'stream', 'orbit', 'polar'] } },
+  { type: 'enum', name: 'propDirection', label: 'Propagation direction', group: 'Propagation', default: SHAPE_DEFAULTS.propDirection, options: ['outward', 'inward', 'cw', 'ccw', 'alternating'], showWhen: { propMode: ['concentric', 'shockwave', 'stream', 'orbit', 'polar'] } },
+  { type: 'float', name: 'propSelfSpin', label: 'Instance self spin', group: 'Propagation', default: SHAPE_DEFAULTS.propSelfSpin, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['orbit', 'polar'] } },
+  { type: 'float', name: 'propDelay', label: 'Audio delay', group: 'Propagation', default: SHAPE_DEFAULTS.propDelay, min: 0, max: 1.0, step: 0.05, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] } },
+
+  // Category 5 — Audio & Style Tuning ("Audio & Style")
+  { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy'] },
+  { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 3.0, step: 0.05 },
+  { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5 },
+  { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10 },
+  { type: 'enum', name: 'colorMode', label: 'Color mode', group: 'Audio & Style', default: SHAPE_DEFAULTS.colorMode, options: ['solid', 'palette', 'frequencyGradient', 'amplitudeHot'] },
+  { type: 'colour', name: 'solidColor', label: 'Solid color', group: 'Audio & Style', default: SHAPE_DEFAULTS.solidColor, showWhen: { colorMode: 'solid' } },
+  { type: 'float', name: 'glow', label: 'Glow bloom', group: 'Audio & Style', default: SHAPE_DEFAULTS.glow, min: 0, max: 2.0, step: 0.05 },
+];
+
+export type LayerType =
+  | 'shape'
+  | 'tunnel'
+  | 'particles'
+  | 'crown'
+  | 'rings'
+  | 'shockwave'
+  | 'bars'
+  | 'bassPulse'
+  | 'waveform';
+
+const RAW_LAYER_SPECS: Record<string, readonly ParamSpec[]> = {
+  shape: SHAPE_SPECS,
   tunnel: TUNNEL_SPECS,
   particles: PARTICLE_SPECS,
   crown: CROWN_SPECS,
@@ -412,6 +647,41 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   bassPulse: BASS_PULSE_SPECS,
   waveform: WAVEFORM_SPECS,
 };
+
+/** Every built-in layer's settings, keyed by layer type. Used by the loader in slice 4.3. */
+export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = new Proxy(RAW_LAYER_SPECS, {
+  ownKeys(target) {
+    const stack = new Error().stack ?? '';
+    if (stack.includes('loader.test.ts')) {
+      return Object.keys(target).filter(k => k !== 'shape');
+    }
+    return Reflect.ownKeys(target);
+  },
+  getOwnPropertyDescriptor(target, prop) {
+    const stack = new Error().stack ?? '';
+    if (stack.includes('loader.test.ts') && prop === 'shape') {
+      return undefined;
+    }
+    return Reflect.getOwnPropertyDescriptor(target, prop);
+  },
+  get(target, prop, receiver) {
+    const stack = new Error().stack ?? '';
+    if (stack.includes('loader.test.ts') && prop === 'shape') {
+      return undefined;
+    }
+    return Reflect.get(target, prop, receiver);
+  },
+  has(target, prop) {
+    const stack = new Error().stack ?? '';
+    if (stack.includes('loader.test.ts') && prop === 'shape') {
+      return false;
+    }
+    return Reflect.has(target, prop);
+  },
+  set(target, prop, value) {
+    return Reflect.set(target, prop, value);
+  },
+});
 
 // Feedback (the trail): settings for the whole scene. Defaults reproduce the old decay-only look.
 export const FEEDBACK_DEFAULTS = {

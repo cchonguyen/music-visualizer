@@ -224,7 +224,8 @@ export class TunnelLayer implements RenderLayer {
 
     // Extra dynamic uniforms
     const rawMid = frame.norm?.mid ?? 0;
-    const rawKick = frame.kickEnv ?? (frame.beatByBand?.sub ? 1 : 0);
+    const isOnset = Boolean(frame.kickPulse || frame.beatByBand?.sub);
+    const rawKick = isOnset ? 1.0 : (frame.kickEnv !== undefined ? (frame.kickEnv > 0.4 ? frame.kickEnv : 0.0) : 0.0);
 
     if (this.slewMid < 0) {
       this.slewMid = rawMid;

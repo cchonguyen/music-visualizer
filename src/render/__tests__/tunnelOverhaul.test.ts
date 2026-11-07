@@ -127,9 +127,10 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
       expect(TUNNEL_DEFAULTS.reverseOnBreakdown).toBe(true);
       expect(TUNNEL_DEFAULTS.hueSpread).toBe(0.55);
       expect(TUNNEL_DEFAULTS.wallTexture).toBe(0.55);
-      expect(TUNNEL_DEFAULTS.zoomPunch).toBe(0.40);
+      expect(TUNNEL_DEFAULTS.zoomPunch).toBe(0.0);
       expect(TUNNEL_DEFAULTS.swirlPulse).toBe(0.35);
       expect(TUNNEL_DEFAULTS.horizonDrift).toBe(0.40);
+      expect(TUNNEL_DEFAULTS.texture).toBe(false);
 
       const flightModeSpec = TUNNEL_SPECS.find(s => s.name === 'flightMode');
       expect(flightModeSpec).toBeDefined();
@@ -265,6 +266,14 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
       expect(state.velocityMultiplier).toBeCloseTo(1.0 + (-0.75 - 1.0) * (1 - Math.exp(-1)), 3);
     });
 
+    it('smooths flight rate energy with 250ms inertia follower', () => {
+      const state = new TunnelState({ slewEnergy: 0 });
+      // In 1 step of dt = 0.25s from energy 0 to 1:
+      // alpha = 1 - exp(-1) = 0.63212
+      stepTunnel(state, { energy: 1.0 }, 0.25, { flightMode: 'forward' });
+      expect(state.slewEnergy).toBeCloseTo(1 - Math.exp(-1), 3);
+    });
+
     it('locks vanishing point dead-center with zero drift', () => {
       const state = new TunnelState({ vanishX: 0 });
       stepTunnel(state, { norm: { sub: 0.5 } }, 0.5, { horizonDrift: 0.6 });
@@ -274,7 +283,7 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
     });
   });
 
-  describe('Shader checks: Circular r, kick warp ripple, and stencil alpha', () => {
+  describe('Shader checks: Circular r, clean geometric depth, smooth angle, and stencil alpha', () => {
     it('keeps r = length(q) circular when uSides < 2.5 with zero polygonal wobble', () => {
       expect(tunnelFragSrc).toContain('if (uSides < 2.5)');
       expect(tunnelFragSrc).toContain('r = length(q);');
@@ -282,13 +291,14 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
       expect(tunnelFragSrc).not.toContain('HEX_AMOUNT');
     });
 
-    it('implements kick FOV warp jump & travelling ripple (uZoomPunch)', () => {
-      expect(tunnelFragSrc).toContain('float rMod = max(r * (1.0 - uKick * uZoomPunch * 0.22), 0.025);');
-      expect(tunnelFragSrc).toContain('uKick * uZoomPunch * 0.35 * sin(0.28 / rMod * 3.0 - forwardPhase * 4.0)');
+    it('implements rock-solid clean geometric depth with zero kick displacement or ripple', () => {
+      expect(tunnelFragSrc).toContain('float z = 0.28 / max(r, 0.025) + forwardPhase;');
+      expect(tunnelFragSrc).not.toContain('uKick * uZoomPunch * 0.35 * sin');
+      expect(tunnelFragSrc).not.toContain('rMod');
     });
 
-    it('implements mid corkscrew swirl & twist (uSwirlPulse)', () => {
-      expect(tunnelFragSrc).toContain('(spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.08)');
+    it('implements smooth angular corkscrew decoupled from contracting radius divisor', () => {
+      expect(tunnelFragSrc).toContain('float a = atan(q.y, q.x) + rollPhase + spiral * (0.28 / max(r, 0.08));');
       expect(tunnelFragSrc).toContain('fract(a / 6.2831853)');
     });
 
