@@ -13,8 +13,15 @@ import { WaveformLayer } from '../render/layers/waveform';
 import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
-import type { ParamValue } from './schema';
+import { FEEDBACK_WARP_SPECS, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
+
+// Extend FEEDBACK_SPECS with opt-in feedback warp parameters (Slice 7.11)
+for (const spec of FEEDBACK_WARP_SPECS) {
+  if (!FEEDBACK_SPECS.some((s) => s.name === spec.name)) {
+    (FEEDBACK_SPECS as ParamSpec[]).push(spec);
+  }
+}
 
 type LayerFactory = (params: Record<string, ParamValue>) => RenderLayer;
 
