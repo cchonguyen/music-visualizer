@@ -30,7 +30,7 @@ import { Studio } from './studio/studio';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
-import { setupControls, sourceName, type ControlsState } from './ui/controls';
+import { isEditableTarget, setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
@@ -74,6 +74,7 @@ function start(): void {
   // Freeze (k) holds the picture; while frozen, . draws exactly one frame (frameStep.ts).
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isEditableTarget(e.target)) return;
     if (e.key === 'k' || e.key === 'K') {
       showToast(host.stepper.toggle() ? 'Frozen. Press . to step a frame.' : 'Running again.');
       return;
@@ -171,6 +172,7 @@ function start(): void {
     // No automatic blend: the view changes only when a key is pressed.
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'c' || e.key === 'C' || e.key === 'b' || e.key === 'B' || e.key === 'x' || e.key === 'X') {
         const k = e.key.toLowerCase();
         if (k === 'c') cycle.mode = cycle.mode === 'timer' ? 'off' : 'timer';
@@ -196,9 +198,11 @@ function start(): void {
     });
     // A/B compare (slice S4): hold A to see the saved copy of the preset on screen; release to return.
     window.addEventListener('keydown', (e) => {
+      if (isEditableTarget(e.target)) return;
       if ((e.key === 'a' || e.key === 'A') && !e.repeat && !e.ctrlKey && !e.metaKey) liveSession.compare(currentId, true);
     });
     window.addEventListener('keyup', (e) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'a' || e.key === 'A') liveSession.compare(currentId, false);
     });
   }

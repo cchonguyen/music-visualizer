@@ -219,17 +219,39 @@ export interface CrownParams {
   rimFactor: number;
   texture: boolean; // band texture (6.4): bar light from mid (angle)
   textureGain: number; // 0..2, how strongly the band texture modulates
+  size?: number;
 }
 export const CROWN_DEFAULTS: CrownParams = {
   rimFactor: 1 - 0.16,
+  size: 2.0,
   texture: true,
   textureGain: 1,
 };
+
+export const CROWN_SIZE_SPEC = {
+  type: 'float' as const,
+  name: 'size',
+  key: 'size',
+  kind: 'number',
+  label: 'Size',
+  group: 'Shape',
+  default: 2.0,
+  min: 0.5,
+  max: 3.0,
+  step: 0.05,
+};
+
 export const CROWN_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'rimFactor', label: 'Sway amount on rim', group: 'Position', default: CROWN_DEFAULTS.rimFactor, min: 0, max: 1, step: 0.01 },
+  CROWN_SIZE_SPEC,
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: CROWN_DEFAULTS.texture },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: CROWN_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
 ];
+
+export const CROWN_SCHEMA: readonly ParamSpec[] & { size: typeof CROWN_SIZE_SPEC } = Object.assign(
+  [...CROWN_SPECS],
+  { size: CROWN_SIZE_SPEC }
+);
 
 export interface RingsParams {
   maxRings: number;

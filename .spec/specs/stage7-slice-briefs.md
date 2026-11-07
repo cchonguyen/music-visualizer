@@ -1412,3 +1412,58 @@ Output ONLY a 1-line receipt upon completion.
 
 ### Communication Rule
 Output ONLY a 1-line receipt upon completion.
+
+
+---
+
+## Slice 7.40: Eliminate jitter across all legacy effects (Sway low-pass, Crown/Bars smooth release envelope, Tunnel swirl clamp, Particles smooth swirl) + Crown 2x size and Transform slider
+
+### Target Files
+- `src/render/swayStore.ts`
+- `src/render/crownStore.ts`
+- `src/render/layers/crown.ts`
+- `src/render/shaders/crown.frag.glsl`
+- `src/render/layers/tunnel.ts`
+- `src/render/shaders/tunnel.frag.glsl`
+- `src/render/layers/particles.ts`
+- `src/presets/layerSchemas.ts`
+- `src/render/__tests__/swayStore.test.ts`
+- `src/render/__tests__/crownStore.test.ts`
+
+### Strict Invariants & Boundaries
+- Double Crown default size (`size = 2.0`) and expose `size` (`0.5..3.0`, default `2.0`, step `0.05`) in `CROWN_SCHEMA`.
+- In `swayStore.ts`: apply a 150ms exponential low-pass filter to `mid` before computing `bendOffset` so camera/vanishing-point sway glides smoothly without jumping.
+- In `crownStore.ts` & `barsState.ts`: apply an asymmetric attack (20ms) and smooth release (140ms) follower to bar heights so bars punch sharply on transients and glide down without chattering.
+- In `tunnel.frag.glsl` & `tunnel.ts`: clamp the swirl denominator (`max(rMod, 0.25)`) and slew `uMid` and `uKick` so the corkscrew never twitches back and forth.
+- In `particles.ts`: slew `uSwirl` with an exponential follower so particle streak angles orbit smoothly without twitching.
+
+### Implementation Steps
+1. **`src/render/swayStore.ts`**:
+   - In `advanceSway(dtSec, mid, calm)`: maintain `let smoothedMid = 0; const k = 1 - Math.exp(-Math.max(0, dtSec) / 0.15); smoothedMid += k * (clamp01(mid) - smoothedMid);` and pass `smoothedMid` to `bendOffset`.
+2. **`src/presets/layerSchemas.ts`**:
+   - Add `size: number` to `CrownParams` (default `2.0`).
+   - Add `{ key: 'size', label: 'Size', kind: 'number', default: 2.0, min: 0.5, max: 3.0, step: 0.05 }` to `CROWN_SCHEMA`.
+3. **`src/render/layers/crown.ts` & `src/render/shaders/crown.frag.glsl`**:
+   - In `crown.ts`: query and upload `uSize = this.p.size ?? 2.0`.
+   - In `crown.frag.glsl`: add `uniform float uSize;`, scale `vec2 q = ((vUv * 2.0 - 1.0) * vec2(aspect, 1.0) - uCentre) / max(uSize, 0.1);`, and adjust stroke antialiasing `smoothstep(0.0015, 0.0045, d)` so bars are anti-aliased and 2x larger.
+4. **`src/render/crownStore.ts`**:
+   - Maintain a per-bar `currentHeights = new Float32Array(BAR_COUNT)` release envelope:
+     - For each bar `i`:
+       - If `h > currentHeights[i]`: attack with `k = 1 - Math.exp(-dt / 0.020)` (20ms fast attack).
+       - If `h < currentHeights[i]`: release with `k = 1 - Math.exp(-dt / 0.140)` (140ms smooth glide).
+       - `currentHeights[i] += k * (h - currentHeights[i])`.
+     - Output `currentHeights[i]` so the bars glide down gracefully.
+5. **`src/render/layers/tunnel.ts` & `src/render/shaders/tunnel.frag.glsl`**:
+   - In `tunnel.ts`: slew `this.slewMid += (frame.norm.mid - this.slewMid) * (1 - Math.exp(-dt / 0.15));` and pass `this.slewMid` to `uMid`. Slew `uKick` with a 60ms decay follower.
+   - In `tunnel.frag.glsl`: clamp the swirl denominator: `(spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.28)`.
+6. **`src/render/layers/particles.ts`**:
+   - In `ParticleLayer.draw()`: maintain `this.slewSwirl += (frame.norm.mid - this.slewSwirl) * (1 - Math.exp(-dt / 0.15));` and use `this.slewSwirl` for `uSwirl`.
+7. **Tests**:
+   - Update tests in `swayStore.test.ts` and `crownStore.test.ts` to verify smooth envelope decay and `uSize` upload.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.

@@ -144,6 +144,7 @@ export class ParticleLayer implements RenderLayer {
   private phylloNextAngleIdx: number = 0;
   private phylloMorphProgress: number = 1.0;
   private divergenceAngle: number = 2.3999632;
+  private slewSwirl: number = 0;
 
   getFlowPhase(): number {
     return this.flowPhase;
@@ -225,6 +226,7 @@ export class ParticleLayer implements RenderLayer {
     this.phylloNextAngleIdx = 0;
     this.phylloMorphProgress = 1.0;
     this.divergenceAngle = 2.3999632;
+    this.slewSwirl = 0;
     this.vao = createVao(gl);
   }
 
@@ -320,7 +322,9 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform3f(this.uAccentA, accents.a[0], accents.a[1], accents.a[2]);
     // Midrange drives a swirl, so the sparkles curve as they travel (2026-11-04).
     // Follow scene (2026-11-06): the scene's wave warp also curls the particles, so swirl follows it too.
-    gl.uniform1f(this.uSwirl, (this.calm ? 0 : Math.min(1, frame.norm.mid)) * this.p.swirlGain * (follow ? 1 + scene.warp : 1));
+    const rawMid = frame.norm?.mid ?? 0;
+    this.slewSwirl += (rawMid - this.slewSwirl) * (1 - Math.exp(-dt / 0.15));
+    gl.uniform1f(this.uSwirl, (this.calm ? 0 : this.slewSwirl) * this.p.swirlGain * (follow ? 1 + scene.warp : 1));
     // Shared sway (uv units) doubled to clip units: the spawn origin follows the tunnel rim.
     const sway = getSway();
     gl.uniform2f(this.uSway, 2 * sway.x, 2 * sway.y);

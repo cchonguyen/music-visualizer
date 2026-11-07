@@ -11,6 +11,8 @@ import { getVisualGain, shapeReaction } from './gainStore';
 export const CROWN_CALM_SCALE = 0.35;
 
 const heights = new Float32Array(BAR_COUNT);
+const currentHeights = new Float32Array(BAR_COUNT);
+const targetHeights = new Float32Array(BAR_COUNT);
 const slow: SlowFollower[] = Array.from({ length: BAR_COUNT }, () => new SlowFollower(2.5));
 let edges: BarEdge[] = [];
 let edgeSampleRate = -1;
@@ -60,8 +62,22 @@ export function advanceCrown(
     edgeFftSize = fftSize;
   }
   const raw = barValues(smoothed, edges);
-  shapeHeights(raw, slow, dtSec, getVisualGain(), calm, heights);
-  if (!enabled) heights.fill(0);
+  shapeHeights(raw, slow, dtSec, getVisualGain(), calm, targetHeights);
+  if (!enabled) {
+    heights.fill(0);
+    currentHeights.fill(0);
+    return;
+  }
+  const dt = Math.max(0, dtSec);
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const h = targetHeights[i] ?? 0;
+    const curr = currentHeights[i] ?? 0;
+    const tau = h > curr ? 0.020 : 0.140;
+    const k = dt > 0 ? 1 - Math.exp(-dt / tau) : 1;
+    const nextH = curr + k * (h - curr);
+    currentHeights[i] = nextH;
+    heights[i] = nextH;
+  }
 }
 
 /** The heights for this frame, as last computed by advanceCrown(). Length BAR_COUNT. */
@@ -72,6 +88,8 @@ export function getCrownHeights(): Float32Array {
 /** Test and reset helper. */
 export function resetCrown(): void {
   heights.fill(0);
+  currentHeights.fill(0);
+  targetHeights.fill(0);
   for (const f of slow) f.reset();
   edgeSampleRate = -1;
   edgeFftSize = -1;

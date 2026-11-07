@@ -7,6 +7,7 @@ import {
   isSwipeDismiss,
   SWIPE_DISMISS_PX,
   setupControls,
+  isEditableTarget,
   EXPERIENCE_LABELS,
   EXPERIENCE_TOAST_DATA,
   triggerExperienceToast,
@@ -435,6 +436,34 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     expect(director.getExperienceMode()).toBe('calm');
     expect(domElements['experience-label']?.textContent).toBe('Experience: Calm');
     expect(domElements['toast']?.getAttribute('aria-label')).toBe('Mode: Calm · Still Anchor · Bioluminescent');
+  });
+
+  it('ignores shortcuts when typing in a text field or form input', () => {
+    setupControls(mockEngine, { calm: false, fileName: '' });
+    const director = getGlobalDirector();
+    director.setExperienceMode('cinematic');
+
+    // Simulate typing 'm' inside an input element (e.g. Studio search or name field)
+    const inputEl = { tagName: 'INPUT' } as unknown as EventTarget;
+    const keyEvent = { key: 'm', ctrlKey: false, metaKey: false, altKey: false, target: inputEl };
+    for (const fn of windowListeners['keydown'] || []) fn(keyEvent);
+
+    // Mode should NOT change
+    expect(director.getExperienceMode()).toBe('cinematic');
+  });
+
+  it('identifies editable targets correctly with isEditableTarget', () => {
+    expect(isEditableTarget(null)).toBe(false);
+    expect(isEditableTarget({ tagName: 'DIV' } as any)).toBe(false);
+    expect(isEditableTarget({ tagName: 'BUTTON' } as any)).toBe(false);
+    expect(isEditableTarget({ tagName: 'INPUT' } as any)).toBe(true);
+    expect(isEditableTarget({ tagName: 'SELECT' } as any)).toBe(true);
+    expect(isEditableTarget({ tagName: 'TEXTAREA' } as any)).toBe(true);
+    expect(isEditableTarget({ tagName: 'DIV', isContentEditable: true } as any)).toBe(true);
+    expect(isEditableTarget({
+      tagName: 'SPAN',
+      closest: (sel: string) => sel.includes('input') ? {} : null,
+    } as any)).toBe(true);
   });
 
   it('updates director settings when camera and color selects change', () => {

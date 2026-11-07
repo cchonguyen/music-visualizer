@@ -69,8 +69,8 @@ void main() {
   float rMod = max(r * (1.0 - uKick * uZoomPunch * 0.22), 0.025);
   float z = 0.28 / rMod + forwardPhase + uKick * uZoomPunch * 0.35 * sin(0.28 / rMod * 3.0 - forwardPhase * 4.0);
 
-  // Mid-band corkscrew swirl & twist (uSwirlPulse)
-  float a = atan(q.y, q.x) + rollPhase + (spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.08);
+  // Mid-band corkscrew swirl & twist (uSwirlPulse) (spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.08)
+  float a = atan(q.y, q.x) + rollPhase + (spiral + uMid * uSwirlPulse * 0.9) / max(rMod, 0.28);
 
   // Seamless angular wrapping
   float aNorm = fract(a / 6.2831853);

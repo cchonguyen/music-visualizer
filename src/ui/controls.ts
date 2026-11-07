@@ -147,6 +147,19 @@ export interface ControlsState {
   fileName: string;
 }
 
+/** Returns true if the target is an editable form control or contenteditable element. */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!target) return false;
+  const el = target as Partial<HTMLElement>;
+  const tag = el.tagName?.toUpperCase();
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+  if (el.isContentEditable) return true;
+  if (typeof (target as Element).closest === 'function') {
+    return Boolean((target as Element).closest('input, select, textarea, [contenteditable="true"], [contenteditable=""]'));
+  }
+  return false;
+}
+
 export function setupControls(engine: AudioEngine, state: ControlsState): { tick(): void } {
   const controls = $<HTMLElement>('controls');
   const fileInput = $<HTMLInputElement>('file-input');
@@ -538,9 +551,9 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Let form controls and text inputs keep their own keys.
+    if (isEditableTarget(e.target)) return;
     const tag = (e.target as HTMLElement | null)?.tagName;
-    // Let form controls keep their own keys (e.g. arrows on sliders).
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     // While the list is open, only ? (close) and Esc (native) act; no other key should play or switch.
     if (shortcutsDialog.open) {
       if (e.key === '?') shortcutsDialog.close();

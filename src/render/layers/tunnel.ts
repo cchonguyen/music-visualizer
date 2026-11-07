@@ -97,6 +97,8 @@ export class TunnelLayer implements RenderLayer {
   /** Smoothed quiet amount, 0 (loud) to 1 (silent). Rises fast, falls on the shared 320 ms release. */
   private quietEnv = 0;
   private highAvg = new SlowFollower(3);
+  private slewMid = -1;
+  private slewKick = -1;
 
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction: never reuse GL objects from before a context restore.
@@ -138,6 +140,8 @@ export class TunnelLayer implements RenderLayer {
     this.band.init(gl);
     this.beatEnv = 0;
     this.quietEnv = 0;
+    this.slewMid = -1;
+    this.slewKick = -1;
     this.vao = createVao(gl);
   }
 
@@ -221,9 +225,25 @@ export class TunnelLayer implements RenderLayer {
     gl.uniform1i(this.uTexMid, unit + 1);
 
     // Extra dynamic uniforms
-    const kickVal = frame.kickEnv ?? (frame.beatByBand?.sub ? 1 : 0);
-    if (this.uKick) gl.uniform1f(this.uKick, kickVal);
-    if (this.uMid) gl.uniform1f(this.uMid, frame.norm.mid);
+    const rawMid = frame.norm?.mid ?? 0;
+    const rawKick = frame.kickEnv ?? (frame.beatByBand?.sub ? 1 : 0);
+
+    if (this.slewMid < 0) {
+      this.slewMid = rawMid;
+    } else {
+      const kMid = dt > 0 ? 1 - Math.exp(-dt / 0.15) : 1;
+      this.slewMid += (rawMid - this.slewMid) * kMid;
+    }
+
+    if (this.slewKick < 0 || rawKick > this.slewKick) {
+      this.slewKick = rawKick;
+    } else {
+      const kKick = dt > 0 ? 1 - Math.exp(-dt / 0.060) : 1;
+      this.slewKick += (rawKick - this.slewKick) * kKick;
+    }
+
+    if (this.uKick) gl.uniform1f(this.uKick, this.slewKick);
+    if (this.uMid) gl.uniform1f(this.uMid, this.slewMid);
     if (this.uLayerOpacity) gl.uniform1f(this.uLayerOpacity, layerOpacity);
     if (this.uHueSpread) gl.uniform1f(this.uHueSpread, this.p.hueSpread);
     if (this.uWallTexture) gl.uniform1f(this.uWallTexture, this.p.wallTexture);

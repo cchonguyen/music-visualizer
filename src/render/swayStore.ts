@@ -12,11 +12,20 @@ export interface SwayOffset {
 const ZERO: SwayOffset = { x: 0, y: 0 };
 let current: SwayOffset = ZERO;
 const bend = new BendState();
+let smoothedMid = 0;
+
+function clamp01(v: number): number {
+  return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
+}
 
 /** Advance the shared sway once for this frame and store it. Call once per frame. */
 export function advanceSway(dtSec: number, mid: number, calm: boolean): SwayOffset {
+  const dt = Math.max(0, dtSec);
+  const k = dt > 0 ? 1 - Math.exp(-dt / 0.15) : 1;
+  smoothedMid += k * (clamp01(mid) - smoothedMid);
+
   const angle = bend.advance(dtSec);
-  const o = bendOffset(angle, mid, calm);
+  const o = bendOffset(angle, smoothedMid, calm);
   current = { x: o.x, y: o.y };
   return current;
 }
@@ -30,4 +39,5 @@ export function getSway(): SwayOffset {
 export function resetSway(): void {
   bend.reset();
   current = ZERO;
+  smoothedMid = 0;
 }
