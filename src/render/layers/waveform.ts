@@ -34,7 +34,13 @@ export class WaveformLayer implements RenderLayer {
   private uAspect: WebGLUniformLocation | null = null;
   private uAmp: WebGLUniformLocation | null = null;
   private uDelta: WebGLUniformLocation | null = null;
+  private uRadius: WebGLUniformLocation | null = null;
+  private uThickness: WebGLUniformLocation | null = null;
+  private uRotPitch: WebGLUniformLocation | null = null;
+  private uRotYaw: WebGLUniformLocation | null = null;
   private delta = 0;
+  private rotPitch = 0;
+  private rotYaw = 0;
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
@@ -65,6 +71,10 @@ export class WaveformLayer implements RenderLayer {
     this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
     this.uAmp = gl.getUniformLocation(this.program, 'uAmp');
     this.uDelta = gl.getUniformLocation(this.program, 'uDelta');
+    this.uRadius = gl.getUniformLocation(this.program, 'uRadius');
+    this.uThickness = gl.getUniformLocation(this.program, 'uThickness');
+    this.uRotPitch = gl.getUniformLocation(this.program, 'uRotPitch');
+    this.uRotYaw = gl.getUniformLocation(this.program, 'uRotYaw');
     this.uAlpha = gl.getUniformLocation(this.program, 'uAlpha');
     this.uLayerOpacity = gl.getUniformLocation(this.program, 'uLayerOpacity');
     this.uRes = gl.getUniformLocation(this.program, 'uRes');
@@ -84,16 +94,17 @@ export class WaveformLayer implements RenderLayer {
     // Draws at the host's target size; nothing to reallocate.
   }
 
-  draw(frame: AudioFrame, _clock: RenderClock, target: RenderTarget, options?: { opacity?: number; uLayerOpacity?: number }): void {
+  draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget, options?: { opacity?: number; uLayerOpacity?: number }): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('WaveformLayer: draw before init');
 
     const n = frame.waveform.length;
     // A line strip needs at least two vertices; nothing to draw otherwise.
     if (n < 2) return;
-    if (frame.kickPulse) {
-      this.delta += 0.4;
-    }
+    const dt = clock.dtSec;
+    this.delta += dt * (0.45 + frame.norm.mid * 0.85) + (frame.kickPulse ? 0.12 : 0);
+    this.rotPitch += dt * (0.32 + frame.norm.sub * 0.55);
+    this.rotYaw += dt * (0.48 + frame.norm.high * 0.65);
     const mode = this.p.mode === 'circle' ? 1 : this.p.mode === 'star7' ? 2 : this.p.mode === 'lissajous' ? 3 : 0;
 
     // Recreate the texture only when the sample count changes; otherwise reuse it.
@@ -111,6 +122,10 @@ export class WaveformLayer implements RenderLayer {
     gl.uniform1f(this.uAspect, target.width / Math.max(target.height, 1));
     gl.uniform1f(this.uAmp, this.p.amplitude);
     gl.uniform1f(this.uDelta, this.delta);
+    if (this.uRadius) gl.uniform1f(this.uRadius, this.p.radius);
+    if (this.uThickness) gl.uniform1f(this.uThickness, this.p.thickness);
+    if (this.uRotPitch) gl.uniform1f(this.uRotPitch, this.rotPitch);
+    if (this.uRotYaw) gl.uniform1f(this.uRotYaw, this.rotYaw);
     const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
     gl.uniform1f(this.uAlpha, opacity); // layer opacity
     if (this.uLayerOpacity) gl.uniform1f(this.uLayerOpacity, opacity);
@@ -119,7 +134,7 @@ export class WaveformLayer implements RenderLayer {
     if (this.uColorMode) gl.uniform1i(this.uColorMode, colorModeInt);
     if (this.uColorA) gl.uniform3f(this.uColorA, palette.accentA[0], palette.accentA[1], palette.accentA[2]);
     if (this.uColorB) gl.uniform3f(this.uColorB, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
-    if (this.uTime) gl.uniform1f(this.uTime, _clock.timeSec);
+    if (this.uTime) gl.uniform1f(this.uTime, clock.timeSec);
     gl.uniform2f(this.uRes, target.width, target.height);
     // Band texture (6.4): update and bind before the wave texture goes on unit 0, so nothing clobbers it.
     gl.uniform1f(this.uTexOn, this.p.texture ? 1 : 0);
@@ -133,8 +148,9 @@ export class WaveformLayer implements RenderLayer {
     gl.uniform1i(this.uWave, 0);
 
     gl.bindVertexArray(this.vao);
-    const vertexCount = mode === 3 ? 1024 : (mode === 1 || mode === 2) ? n + 1 : n;
-    gl.drawArrays(gl.LINE_STRIP, 0, vertexCount);
+    const samplePoints = mode === 3 ? 1025 : (mode === 1 || mode === 2) ? n + 1 : n;
+    const vertexCount = samplePoints * 2;
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertexCount);
     gl.bindVertexArray(null);
   }
 
@@ -155,6 +171,10 @@ export class WaveformLayer implements RenderLayer {
     this.uAspect = null;
     this.uAmp = null;
     this.uDelta = null;
+    this.uRadius = null;
+    this.uThickness = null;
+    this.uRotPitch = null;
+    this.uRotYaw = null;
     this.uAlpha = null;
     this.uLayerOpacity = null;
     this.uRes = null;

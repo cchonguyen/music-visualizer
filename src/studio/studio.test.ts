@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import { DELETE_CONFIRM_MS, deleteAnnouncement, nextDeleteTap, validatePresetName, buildLayerControls, bindSpec } from './studio';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DELETE_CONFIRM_MS, deleteAnnouncement, nextDeleteTap, validatePresetName, buildLayerControls, bindSpec, buildGlobalDirectorControls } from './studio';
+import { getGlobalDirector, resetGlobalDirector } from '../render/globalDirector';
 import { Scene } from '../render/scene';
 import type { Preset, LayerEntry } from '../presets/format';
 import type { Vec3Spec } from '../presets/schema';
@@ -69,6 +70,11 @@ function createMockPane() {
     fire: (event: string, value: any) => void;
   }> = [];
 
+  const folders: Array<{
+    options: any;
+    folder: ReturnType<typeof createMockPane>;
+  }> = [];
+
   const addBinding = (target: any, prop: any, options: any) => {
     const listeners: Record<string, ((ev: { value: any }) => void)[]> = {};
     const item = {
@@ -90,7 +96,13 @@ function createMockPane() {
     return item;
   };
 
-  return { addBinding, bindings };
+  const addFolder = (options: any) => {
+    const folder = createMockPane();
+    folders.push({ options, folder });
+    return folder;
+  };
+
+  return { addBinding, bindings, addFolder, folders };
 }
 
 describe('buildLayerControls (live Opacity, Blend, Trails)', () => {
@@ -250,5 +262,113 @@ describe('bindSpec (vec3 / decayRgb bindings)', () => {
     pane.bindings[0]!.fire('change', 0.99);
     expect(bag.decayRgb[0]).toBe(0.99);
     expect(onEdit).toHaveBeenCalled();
+  });
+});
+
+describe('buildGlobalDirectorControls (slice 7.32)', () => {
+  beforeEach(() => {
+    resetGlobalDirector();
+  });
+
+  it('creates 6 bindings on the folder with correct labels and configuration including experience mode', () => {
+    const folder = createMockPane();
+    const director = getGlobalDirector();
+    director.reset();
+
+    buildGlobalDirectorControls(folder, director);
+
+    expect(folder.bindings).toHaveLength(6);
+
+    const [expModeB, camModeB, camIntensityB, colMoodB, colIntensityB, trigB] = folder.bindings;
+
+    expect(expModeB!.options.label).toBe('Experience mode');
+    expect(expModeB!.options.options).toEqual({
+      'Cinematic': 'cinematic',
+      'Calm': 'calm',
+      'Minimal': 'minimal',
+      'Color Walk': 'colorWalk',
+      'Custom': 'custom',
+    });
+
+    expect(camModeB!.options.label).toBe('Camera motion');
+    expect(camModeB!.options.options).toEqual({
+      'Auto (Complementary)': 'auto',
+      'Crane sway': 'craneSway',
+      'Dutch roll': 'dutchRoll',
+      'Breathing push': 'breathingPush',
+      'Horizon 2.5D tilt': 'horizonTilt',
+      'Still anchor': 'stillAnchor',
+      'Off': 'off',
+    });
+
+    expect(camIntensityB!.options.label).toBe('Camera intensity');
+    expect(camIntensityB!.options.min).toBe(0);
+    expect(camIntensityB!.options.max).toBe(1);
+    expect(camIntensityB!.options.step).toBe(0.05);
+
+    expect(colMoodB!.options.label).toBe('Color mood');
+    expect(colMoodB!.options.options).toEqual({
+      'Auto-cycle palettes': 'auto',
+      'Native (preset original)': 'native',
+      'Cyberpunk (Cyan/Magenta)': 'cyberpunk',
+      'Ember (Indigo/Gold)': 'ember',
+      'Bioluminescent (Teal/Aqua)': 'biolum',
+      'Vapor (Violet/Rose)': 'vapor',
+      'Prismatic (Cobalt/Coral)': 'prismatic',
+    });
+
+    expect(colIntensityB!.options.label).toBe('Color intensity');
+    expect(colIntensityB!.options.min).toBe(0);
+    expect(colIntensityB!.options.max).toBe(1);
+    expect(colIntensityB!.options.step).toBe(0.05);
+
+    expect(trigB!.options.label).toBe('Transition trigger');
+    expect(trigB!.options.options).toEqual({
+      'Song section (35s+)': 'section',
+      'Every 32 beats': 'beats32',
+      'Every 64 beats': 'beats64',
+      'Every 128 beats': 'beats128',
+      'Timer (45s)': 'timer45',
+    });
+  });
+
+  it('updates director settings and experience mode when bindings change', () => {
+    const folder = createMockPane();
+    const director = getGlobalDirector();
+    director.reset();
+
+    buildGlobalDirectorControls(folder, director);
+
+    const [expModeB, camModeB, camIntensityB, colMoodB, colIntensityB, trigB] = folder.bindings;
+
+    expModeB!.fire('change', 'calm');
+    expect(director.getExperienceMode()).toBe('calm');
+    expect(director.isCalm()).toBe(true);
+
+    camModeB!.fire('change', 'dutchRoll');
+    expect(director.getSettings().cameraMode).toBe('dutchRoll');
+
+    camIntensityB!.fire('change', 0.85);
+    expect(director.getSettings().cameraIntensity).toBe(0.85);
+
+    colMoodB!.fire('change', 'biolum');
+    expect(director.getSettings().colorMood).toBe('biolum');
+
+    colIntensityB!.fire('change', 0.2);
+    expect(director.getSettings().colorIntensity).toBe(0.2);
+
+    trigB!.fire('change', 'beats64');
+    expect(director.getSettings().triggerCadence).toBe('beats64');
+  });
+
+  it('renders Global Director folder with title and collapsed state', () => {
+    const pane = createMockPane();
+    const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
+    buildGlobalDirectorControls(dirFolder);
+
+    expect(pane.folders).toHaveLength(1);
+    expect(pane.folders[0]!.options.title).toBe('Global Director');
+    expect(pane.folders[0]!.options.expanded).toBe(false);
+    expect(pane.folders[0]!.folder.bindings).toHaveLength(6);
   });
 });

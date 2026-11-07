@@ -2,12 +2,59 @@
 // show "unsaved changes", user presets in the browser (localStorage), and JSON export/import.
 // Scenes are built on demand from the working copies. Layer-list changes rebuild the scene.
 import { buildScene, applyPresetToScene } from './loader';
-import { parsePreset, PresetFormatError, type Preset, type SchemaRegistry } from './format';
+import {
+  parsePreset,
+  PresetFormatError,
+  type Preset,
+  type SchemaRegistry,
+  type DirectorPaletteAsset,
+  type ExperienceBundleAsset,
+} from './format';
 import type { Scene } from '../render/scene';
 import { valuesOf } from './loader';
 import type { ParamValue } from './schema';
+import {
+  GlobalDirector,
+  getGlobalDirector,
+  DIRECTOR_PALETTES,
+  type PaletteDef,
+  type GlobalDirectorSettings,
+} from '../render/globalDirector';
+
+if (!(GlobalDirector.prototype as any).registerPalette) {
+  (GlobalDirector.prototype as any).registerPalette = function (this: GlobalDirector, palette: DirectorPaletteAsset) {
+    (DIRECTOR_PALETTES as Record<string, PaletteDef>)[palette.id] = {
+      shadowTint: palette.shadowTint,
+      highlightTint: palette.highlightTint,
+      spatialSpread: palette.spatialSpread,
+    };
+  };
+}
+
+if (!(GlobalDirector.prototype as any).getDirectorProfile) {
+  (GlobalDirector.prototype as any).getDirectorProfile = function (this: GlobalDirector) {
+    const s = this.getSettings();
+    return {
+      cameraMode: s.cameraMode,
+      colorMood: s.colorMood,
+      colorIntensity: s.colorIntensity,
+    };
+  };
+}
 
 export const USER_PRESETS_KEY = 'mv.userPresets';
+export const CUSTOM_PALETTES_KEY = 'mv.customDirectorPalettes';
+
+export function registerPaletteInDirector(palette: DirectorPaletteAsset, director = getGlobalDirector()): void {
+  (DIRECTOR_PALETTES as Record<string, PaletteDef>)[palette.id] = {
+    shadowTint: palette.shadowTint,
+    highlightTint: palette.highlightTint,
+    spatialSpread: palette.spatialSpread,
+  };
+  if (typeof (director as any).registerPalette === 'function') {
+    (director as any).registerPalette(palette);
+  }
+}
 
 /** The compositor operations the session needs. Compositor implements them. */
 export interface SceneHost {
@@ -44,7 +91,9 @@ export class PresetSession {
     private readonly host: SceneHost,
     private readonly registry: SchemaRegistry,
     private readonly storage: Storage | undefined,
-  ) {}
+  ) {
+    this.loadCustomPalettes();
+  }
 
   addBuiltin(id: string, preset: Preset): void {
     this.entries.set(id, { id, builtin: true, preset: structuredClone(preset), savedJson: JSON.stringify(preset) });
@@ -226,9 +275,91 @@ export class PresetSession {
     this.persist();
   }
 
+  /** Loads custom palettes saved in this browser and registers them with GlobalDirector. */
+  loadCustomPalettes(): DirectorPaletteAsset[] {
+    let palettes: DirectorPaletteAsset[] = [];
+    try {
+      const raw = JSON.parse(this.storage?.getItem(CUSTOM_PALETTES_KEY) ?? '[]');
+      if (Array.isArray(raw)) {
+        palettes = raw;
+        for (const p of palettes) {
+          if (p && p.id && p.shadowTint && p.highlightTint) {
+            registerPaletteInDirector(p);
+          }
+        }
+      }
+    } catch {
+      // ignore unreadable storage
+    }
+    return palettes;
+  }
+
+  saveCustomPalette(palette: DirectorPaletteAsset): void {
+    let existing: DirectorPaletteAsset[] = [];
+    try {
+      existing = JSON.parse(this.storage?.getItem(CUSTOM_PALETTES_KEY) ?? '[]');
+      if (!Array.isArray(existing)) existing = [];
+    } catch {
+      existing = [];
+    }
+    const filtered = existing.filter((p) => p.id !== palette.id);
+    filtered.push(palette);
+    try {
+      this.storage?.setItem(CUSTOM_PALETTES_KEY, JSON.stringify(filtered));
+    } catch {
+      // ignore storage error
+    }
+    try {
+      if (typeof localStorage !== 'undefined' && this.storage !== localStorage) {
+        localStorage.setItem(CUSTOM_PALETTES_KEY, JSON.stringify(filtered));
+      }
+    } catch {
+      // ignore
+    }
+    registerPaletteInDirector(palette);
+  }
+
+  /** Export user presets + custom palettes + director settings as an ExperienceBundleAsset JSON. */
+  exportExperienceBundle(name: string): string {
+    const userPresets = [...this.entries.values()]
+      .filter((e) => !e.builtin)
+      .map((e) => structuredClone(e.preset));
+
+    let customPalettes: DirectorPaletteAsset[] = [];
+    try {
+      const raw = JSON.parse(this.storage?.getItem(CUSTOM_PALETTES_KEY) ?? '[]');
+      if (Array.isArray(raw)) customPalettes = raw;
+    } catch {
+      customPalettes = [];
+    }
+
+    const bundle: ExperienceBundleAsset = {
+      kind: 'mv-experience-bundle',
+      version: 1,
+      name: name.trim() || 'Experience Bundle',
+      presets: userPresets,
+      directorPalettes: customPalettes,
+      directorSettings: getGlobalDirector().getSettings(),
+    };
+    return JSON.stringify(bundle, null, 2);
+  }
+
   /** The preset as a JSON file's text (the file format from format.ts). */
-  exportJson(id: string): string {
-    return JSON.stringify(this.require(id).preset, null, 2);
+  exportJson(id: string, includeActiveProfile: boolean = false): string {
+    const entry = this.require(id);
+    const clone = structuredClone(entry.preset);
+    if (includeActiveProfile && !clone.directorProfile) {
+      const director = getGlobalDirector();
+      const profile = typeof (director as any).getDirectorProfile === 'function'
+        ? (director as any).getDirectorProfile()
+        : {
+            cameraMode: director.getSettings().cameraMode,
+            colorMood: director.getSettings().colorMood,
+            colorIntensity: director.getSettings().colorIntensity,
+          };
+      clone.directorProfile = profile;
+    }
+    return JSON.stringify(clone, null, 2);
   }
 
   /** Reads a JSON text as a new user preset. Throws PresetFormatError if it cannot be repaired.
@@ -245,6 +376,142 @@ export class PresetSession {
     this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset) });
     this.persist();
     return { id, warnings };
+  }
+
+  /**
+   * Imports a polymorphic visualizer asset (preset, custom palette, or experience bundle).
+   */
+  importAsset(jsonString: string): {
+    kind: 'preset' | 'palette' | 'bundle';
+    id?: string;
+    name: string;
+    warnings: string[];
+  } {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(jsonString);
+    } catch {
+      throw new PresetFormatError('the file is not valid JSON');
+    }
+
+    if (!raw || typeof raw !== 'object') {
+      throw new PresetFormatError('asset must be a JSON object');
+    }
+
+    const asset = raw as Record<string, unknown>;
+
+    // 1. Standalone Director Palette
+    if (asset.kind === 'mv-director-palette') {
+      if (typeof asset.name !== 'string' || asset.name.trim() === '') {
+        throw new PresetFormatError('palette requires a name');
+      }
+      if (
+        !Array.isArray(asset.shadowTint) ||
+        asset.shadowTint.length !== 3 ||
+        !asset.shadowTint.every((n) => typeof n === 'number' && Number.isFinite(n))
+      ) {
+        throw new PresetFormatError('palette requires shadowTint [R, G, B]');
+      }
+      if (
+        !Array.isArray(asset.highlightTint) ||
+        asset.highlightTint.length !== 3 ||
+        !asset.highlightTint.every((n) => typeof n === 'number' && Number.isFinite(n))
+      ) {
+        throw new PresetFormatError('palette requires highlightTint [R, G, B]');
+      }
+
+      const id = typeof asset.id === 'string' && asset.id.trim()
+        ? asset.id.trim()
+        : asset.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+
+      const palette: DirectorPaletteAsset = {
+        kind: 'mv-director-palette',
+        version: 1,
+        id,
+        name: asset.name.trim(),
+        shadowTint: [
+          Math.max(0, Math.min(1, Number(asset.shadowTint[0]))),
+          Math.max(0, Math.min(1, Number(asset.shadowTint[1]))),
+          Math.max(0, Math.min(1, Number(asset.shadowTint[2]))),
+        ],
+        highlightTint: [
+          Math.max(0, Math.min(1, Number(asset.highlightTint[0]))),
+          Math.max(0, Math.min(1, Number(asset.highlightTint[1]))),
+          Math.max(0, Math.min(1, Number(asset.highlightTint[2]))),
+        ],
+        spatialSpread:
+          typeof asset.spatialSpread === 'number' && Number.isFinite(asset.spatialSpread)
+            ? Math.max(0, Math.min(1, asset.spatialSpread))
+            : 0.45,
+      };
+
+      this.saveCustomPalette(palette);
+      return { kind: 'palette', id: palette.id, name: palette.name, warnings: [] };
+    }
+
+    // 2. Experience Bundle
+    if (asset.kind === 'mv-experience-bundle') {
+      const warnings: string[] = [];
+      const name = typeof asset.name === 'string' && asset.name.trim()
+        ? asset.name.trim()
+        : 'Experience Bundle';
+
+      if (Array.isArray(asset.presets)) {
+        for (const p of asset.presets) {
+          try {
+            const { preset, warnings: w } = parsePreset(p, this.registry);
+            warnings.push(...w);
+            const id = `user-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+            this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset) });
+          } catch (err) {
+            warnings.push(`Preset skipped: ${(err as Error).message}`);
+          }
+        }
+        this.persist();
+      }
+
+      if (Array.isArray(asset.directorPalettes)) {
+        for (const pal of asset.directorPalettes) {
+          try {
+            if (pal && typeof pal === 'object' && pal.name && pal.shadowTint && pal.highlightTint) {
+              const palObj = pal as Record<string, unknown>;
+              const palId = typeof palObj.id === 'string' && palObj.id.trim()
+                ? palObj.id.trim()
+                : String(palObj.name).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+              const shadowTint = Array.isArray(palObj.shadowTint)
+                ? [Number(palObj.shadowTint[0]) || 0, Number(palObj.shadowTint[1]) || 0, Number(palObj.shadowTint[2]) || 0] as [number, number, number]
+                : [0, 0, 0] as [number, number, number];
+              const highlightTint = Array.isArray(palObj.highlightTint)
+                ? [Number(palObj.highlightTint[0]) || 1, Number(palObj.highlightTint[1]) || 1, Number(palObj.highlightTint[2]) || 1] as [number, number, number]
+                : [1, 1, 1] as [number, number, number];
+              const paletteAsset: DirectorPaletteAsset = {
+                kind: 'mv-director-palette',
+                version: 1,
+                id: palId,
+                name: String(palObj.name).trim(),
+                shadowTint,
+                highlightTint,
+                spatialSpread: typeof palObj.spatialSpread === 'number' ? palObj.spatialSpread : 0.45,
+              };
+              this.saveCustomPalette(paletteAsset);
+            }
+          } catch (err) {
+            warnings.push(`Palette skipped: ${(err as Error).message}`);
+          }
+        }
+      }
+
+      if (asset.directorSettings && typeof asset.directorSettings === 'object') {
+        getGlobalDirector().updateSettings(asset.directorSettings as Partial<GlobalDirectorSettings>);
+      }
+
+      return { kind: 'bundle', name, warnings };
+    }
+
+    // 3. Standard Preset JSON
+    const { id, warnings } = this.importJson(jsonString);
+    const presetName = this.entries.get(id)?.preset.name ?? 'Preset';
+    return { kind: 'preset', id, name: presetName, warnings };
   }
 
   private require(id: string): SessionEntry {

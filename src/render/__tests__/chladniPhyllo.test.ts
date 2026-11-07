@@ -1,9 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ChladniSandLayer, CHLADNI_POINT_COUNT } from '../layers/chladniSand';
 import { ParticleLayer } from '../layers/particles';
+import { TunnelLayer } from '../layers/tunnel';
 import chladniVertSrc from '../shaders/chladniSand.vert.glsl?raw';
 import chladniFragSrc from '../shaders/chladniSand.frag.glsl?raw';
 import particlesVertSrc from '../shaders/particles.vert.glsl?raw';
+import particlesFragSrc from '../shaders/particles.frag.glsl?raw';
+import tunnelFragSrc from '../shaders/tunnel.frag.glsl?raw';
 import {
   assertValidSpec,
   CHLADNI_SPECS,
@@ -475,6 +478,46 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
       const expectedGoldenAngle = Math.PI * (3.0 - Math.sqrt(5.0));
       expect(Math.abs(goldenAngle - expectedGoldenAngle)).toBeLessThan(1e-4);
     });
+
+    it('uploads a non-zero uSparkle (>= 0.48) even when frame.norm.high === 0 in both field and phyllotaxis modes', () => {
+      const gl = createMockGl();
+      const target = makeMockTarget();
+      const clock = makeMockClock();
+      const zeroHighFrame: AudioFrame = {
+        ...makeMockFrame(),
+        norm: { sub: 0.0, mid: 0.0, high: 0.0 },
+        beatByBand: { sub: false, mid: false, high: false },
+      };
+
+      // 1. Phyllotaxis mode
+      const phylloLayer = new ParticleLayer({ mode: 'phyllotaxis' });
+      phylloLayer.init(gl);
+      phylloLayer.draw(zeroHighFrame, clock, target);
+      let uniforms = (gl as any)._uniformValues;
+      const phylloSparkle = uniforms.get('uSparkle');
+      expect(phylloSparkle).toBeGreaterThanOrEqual(0.48);
+      phylloLayer.dispose();
+
+      // 2. Field mode
+      const fieldLayer = new ParticleLayer({ mode: 'field' });
+      fieldLayer.init(gl);
+      fieldLayer.draw(zeroHighFrame, clock, target);
+      uniforms = (gl as any)._uniformValues;
+      const fieldSparkle = uniforms.get('uSparkle');
+      expect(fieldSparkle).toBeGreaterThanOrEqual(0.48);
+      expect(uniforms.get('uMode')).toBe(2);
+      fieldLayer.dispose();
+
+      // 3. Radial mode
+      const radialLayer = new ParticleLayer({ mode: 'radial' });
+      radialLayer.init(gl);
+      radialLayer.draw(zeroHighFrame, clock, target);
+      uniforms = (gl as any)._uniformValues;
+      const radialSparkle = uniforms.get('uSparkle');
+      expect(radialSparkle).toBeGreaterThanOrEqual(0.48);
+      expect(uniforms.get('uMode')).toBe(0);
+      radialLayer.dispose();
+    });
   });
 
   describe('Flagship Presets 09 and 10', () => {
@@ -576,6 +619,72 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
       expect(particlesVertSrc).toContain('uPetalStretch');
       expect(particlesVertSrc).toContain('uSeedShape');
       expect(particlesVertSrc).toContain('kickWave');
+    });
+
+    it('particles shaders incorporate coherent arm wave, softened twinkle, and proportional stencil alpha (Slice 7.33)', () => {
+      expect(particlesVertSrc).toContain('armWave');
+      expect(particlesVertSrc).toContain('mix(0.72, 1.15, armWave)');
+      expect(particlesVertSrc).toContain('mix(0.45, 1.0, tw * tw)');
+
+      expect(particlesFragSrc).toContain('smoothstep(0.15, 0.85, vMix)');
+      expect(particlesFragSrc).toContain('clamp(max(out_colour.r, max(out_colour.g, out_colour.b)), 0.0, 1.0)');
+      expect(particlesFragSrc).toContain('vec4(min(out_colour, vec3(0.95)), a)');
+    });
+
+    it('particles shaders double radial coverage, widen edge fade, and provide smooth beat glow breathing (Slice 7.39)', () => {
+      expect(particlesVertSrc).toContain('(1.0 / mix(depthNear, depthFar, life)) * 2.1;');
+      expect(particlesVertSrc).toContain('smoothstep(0.0, 0.08, life) * (1.0 - smoothstep(0.85, 1.0, life))');
+      expect(particlesVertSrc).not.toContain('r = normR * uFar * (1.0 + 0.08 * kickWave);');
+      expect(particlesFragSrc).toContain('1.0 + 0.35 * uKickEnv * uBeatReactivity');
+    });
+
+    it('tunnel shader softens beat strobe into ambient rim glow (Slice 7.39)', () => {
+      expect(tunnelFragSrc).toContain('smoothstep(0.15, 0.85, rim)');
+    });
+  });
+
+  describe('Slice 7.39 beatReactivity & smooth momentum reactivity', () => {
+    it('ParticleLayer uploads uBeatReactivity and scales kick push', () => {
+      const gl = createMockGl();
+      const layer = new ParticleLayer();
+      layer.init(gl);
+
+      const frame = makeMockFrame();
+      const clock = makeMockClock();
+      const target = makeMockTarget();
+
+      // Default beatReactivity = 1.0
+      layer.draw(frame, clock, target);
+      const uniformMap = (gl as any)._uniformValues as Map<string, any>;
+      expect(uniformMap.get('uBeatReactivity')).toBe(1.0);
+
+      // Custom beatReactivity = 0.0
+      layer.setParams({ beatReactivity: 0.0 });
+      layer.draw(frame, clock, target);
+      expect(uniformMap.get('uBeatReactivity')).toBe(0.0);
+    });
+
+    it('TunnelLayer scales uBeat by beatReactivity and keeps density stable', () => {
+      const gl = createMockGl();
+      const layer = new TunnelLayer({ beatReactivity: 0.0, ringDensity: 0.8 });
+      layer.init(gl);
+
+      const frame = makeMockFrame();
+      frame.beatByBand.sub = true;
+      const clock = makeMockClock();
+      const target = makeMockTarget();
+
+      layer.draw(frame, clock, target);
+      const uniformMap = (gl as any)._uniformValues as Map<string, any>;
+      // With beatReactivity = 0.0, uBeat must be 0
+      expect(uniformMap.get('uBeat')).toBe(0.0);
+      // Density is stable (0.8), without the +30% surge
+      expect(uniformMap.get('uDensity')).toBe(0.8);
+
+      // With beatReactivity = 1.0, uBeat is non-zero after beat hit
+      layer.setParams({ beatReactivity: 1.0 });
+      layer.draw(frame, clock, target);
+      expect(uniformMap.get('uBeat')).toBeGreaterThan(0.0);
     });
   });
 });

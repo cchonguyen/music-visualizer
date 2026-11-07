@@ -312,6 +312,17 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(feedbackSrc).toContain('uContourFreq');
       expect(feedbackSrc).toContain('uContourWidth');
       expect(feedbackSrc).toContain('uColorSpread');
+
+      // Slice 7.34 additions:
+      expect(feedbackSrc).toContain('rot2');
+      expect(feedbackSrc).toContain('curlPotential');
+      expect(feedbackSrc).toContain('uMobiusMode');
+      expect(feedbackSrc).toContain('centerBoost');
+      expect(feedbackSrc).toContain('swirlWave');
+      expect(feedbackSrc).toContain('splitAngle');
+      expect(feedbackSrc).toContain('dispAxis');
+      expect(feedbackSrc).toContain('blurPrev');
+      expect(feedbackSrc).toContain('effFreq');
     });
 
     it('compiles cleanly via compileProgram with mock WebGL', () => {
@@ -355,6 +366,25 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(warpModeCall![1]).toBe(expectedInt);
     });
 
+    it.each([
+      ['auto', 0],
+      ['dipoleFlow', 1],
+      ['doubleVortex', 2],
+      ['figureEight', 3],
+      ['breathingOrbit', 4],
+    ])('maps mobiusMode "%s" to integer %d', (mode, expectedInt) => {
+      const gl = createMockGl();
+      const scene = new Scene('test', []);
+      scene.init(gl);
+      scene.setFeedback({ mobiusMode: mode });
+      scene.draw(makeMockFrame(), mockClock);
+
+      const uniform1iMock = gl.uniform1i as unknown as { mock: { calls: [unknown, number][] } };
+      const mobiusModeCall = uniform1iMock.mock.calls.find(([loc]) => (loc as { name: string })?.name === 'uMobiusMode');
+      expect(mobiusModeCall).toBeDefined();
+      expect(mobiusModeCall![1]).toBe(expectedInt);
+    });
+
     it('binds decayRgb vec3 uniform correctly', () => {
       const gl = createMockGl();
       const scene = new Scene('test', []);
@@ -389,6 +419,7 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
         mobiusSwirl: -0.4,
         mobiusPoleOffset: 0.52,
         mobiusWander: 0.65,
+        mobiusMode: 'doubleVortex',
       });
       scene.draw(makeMockFrame(), mockClock);
 
@@ -418,6 +449,7 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
 
       expect(findFloat('uMobiusFlow')).toBe(1.1);
       expect(findFloat('uMobiusSwirl')).toBe(-0.4);
+      expect(findInt('uMobiusMode')).toBe(2);
 
       const poleA = findVec2('uMobiusPoleA');
       const poleB = findVec2('uMobiusPoleB');

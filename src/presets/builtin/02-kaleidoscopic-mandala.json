@@ -13,29 +13,35 @@
     "mandalaKickFlare": 0.4,
     "zoom": 1.038,
     "rotate": 0.015,
-    "decay": 0.88,
+    "decay": 0.90,
+    "fade": 0.005,
     "decayRgb": [0.92, 0.90, 0.96]
   },
   "layers": [
     {
-      "type": "rings",
-      "blend": "max",
-      "trails": true,
+      "type": "waveform",
+      "blend": "add",
+      "trails": false,
       "params": {
-        "mode": "orbitTriangles",
-        "maxRings": 6,
-        "strokeBase": 0.005,
-        "texture": true,
-        "textureGain": 1.2
+        "mode": "circle",
+        "radius": 0.5,
+        "thickness": 2.2,
+        "colorMode": "palette"
       }
     },
     {
-      "type": "waveform",
-      "blend": "max",
-      "trails": false,
+      "type": "particles",
+      "blend": "add",
       "params": {
-        "mode": "star7",
-        "colorMode": "palette"
+        "shape": "streak",
+        "swirlGain": 1.2
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {
+        "style": "ring",
+        "ringSec": 0.4
       }
     }
   ],

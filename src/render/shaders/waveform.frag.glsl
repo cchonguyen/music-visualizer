@@ -1,6 +1,9 @@
 #version 300 es
 precision highp float;
 
+in float vEdge;
+in float vPathU;
+
 uniform float uAlpha;        // legacy crossfade alpha
 uniform float uLayerOpacity; // layer opacity
 uniform vec2 uRes;           // target size in pixels (maps fragments to clip space)
@@ -17,19 +20,10 @@ uniform float uTime;
 
 out vec4 fragColor;
 
-const float TAU = 6.2831853;
+const float TAU = 6.283185307179586;
 
 void main() {
-  // Fragment position in clip space, -1..1.
-  vec2 c = gl_FragCoord.xy / uRes * 2.0 - 1.0;
-  float u = (c.x + 1.0) * 0.5;
-  if (uMode == 1 || uMode == 2) {
-    float a = atan(c.y, c.x * uAspect);
-    u = fract(a / TAU);
-  } else if (uMode == 3) {
-    float a = atan(c.y, c.x * uAspect);
-    u = fract((a + c.x) * 0.5);
-  }
+  float u = clamp(vPathU, 0.0, 1.0);
 
   // Band texture (6.4): high band scales the line brightness (1.0 when off).
   float texMul = 1.0;
@@ -41,9 +35,6 @@ void main() {
   // Audio displacement amplitude at current path position
   float s = texture(uWave, vec2(clamp(u, 0.0, 1.0), 0.5)).r;
   float amp = clamp(abs(s), 0.0, 1.0);
-  if (uMode == 0) {
-    amp = max(amp, clamp(abs(c.y) * 1.25, 0.0, 1.0));
-  }
 
   vec3 col;
   if (uColorMode == 0) {
@@ -65,11 +56,17 @@ void main() {
 
     float t = smoothstep(0.12, 0.75, amp);
     vec3 gradCol = mix(lowCol, peakCol, t);
-    float core = smoothstep(0.68, 0.98, amp);
-    col = clamp(mix(gradCol, whiteHot, core * 0.75) * texMul, 0.0, 1.0);
+    float coreG = smoothstep(0.68, 0.98, amp);
+    col = clamp(mix(gradCol, whiteHot, coreG * 0.75) * texMul, 0.0, 1.0);
   }
 
+  // Anti-aliased cross-section profile
+  float dist = abs(vEdge);
+  float core = exp(-dist * dist * 4.5);
+  float halo = smoothstep(1.0, 0.0, dist) * 0.55;
+  float profile = clamp(core + halo, 0.0, 1.0);
+
   float layerOp = uLayerOpacity > 0.0 ? uLayerOpacity : (uAlpha > 0.0 ? uAlpha : uLayerOpacity);
-  float a = 1.0;
-  fragColor = vec4(col * layerOp, a * layerOp);
+  col *= profile * layerOp;
+  fragColor = vec4(col, clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0));
 }

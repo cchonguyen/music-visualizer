@@ -12,7 +12,8 @@
       "type": "waveform",
       "params": {
         "mode": "lissajous",
-        "amplitude": 1.0
+        "amplitude": 1.0,
+        "thickness": 2.2
       }
     }
   ],

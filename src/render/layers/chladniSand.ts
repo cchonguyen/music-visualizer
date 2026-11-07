@@ -9,6 +9,19 @@ import vertSrc from '../shaders/chladniSand.vert.glsl?raw';
 import fragSrc from '../shaders/chladniSand.frag.glsl?raw';
 import { CHLADNI_DEFAULTS, type ChladniSandParams } from '../../presets/schema';
 
+export type ChladniPlateModeExtended =
+  | 'fullscreen'
+  | 'isometricPlate'
+  | 'radialMandala'
+  | 'hexagon'
+  | 'triangle'
+  | 'starMandala'
+  | 'morph';
+
+export interface ChladniSandParamsExtended extends Omit<ChladniSandParams, 'plateMode'> {
+  plateMode?: ChladniPlateModeExtended;
+}
+
 export const CHLADNI_POINT_COUNT = 8192;
 
 /** Curated integer eigenmode pairs (n !== m). */
@@ -45,7 +58,7 @@ function parseHexColor(hex: string): [number, number, number] {
 
 export class ChladniSandLayer implements RenderLayer {
   opacity = 1.0;
-  private p: ChladniSandParams;
+  private p: ChladniSandParamsExtended;
   private seedData: Float32Array;
   private dpr = 1.0;
 
@@ -55,7 +68,7 @@ export class ChladniSandLayer implements RenderLayer {
   private morphProgress = 1.0;
   private phraseCooldownSec = 6.0;
 
-  constructor(params: Partial<ChladniSandParams> = {}) {
+  constructor(params: Partial<ChladniSandParamsExtended> = {}) {
     this.p = { ...CHLADNI_DEFAULTS, ...params };
     // Pre-allocate 8,192 static 2D seed points vec4(x, y, hash1, hash2)
     this.seedData = new Float32Array(CHLADNI_POINT_COUNT * 4);
@@ -80,7 +93,7 @@ export class ChladniSandLayer implements RenderLayer {
     this.opacity = opacity;
   }
 
-  setParams(params: Partial<ChladniSandParams>): void {
+  setParams(params: Partial<ChladniSandParamsExtended>): void {
     this.p = { ...this.p, ...params };
   }
 
@@ -194,12 +207,23 @@ export class ChladniSandLayer implements RenderLayer {
     // Wired uScale slider (fixing the dead scale slider!)
     gl.uniform1f(this.uScale, this.p.scale > 0 ? this.p.scale : 1.0);
 
-    // Plate geometry mode: 0 = fullscreen, 1 = isometricPlate, 2 = radialMandala
+    // Plate geometry mode:
+    // 0 = fullscreen, 1 = isometricPlate, 2 = radialMandala,
+    // 3 = hexagon, 4 = triangle, 5 = starMandala, 6 = morph
     let plateModeInt = 0;
-    if (this.p.plateMode === 'isometricPlate') {
+    const mode = this.p.plateMode;
+    if (mode === 'isometricPlate') {
       plateModeInt = 1;
-    } else if (this.p.plateMode === 'radialMandala') {
+    } else if (mode === 'radialMandala') {
       plateModeInt = 2;
+    } else if (mode === 'hexagon') {
+      plateModeInt = 3;
+    } else if (mode === 'triangle') {
+      plateModeInt = 4;
+    } else if (mode === 'starMandala') {
+      plateModeInt = 5;
+    } else if (mode === 'morph') {
+      plateModeInt = 6;
     }
     gl.uniform1i(this.uPlateMode, plateModeInt);
 

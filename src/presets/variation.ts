@@ -14,10 +14,25 @@ function snap(spec: { min: number; step: number }, v: number): number {
   return spec.min + Math.round((v - spec.min) / spec.step) * spec.step;
 }
 
+const FEEDBACK_MOTION_KEYS = new Set([
+  'zoom',
+  'rotate',
+  'centreX',
+  'centreY',
+  'driftX',
+  'driftY',
+  'stretchX',
+  'stretchY',
+]);
+
 export function randomValue(spec: ParamSpec, rng: Rng): ParamValue {
   switch (spec.type) {
-    case 'float':
-      return clamp(snap(spec, spec.min + rng() * (spec.max - spec.min)), spec.min, spec.max);
+    case 'float': {
+      const fullPick = spec.min + rng() * (spec.max - spec.min);
+      const isFeedbackMotion = FEEDBACK_MOTION_KEYS.has(spec.name) && spec.group === 'Motion';
+      const v = isFeedbackMotion ? spec.default + (fullPick - spec.default) * 0.25 : fullPick;
+      return clamp(snap(spec, v), spec.min, spec.max);
+    }
     case 'int':
       return Math.round(clamp(spec.min + rng() * (spec.max - spec.min), spec.min, spec.max));
     case 'bool':

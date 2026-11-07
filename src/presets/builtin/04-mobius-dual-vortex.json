@@ -16,15 +16,6 @@
   },
   "layers": [
     {
-      "type": "rings",
-      "blend": "max",
-      "trails": true,
-      "params": {
-        "mode": "polarGrid",
-        "strokeBase": 0.003
-      }
-    },
-    {
       "type": "particles",
       "blend": "max",
       "opacity": 0.7,
@@ -33,6 +24,27 @@
         "swirlGain": 2.5,
         "zoom": 1.2,
         "brightness": 1.2
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {
+        "style": "ring",
+        "ringSec": 0.35
+      }
+    },
+    {
+      "type": "crown",
+      "opacity": 0.6,
+      "blend": "max",
+      "params": {}
+    },
+    {
+      "type": "waveform",
+      "params": {
+        "mode": "line",
+        "amplitude": 1.0,
+        "thickness": 2.0
       }
     }
   ],

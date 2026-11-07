@@ -2,7 +2,7 @@
 // Per frame: decay last frame into `write`, add the layers on top (additive),
 // then swap. After the swap, `outputTexture()` is the finished image.
 import type { AudioFrame } from '../audio/types';
-import { PingPong } from '../gl/fbo';
+import { PingPong, clampSize, type PassTarget } from '../gl/fbo';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { createVao } from '../gl/vao';
 import type { RenderClock } from './clock';
@@ -58,7 +58,7 @@ const UNIFORMS = [
   'uCurlOctaves', 'uCurlTurbulence', 'uCurlFlowPattern',
   'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin', 'uMandalaKickFlare',
   'uContourFreq', 'uContourWidth', 'uColorSpread',
-  'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl',
+  'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl', 'uMobiusMode',
   'uKick', 'uSub', 'uHigh',
 ] as const;
 
@@ -72,16 +72,22 @@ export interface LayerEntry {
 
 export type SceneLayerConfig = LayerEntry;
 
+export interface LayerDrawOptions {
+  opacity?: number;
+  uLayerOpacity?: number;
+  sceneTex?: WebGLTexture | null;
+}
+
 export function applyLayerBlend(gl: WebGL2RenderingContext, blend: BlendMode): void {
   gl.enable(gl.BLEND);
   switch (blend) {
     case 'alpha':
       gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       break;
     case 'add':
       gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.blendFunc(gl.ONE, gl.ONE);
       break;
     case 'screen':
       gl.blendEquation(gl.FUNC_ADD);
@@ -90,7 +96,7 @@ export function applyLayerBlend(gl: WebGL2RenderingContext, blend: BlendMode): v
     case 'max':
     default:
       gl.blendEquation(gl.MAX);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.blendFunc(gl.ONE, gl.ONE);
       break;
   }
 }
@@ -118,6 +124,7 @@ export class Scene {
   private uni = new Map<string, WebGLUniformLocation | null>();
   private foregroundOpacity = 1.0;
   private outputTex: WebGLTexture | null = null;
+  private snapshotTarget: PassTarget | null = null;
 
   constructor(name: string, layers: RenderLayer[], configs: SceneLayerConfig[] = []) {
     this.name = name;
@@ -197,6 +204,37 @@ export class Scene {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  private allocateSnapshot(gl: WebGL2RenderingContext, width: number, height: number): PassTarget {
+    const size = clampSize(width, height);
+    const texture = gl.createTexture();
+    const framebuffer = gl.createFramebuffer();
+    if (!texture || !framebuffer) throw new Error('could not create snapshot target');
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size.width, size.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      throw new Error(`snapshot framebuffer incomplete (status ${status})`);
+    }
+    return { framebuffer, texture };
+  }
+
+  private freeSnapshot(): void {
+    const gl = this.gl;
+    if (gl && this.snapshotTarget) {
+      gl.deleteTexture(this.snapshotTarget.texture);
+      gl.deleteFramebuffer(this.snapshotTarget.framebuffer);
+      this.snapshotTarget = null;
+    }
+  }
+
   init(gl: WebGL2RenderingContext): void {
     this.gl = gl;
     this.prog = compileProgram(gl, FULLSCREEN_VERT, feedbackSrc, `feedback:${this.name}`);
@@ -207,6 +245,7 @@ export class Scene {
     const b = scaledBufferSize(this.w, this.h, getRenderScale());
     this.pp = new PingPong(gl, b.width, b.height);
     this.appliedScale = getRenderScale();
+    this.snapshotTarget = this.allocateSnapshot(gl, b.width, b.height);
     for (const l of this.layers) l.init(gl);
   }
 
@@ -221,6 +260,10 @@ export class Scene {
   private applyScale(): void {
     const b = scaledBufferSize(this.w, this.h, getRenderScale());
     this.pp?.resize(b.width, b.height);
+    if (this.gl) {
+      this.freeSnapshot();
+      this.snapshotTarget = this.allocateSnapshot(this.gl, b.width, b.height);
+    }
     this.appliedScale = getRenderScale();
   }
 
@@ -306,9 +349,29 @@ export class Scene {
 
       let effectiveOpacity = cfg.opacity ?? 1.0;
       if (decay > 0.05 && (cfg.blend === 'add' || cfg.blend === 'screen')) {
-        effectiveOpacity *= (1.0 - decay * 0.82);
+        effectiveOpacity *= (1.0 - decay * 0.45);
       }
       effectiveOpacity *= this.foregroundOpacity;
+
+      const isMoire = ('type' in layer && (layer as unknown as { type: string }).type === 'moire') || layer.constructor?.name === 'MoireLayer';
+      let sceneTex: WebGLTexture | null = null;
+      if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
+        gl.viewport(0, 0, pp.width, pp.height);
+        gl.disable(gl.BLEND);
+        gl.useProgram(this.blitProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, target.texture);
+        const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+        if (uSrc !== null) gl.uniform1i(uSrc, 0);
+        gl.bindVertexArray(this.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindVertexArray(null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        bindTarget(gl, target);
+        sceneTex = this.snapshotTarget.texture;
+      }
 
       applyLayerBlend(gl, cfg.blend);
 
@@ -319,16 +382,19 @@ export class Scene {
         (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(effectiveOpacity);
       }
 
-      (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: { opacity: number; uLayerOpacity: number }) => void)(
+      const drawOpts: LayerDrawOptions = { opacity: effectiveOpacity, uLayerOpacity: effectiveOpacity };
+      if (sceneTex) drawOpts.sceneTex = sceneTex;
+
+      (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: LayerDrawOptions) => void)(
         frame,
         clock,
         target,
-        { opacity: effectiveOpacity, uLayerOpacity: effectiveOpacity },
+        drawOpts,
       );
 
       // Restore default GL blend state immediately after each layer draw
       gl.blendEquation(gl.MAX);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.blendFunc(gl.ONE, gl.ONE);
     }
     gl.disable(gl.BLEND);
     gl.blendEquation(gl.FUNC_ADD);
@@ -371,6 +437,26 @@ export class Scene {
         if (cfg.trails !== false) continue;
 
         const overlayOpacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
+        const isMoire = ('type' in layer && (layer as unknown as { type: string }).type === 'moire') || layer.constructor?.name === 'MoireLayer';
+        let sceneTex: WebGLTexture | null = null;
+        if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
+          gl.viewport(0, 0, pp.width, pp.height);
+          gl.disable(gl.BLEND);
+          gl.useProgram(this.blitProg);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, writeTarget.texture);
+          const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+          if (uSrc !== null) gl.uniform1i(uSrc, 0);
+          gl.bindVertexArray(this.vao);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.bindVertexArray(null);
+          gl.bindTexture(gl.TEXTURE_2D, null);
+
+          bindTarget(gl, writeTarget);
+          sceneTex = this.snapshotTarget.texture;
+        }
+
         applyLayerBlend(gl, cfg.blend);
 
         if ('opacity' in layer) {
@@ -380,16 +466,19 @@ export class Scene {
           (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(overlayOpacity);
         }
 
-        (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: { opacity: number; uLayerOpacity: number }) => void)(
+        const drawOpts: LayerDrawOptions = { opacity: overlayOpacity, uLayerOpacity: overlayOpacity };
+        if (sceneTex) drawOpts.sceneTex = sceneTex;
+
+        (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: LayerDrawOptions) => void)(
           frame,
           clock,
           writeTarget,
-          { opacity: overlayOpacity, uLayerOpacity: overlayOpacity },
+          drawOpts,
         );
 
         // Restore default GL blend state immediately after each layer draw
         gl.blendEquation(gl.MAX);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.blendFunc(gl.ONE, gl.ONE);
       }
       gl.disable(gl.BLEND);
       gl.blendEquation(gl.FUNC_ADD);
@@ -480,11 +569,21 @@ export class Scene {
     gl.uniform1f?.(u('uContourWidth')!, Number(this.fb.contourWidth ?? 0.45));
     gl.uniform1f?.(u('uColorSpread')!, Number(this.fb.colorSpread ?? 0.65));
 
-    // Slice 7.22 Möbius dipole uniforms:
+    // Slice 7.22 / 7.34 Möbius dipole uniforms:
     gl.uniform2f?.(u('uMobiusPoleA')!, this.lastPoleA[0], this.lastPoleA[1]);
     gl.uniform2f?.(u('uMobiusPoleB')!, this.lastPoleB[0], this.lastPoleB[1]);
     gl.uniform1f?.(u('uMobiusFlow')!, Number(this.fb.mobiusFlow ?? 0.85));
     gl.uniform1f?.(u('uMobiusSwirl')!, Number(this.fb.mobiusSwirl ?? 0.65));
+    const MOBIUS_MODES: Record<string, number> = {
+      auto: 0,
+      dipoleFlow: 1,
+      doubleVortex: 2,
+      figureEight: 3,
+      breathingOrbit: 4,
+    };
+    const mobiusModeKey = String(this.fb.mobiusMode ?? 'auto');
+    const mobiusModeInt = MOBIUS_MODES[mobiusModeKey] ?? 0;
+    gl.uniform1i?.(u('uMobiusMode')!, mobiusModeInt);
 
     // Audio modulations:
     gl.uniform1f?.(u('uKick')!, frame?.kickEnv ?? (frame?.raw?.sub ?? 0.0));
@@ -496,6 +595,7 @@ export class Scene {
     const gl = this.gl;
     for (const l of this.layers) l.dispose();
     this.pp?.dispose();
+    this.freeSnapshot();
     if (gl) {
       if (this.prog) gl.deleteProgram(this.prog);
       if (this.blitProg) gl.deleteProgram(this.blitProg);

@@ -30,4 +30,6 @@
 - `480` `.spec/specs/stage7-architecture-plan.md` — Stage 7 master architecture plan
 - `481` `.spec/specs/stage7-slice-briefs.md` — Stage 7 atomic implementation briefs
 - `482` `.spec/stage7-slice-briefs.md` — Stage 7 slice briefs alias
+- `483` `.spec/specs/global-director-spec.md` — Global Director (Camera & Color Evolution) spec
+- `484` `.spec/specs/global-director-roadmap.md` — Global Director consolidation, Experience Hub & pre-spec roadmap
 

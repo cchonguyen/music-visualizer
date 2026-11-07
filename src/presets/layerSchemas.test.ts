@@ -3,6 +3,7 @@ import { assertValidSpec, defaultsFor } from "./schema";
 import {
   BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
+  WAVEFORM_DEFAULTS, WAVEFORM_SPECS, WAVEFORM_SCHEMA,
 } from "./layerSchemas";
 
 describe("layer schemas", () => {
@@ -22,6 +23,7 @@ describe("layer schemas", () => {
     expect(SHOCKWAVE_DEFAULTS).toEqual({ ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35, style: 'ring', texture: true, textureGain: 1 });
     expect(BARS_DEFAULTS).toEqual({ texture: true, textureGain: 1 });
     expect(BASS_PULSE_DEFAULTS).toEqual({ texture: true, textureGain: 1 });
+    expect(WAVEFORM_DEFAULTS).toEqual({ mode: 'line', amplitude: 1, radius: 0.45, thickness: 2.0, texture: true, textureGain: 1, colorMode: 'white' });
   });
 
   it.each([
@@ -32,8 +34,26 @@ describe("layer schemas", () => {
     ["shockwave", SHOCKWAVE_SPECS, SHOCKWAVE_DEFAULTS],
     ["bars", BARS_SPECS, BARS_DEFAULTS],
     ["bassPulse", BASS_PULSE_SPECS, BASS_PULSE_DEFAULTS],
+    ["waveform", WAVEFORM_SPECS, WAVEFORM_DEFAULTS],
   ])("%s: schema defaults match the layer's typed defaults", (_name, specs, defaults) => {
     expect(defaultsFor(specs)).toEqual(defaults);
+  });
+
+  it("exposes radius and thickness sliders in WAVEFORM_SCHEMA", () => {
+    expect(WAVEFORM_SCHEMA.radius).toMatchObject({
+      name: 'radius',
+      default: 0.45,
+      min: 0.15,
+      max: 0.95,
+      step: 0.01,
+    });
+    expect(WAVEFORM_SCHEMA.thickness).toMatchObject({
+      name: 'thickness',
+      default: 2.0,
+      min: 0.5,
+      max: 5.0,
+      step: 0.1,
+    });
   });
 
   it("every layer type is registered", () => {

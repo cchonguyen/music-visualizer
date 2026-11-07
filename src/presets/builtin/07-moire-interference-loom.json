@@ -24,6 +24,17 @@
       }
     },
     {
+      "type": "particles",
+      "blend": "max",
+      "trails": true,
+      "params": {
+        "mode": "phyllotaxis",
+        "shape": "streak",
+        "size": 1.8,
+        "brightness": 1.2
+      }
+    },
+    {
       "type": "bassPulse",
       "opacity": 0.25,
       "blend": "screen",

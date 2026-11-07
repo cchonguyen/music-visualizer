@@ -5,6 +5,7 @@ uniform vec2 uRes;        // target size in pixels
 uniform vec2 uCenter;     // shared sway offset, uv units (same centre rule as the tunnel)
 uniform float uRadius;    // ring radius, in the tunnel's radius units
 uniform float uFade;      // 1 at birth, 0 at the end of the ring's life
+uniform vec3 uBase;       // optional base color (defaults to 0)
 uniform vec3 uAccent;     // palette accent for the ring
 uniform float uGlow;      // 0 = thin ring (default), 1 = soft radial glow field (V4)
 uniform float uTexOn;     // 1 = band texture on (6.3), 0 = off: output identical to before
@@ -38,15 +39,14 @@ void main() {
 
   float core = exp(-pow(d / CORE_WIDTH, 2.0));
   float glow = exp(-pow(d / GLOW_WIDTH, 2.0)) * 0.25;
-  // The core is pushed toward white (a small bright feature may reach white, owner decision 2026-11-04).
-  vec3 col = mix(uAccent, vec3(1.0), 0.6) * core * uFade * texMul + uAccent * glow * uFade;
+  float ring = (core + glow) * uFade;
   if (uGlow > 0.5) {
     // Glow field: a soft disc that grows to the ring radius and fades with the ring. It shares the kick's flash token.
     float disc = 1.0 - smoothstep(0.0, 1.0, 2.0 * length(p) / max(uRadius, 0.05));
-    col += uAccent * 0.45 * disc * uFade;
+    ring += 0.45 * disc * uFade;
   }
-  float ring = max(col.r, max(col.g, col.b));
-  col *= uLayerOpacity;
-  float a = clamp(ring, 0.0, 1.0) * uLayerOpacity;
+  vec3 accentCore = mix(uAccent, vec3(1.0), 0.6 * clamp(core, 0.0, 1.0));
+  vec3 col = mix(uBase, accentCore, clamp(ring, 0.0, 1.0)) * clamp(ring, 0.0, 1.5) * texMul * uLayerOpacity;
+  float a = clamp(ring * texMul, 0.0, 1.0) * uLayerOpacity;
   outColor = vec4(col, a);
 }

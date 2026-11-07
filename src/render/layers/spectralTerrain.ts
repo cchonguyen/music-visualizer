@@ -36,7 +36,7 @@ export class SpectralTerrainLayer implements RenderLayer {
   private p: SpectralTerrainParams;
 
   constructor(params: Partial<SpectralTerrainParams> = {}) {
-    this.p = { ...SPECTRAL_TERRAIN_DEFAULTS, ...params };
+    this.p = { ...SPECTRAL_TERRAIN_DEFAULTS, skirtOpacity: 0.15, ...params };
   }
 
   setParams(params: Partial<SpectralTerrainParams>): void {
@@ -177,6 +177,24 @@ export class SpectralTerrainLayer implements RenderLayer {
     this.headRow = 0;
   }
 
+  private updateHistoryTexture(gl: WebGL2RenderingContext): void {
+    gl.activeTexture(gl.TEXTURE0 + TERRAIN_HISTORY_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D, this.historyTex);
+    gl.texSubImage2D(
+      gl.TEXTURE_2D,
+      0,
+      0,
+      this.headRow,
+      TERRAIN_BINS,
+      1,
+      gl.RED,
+      gl.FLOAT,
+      this.currentBins,
+      0,
+    );
+    gl.activeTexture(gl.TEXTURE0);
+  }
+
   resize(_width: number, _height: number, _dpr: number): void {
     // Draws with fixed geometry in target coordinates; no reallocation needed.
   }
@@ -210,21 +228,8 @@ export class SpectralTerrainLayer implements RenderLayer {
       this.currentBins,
     );
 
-    // Update ring-buffer texture at headRow
-    gl.bindTexture(gl.TEXTURE_2D, this.historyTex);
-    gl.texSubImage2D(
-      gl.TEXTURE_2D,
-      0,
-      0,
-      this.headRow,
-      TERRAIN_BINS,
-      1,
-      gl.RED,
-      gl.FLOAT,
-      this.currentBins,
-      0,
-    );
-    gl.bindTexture(gl.TEXTURE_2D, null);
+    // Update ring-buffer texture at headRow on TEXTURE5 (never unbind unit 0)
+    this.updateHistoryTexture(gl);
 
     const activeHeadRow = this.headRow;
     this.lastWriteRow = activeHeadRow;
@@ -264,7 +269,7 @@ export class SpectralTerrainLayer implements RenderLayer {
     const layoutModeInt = LAYOUT_MODES[this.p.layoutMode ?? 'fullHorizon'] ?? 0;
     gl.uniform1i(this.uLayoutMode, layoutModeInt);
 
-    const skirtOpacity = this.p.skirtOpacity ?? SPECTRAL_TERRAIN_DEFAULTS.skirtOpacity;
+    const skirtOpacity = this.p.skirtOpacity ?? 0.15;
     gl.uniform1f(this.uSkirtOpacity, skirtOpacity);
 
     const colorSpread = this.p.colorSpread ?? SPECTRAL_TERRAIN_DEFAULTS.colorSpread;
@@ -292,10 +297,10 @@ export class SpectralTerrainLayer implements RenderLayer {
     for (let z = 0; z < TERRAIN_RIDGES; z++) {
       gl.uniform1i(this.uRidgeIndex, z);
 
-      // 1. Dark occlusion skirt with gl.FUNC_ADD and SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+      // 1. Dark occlusion skirt with gl.FUNC_ADD and ONE, ONE_MINUS_SRC_ALPHA
       gl.uniform1i(this.uIsSkirtPass, 1);
       gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.bindVertexArray(this.skirtVao);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
 

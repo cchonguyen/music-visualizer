@@ -175,36 +175,36 @@ describe('Scene blend state ownership and transitions (Slice 7.8)', () => {
 
     scene.draw(makeMockFrame(), mockClock);
 
-    // Layer 1 ('max'): gl.MAX, SRC_ALPHA, ONE -> draw -> restore gl.MAX, SRC_ALPHA, ONE
+    // Layer 1 ('max'): gl.MAX, ONE, ONE -> draw -> restore gl.MAX, ONE, ONE
     expect(calls).toContain('blendEquation:MAX');
-    expect(calls).toContain('blendFunc:SRC_ALPHA,ONE');
+    expect(calls).toContain('blendFunc:ONE,ONE');
     expect(calls).toContain('draw-layer1');
 
-    // Layer 2 ('alpha'): gl.FUNC_ADD, SRC_ALPHA, ONE_MINUS_SRC_ALPHA -> draw -> restore gl.MAX, SRC_ALPHA, ONE
+    // Layer 2 ('alpha'): gl.FUNC_ADD, ONE, ONE_MINUS_SRC_ALPHA -> draw -> restore gl.MAX, ONE, ONE
     expect(calls).toContain('blendEquation:FUNC_ADD');
-    expect(calls).toContain('blendFunc:SRC_ALPHA,ONE_MINUS_SRC_ALPHA');
+    expect(calls).toContain('blendFunc:ONE,ONE_MINUS_SRC_ALPHA');
     expect(calls).toContain('draw-layer2');
 
-    // Layer 3 ('add'): gl.FUNC_ADD, SRC_ALPHA, ONE -> draw -> restore gl.MAX, SRC_ALPHA, ONE
-    expect(calls).toContain('blendFunc:SRC_ALPHA,ONE');
+    // Layer 3 ('add'): gl.FUNC_ADD, ONE, ONE -> draw -> restore gl.MAX, ONE, ONE
+    expect(calls).toContain('blendFunc:ONE,ONE');
     expect(calls).toContain('draw-layer3');
 
-    // Layer 4 ('screen'): gl.FUNC_ADD, ONE, ONE_MINUS_SRC_COLOR -> draw -> restore gl.MAX, SRC_ALPHA, ONE
+    // Layer 4 ('screen'): gl.FUNC_ADD, ONE, ONE_MINUS_SRC_COLOR -> draw -> restore gl.MAX, ONE, ONE
     expect(calls).toContain('blendFunc:ONE,ONE_MINUS_SRC_COLOR');
     expect(calls).toContain('draw-layer4');
 
     // After each layer draw, restoration of MAX must occur immediately
     const l2Index = calls.indexOf('draw-layer2');
     expect(calls[l2Index + 1]).toBe('blendEquation:MAX');
-    expect(calls[l2Index + 2]).toBe('blendFunc:SRC_ALPHA,ONE');
+    expect(calls[l2Index + 2]).toBe('blendFunc:ONE,ONE');
 
     const l3Index = calls.indexOf('draw-layer3');
     expect(calls[l3Index + 1]).toBe('blendEquation:MAX');
-    expect(calls[l3Index + 2]).toBe('blendFunc:SRC_ALPHA,ONE');
+    expect(calls[l3Index + 2]).toBe('blendFunc:ONE,ONE');
 
     const l4Index = calls.indexOf('draw-layer4');
     expect(calls[l4Index + 1]).toBe('blendEquation:MAX');
-    expect(calls[l4Index + 2]).toBe('blendFunc:SRC_ALPHA,ONE');
+    expect(calls[l4Index + 2]).toBe('blendFunc:ONE,ONE');
   });
 
   it('passes opacity into each layer draw and sets layer.opacity / setOpacity', () => {
@@ -376,7 +376,7 @@ describe('buildScene preserving layer opacity and blend mode (Slice 7.8)', () =>
 });
 
 describe('Slice 7.18: Blend defaults, screen mode, energy compensation, and trails pass split', () => {
-  it('defaults blend to max and uses SRC_ALPHA, ONE for max blend mode', () => {
+  it('defaults blend to max and uses ONE, ONE for max blend mode', () => {
     const gl = createMockGl();
     const calls: string[] = [];
 
@@ -408,7 +408,7 @@ describe('Slice 7.18: Blend defaults, screen mode, energy compensation, and trai
     scene.draw(makeMockFrame(), mockClock);
 
     expect(calls).toContain('blendEquation:MAX');
-    expect(calls).toContain('blendFunc:SRC_ALPHA,ONE');
+    expect(calls).toContain('blendFunc:ONE,ONE');
     expect(calls).toContain('draw-layer');
   });
 
@@ -478,14 +478,14 @@ describe('Slice 7.18: Blend defaults, screen mode, energy compensation, and trai
         { opacity: 1.0, blend: 'max', trails: true },
       ],
     );
-    // decay = 0.90 (> 0.05). scaling factor = 1.0 - 0.90 * 0.82 = 0.262
+    // decay = 0.90 (> 0.05). scaling factor = 1.0 - 0.90 * 0.45 = 0.595
     scene.setFeedback({ decay: 0.9 });
     scene.init(gl);
 
     scene.draw(makeMockFrame(), mockClock);
 
-    const expectedAdd = 1.0 * (1.0 - 0.9 * 0.82);
-    const expectedScreen = 0.8 * (1.0 - 0.9 * 0.82);
+    const expectedAdd = 1.0 * (1.0 - 0.9 * 0.45);
+    const expectedScreen = 0.8 * (1.0 - 0.9 * 0.45);
 
     expect(receivedAddOpt!.opacity).toBeCloseTo(expectedAdd, 5);
     expect(receivedScreenOpt!.opacity).toBeCloseTo(expectedScreen, 5);

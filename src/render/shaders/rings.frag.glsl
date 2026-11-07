@@ -34,6 +34,14 @@ float distToSegment(vec2 p, vec2 a, vec2 b) {
   return length(pa - ba * h);
 }
 
+float softRingProfile(float d, float width, out float coreOut) {
+  float core = exp(- (d * d) / max(width * width * 0.18, 1e-6));
+  float halo = exp(- (d * d) / max(width * width * 0.85, 1e-6)) * 0.45;
+  float c = clamp(core + halo, 0.0, 1.0) * (1.0 - smoothstep(width * 0.85, width * 1.35, d));
+  coreOut = core;
+  return c;
+}
+
 // 3-tier counter-rotating stained-glass Mandala seed lattice
 void orbitTriangles(vec2 p, float time, float kick, out vec3 col, out float alpha) {
   vec3 colA = length(uColorA) > 0.01 ? uColorA : vec3(0.133, 0.827, 0.933);
@@ -62,7 +70,8 @@ void orbitTriangles(vec2 p, float time, float kick, out vec3 col, out float alph
   float dHub = abs(r - 0.06 * (1.0 + 0.1 * kick));
   float dSpoke = distToSegment(pFold1, vec2(0.06, 0.0), vStarOut);
   float dStar = min(dStarEdge, min(dHub, dSpoke));
-  float inkStar = 1.0 - smoothstep(width * 0.5, width * 1.5, dStar);
+  float coreStar = 0.0;
+  float inkStar = softRingProfile(dStar, width, coreStar);
 
   // --- Tier 2: Middle 6-Chevron Diamond Ring at r = 0.56 ---
   // Counter-rotating at rot2 = -time * 0.35
@@ -86,7 +95,8 @@ void orbitTriangles(vec2 p, float time, float kick, out vec3 col, out float alph
   float dMidChev  = distToSegment(pFold2, vMidLat, vChevron);
   float dMidRing  = abs(r - rMid);
   float dDiamonds = min(min(dMidEdge1, dMidEdge2), min(dMidChev, dMidRing));
-  float inkDiamonds = 1.0 - smoothstep(width * 0.5, width * 1.5, dDiamonds);
+  float coreDiamonds = 0.0;
+  float inkDiamonds = softRingProfile(dDiamonds, width, coreDiamonds);
 
   // --- Tier 3: Outer 12-Ray Crystal Spikes reaching r = 0.98 ---
   // Counter-rotating at rot3 = time * 0.22
@@ -110,15 +120,20 @@ void orbitTriangles(vec2 p, float time, float kick, out vec3 col, out float alph
   float dSpikeSpine  = distToSegment(pFold3, vSpikeNotch, vSpikeTip);
   float dSpikeBridge = distToSegment(pFold3, vSpikeBase, vSpikeBridge);
   float dSpikes = min(min(dSpikeEdge, dSpikeBase), min(dSpikeSpine, dSpikeBridge));
-  float inkSpikes = (1.0 - smoothstep(width * 0.5, width * 1.5, dSpikes)) * smoothstep(1.05, 0.98, r);
+  float coreSpikes = 0.0;
+  float inkSpikes = softRingProfile(dSpikes, width, coreSpikes) * smoothstep(1.05, 0.98, r);
 
-  // Stained-glass alternating colors:
+  // Stained-glass alternating colors with white-hot core spine:
   // Tier 1 & 3: uColorA (neon cyan)
   // Tier 2: uColorB (neon magenta/pink)
   float inkCyan = max(inkStar, inkSpikes);
+  float coreCyan = max(coreStar, coreSpikes);
   float inkMag = inkDiamonds;
 
-  col = colA * inkCyan + colB * inkMag;
+  vec3 cyanSpine = mix(colA, vec3(1.0), 0.35 * coreCyan);
+  vec3 magSpine = mix(colB, vec3(1.0), 0.35 * coreDiamonds);
+
+  col = cyanSpine * inkCyan + magSpine * inkMag;
   float totalInk = inkCyan + inkMag;
   if (totalInk > 1.0) {
     col /= totalInk;
@@ -158,19 +173,23 @@ void main() {
     float width = max(uStroke, 0.002);
     float ringSpacing = 0.08;
     float dR = abs(mod(r + ringSpacing * 0.5, ringSpacing) - ringSpacing * 0.5);
-    float ringInk = 1.0 - smoothstep(width * 0.5, width * 1.8, dR);
+    float coreR = 0.0;
+    float ringInk = softRingProfile(dR, width, coreR);
 
     float numSpokes = 12.0;
     float thetaSpacing = TAU / numSpokes;
     float theta = atan(p.y, p.x);
     float dTheta = r * abs(mod(theta + thetaSpacing * 0.5, thetaSpacing) - thetaSpacing * 0.5);
-    float spokeInk = 1.0 - smoothstep(width * 0.5, width * 1.8, dTheta);
+    float coreSpoke = 0.0;
+    float spokeInk = softRingProfile(dTheta, width, coreSpoke);
 
     float fade = smoothstep(0.9, 0.1, r);
     float ink = max(ringInk, spokeInk) * fade;
+    float core = max(coreR, coreSpoke) * fade;
 
     float brightness = 0.6 + 0.4 * clamp(uNorm, 0.0, 1.0);
-    col = min(uAccent * brightness * texMul, vec3(0.7));
+    vec3 spineAccent = mix(uAccent, vec3(1.0), 0.35 * core);
+    col = min(spineAccent * brightness * texMul, vec3(0.85)) * ink;
     alpha = ink;
   } else {
     // Mode 0: concentric rings (default)
@@ -182,6 +201,7 @@ void main() {
     }
 
     float ink = 0.0;
+    float coreMax = 0.0;
     for (int i = 0; i < MAX_RINGS; i++) {
       if (i >= uCount) break;
       float ringRadius = float(i + 1) / float(uCount + 1) * 0.45;
@@ -194,12 +214,17 @@ void main() {
         ink = max(ink, (1.0 - smoothstep(ringRadius - width, ringRadius, rr)) * 0.35);
       } else {
         float d = abs(rr - ringRadius);
-        ink = max(ink, 1.0 - smoothstep(width * 0.5, width, d));
+        float core = exp(- (d * d) / max(width * width * 0.18, 1e-6));
+        float halo = exp(- (d * d) / max(width * width * 0.85, 1e-6)) * 0.45;
+        float c = clamp(core + halo, 0.0, 1.0) * (1.0 - smoothstep(width * 0.85, width * 1.35, d));
+        ink = max(ink, c);
+        coreMax = max(coreMax, core);
       }
     }
 
     float brightness = 0.6 + 0.4 * clamp(uNorm, 0.0, 1.0);
-    col = min(uAccent * brightness * texMul, vec3(0.7));
+    vec3 spineAccent = mix(uAccent, vec3(1.0), 0.35 * coreMax);
+    col = min(spineAccent * brightness * texMul, vec3(0.85)) * ink;
     alpha = ink;
   }
 

@@ -122,7 +122,8 @@ void main() {
   vec3 chosenAccent = (pattern == 0) ? ringCol : baseAccent;
   vec3 rings = mix(uBase * stripe, chosenAccent, stripe * stripeGain) * pulse;
   rings += uAccentB * 0.15 * smoothstep(0.85, 1.0, stripe);
-  rings += chosenAccent * 0.45 * clamp(uBeat, 0.0, 1.0) * smoothstep(0.8, 1.0, stripe);
+  // Soft ambient rim glow on beat swell instead of harsh strobe
+  rings += chosenAccent * 0.30 * clamp(uBeat, 0.0, 1.0) * (smoothstep(0.4, 1.0, stripe) * 0.6 + smoothstep(0.15, 0.85, rim) * 0.4);
   rings += chosenAccent * 0.5 * clamp(uSub, 0.0, 1.0) * smoothstep(0.75, 1.0, stripe);
   rings *= texMul;
 

@@ -64,9 +64,8 @@ void main() {
     texMul = max(0.0, 1.0 + uTexGain * (midS - 0.5));
   }
 
-  // Dim by design: the crown supports the flight, it does not compete with it.
-  vec3 col = uAccent * 0.6 * clamp(light * texMul, 0.0, 1.0);
-  col *= uLayerOpacity;
+  // Boosted base intensity so crown has strong visual presence when layered.
+  vec3 col = uAccent * 0.95 * light * texMul * uLayerOpacity;
   float a = clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0);
   outColor = vec4(col, a);
 }

@@ -27,6 +27,7 @@ function createMockGl(hasFloat = true): WebGL2RenderingContext & {
   const texImageCalls: any[] = [];
 
   const gl = {
+    BLEND: 0x0be2,
     TEXTURE0: 0x84c0,
     TEXTURE1: 0x84c1,
     TEXTURE2: 0x84c2,
@@ -67,8 +68,12 @@ function createMockGl(hasFloat = true): WebGL2RenderingContext & {
       return null;
     }),
 
-    enable: vi.fn(),
-    disable: vi.fn(),
+    enable: vi.fn((cap?: number) => {
+      calls.push(`enable:${cap === 0x0be2 ? 'BLEND' : cap}`);
+    }),
+    disable: vi.fn((cap?: number) => {
+      calls.push(`disable:${cap === 0x0be2 ? 'BLEND' : cap}`);
+    }),
     viewport: vi.fn((_x: number, _y: number, w: number, h: number) => {
       calls.push(`viewport:${w}x${h}`);
     }),
@@ -392,5 +397,34 @@ describe('ReactionDiffusionLayer (Slice 7.17)', () => {
     // Centroid on explicit number
     const frameWithCentroid = makeMockFrame({ centroid: 0.75 } as any);
     expect(computeCentroid(frameWithCentroid)).toBe(0.75);
+  });
+
+  it('disables blending before simulation substeps and re-enables before display rendering', () => {
+    const gl = createMockGl(true);
+    const layer = new ReactionDiffusionLayer();
+    layer.init(gl);
+
+    const frame = makeMockFrame();
+    layer.draw(frame, mockClock, mockTarget, { uLayerOpacity: 0.85 });
+
+    const disableBlendIdx = gl.calls.indexOf('disable:BLEND');
+    const enableBlendIdx = gl.calls.indexOf('enable:BLEND');
+    const firstDrawIdx = gl.calls.indexOf('drawArrays:4:0:3');
+    const lastDrawIdx = gl.calls.lastIndexOf('drawArrays:4:0:3');
+
+    expect(disableBlendIdx).toBeGreaterThan(-1);
+    expect(enableBlendIdx).toBeGreaterThan(-1);
+    expect(firstDrawIdx).toBeGreaterThan(-1);
+    expect(lastDrawIdx).toBeGreaterThan(firstDrawIdx);
+
+    // disable:BLEND must happen before the first simulation substep draw
+    expect(disableBlendIdx).toBeLessThan(firstDrawIdx);
+    // enable:BLEND must happen after simulation substeps and before the final render pass draw
+    expect(enableBlendIdx).toBeGreaterThan(firstDrawIdx);
+    expect(enableBlendIdx).toBeLessThan(lastDrawIdx);
+
+    expect(gl.disable).toHaveBeenCalledWith(gl.BLEND);
+    expect(gl.enable).toHaveBeenCalledWith(gl.BLEND);
+    expect(gl.uniformValues.get('uLayerOpacity')).toBe(0.85);
   });
 });

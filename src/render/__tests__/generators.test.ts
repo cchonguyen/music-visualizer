@@ -263,6 +263,76 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(moireFragSrc).toContain('fragColor = vec4(col * a, a)');
   });
 
+  it('binds uSceneTex on TEXTURE1 when provided via options.sceneTex (Slice 7.35)', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    const mockSceneTex = { id: 'mockSceneTex' } as unknown as WebGLTexture;
+    layer.draw(frame, dummyClock, dummyTarget, { sceneTex: mockSceneTex });
+
+    const activeUnits = (gl as any)._activeTextures;
+    expect(activeUnits).toContain(gl.TEXTURE1);
+    expect((gl as any)._boundTextures.get(gl.TEXTURE1)).toBe(mockSceneTex);
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uSceneTex' }),
+      1,
+    );
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uHasSceneTex' }),
+      1,
+    );
+  });
+
+  it('sets uHasSceneTex to 0 when sceneTex is not provided (Slice 7.35)', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uHasSceneTex' }),
+      0,
+    );
+  });
+
+  it('verifies moire.frag.glsl contains uSceneTex, uHasSceneTex, wide Nyquist roll-off, and refraction gradient (Slice 7.35)', () => {
+    expect(moireFragSrc).toContain('uniform sampler2D uSceneTex;');
+    expect(moireFragSrc).toContain('uniform int uHasSceneTex;');
+    expect(moireFragSrc).toContain('1.0 - fw * 0.12');
+    expect(moireFragSrc).toContain('max(freqDelta, 0.045)');
+    expect(moireFragSrc).toContain('dFdx(interference)');
+    expect(moireFragSrc).toContain('dFdy(interference)');
+    expect(moireFragSrc).toContain('mix(0.55, 1.65, interference)');
+  });
+
+  it('Scene passes snapshot texture to MoireLayer as sceneTex during draw (Slice 7.35)', () => {
+    const gl = createMockGl();
+    const moireLayer = new MoireLayer();
+    const drawSpy = vi.spyOn(moireLayer, 'draw');
+    const scene = new Scene('moireScene', [moireLayer]);
+    scene.init(gl);
+
+    const frame = createDummyAudioFrame();
+    scene.draw(frame, dummyClock);
+
+    expect(drawSpy).toHaveBeenCalledWith(
+      frame,
+      dummyClock,
+      expect.anything(),
+      expect.objectContaining({
+        sceneTex: expect.anything(),
+      }),
+    );
+    const lastCall = drawSpy.mock.calls[0];
+    const optionsPassed = lastCall?.[3] as any;
+    expect(optionsPassed?.sceneTex).not.toBeNull();
+    expect(optionsPassed?.sceneTex).toBeDefined();
+  });
+
   it('disposes resources cleanly', () => {
     const gl = createMockGl();
     const layer = new MoireLayer();
@@ -389,9 +459,42 @@ describe('Slice 7.13: SpectralTerrainLayer and shaders', () => {
     // Line draw calls: LINE_STRIP with 128 vertices
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.LINE_STRIP, 0, TERRAIN_BINS);
 
-    // Blending enabled with SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+    // Blending enabled with ONE, ONE_MINUS_SRC_ALPHA for skirts and SRC_ALPHA, ONE for lines
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND);
-    expect(gl.blendFunc).toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE);
+  });
+
+  it('protects texture unit 0: never unbinds texture unit 0 during history upload or draw (Slice 7.38)', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    // Bind a dummy texture to TEXTURE0 before terrain draw
+    const dummyTex0 = { id: 'dummyTex0' } as unknown as WebGLTexture;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, dummyTex0);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    // Verify TEXTURE0 was never unbound (boundTexture for TEXTURE0 is still dummyTex0)
+    expect((gl as any)._boundTextures.get(gl.TEXTURE0)).toBe(dummyTex0);
+  });
+
+  it('defaults skirtOpacity to 0.15 and applies non-destructive skirt blendFunc (Slice 7.38)', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uSkirtOpacity' }),
+      0.15,
+    );
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   });
 
   it('disposes all buffers, textures, and program', () => {
@@ -503,6 +606,10 @@ describe('Slice 7.13: Flagship Presets 07 and 08', () => {
     const terrainLayer = p8.layers.find((l) => l.type === 'spectralTerrain');
     expect(terrainLayer).toBeDefined();
     expect(terrainLayer!.enabled).toBe(true);
+    expect(terrainLayer!.blend).toBe('max');
+    expect(terrainLayer!.trails).toBe(true);
+    expect(terrainLayer!.params.skirtOpacity?.value).toBe(0.20);
+    expect(terrainLayer!.params.lineThickness?.value).toBe(2.2);
 
     const pulseLayer = p8.layers.find((l) => l.type === 'bassPulse');
     expect(pulseLayer).toBeDefined();

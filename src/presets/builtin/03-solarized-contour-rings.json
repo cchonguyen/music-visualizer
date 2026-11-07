@@ -24,7 +24,8 @@
       "trails": true,
       "params": {
         "maxRings": 5,
-        "strokeBase": 0.02
+        "strokeBase": 0.02,
+        "strokeNormGain": 0.012
       }
     }
   ],

@@ -21,6 +21,8 @@ uniform float uColorSpread;
 uniform int uPatternMode;
 uniform float uAudioWarp;
 uniform float uLayerOpacity;
+uniform sampler2D uSceneTex;
+uniform int uHasSceneTex;
 
 in vec2 vUv;
 out vec4 fragColor;
@@ -34,8 +36,8 @@ const float MAX_SPATIAL_FREQ = 75.0;
 // Analytical derivative-based (fwidth) anti-aliasing with Nyquist roll-off
 float evaluateGrid(float phase, float width) {
   float fw = fwidth(phase);
-  // Roll off toward flat average when spatial frequency approaches Nyquist limit
-  float nyquistFade = clamp(1.0 - fw * 0.35, 0.0, 1.0);
+  // Roll off toward flat average when spatial frequency approaches Nyquist limit (Slice 7.35 wide sweet spot)
+  float nyquistFade = clamp(1.0 - fw * 0.12, 0.22, 1.0);
 
   // Normalized phase in [0, 1)
   float p = fract(phase / TAU);
@@ -57,10 +59,11 @@ void main() {
   float t = uTime * uSpeed;
   float kick = max(u_kickEnv, uKickEnv);
 
-  // Frequency ratio (<= 0.08 delta) modulated with u_sub
+  // Frequency ratio (<= 0.08 delta) modulated with u_sub (Slice 7.35: min detuning max(freqDelta, 0.045))
   float freqDelta = clamp(u_sub, 0.0, 1.0) * 0.08;
+  float effDelta = max(freqDelta, 0.045);
   float freq1 = baseFreq;
-  float freq2 = baseFreq * (1.0 + freqDelta);
+  float freq2 = baseFreq * (1.0 + effDelta);
 
   // Bass center sweep: u_sub visibly sweeps center separation apart
   float sep = 0.18 + 0.25 * uAudioWarp * u_sub;
@@ -136,11 +139,21 @@ void main() {
   // Contrast & Softness: blend between smooth cosine interference and anti-aliased ribbons via uWaveShape
   float moire = mix(moireSmooth, moireCrisp, clamp(uWaveShape, 0.0, 1.0));
   moire = clamp(moire, 0.0, 1.0);
+  float interference = moire;
 
   // Two-tone palette color gradient controlled by uColorSpread
   float beatPhase = 0.5 + 0.5 * cos((phi1 + phi2) * 0.5);
   vec3 fringeCol = mix(uColorA, uColorB, clamp(beatPhase * uColorSpread, 0.0, 1.0));
   vec3 col = fringeCol * uBrightness;
+  vec3 moireCol = col;
+
+  // Slice 7.35: Feedback trail buffer refraction & modulation (uSceneTex)
+  vec2 moireGrad = vec2(dFdx(interference), dFdy(interference));
+  if (uHasSceneTex == 1) {
+    vec3 bg = texture(uSceneTex, vUv + moireGrad * (0.018 + 0.025 * uAudioWarp)).rgb;
+    vec3 woven = bg * mix(0.55, 1.65, interference) + moireCol * (0.35 + 0.65 * clamp(length(bg) * 1.5, 0.25, 1.0));
+    col = woven;
+  }
 
   // Stencil alpha: dark troughs emit alpha = 0 so underlying layers show through cleanly!
   float a = clamp(moire * uContrast, 0.0, 1.0) * uLayerOpacity;

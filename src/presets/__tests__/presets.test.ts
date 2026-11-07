@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BUILTIN_PRESETS, FLAGSHIP_PRESETS } from '../builtin';
+import { BUILTIN_PRESETS, FLAGSHIP_PRESETS, ALL_PRESETS } from '../builtin';
 import { PRESET_VERSION } from '../format';
 import { buildScene } from '../loader';
 import { BrightnessLimiter, CAP_FLOOR } from '../../render/safety';
@@ -58,9 +58,18 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     const waveLayer = p1.layers.find((l) => l.type === 'waveform')!;
     expect(waveLayer).toBeDefined();
     expect(waveLayer.params.mode?.value).toBe('circle');
+    expect(waveLayer.params.radius?.value).toBe(0.62);
+    expect(waveLayer.params.thickness?.value).toBe(2.4);
     expect(waveLayer.params.colorMode?.value).toBe('gradient');
     expect(waveLayer.params.amplitude?.link?.source).toBe('sub');
     expect(waveLayer.params.textureGain?.link?.source).toBe('mid');
+    const partLayer = p1.layers.find((l) => l.type === 'particles')!;
+    expect(partLayer).toBeDefined();
+    expect(partLayer.opacity).toBe(0.55);
+    expect(partLayer.blend).toBe('add');
+    expect(partLayer.params.shape?.value).toBe('dot');
+    expect(partLayer.params.size?.value).toBe(1.6);
+    expect(partLayer.params.swirlGain?.value).toBe(1.4);
   });
 
   it('Preset 02 (Kaleidoscopic Mandala) matches specifications', () => {
@@ -75,20 +84,22 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(p2.feedback.mandalaKickFlare?.value).toBe(0.4);
     expect(p2.feedback.zoom?.value).toBe(1.038);
     expect(p2.feedback.rotate?.value).toBe(0.015);
-    expect(p2.feedback.decay?.value).toBe(0.88);
+    expect(p2.feedback.decay?.value).toBe(0.90);
+    expect(p2.feedback.fade?.value).toBe(0.005);
     expect(p2.feedback.decayRgb?.value).toEqual([0.92, 0.90, 0.96]);
-    const ringsLayer = p2.layers.find((l) => l.type === 'rings')!;
-    expect(ringsLayer).toBeDefined();
-    expect(ringsLayer.blend).toBe('max');
-    expect(ringsLayer.trails).toBe(true);
-    expect(ringsLayer.params.mode?.value).toBe('orbitTriangles');
-    expect(ringsLayer.params.maxRings?.value).toBe(6);
+    expect(p2.layers.some((l) => l.type === 'rings')).toBe(false);
     const waveLayer = p2.layers.find((l) => l.type === 'waveform')!;
     expect(waveLayer).toBeDefined();
-    expect(waveLayer.blend).toBe('max');
+    expect(waveLayer.blend).toBe('add');
     expect(waveLayer.trails).toBe(false);
-    expect(waveLayer.params.mode?.value).toBe('star7');
+    expect(waveLayer.params.mode?.value).toBe('circle');
+    expect(waveLayer.params.thickness?.value).toBe(2.2);
     expect(waveLayer.params.colorMode?.value).toBe('palette');
+    const partLayer = p2.layers.find((l) => l.type === 'particles')!;
+    expect(partLayer).toBeDefined();
+    expect(partLayer.params.shape?.value).toBe('streak');
+    const shockLayer = p2.layers.find((l) => l.type === 'shockwave')!;
+    expect(shockLayer).toBeDefined();
   });
 
   it('Preset 03 (Solarized Contour Rings) matches specifications', () => {
@@ -111,6 +122,7 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(ringsLayer.blend).toBe('max');
     expect(ringsLayer.trails).toBe(true);
     expect(ringsLayer.params.maxRings?.value).toBe(5);
+    expect(ringsLayer.params.strokeNormGain?.value).toBe(0.012);
   });
 
   it('Preset 04 (Möbius Dual Vortex) matches specifications', () => {
@@ -125,15 +137,18 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(p4.feedback.mobiusMode?.value).toBe('auto');
     expect(p4.feedback.decay?.value).toBe(0.90);
     expect(p4.feedback.decayRgb?.value).toEqual([0.92, 0.91, 0.96]);
-    const ringsLayer = p4.layers.find((l) => l.type === 'rings')!;
-    expect(ringsLayer).toBeDefined();
-    expect(ringsLayer.params.mode?.value).toBe('polarGrid');
-    expect(ringsLayer.blend).toBe('max');
-    expect(ringsLayer.trails).toBe(true);
+    expect(p4.layers.some((l) => l.type === 'rings')).toBe(false);
     const particleLayer = p4.layers.find((l) => l.type === 'particles')!;
     expect(particleLayer).toBeDefined();
     expect(particleLayer.blend).toBe('max');
     expect(particleLayer.opacity).toBe(0.7);
+    const shockLayer = p4.layers.find((l) => l.type === 'shockwave')!;
+    expect(shockLayer).toBeDefined();
+    const crownLayer = p4.layers.find((l) => l.type === 'crown')!;
+    expect(crownLayer).toBeDefined();
+    const waveLayer = p4.layers.find((l) => l.type === 'waveform')!;
+    expect(waveLayer).toBeDefined();
+    expect(waveLayer.params.mode?.value).toBe('line');
   });
 
   it('Preset 05 (RGB Aberration Vortex) matches specifications', () => {
@@ -145,6 +160,7 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     const waveLayer = p5.layers.find((l) => l.type === 'waveform')!;
     expect(waveLayer).toBeDefined();
     expect(waveLayer.params.mode?.value).toBe('star7');
+    expect(waveLayer.params.thickness?.value).toBe(2.2);
     const shockLayer = p5.layers.find((l) => l.type === 'shockwave')!;
     expect(shockLayer).toBeDefined();
   });
@@ -156,6 +172,7 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     const waveLayer = p6.layers.find((l) => l.type === 'waveform')!;
     expect(waveLayer).toBeDefined();
     expect(waveLayer.params.mode?.value).toBe('lissajous');
+    expect(waveLayer.params.thickness?.value).toBe(2.2);
     expect(p6.post.crtScanlines?.value).toBe(0.25);
     expect(p6.post.crtBarrel?.value).toBe(0.08);
     expect(p6.post.bloom?.value).toBe(0.7);
@@ -184,6 +201,41 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
         expect(Number.isFinite(cap)).toBe(true);
       }
     }
+  });
+
+  it('Presets 07, 09, 10, 11, tex-dust-wave, and tex-ripple-field match Slice 7.37 specifications', () => {
+    const p7 = ALL_PRESETS.find((p) => p.id === '07-moire-interference-loom')!.preset;
+    expect(p7.layers.map((l) => l.type)).toEqual(['moire', 'particles', 'bassPulse']);
+    const moireLayer = p7.layers.find((l) => l.type === 'moire')!;
+    expect(moireLayer.params.patternMode?.value).toBe('starburstLoom');
+
+    const p9 = ALL_PRESETS.find((p) => p.id === '09-chladni-cymatic-sand')!.preset;
+    expect(p9.layers[0]!.params.plateMode?.value).toBe('fullscreen');
+
+    const p10 = ALL_PRESETS.find((p) => p.id === '10-phyllotaxis-spiral-bloom')!.preset;
+    expect(p10.layers.map((l) => l.type)).toEqual(['particles', 'rings', 'crown']);
+    const p10Rings = p10.layers.find((l) => l.type === 'rings')!;
+    expect(p10Rings.opacity).toBe(0.35);
+    const p10Crown = p10.layers.find((l) => l.type === 'crown')!;
+    expect(p10Crown.opacity).toBe(0.45);
+
+    const p11 = ALL_PRESETS.find((p) => p.id === '11-ferrofluid-magnetic-crown')!.preset;
+    expect(p11.layers.some((l) => l.type === 'ferrofluid')).toBe(true);
+
+    const pDust = BUILTIN_PRESETS.find((p) => p.id === 'tex-dust-wave')!.preset;
+    expect(pDust.feedback.stretchY?.value).toBe(1.36);
+    const dustWave = pDust.layers.find((l) => l.type === 'waveform')!;
+    expect(dustWave.params.mode?.value).toBe('line');
+    const dustPart = pDust.layers.find((l) => l.type === 'particles')!;
+    expect(dustPart.params.mode?.value).toBe('phyllotaxis');
+    expect(dustPart.params.seedShape?.value).toBe('orb');
+
+    const pRipple = BUILTIN_PRESETS.find((p) => p.id === 'tex-ripple-field')!.preset;
+    const ripWave = pRipple.layers.find((l) => l.type === 'waveform')!;
+    expect(ripWave.params.thickness?.value).toBe(2.2);
+    const ripPart = pRipple.layers.find((l) => l.type === 'particles')!;
+    expect(ripPart).toBeDefined();
+    expect(ripPart.opacity).toBe(0.75);
   });
 
   it('all 23 existing presets continue to pass without error or warnings', () => {

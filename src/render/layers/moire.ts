@@ -20,6 +20,7 @@ const PATTERN_MODES: Record<string, number> = {
 };
 
 export class MoireLayer implements RenderLayer {
+  readonly type = 'moire';
   private p: MoireParams;
 
   constructor(params: Partial<MoireParams> = {}) {
@@ -54,6 +55,8 @@ export class MoireLayer implements RenderLayer {
   private uPatternMode: WebGLUniformLocation | null = null;
   private uAudioWarp: WebGLUniformLocation | null = null;
   private uLayerOpacity: WebGLUniformLocation | null = null;
+  private uSceneTex: WebGLUniformLocation | null = null;
+  private uHasSceneTex: WebGLUniformLocation | null = null;
 
   init(gl: WebGL2RenderingContext): void {
     this.gl = gl;
@@ -78,6 +81,8 @@ export class MoireLayer implements RenderLayer {
     this.uPatternMode = gl.getUniformLocation(this.program, 'uPatternMode');
     this.uAudioWarp = gl.getUniformLocation(this.program, 'uAudioWarp');
     this.uLayerOpacity = gl.getUniformLocation(this.program, 'uLayerOpacity');
+    this.uSceneTex = gl.getUniformLocation(this.program, 'uSceneTex');
+    this.uHasSceneTex = gl.getUniformLocation(this.program, 'uHasSceneTex');
     this.vao = createVao(gl);
   }
 
@@ -89,7 +94,7 @@ export class MoireLayer implements RenderLayer {
     frame: AudioFrame,
     clock: RenderClock,
     target: RenderTarget,
-    options?: { opacity?: number; uLayerOpacity?: number },
+    options?: { opacity?: number; uLayerOpacity?: number; sceneTex?: WebGLTexture | null },
   ): void {
     const gl = this.gl;
     if (!gl || !this.program || !this.vao) throw new Error('MoireLayer: draw before init');
@@ -132,6 +137,18 @@ export class MoireLayer implements RenderLayer {
     const layerOpacity = options?.uLayerOpacity ?? options?.opacity ?? 1.0;
     gl.uniform1f(this.uLayerOpacity, layerOpacity);
 
+    // Slice 7.35: Bind sceneTex to TEXTURE1 if provided
+    const sceneTex = options?.sceneTex ?? null;
+    gl.uniform1i(this.uSceneTex, 1);
+    if (sceneTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, sceneTex);
+      gl.uniform1i(this.uHasSceneTex, 1);
+      gl.activeTexture(gl.TEXTURE0);
+    } else {
+      gl.uniform1i(this.uHasSceneTex, 0);
+    }
+
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -144,5 +161,7 @@ export class MoireLayer implements RenderLayer {
     this.gl = null;
     this.program = null;
     this.vao = null;
+    this.uSceneTex = null;
+    this.uHasSceneTex = null;
   }
 }

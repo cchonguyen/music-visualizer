@@ -20,7 +20,7 @@
     {
       "type": "spectralTerrain",
       "opacity": 1.0,
-      "blend": "alpha",
+      "blend": "max",
       "trails": true,
       "params": {
         "elevation": 0.75,
@@ -28,11 +28,11 @@
         "horizonY": 0.32,
         "foregroundY": -0.58,
         "brightness": 1.3,
-        "lineThickness": 1.9,
+        "lineThickness": 2.2,
         "ridgeShape": "smooth",
         "layoutMode": "fullHorizon",
         "gridCols": 16,
-        "skirtOpacity": 0.90,
+        "skirtOpacity": 0.20,
         "colorSpread": 0.88,
         "terrainFlow": 0.40
       }

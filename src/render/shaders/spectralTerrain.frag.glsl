@@ -19,10 +19,8 @@ out vec4 outColor;
 
 void main() {
   if (uIsSkirtPass == 1) {
-    // Dark indigo-black occlusion skirt: alpha = uSkirtOpacity * uLayerOpacity
-    vec3 skirtColor = vec3(0.008, 0.008, 0.014);
-    float skirtAlpha = clamp(uSkirtOpacity * uLayerOpacity, 0.0, 1.0);
-    outColor = vec4(skirtColor, skirtAlpha);
+    // Soft transparent dark-indigo tint: alpha = 0.12 * uSkirtOpacity * uLayerOpacity
+    outColor = vec4(vec3(0.005), 0.12 * uSkirtOpacity * uLayerOpacity);
   } else {
     // Ridge crests and 3D wireframe grid lines:
     // Gradient between uColorA (electric cyan on flanks) and uColorB (neon magenta on central peaks)

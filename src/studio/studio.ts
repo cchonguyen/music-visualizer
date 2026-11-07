@@ -14,6 +14,19 @@ import type { PresetSession } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
 import type { ParamSpec, ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
+import {
+  EXPERIENCE_MODES,
+  CAMERA_MODES,
+  COLOR_MOODS,
+  TRIGGER_CADENCES,
+  getGlobalDirector,
+  type ExperienceMode,
+  type CameraMode,
+  type ColorMood,
+  type TriggerCadence,
+} from '../render/globalDirector';
+
+export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES };
 
 export interface StudioOptions {
   session: PresetSession;
@@ -206,6 +219,10 @@ export class Studio {
     pane.addBlade({ view: 'separator' });
     pane.addButton({ title: 'Randomise (within safe ranges)' }).on('click', () => this.vary('random'));
     pane.addButton({ title: 'Mutate (±10%)' }).on('click', () => this.vary('mutate'));
+
+    // --- Global Director (Sector 483, Slice 7.32) -----------------------------------
+    const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
+    buildGlobalDirectorControls(dirFolder);
 
     // --- Layer stack ----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
@@ -506,7 +523,7 @@ export class Studio {
   }
 
   private exportFile(id: string): void {
-    const text = this.opts.session.exportJson(id);
+    const text = this.opts.session.exportJson(id, true);
     const name = (this.opts.session.get(id)?.preset.name ?? 'preset').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');
@@ -524,9 +541,15 @@ export class Studio {
       const file = input.files?.[0];
       if (!file) return;
       try {
-        const { id, warnings } = this.opts.session.importJson(await file.text());
-        showToast(warnings.length ? `Imported with ${warnings.length} fix(es)` : 'Imported');
-        this.opts.switchTo(id);
+        const res = this.opts.session.importAsset(await file.text());
+        if (res.kind === 'preset') {
+          showToast(res.warnings.length ? `Imported with ${res.warnings.length} fix(es)` : `Imported Preset · ${res.name}`);
+          if (res.id) this.opts.switchTo(res.id);
+        } else if (res.kind === 'palette') {
+          showToast(`Imported Palette · ${res.name}`);
+        } else if (res.kind === 'bundle') {
+          showToast(`Imported Bundle · ${res.name}`);
+        }
       } catch (err) {
         showToast((err as Error).message);
       }
@@ -693,4 +716,94 @@ export function bindSpec(
       return [b0, b1, b2];
     }
   }
+}
+
+export function buildGlobalDirectorControls(
+  folder: { addBinding: (target: any, prop: any, options?: any) => any },
+  director = getGlobalDirector(),
+) {
+  const settings = { ...director.getSettings() };
+
+  const experienceModeBinding = folder.addBinding(settings, 'experienceMode', {
+    label: 'Experience mode',
+    options: {
+      'Cinematic': 'cinematic',
+      'Calm': 'calm',
+      'Minimal': 'minimal',
+      'Color Walk': 'colorWalk',
+      'Custom': 'custom',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.setExperienceMode(ev.value as ExperienceMode);
+  });
+
+  const cameraModeBinding = folder.addBinding(settings, 'cameraMode', {
+    label: 'Camera motion',
+    options: {
+      'Auto (Complementary)': 'auto',
+      'Crane sway': 'craneSway',
+      'Dutch roll': 'dutchRoll',
+      'Breathing push': 'breathingPush',
+      'Horizon 2.5D tilt': 'horizonTilt',
+      'Still anchor': 'stillAnchor',
+      'Off': 'off',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ cameraMode: ev.value as CameraMode });
+  });
+
+  const cameraIntensityBinding = folder.addBinding(settings, 'cameraIntensity', {
+    label: 'Camera intensity',
+    min: 0,
+    max: 1,
+    step: 0.05,
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ cameraIntensity: Number(ev.value) });
+  });
+
+  const colorMoodBinding = folder.addBinding(settings, 'colorMood', {
+    label: 'Color mood',
+    options: {
+      'Auto-cycle palettes': 'auto',
+      'Native (preset original)': 'native',
+      'Cyberpunk (Cyan/Magenta)': 'cyberpunk',
+      'Ember (Indigo/Gold)': 'ember',
+      'Bioluminescent (Teal/Aqua)': 'biolum',
+      'Vapor (Violet/Rose)': 'vapor',
+      'Prismatic (Cobalt/Coral)': 'prismatic',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ colorMood: ev.value as ColorMood });
+  });
+
+  const colorIntensityBinding = folder.addBinding(settings, 'colorIntensity', {
+    label: 'Color intensity',
+    min: 0,
+    max: 1,
+    step: 0.05,
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ colorIntensity: Number(ev.value) });
+  });
+
+  const triggerCadenceBinding = folder.addBinding(settings, 'triggerCadence', {
+    label: 'Transition trigger',
+    options: {
+      'Song section (35s+)': 'section',
+      'Every 32 beats': 'beats32',
+      'Every 64 beats': 'beats64',
+      'Every 128 beats': 'beats128',
+      'Timer (45s)': 'timer45',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ triggerCadence: ev.value as TriggerCadence });
+  });
+
+  return {
+    experienceModeBinding,
+    cameraModeBinding,
+    cameraIntensityBinding,
+    colorMoodBinding,
+    colorIntensityBinding,
+    triggerCadenceBinding,
+  };
 }

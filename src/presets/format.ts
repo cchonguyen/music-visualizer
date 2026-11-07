@@ -1,6 +1,7 @@
 // Preset format: the shape of a preset as a JSON file, and the checker that turns
 // any JSON (hand-edited, imported, or saved by an older version) into a safe Preset.
 import { AUDIO_SOURCES, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
+import type { GlobalDirectorSettings } from "../render/globalDirector";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
 export const PRESET_VERSION = 1 as const;
@@ -65,7 +66,33 @@ export interface Preset {
   feedback: Settings;
   layers: LayerEntry[];
   post: Settings;
+  directorProfile?: {
+    cameraMode?: string;
+    colorMood?: string;
+    colorIntensity?: number;
+  };
 }
+
+export interface DirectorPaletteAsset {
+  kind: 'mv-director-palette';
+  version: 1;
+  id: string;
+  name: string;
+  shadowTint: [number, number, number];
+  highlightTint: [number, number, number];
+  spatialSpread: number;
+}
+
+export interface ExperienceBundleAsset {
+  kind: 'mv-experience-bundle';
+  version: 1;
+  name: string;
+  presets?: Preset[];
+  directorPalettes?: DirectorPaletteAsset[];
+  directorSettings?: Partial<GlobalDirectorSettings>;
+}
+
+export type VisualizerAsset = Preset | DirectorPaletteAsset | ExperienceBundleAsset;
 
 /** Which schema lists exist. Layers are looked up by their type name. */
 export interface SchemaRegistry {
@@ -246,6 +273,23 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     });
   });
 
+  let directorProfile: { cameraMode?: string; colorMood?: string; colorIntensity?: number } | undefined;
+  if (isRecord(raw.directorProfile)) {
+    const dp: { cameraMode?: string; colorMood?: string; colorIntensity?: number } = {};
+    if (typeof raw.directorProfile.cameraMode === "string" && raw.directorProfile.cameraMode.trim() !== "") {
+      dp.cameraMode = raw.directorProfile.cameraMode.trim();
+    }
+    if (typeof raw.directorProfile.colorMood === "string" && raw.directorProfile.colorMood.trim() !== "") {
+      dp.colorMood = raw.directorProfile.colorMood.trim();
+    }
+    if (typeof raw.directorProfile.colorIntensity === "number" && Number.isFinite(raw.directorProfile.colorIntensity)) {
+      dp.colorIntensity = Math.max(0, Math.min(1, raw.directorProfile.colorIntensity));
+    }
+    if (Object.keys(dp).length > 0) {
+      directorProfile = dp;
+    }
+  }
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
@@ -254,6 +298,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     feedback: parseSettings(raw.feedback, registry.feedback, "feedback", warnings),
     layers,
     post: parseSettings(raw.post, registry.post, "post", warnings),
+    ...(directorProfile ? { directorProfile } : {}),
   };
   return { preset, warnings };
 }

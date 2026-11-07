@@ -9,6 +9,17 @@ import vertSrc from '../shaders/ferrofluid.vert.glsl?raw';
 import fragSrc from '../shaders/ferrofluid.frag.glsl?raw';
 import { FERROFLUID_DEFAULTS, type FerrofluidParams } from '../../presets/schema';
 
+export interface FerrofluidExtendedParams extends FerrofluidParams {
+  colorPrimary?: string;
+  colorSecondary?: string;
+}
+
+function parseHexColor(hex: string): [number, number, number] {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return [0.06, 0.90, 0.98];
+  return [parseInt(m[1]!, 16) / 255, parseInt(m[2]!, 16) / 255, parseInt(m[3]!, 16) / 255];
+}
+
 /**
  * Generates an indexed unit sphere triangle mesh by recursively subdividing an icosahedron.
  * Subdivision 0: 12 vertices / 20 triangles
@@ -115,10 +126,10 @@ export function generateIcosahedronMesh(subdivisions = 4): { positions: Float32A
 
 export class FerrofluidLayer implements RenderLayer {
   opacity = 1.0;
-  private p: FerrofluidParams;
+  private p: FerrofluidExtendedParams;
   private indexCount = 0;
 
-  constructor(params: Partial<FerrofluidParams> = {}) {
+  constructor(params: Partial<FerrofluidExtendedParams> = {}) {
     this.p = { ...FERROFLUID_DEFAULTS, ...params };
   }
 
@@ -126,7 +137,7 @@ export class FerrofluidLayer implements RenderLayer {
     this.opacity = opacity;
   }
 
-  setParams(params: Partial<FerrofluidParams>): void {
+  setParams(params: Partial<FerrofluidExtendedParams>): void {
     this.p = { ...this.p, ...params };
   }
 
@@ -149,6 +160,8 @@ export class FerrofluidLayer implements RenderLayer {
   private uBrightness: WebGLUniformLocation | null = null;
   private uFresnelGain: WebGLUniformLocation | null = null;
   private uLayerOpacity: WebGLUniformLocation | null = null;
+  private uColorPrimary: WebGLUniformLocation | null = null;
+  private uColorSecondary: WebGLUniformLocation | null = null;
 
   init(gl: WebGL2RenderingContext): void {
     this.gl = gl;
@@ -167,6 +180,8 @@ export class FerrofluidLayer implements RenderLayer {
     this.uBrightness = gl.getUniformLocation(this.program, 'uBrightness');
     this.uFresnelGain = gl.getUniformLocation(this.program, 'uFresnelGain');
     this.uLayerOpacity = gl.getUniformLocation(this.program, 'uLayerOpacity');
+    this.uColorPrimary = gl.getUniformLocation(this.program, 'uColorPrimary');
+    this.uColorSecondary = gl.getUniformLocation(this.program, 'uColorSecondary');
 
     // Generate static 4-subdivision unit icosahedron mesh once during init()
     const mesh = generateIcosahedronMesh(4);
@@ -229,8 +244,21 @@ export class FerrofluidLayer implements RenderLayer {
     gl.uniform1f(this.uBrightness, this.p.brightness);
     gl.uniform1f(this.uFresnelGain, this.p.fresnelGain);
 
+    const col1 = parseHexColor(this.p.colorPrimary ?? '#0fe6fa');
+    const col2 = parseHexColor(this.p.colorSecondary ?? '#ff9414');
+    if (this.uColorPrimary) {
+      gl.uniform3f(this.uColorPrimary, col1[0], col1[1], col1[2]);
+    }
+    if (this.uColorSecondary) {
+      gl.uniform3f(this.uColorSecondary, col2[0], col2[1], col2[2]);
+    }
+
     const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
     gl.uniform1f(this.uLayerOpacity, opacity);
+
+    // Backface culling: discard rear triangles so rear hemisphere never draws over front hemisphere
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
 
     // Invariant: gl.DEPTH_TEST enabled ONLY during FerrofluidLayer.draw()
     // and disabled immediately afterward so 2D layers are unaffected.
@@ -241,6 +269,7 @@ export class FerrofluidLayer implements RenderLayer {
     gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
 
     gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
     gl.bindVertexArray(null);
   }
 
@@ -270,5 +299,7 @@ export class FerrofluidLayer implements RenderLayer {
     this.uBrightness = null;
     this.uFresnelGain = null;
     this.uLayerOpacity = null;
+    this.uColorPrimary = null;
+    this.uColorSecondary = null;
   }
 }

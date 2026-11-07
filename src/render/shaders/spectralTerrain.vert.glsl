@@ -52,6 +52,11 @@ void main() {
   float h4 = texture(uHistoryTex, vec2(clamp(u + 2.0 * du, 0.0, 1.0), v)).r;
   float h = (h0 * 0.10 + h1 * 0.20 + h2 * 0.40 + h3 * 0.20 + h4 * 0.10);
 
+  // Subtle ambient travelling sine wave ensures visible ridge contours even during silence (Slice 7.33)
+  float uNorm = u;
+  int uRow = row;
+  h += 0.035 * sin(uNorm * 10.0 + float(uRow) * 0.35);
+
   // Shape smoothed spectrum with uRidgeShape
   if (uRidgeShape == 1) {
     // 1 = rounded: sqrt
@@ -100,7 +105,7 @@ void main() {
   float yBottom = yBase - 0.04;
 
   float perspectiveScale = mix(0.42, 1.0, t);
-  float ribbonHalfThick = uLineThickness * 0.0022 * perspectiveScale * 0.5;
+  float ribbonHalfThick = max(uLineThickness * 0.0055 * perspectiveScale, 0.0028);
 
   float yPos;
   if (uIsSkirtPass == 1) {
@@ -117,7 +122,7 @@ void main() {
   // Legacy vertex color for compatibility
   float depthFade = mix(0.5, 1.0, t);
   vec3 lineColor = mix(uBase, uAccent, clamp(elevation * 2.5, 0.0, 1.0)) * uBrightness * depthFade;
-  vColor = (uIsSkirtPass == 1) ? vec4(0.012, 0.012, 0.016, 1.0) : vec4(lineColor, 1.0);
+  vColor = (uIsSkirtPass == 1) ? vec4(vec3(0.005), 0.12) : vec4(lineColor, 1.0);
 
   vPosNorm = vec2(xNorm, isSkirtBottom);
   vElevation = elevation;

@@ -81,6 +81,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
   private uKill: WebGLUniformLocation | null = null;
   private u_mid: WebGLUniformLocation | null = null;
   private u_centroid: WebGLUniformLocation | null = null;
+  private u_kickEnv: WebGLUniformLocation | null = null;
   private uInjectRing: WebGLUniformLocation | null = null;
 
   // Render Uniforms
@@ -91,6 +92,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
   private uColorCobalt: WebGLUniformLocation | null = null;
   private uBrightness: WebGLUniformLocation | null = null;
   private uSpecular: WebGLUniformLocation | null = null;
+  private uLayerOpacity: WebGLUniformLocation | null = null;
 
   init(gl: WebGL2RenderingContext): void {
     // If re-initializing after context loss, clean up any previous references
@@ -117,6 +119,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
     this.uKill = gl.getUniformLocation(this.simProgram, 'uKill');
     this.u_mid = gl.getUniformLocation(this.simProgram, 'u_mid');
     this.u_centroid = gl.getUniformLocation(this.simProgram, 'u_centroid');
+    this.u_kickEnv = gl.getUniformLocation(this.simProgram, 'u_kickEnv');
     this.uInjectRing = gl.getUniformLocation(this.simProgram, 'uInjectRing');
 
     // Retrieve render uniform locations
@@ -127,6 +130,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
     this.uColorCobalt = gl.getUniformLocation(this.renderProgram, 'uColorCobalt');
     this.uBrightness = gl.getUniformLocation(this.renderProgram, 'uBrightness');
     this.uSpecular = gl.getUniformLocation(this.renderProgram, 'uSpecular');
+    this.uLayerOpacity = gl.getUniformLocation(this.renderProgram, 'uLayerOpacity');
 
     // Seed chemical state: U = 1.0, V = 0.0 with a central ring of V = 0.5
     this.simTargetA = this.allocateTarget(gl);
@@ -134,6 +138,64 @@ export class ReactionDiffusionLayer implements RenderLayer {
     this.currentSimTarget = 'a';
     this.accumulator = 0;
     this.lastSubsteps = 0;
+  }
+
+  private seedInitialState(seed: Float32Array | Uint8Array, isFloat: boolean): void {
+    const buds = [
+      { x: 0.14, y: 0.11, r: 0.045 },
+      { x: -0.15, y: 0.09, r: 0.040 },
+      { x: 0.08, y: -0.16, r: 0.042 },
+      { x: -0.12, y: -0.14, r: 0.045 },
+      { x: 0.18, y: -0.05, r: 0.038 },
+      { x: -0.04, y: 0.20, r: 0.035 },
+    ];
+
+    for (let y = 0; y < RD_SIZE; y++) {
+      for (let x = 0; x < RD_SIZE; x++) {
+        const idx = (y * RD_SIZE + x) * 4;
+        const dx = (x + 0.5) / RD_SIZE - 0.5;
+        const dy = (y + 0.5) / RD_SIZE - 0.5;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+
+        let v = 0.0;
+        let u = 1.0;
+
+        // Break radial symmetry on the initial seed ring (dist >= 0.14 && dist <= 0.28)
+        // by modulating chemical V with deterministic angular/spatial hashes
+        if (dist >= 0.14 && dist <= 0.28) {
+          const hashMod = 0.5 + 0.25 * (Math.sin(angle * 7.0) + Math.cos(angle * 13.0));
+          if (hashMod > 0.3) {
+            v = Math.min(0.65, hashMod);
+            u = 1.0 - v;
+          }
+        }
+
+        // Secondary organic coral buds
+        for (const bud of buds) {
+          const bDist = Math.hypot(dx - bud.x, dy - bud.y);
+          if (bDist < bud.r) {
+            const budV = 0.55 * (1.0 - bDist / bud.r);
+            if (budV > v) {
+              v = budV;
+              u = 1.0 - v;
+            }
+          }
+        }
+
+        if (isFloat) {
+          seed[idx] = u;
+          seed[idx + 1] = v;
+          seed[idx + 2] = 0.0;
+          seed[idx + 3] = 1.0;
+        } else {
+          seed[idx] = Math.round(u * 255);
+          seed[idx + 1] = Math.round(v * 255);
+          seed[idx + 2] = 0;
+          seed[idx + 3] = 255;
+        }
+      }
+    }
   }
 
   private allocateTarget(gl: WebGL2RenderingContext): SimTarget {
@@ -146,36 +208,12 @@ export class ReactionDiffusionLayer implements RenderLayer {
     if (this.isFloatSupported) {
       // Allocate seeded RGBA16F state
       const seed = new Float32Array(RD_SIZE * RD_SIZE * 4);
-      for (let y = 0; y < RD_SIZE; y++) {
-        for (let x = 0; x < RD_SIZE; x++) {
-          const idx = (y * RD_SIZE + x) * 4;
-          const dx = (x + 0.5) / RD_SIZE - 0.5;
-          const dy = (y + 0.5) / RD_SIZE - 0.5;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const inRing = dist >= 0.18 && dist <= 0.26;
-          seed[idx] = inRing ? 0.5 : 1.0;      // U
-          seed[idx + 1] = inRing ? 0.5 : 0.0;  // V
-          seed[idx + 2] = 0.0;
-          seed[idx + 3] = 1.0;
-        }
-      }
+      this.seedInitialState(seed, true);
       gl.texImage2D(gl.TEXTURE_2D, 0, (gl as any).RGBA16F ?? gl.RGBA, RD_SIZE, RD_SIZE, 0, gl.RGBA, gl.FLOAT, seed);
     } else {
       // Allocate seeded RGBA8 fallback state
       const seed = new Uint8Array(RD_SIZE * RD_SIZE * 4);
-      for (let y = 0; y < RD_SIZE; y++) {
-        for (let x = 0; x < RD_SIZE; x++) {
-          const idx = (y * RD_SIZE + x) * 4;
-          const dx = (x + 0.5) / RD_SIZE - 0.5;
-          const dy = (y + 0.5) / RD_SIZE - 0.5;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const inRing = dist >= 0.18 && dist <= 0.26;
-          seed[idx] = inRing ? 128 : 255;     // U
-          seed[idx + 1] = inRing ? 128 : 0;   // V
-          seed[idx + 2] = 0;
-          seed[idx + 3] = 255;
-        }
-      }
+      this.seedInitialState(seed, false);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RD_SIZE, RD_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, seed);
     }
 
@@ -196,7 +234,12 @@ export class ReactionDiffusionLayer implements RenderLayer {
     // Isolated 256x256 simulation resolution is fixed; main pass draws into target dimensions.
   }
 
-  draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
+  draw(
+    frame: AudioFrame,
+    clock: RenderClock,
+    target: RenderTarget,
+    options?: { uLayerOpacity?: number; opacity?: number },
+  ): void {
     const gl = this.gl;
     if (
       !gl ||
@@ -231,6 +274,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
     const shouldInject = kickPulse || kickEnv > 0.7;
 
     // 1. Run simulation sub-steps on dedicated 256x256 PingPong FBO
+    gl.disable(gl.BLEND);
     gl.useProgram(this.simProgram);
     gl.bindVertexArray(this.vao);
 
@@ -242,6 +286,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
     gl.uniform1f(this.uKill, this.p.kill);
     gl.uniform1f(this.u_mid, midVal);
     gl.uniform1f(this.u_centroid, centroidVal);
+    if (this.u_kickEnv) gl.uniform1f(this.u_kickEnv, kickEnv);
     gl.uniform1f(this.uInjectRing, shouldInject ? 1.0 : 0.0);
 
     for (let s = 0; s < subSteps; s++) {
@@ -264,6 +309,7 @@ export class ReactionDiffusionLayer implements RenderLayer {
 
     // 2. Render pass: Draw embossed coral into main scene FBO
     bindTarget(gl, target);
+    gl.enable(gl.BLEND);
     gl.useProgram(this.renderProgram);
 
     const latestState = this.currentSimTarget === 'a' ? this.simTargetA : this.simTargetB;
@@ -277,6 +323,8 @@ export class ReactionDiffusionLayer implements RenderLayer {
     gl.uniform3fv(this.uColorCobalt, parseHexColor(this.p.colorCobalt));
     gl.uniform1f(this.uBrightness, this.p.brightness);
     gl.uniform1f(this.uSpecular, this.p.specular);
+    const layerOpacity = options?.uLayerOpacity ?? options?.opacity ?? 1.0;
+    if (this.uLayerOpacity) gl.uniform1f(this.uLayerOpacity, layerOpacity);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 

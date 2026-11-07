@@ -1,17 +1,21 @@
 #version 300 es
-// FerrofluidLayer fragment shader (Slice 7.15)
+// FerrofluidLayer fragment shader (Slice 7.15, Slice 7.36)
 // Procedural studio MatCap Chrome reflection gradient mapped to (vNormal.x, vNormal.y)
-// + high-contrast cyan/amber Fresnel Rim Halo pow(1.0 - max(dot(V, vNormal), 0.0), 3.0).
+// + palette-infused metallic body + high-contrast Fresnel Rim Halo pow(1.0 - NdotV, 3.0)
+// and Reinhard highlight roll-off.
 precision highp float;
 
 in vec3 vNormal;    // View-space surface normal
 in vec3 vView;      // View-space direction to eye
 in float vSpike;    // Local spike displacement
+in float vHeight;   // Local surface height above base
 in vec3 vLocalPos;
 
 uniform float uBrightness;
 uniform float uFresnelGain;
 uniform float uLayerOpacity;
+uniform vec3 uColorPrimary;
+uniform vec3 uColorSecondary;
 
 out vec4 outColor;
 
@@ -41,28 +45,39 @@ void main() {
   // Specular sheen on sharp spike tips
   float tipGleam = pow(clamp(N.z * 0.5 + 0.5, 0.0, 1.0), 8.0) * 0.25;
 
-  // Obsidian / deep glossy black magnetite base fluid
-  vec3 fluidBase = vec3(0.025, 0.03, 0.04);
-
-  // Chrome specular highlight composite
-  vec3 chromeSpec = vec3(0.94, 0.97, 1.0) * (keyLight * 2.2 + fillLight * 1.1 + horizonBand + zebraReflect + tipGleam);
-  vec3 matcapChrome = fluidBase + chromeSpec;
-
-  // 2. High-contrast Cyan / Amber Fresnel Rim Halo:
+  // 2. Color palette infusion into metallic body & midtones:
   float NdotV = max(dot(V, N), 0.0);
   float fresnel = pow(1.0 - NdotV, 3.0);
 
-  // Dynamic cyan/amber split along rim orientation
+  // Dynamic cyan/amber split along normal orientation & curvature
   float rimGradient = clamp(0.5 + 0.5 * (N.y * 0.85 + N.x * 0.55), 0.0, 1.0);
-  vec3 cyanColor = vec3(0.06, 0.90, 0.98);
-  vec3 amberColor = vec3(1.0, 0.58, 0.08);
-  vec3 rimColor = mix(cyanColor, amberColor, rimGradient);
+  vec3 rimColor = mix(uColorPrimary, uColorSecondary, rimGradient);
 
+  // Body tint modulated by surface curvature vHeight and normal angle
+  float heightMix = clamp(vHeight * 3.5, 0.0, 1.0);
+  vec3 bodyTint = mix(uColorPrimary, uColorSecondary, clamp(0.5 + 0.5 * N.y + 0.25 * sin(vHeight * 8.0), 0.0, 1.0));
+
+  // Obsidian magnetite base infused with deep subtle palette tone
+  vec3 fluidBase = vec3(0.02, 0.025, 0.035) + bodyTint * (0.07 + 0.14 * heightMix * (1.0 - NdotV * 0.5));
+
+  // Midtone reflections infused with iridescent metallic sheen
+  float midtoneSheen = keyLight * 0.55 + fillLight * 0.75 + horizonBand * 0.65 + zebraReflect * 0.45;
+  vec3 midtoneTint = mix(bodyTint, rimColor, 0.35) * midtoneSheen * 1.2;
+
+  // Specular highlights
+  vec3 chromeSpec = vec3(0.95, 0.97, 1.0) * (keyLight * 2.2 + fillLight * 0.55 + tipGleam * 1.2);
+
+  vec3 matcapChrome = fluidBase + midtoneTint + chromeSpec;
+
+  // High-contrast Fresnel rim halo
   vec3 fresnelHalo = rimColor * (fresnel * uFresnelGain * 2.2);
 
-  // 3. Composite color and alpha
-  vec3 finalColor = (matcapChrome + fresnelHalo) * uBrightness;
-  float alpha = clamp(uLayerOpacity * mix(0.92, 1.0, fresnel), 0.0, 1.0);
+  // Composite raw color
+  vec3 rawColor = (matcapChrome + fresnelHalo) * uBrightness;
 
-  outColor = vec4(finalColor, alpha);
+  // Smooth Reinhard-style highlight roll-off so specular peaks stay rich and iridescent
+  vec3 col = rawColor / (1.0 + rawColor * 0.45) * 1.25;
+
+  float alpha = clamp(uLayerOpacity * mix(0.92, 1.0, fresnel), 0.0, 1.0);
+  outColor = vec4(col, alpha);
 }

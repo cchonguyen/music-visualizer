@@ -21,13 +21,14 @@ import { PARTICLE_DEFAULTS, type ParticleParams } from '../../presets/layerSchem
 import { getSceneTransform } from '../sceneTransformStore';
 import { getTerrainState } from '../terrainStore';
 
-export interface ParticleLayerParams extends ParticleParams {
+export interface ParticleLayerParams extends Omit<ParticleParams, 'mode'> {
   terrainDisplace?: number;
   seedShape?: 'orb' | 'petal' | 'star';
   phylloPattern?: 'auto' | 'golden137.5' | 'lucas99.5' | 'fibonacci137.6' | 'rosette137.3' | 'starburst144';
   petalStretch?: number;
   flowSpeed?: number;
   subTwist?: number;
+  mode?: 'radial' | 'phyllotaxis' | 'field';
 }
 
 const PHYLLO_PATTERNS: Record<string, number> = {
@@ -132,6 +133,7 @@ export class ParticleLayer implements RenderLayer {
   private uTerrainTex: WebGLUniformLocation | null = null;
   private uTerrainDisplace: WebGLUniformLocation | null = null;
   private uTerrainWriteRow: WebGLUniformLocation | null = null;
+  private uBeatReactivity: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
 
   /** Monotonic phase accumulators and phrase-locked divergence angle state (Slice 7.29) */
@@ -211,6 +213,7 @@ export class ParticleLayer implements RenderLayer {
     this.uTerrainTex = gl.getUniformLocation(this.program, 'uTerrainTex');
     this.uTerrainDisplace = gl.getUniformLocation(this.program, 'uTerrainDisplace');
     this.uTerrainWriteRow = gl.getUniformLocation(this.program, 'uTerrainWriteRow');
+    this.uBeatReactivity = gl.getUniformLocation(this.program, 'uBeatReactivity');
     this.band.init(gl);
     this.phase.reset();
     this.twinkle.reset();
@@ -282,20 +285,26 @@ export class ParticleLayer implements RenderLayer {
     }
 
     // Density rises with energy only in loud sections; phase never decreases.
+    // In radial mode: add gentle kick velocity momentum push to particle lifetime rather than snapping their positions.
+    const beatReactivity = this.p.beatReactivity ?? 1.0;
+    const kickPush = this.calm ? 0 : kickEnv * 0.45 * beatReactivity;
     const section = this.calm ? 1 : Math.max(0, 1 + this.sectionContrast);
     const rate = this.calm
       ? CALM_PHASE_RATE * getVisualGain()
-      : (BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy) * section;
+      : (BASE_PHASE_RATE + ENERGY_PHASE_RATE * frame.energy + kickPush) * section;
     const phase = this.phase.advance(clock.dtSec, rate);
     // Calm slows the motion, but the twinkle keeps real time (only its brightness is dimmed).
     const twinkleTime = this.twinkle.advance(clock.dtSec, 1);
     // Hue drift (4.8): the clock only moves forward; the shader gets shift + drift wrapped to 0..1.
     this.hueTurns += this.p.hueDrift * Math.max(0, clock.dtSec);
 
-    // norm.high (track-relative): raw treble is often under 0.3 on real music, so env.high barely lit the particles.
-    // Hi-hat flashes add only a little sparkle (flashSparkleScale), so the scene doesn't strobe on every hit.
-    let sparkle = clamp01(frame.norm.high + this.flash * this.p.flashSparkleScale);
-    if (this.calm) sparkle *= this.p.calmSparkleScale;
+    // Sparkle floor (Slice 7.33): base floor prevents blackout during silence or zero treble.
+    const normHigh = frame.norm?.high ?? 0;
+    const normMid = frame.norm?.mid ?? 0;
+    const normSub = frame.norm?.sub ?? 0;
+    const baseFloor = Math.max(0.48, this.p.calmSparkleScale);
+    const audioLift = 0.55 * normHigh + 0.30 * normMid + 0.25 * normSub;
+    const sparkle = clamp01(baseFloor + audioLift + this.flash * this.p.flashSparkleScale);
 
     const palette: Palette = getPalette(this.paletteName);
     const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
@@ -323,8 +332,12 @@ export class ParticleLayer implements RenderLayer {
     // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).
     gl.uniform1fv(this.uCrown, getCrownHeights());
 
-    const isPhyllotaxis = this.p.mode === 'phyllotaxis';
-    gl.uniform1i(this.uMode, isPhyllotaxis ? 1 : 0);
+    const mode = this.p.mode;
+    const isPhyllotaxis = mode === 'phyllotaxis';
+    let modeInt = 0;
+    if (isPhyllotaxis) modeInt = 1;
+    else if (mode === 'field') modeInt = 2;
+    gl.uniform1i(this.uMode, modeInt);
     gl.uniform1f(this.uSubTwist, (this.calm ? 0 : (frame.norm?.sub ?? 0)) * 5.0);
     gl.uniform1f(this.uFlowSpeed, this.p.flowSpeed ?? 2.5);
 
@@ -365,6 +378,7 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uDivergenceAngle, this.divergenceAngle);
     gl.uniform1f(this.uPetalStretch, this.p.petalStretch ?? 1.65);
     gl.uniform1f(this.uKickEnv, kickEnv);
+    if (this.uBeatReactivity) gl.uniform1f(this.uBeatReactivity, beatReactivity);
     gl.uniform1f(this.uSize, this.p.size);
     // Colour shift (4.8): fixed offset plus drift, wrapped into 0..1 turns. Zero at the defaults.
     gl.uniform1f(this.uHue, ((this.p.hueShift + this.hueTurns) % 1 + 1) % 1);
@@ -417,6 +431,7 @@ export class ParticleLayer implements RenderLayer {
     this.uTerrainTex = null;
     this.uTerrainDisplace = null;
     this.uTerrainWriteRow = null;
+    this.uBeatReactivity = null;
     this.uPhase = null;
     this.uAspect = null;
     this.uAccent = null;

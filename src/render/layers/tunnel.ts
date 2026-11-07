@@ -191,9 +191,10 @@ export class TunnelLayer implements RenderLayer {
     const accents = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
 
     const layerOpacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity ?? 1.0;
+    const beatReactivity = this.p.beatReactivity ?? 0.5;
 
     gl.useProgram(this.program);
-    gl.uniform1f(this.uBeat, this.beatEnv);
+    gl.uniform1f(this.uBeat, this.beatEnv * beatReactivity);
     gl.uniform1f(this.uQuiet, this.quietEnv);
     if (this.uPhase) gl.uniform1f(this.uPhase, forwardPhase);
     if (this.uForwardPhase) gl.uniform1f(this.uForwardPhase, forwardPhase);
@@ -236,7 +237,7 @@ export class TunnelLayer implements RenderLayer {
     const rollVal = this.roll.advance(clock.dtSec, frame.energy, this.calm);
     gl.uniform1f(this.uRoll, rollVal);
     if (this.uRollPhase) gl.uniform1f(this.uRollPhase, rollVal);
-    gl.uniform1f(this.uDensity, this.p.ringDensity * (1 + 0.3 * Math.max(0, frame.env.sub - 0.2)));
+    gl.uniform1f(this.uDensity, this.p.ringDensity);
     gl.uniform1f(this.uHue, Math.min(1, Math.max(0, 0.5 + 0.35 * Math.sin(t * 0.11) + 0.4 * (frame.norm.high - highSlow))));
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

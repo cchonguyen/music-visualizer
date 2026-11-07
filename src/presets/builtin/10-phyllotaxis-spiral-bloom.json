@@ -20,6 +20,21 @@
         "size": 2.2,
         "brightness": 1.4
       }
+    },
+    {
+      "type": "rings",
+      "opacity": 0.35,
+      "blend": "screen",
+      "params": {
+        "maxRings": 4,
+        "strokeBase": 0.003
+      }
+    },
+    {
+      "type": "crown",
+      "opacity": 0.45,
+      "blend": "screen",
+      "params": {}
     }
   ],
   "post": {}

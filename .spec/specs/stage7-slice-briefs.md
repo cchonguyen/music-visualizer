@@ -947,3 +947,468 @@ Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or p
 ### Communication Rule
 Output ONLY a 1-line receipt upon completion. Do not reprint unchanged code or provide conversational explanations.
 
+
+
+---
+
+## Slice 7.30: Fix double-opacity blending (`add`/`screen`/`alpha`), soften `rings` cross-section, and tighten Feedback Motion sliders + `0.25x` randomizer excursion
+
+### Target Files
+- `src/render/scene.ts`
+- `src/render/shaders/crown.frag.glsl`
+- `src/render/shaders/shockwave.frag.glsl`
+- `src/render/shaders/rings.frag.glsl`
+- `src/presets/layerSchemas.ts`
+- `src/presets/variation.ts`
+- `src/render/__tests__/scene.test.ts`
+
+### Strict Invariants & Boundaries
+- Do NOT square `uLayerOpacity` in hardware blending: when shaders already multiply `col.rgb *= uLayerOpacity`, `'add'` and `'screen'` MUST use `gl.ONE` source factor (`gl.blendFunc(gl.ONE, gl.ONE)` for `'add'`, `gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR)` for `'screen'`), and `'alpha'` must either premultiply RGB once (`gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)`) or apply `uLayerOpacity` only in `.a`.
+- Relax the overly aggressive `(1.0 - decay * 0.82)` attenuation in `Scene.draw()` to `(1.0 - decay * 0.45)` so added layers (`shockwave`, `crown`, `particles`) are clearly visible over trailing presets like `Dust Wave`, `Mandala`, and `Möbius`.
+
+### Implementation Steps
+1. **`src/render/scene.ts`**:
+   - In `applyLayerBlend(gl, blend)`:
+     - `'max'`: `gl.blendEquation(gl.MAX); gl.blendFunc(gl.ONE, gl.ONE);`
+     - `'alpha'`: `gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);` (premultiplied alpha, since layer shaders already multiply `col.rgb` by `uLayerOpacity` and their shape mask)
+     - `'add'`: `gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ONE, gl.ONE);`
+     - `'screen'`: `gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR);`
+   - In `Scene.draw()`: change the trailing additive/screen decay compensation from `effectiveOpacity *= (1.0 - decay * 0.82)` to `effectiveOpacity *= (1.0 - decay * 0.45)`.
+2. **`src/render/shaders/crown.frag.glsl` & `src/render/shaders/shockwave.frag.glsl`**:
+   - In `crown.frag.glsl`: boost base intensity from `0.6` to `0.95` (`vec3 col = uAccent * 0.95 * light * texMul * uLayerOpacity;`) so `crown` has strong visual presence when layered.
+   - In `shockwave.frag.glsl`: ensure `col` is multiplied by the ring/glow profile once (`vec3 col = mix(uBase, uAccent, clamp(ring, 0.0, 1.0)) * clamp(ring, 0.0, 1.5) * texMul * uLayerOpacity;`) so premultiplied `'add'`, `'max'`, and `'alpha'` never emit dark bounding boxes or square `uLayerOpacity`.
+3. **`src/render/shaders/rings.frag.glsl`**:
+   - Replace the flat-topped boxcar ring profile (`1.0 - smoothstep(width * 0.5, width, d)`) across `rings`, `orbitTriangles`, `polarGrid`, and `mandala` modes with a soft neon-core + feathered Gaussian halo:
+     `float core = exp(- (d * d) / max(width * width * 0.18, 1e-6));`
+     `float halo = exp(- (d * d) / max(width * width * 0.85, 1e-6)) * 0.45;`
+     `float c = clamp(core + halo, 0.0, 1.0) * (1.0 - smoothstep(width * 0.85, width * 1.35, d));`
+   - Blend ring color smoothly between `uAccent` in the halo and bright `mix(uAccent, vec3(1.0), 0.35 * core)` at the thin center spine so rings feed gradient ink into feedback trails instead of acting like flat opaque cutouts.
+4. **`src/presets/layerSchemas.ts` & `src/presets/variation.ts`**:
+   - In `src/presets/layerSchemas.ts`:
+     - Reduce default `rings.strokeBase` from `0.006` to `0.0035`.
+     - Tighten `FEEDBACK_SCHEMA` motion ranges for fine Studio control while preserving all user preset values:
+       - `zoom`: `min: 0.85, max: 1.15, step: 0.001, default: 1`
+       - `rotate`: `min: -0.04, max: 0.04, step: 0.0005, default: 0`
+       - `centreX`: `min: -0.28, max: 0.28, step: 0.005, default: 0`
+       - `centreY`: `min: -0.28, max: 0.28, step: 0.005, default: 0`
+       - `driftX`: `min: -0.005, max: 0.005, step: 0.0001, default: 0`
+       - `driftY`: `min: -0.005, max: 0.005, step: 0.0001, default: 0`
+       - `stretchX`: `min: 0.80, max: 1.40, step: 0.005, default: 1`
+       - `stretchY`: `min: 0.80, max: 1.40, step: 0.005, default: 1`
+   - In `src/presets/variation.ts`:
+     - For feedback motion keys (`zoom`, `rotate`, `centreX`, `centreY`, `driftX`, `driftY`, `stretchX`, `stretchY`), scale random excursion around `spec.default` by `0.25` in `randomisePreset` so clicking **Randomise** always stays within a gentle `±25%` musical window around neutral instead of picking extreme edge values.
+5. **`src/render/__tests__/scene.test.ts`**:
+   - Update blend state assertions for premultiplied `'add'` (`gl.ONE, gl.ONE`), `'alpha'` (`gl.ONE, gl.ONE_MINUS_SRC_ALPHA`), `'max'` (`gl.ONE, gl.ONE`), and the updated `(1.0 - decay * 0.45)` attenuation factor.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.31: Upgrade `WaveformLayer` to an extruded screen-space quad ribbon (`thickness` & `radius` sliders) + full-screen 3D tumbling `lissajous`
+
+### Target Files
+- `src/render/layers/waveform.ts`
+- `src/render/shaders/waveform.vert.glsl`
+- `src/render/shaders/waveform.frag.glsl`
+- `src/presets/layerSchemas.ts`
+- `src/presets/layerSchemas.test.ts`
+
+### Strict Invariants & Boundaries
+- Replace the 1px `gl.LINE_STRIP` with a `gl.TRIANGLE_STRIP` extruded ribbon (`2` vertices per sample point: `vEdge = -1.0` and `vEdge = +1.0`) so `WaveformLayer` can render >1px anti-aliased glowing ribbons on macOS WebGL2/Metal where `gl.lineWidth` is capped at `1.0`.
+- Expose `radius` (`0.15..0.95`, default `0.45`, step `0.01`) and `thickness` (`0.5..5.0`, default `2.0`, step `0.1`) in `WAVEFORM_SCHEMA`.
+- Make `lissajous` mode fill `~68%` of the viewport and rotate continuously in 3D every frame via `clock.dtSec`.
+
+### Implementation Steps
+1. **`src/presets/layerSchemas.ts` & `src/presets/layerSchemas.test.ts`**:
+   - Add to `WAVEFORM_SCHEMA`:
+     - `radius`: `{ key: 'radius', label: 'Circle / Star radius', kind: 'number', default: 0.45, min: 0.15, max: 0.95, step: 0.01 }`
+     - `thickness`: `{ key: 'thickness', label: 'Line thickness', kind: 'number', default: 2.0, min: 0.5, max: 5.0, step: 0.1 }`
+2. **`src/render/layers/waveform.ts`**:
+   - For each sample `i` (`0..N-1`), emit 2 vertices into a `gl.TRIANGLE_STRIP` buffer encoding `(t, sampleCurrent, sampleNext, side)` where `side` is `-1.0` and `+1.0` (or upload a static `(index, side)` VBO + update a `sample` VBO/uniform array or pair `(currSample, nextSample)` per vertex so the vertex shader can compute the exact screen-space tangent between point `i` and `i+1`!).
+   - Advance continuous 3D rotation phases every frame using `clock.dtSec`:
+     - `this.delta += dt * (0.45 + frame.norm.mid * 0.85) + (frame.kickPulse ? 0.12 : 0);`
+     - `this.rotPitch += dt * (0.32 + frame.norm.sub * 0.55);`
+     - `this.rotYaw += dt * (0.48 + frame.norm.high * 0.65);`
+   - Upload `uRadius`, `uThickness`, `uRotPitch`, and `uRotYaw` to `waveform.vert.glsl`.
+3. **`src/render/shaders/waveform.vert.glsl` & `src/render/shaders/waveform.frag.glsl`**:
+   - In `waveform.vert.glsl`:
+     - Compute the 2D clip-space centerline position `pCurr` at `i` and `pNext` at `i+1`:
+       - For `uMode == 1` (`circle`): use `float r = uRadius + 0.22 * uAmp * s;`.
+       - For `uMode == 2` (`star7`): use `float r = uRadius + 0.065 * cos(7.0 * angle) + 0.22 * uAmp * s;`.
+       - For `uMode == 3` (`lissajous`):
+         - Compute 3D knot `(x, y, z)` in `[-1, 1]^3`, apply continuous 3D rotation matrices `Ry(uRotYaw) * Rx(uRotPitch)` to `vec3(x, y, z)`, and project with `float depth = 2.2 - p3.z * 0.55; vec2 p2 = p3.xy * (1.35 * clamp(uAmp, 0.4, 1.8) / depth); p2.x /= max(uAspect * 0.65, 1.0);` so the 3D knot fills ~65–75% of the screen and spins smoothly like a real 3D object.
+     - Extrude perpendicular to `normalize(pNext - pCurr)` by `aSide * uThickness * 0.0032` and pass `vEdge = aSide` (`-1..1`) to the fragment shader.
+   - In `waveform.frag.glsl`:
+     - Compute a smooth anti-aliased cross-section from `vEdge`:
+       `float dist = abs(vEdge);`
+       `float core = exp(-dist * dist * 4.5);`
+       `float halo = smoothstep(1.0, 0.0, dist) * 0.55;`
+       `float profile = clamp(core + halo, 0.0, 1.0);`
+     - Multiply `col *= profile * uLayerOpacity;` and output `fragColor = vec4(col, clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0));`.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.32: Fix `ReactionDiffusionLayer` ping-pong FBO `gl.disable(gl.BLEND)` bug, Laplacian diffusion scale, organic noise seeding, and slider responsiveness (Preset 12)
+
+### Target Files
+- `src/render/layers/reactionDiffusion.ts`
+- `src/render/shaders/rdSim.frag.glsl`
+- `src/render/shaders/rdRender.frag.glsl`
+- `src/presets/builtin/12-reaction-diffusion-coral.json`
+- `src/render/__tests__/reactionDiffusion.test.ts`
+
+### Strict Invariants & Boundaries
+- `ReactionDiffusionLayer.draw()` MUST call `gl.disable(gl.BLEND)` before running its Gray-Scott simulation substeps into `simTargetA` / `simTargetB`, and MUST re-enable `gl.enable(gl.BLEND)` before drawing the final display quad into the scene FBO.
+- All sliders (`feed`, `kill`, `du`, `dv`, `speed`, `colorCobalt`, `colorPink`) must visibly control the coral pattern and colors in real time.
+
+### Implementation Steps
+1. **`src/render/layers/reactionDiffusion.ts`**:
+   - In `seedInitialState()`: break radial symmetry on the initial seed ring (`dist >= 0.14 && dist <= 0.28`) by modulating chemical `V` with deterministic angular/spatial hashes (`sin(angle * 7.0) + cos(angle * 13.0)`) and seeding several secondary organic coral buds so fingers immediately branch and curl instead of expanding as a uniform circle.
+   - In `draw(frame, clock, options)`:
+     - Save/restore blend state: call `gl.disable(gl.BLEND)` before the substep loop (`for (let i = 0; i < substeps; i++)`), and call `gl.enable(gl.BLEND)` before the final render pass (`this.renderProg`).
+     - Accept `options?: { uLayerOpacity?: number }` and pass `uLayerOpacity` (`options?.uLayerOpacity ?? 1.0`) to `rdRender.frag.glsl`.
+2. **`src/render/shaders/rdSim.frag.glsl`**:
+   - Scale the 9-point Laplacian by `4.2` (`vec2 lap = (... ) * 4.2;`) so Pearson diffusion coefficients (`u_du = 0.16`, `u_dv = 0.08`) produce the true Gray-Scott mitosis/coral wavelength instead of flooding the grid.
+   - Respect user `u_feed` and `u_kill` sliders directly (`float F = clamp(u_feed + (u_mid - 0.35) * 0.008, 0.015, 0.095); float K = clamp(u_kill + (u_centroid - 0.5) * 0.005, 0.040, 0.075);`) instead of overwriting 50% of the slider with hardcoded constants.
+   - Add spatial noise (`fract(sin(dot(vUv * 64.0, vec2(12.9898, 78.233)) + u_kickEnv * 7.1) * 43758.5453)`) to the kick ring injection (`dist >= 0.15 && dist <= 0.23`) and gently damp `V` near the outer border so coral ridges constantly branch and never lock into a flat full-screen sheet.
+3. **`src/render/shaders/rdRender.frag.glsl`**:
+   - Add `uniform float uLayerOpacity;`.
+   - Map `vVal` (`0.0..0.5`) across a rich 3-stop gradient: dark transparent background (`vVal < 0.06`), `uColorCobalt` along the outer coral troughs/slopes (`smoothstep(0.05, 0.24, vVal)`), and `uColorPink` on the active growing ridge crests (`smoothstep(0.22, 0.42, vVal)`) + 3D normal specular highlights (`dFdx/dFdy`).
+   - Multiply output `col *= mask * uLayerOpacity` where `mask = smoothstep(0.03, 0.12, vVal)` so empty chemical background (`vVal ≈ 0`) is transparent (`alpha = 0`) and layers cleanly with trails.
+4. **`src/presets/builtin/12-reaction-diffusion-coral.json` & `src/render/__tests__/reactionDiffusion.test.ts`**:
+   - Tune Preset 12 defaults (`feed: 0.037`, `kill: 0.060`, `du: 0.16`, `dv: 0.08`, `speed: 1.0`) and add a unit test in `reactionDiffusion.test.ts` verifying `gl.disable(gl.BLEND)` is called before simulation substeps and `gl.enable(gl.BLEND)` is called before display rendering.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.33: Fix `ParticleLayer` (`field` blackout floor, stencil alpha, and `phyllotaxis` coherent spiral-arm waves) + `SpectralTerrainLayer` ribbon thickness floor
+
+### Target Files
+- `src/render/layers/particles.ts`
+- `src/render/shaders/particles.vert.glsl`
+- `src/render/shaders/particles.frag.glsl`
+- `src/render/shaders/spectralTerrain.vert.glsl`
+- `src/render/__tests__/chladniPhyllo.test.ts`
+
+### Strict Invariants & Boundaries
+- `ParticleLayer` in `field`, `radial`, and `phyllotaxis` modes must NEVER output black (`0.0`) when high-frequency treble (`frame.norm.high`) is `0.0` (e.g. during silence, bass/mid passages, or test signals).
+- `particles.frag.glsl` must emit proportional stencil alpha (`clamp(max(out_colour.r, max(out_colour.g, out_colour.b)), 0.0, 1.0)`) instead of hardcoded `1.0` so `'alpha'` blending never draws opaque black squares.
+- In `phyllotaxis` mode (`uMode == 1`), replace uncorrelated random `tw^3` blinking with coherent Fibonacci spiral-arm phase waves so the interlocking parastichy spirals are continuously visible even without feedback zoom/rotate.
+
+### Implementation Steps
+1. **`src/render/layers/particles.ts`**:
+   - Fix `sparkle` floor in `draw()`:
+     ```ts
+     const baseFloor = Math.max(0.48, this.p.calmSparkleScale);
+     const audioLift = 0.55 * frame.norm.high + 0.30 * frame.norm.mid + 0.25 * frame.norm.sub;
+     const sparkle = clamp01(baseFloor + audioLift + this.flash * this.p.flashSparkleScale);
+     ```
+2. **`src/render/shaders/particles.vert.glsl` & `src/render/shaders/particles.frag.glsl`**:
+   - In `particles.vert.glsl`:
+     - For `uMode == 1` (`phyllotaxis`):
+       - Compute coherent spiral-arm brightness wave along the 8 and 13 Fibonacci parastichies:
+         `float armWave = 0.5 + 0.5 * sin(theta * 8.0 - normR * 18.0 + uFlowPhase * 2.5) * cos(theta * 5.0 + normR * 12.0 - uTwistPhase * 2.0);`
+       - Set `vTwinkle = mix(0.72, 1.15, armWave);` (never blacks out adjacent seeds along a spiral arm!).
+       - Scale `quadSize = mix(0.016, 0.028, armWave) * uSize * (0.75 + 0.45 * normR);` so seeds form connected, legible Fibonacci spiral ribbons from center to edge.
+     - For `uMode == 0` (`radial`) and `uMode == 2` (`field`):
+       - Soften `vTwinkle` from `tw^4` (`< 0.05` half the time) to `mix(0.45, 1.0, tw * tw)` so flow-field particles stay smoothly visible as they drift across the vector field.
+   - In `particles.frag.glsl`:
+     - Replace the binary `step(0.5, vMix)` color quantization with a smooth 3-tone gradient using `smoothstep(0.15, 0.85, vMix)` plus subtle spiral iridescence.
+     - Replace hardcoded alpha `1.0` with `float a = clamp(max(out_colour.r, max(out_colour.g, out_colour.b)), 0.0, 1.0); fragColor = vec4(min(out_colour, vec3(0.95)), a);`.
+3. **`src/render/shaders/spectralTerrain.vert.glsl`**:
+   - Fix the sub-pixel ridge ribbon thickness (`uLineThickness * 0.0022 * perspectiveScale * 0.5`) by boosting base thickness and enforcing a minimum clip-space floor:
+     `float ribbonHalfThick = max(uLineThickness * 0.0055 * perspectiveScale, 0.0028);`
+   - Add a subtle ambient travelling sine wave (`0.035 * sin(uNorm * 10.0 + float(uRow) * 0.35)`) to `h` so even during silence or low spectrum bins, the 64 mountain ridges display visible glowing contours above their dark occlusion skirts.
+4. **`src/render/__tests__/chladniPhyllo.test.ts`**:
+   - Add unit test verifying `ParticleLayer` uploads a non-zero `uSparkle` (`>= 0.48`) even when `frame.norm.high === 0` in both `'field'` and `'phyllotaxis'` modes.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.34: Feedback Warp Overhaul — 3D time-varying Curl, wide smooth Solarize contour curve, Jacobian-compensated Möbius + wired `uMobiusMode`, and temporal RGB Vortex swirl
+
+### Target Files
+- `src/render/shaders/feedback.frag.glsl`
+- `src/render/scene.ts`
+- `src/render/__tests__/feedbackWarp.test.ts`
+
+### Strict Invariants & Boundaries
+- Keep all uniform names backwards-compatible with existing tests and add `uMobiusMode` (`0..4`) wired from `Scene`.
+- Ensure `solarize` produces clean, non-noisy topographic contours across the entire `0.0..1.0` slider range.
+- Ensure `mobius` mode visibly transports center particles, waveforms, and shockwaves along dipole arcs across the screen.
+
+### Implementation Steps
+1. **`src/render/scene.ts`**:
+   - Map `this.feedback.mobiusMode` (`'auto' -> 0`, `'dipoleFlow' -> 1`, `'doubleVortex' -> 2`, `'figureEight' -> 3`, `'breathingOrbit' -> 4`) and upload `uMobiusMode` (`gl.uniform1i`) to `feedback.frag.glsl`.
+2. **`src/render/shaders/feedback.frag.glsl`**:
+   - **Curl Warp (`uWarpMode == 1`) — Temporal Evolution & Balanced Plumes:**
+     - In `curlNoise(vec2 p, float t, int octaves)`: evolve the potential field by blending two time-rotated noise layers (`rot2(t * 0.18) * p` and `rot2(-t * 0.14) * p + vec2(sin(t * 0.35), cos(t * 0.29)) * 1.4`) so vortices genuinely morph and turn over time instead of sliding along a fixed diagonal.
+     - In `uCurlFlowPattern == 0` (`plumes`): replace the static `-0.65` upward chimney with a slowly precessing, breathing flow vector `vec2(sin(uTime * 0.22 + p.y * 2.5), cos(uTime * 0.17 + p.x * 2.5)) * 0.22 + radial * (0.18 * sin(uTime * 0.31) + uSub * 0.25)` so the fluid swirls in evolving multi-directional currents.
+   - **Möbius Dual Vortex (`uWarpMode == 3`) — Center Jacobian Compensation & `uMobiusMode`:**
+     - Add `uniform int uMobiusMode;`. Select mode `int mMode = (uMobiusMode == 0) ? int(mod(floor(uTime / 14.0), 4.0)) : (uMobiusMode - 1);`.
+     - Boost the log-polar dipole velocity step from `0.035` to `0.115` and scale by inverse center Jacobian compensation `float centerBoost = mix(2.4, 1.0, smoothstep(0.0, poleOff * 1.2, length(p)));` so ink near the origin is strongly pulled into the dipole streams.
+     - Vary the flow/swirl ratio by `mMode` (`0`: dipole source-to-sink arc, `1`: counter-rotating double vortex, `2`: lemniscate figure-eight cross-flow, `3`: breathing orbital exchange).
+   - **RGB Aberration Vortex (`uWarpMode == 4`) — Temporal Swirl Variety:**
+     - Modulate the tangential swirl and chromatic split angle with time and audio:
+       `float swirlWave = 1.0 + 0.45 * sin(length(p) * 6.0 - uTime * uWarpSpeed * 1.2) + uSub * 0.4;`
+       `float splitAngle = uRgbSplit * (1.5 + 0.6 * sin(uTime * 0.65 + length(p) * 4.0));`
+       `vec2 dispAxis = vec2(cos(uTime * 0.42), sin(uTime * 0.42)) * uRgbSplit * 0.35 * (0.5 + 0.5 * sin(uTime * 0.9));`
+       Apply `swirlWave`, `splitAngle`, and `dispAxis` to the R/G/B sample coordinates so the chromatic aberration trails undulate and precess dynamically over time.
+   - **Solarized Contour (`uSolarize > 0.0`) — Wide, Silky Topographic Range:**
+     - Compute smoothed neighborhood luminance `float smoothLum = dot(blurPrev(uv, max(uBlur, 0.35)), vec3(0.299, 0.587, 0.114));` so feeding contours back into `uPrev` never amplifies 1px Nyquist noise.
+     - Damp effective contour frequency at high `uSolarize`: `float effFreq = uContourFreq * mix(1.0, 0.55, uSolarize * uSolarize);`.
+     - Compute an energy-preserving contour wave `float band = mix(0.62, 1.18, pow(0.5 + 0.5 * sin(smoothLum * effFreq * 3.14159265 + phase), mix(3.2, 1.1, uContourWidth)));` so low `uSolarize` values don't extinguish midtones and high `uSolarize` values (`0.5..1.0`) produce rich, smooth topographic ribbons without high-frequency static.
+3. **`src/render/__tests__/feedbackWarp.test.ts`**:
+   - Add test assertions verifying `uMobiusMode` uniform binding in `Scene` and shader compilation with the updated warp/solarize logic.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.35: `MoireLayer` feedback trail buffer refraction & modulation (`uPrevScene` ping-pong read/write) + wide sweet-spot anti-aliasing
+
+### Target Files
+- `src/render/scene.ts`
+- `src/render/layers/moire.ts`
+- `src/render/shaders/moire.frag.glsl`
+- `src/render/__tests__/generators.test.ts`
+
+### Strict Invariants & Boundaries
+- Never read and write the exact same `WebGLTexture` in a single draw call (WebGL2 feedback loop error).
+- When `MoireLayer.draw()` runs, `Scene.draw()` must pass a safe readable snapshot texture (`sceneTex: WebGLTexture`) containing the current accumulated trails/layers below `moire`.
+- Fix `evaluateGrid()` in `moire.frag.glsl` so high `scale` or low `waveShape` never collapses `abs(grid1 - grid2)` to `0.0` (black).
+
+### Implementation Steps
+1. **`src/render/scene.ts`**:
+   - Extend `LayerDrawOptions` (passed to `layer.draw(frame, clock, options)`) with `sceneTex?: WebGLTexture | null`.
+   - When drawing a layer with `entry.type === 'moire'` in `Scene.draw()`:
+     - If drawing in Pass 1B (into `this.targets.write.fbo`), first blit/copy `this.targets.write` to `this.postTarget.fbo` (or swap `this.targets` and copy `read` back to `write`) and pass `sceneTex: this.postTarget.tex` (or `this.targets.read.tex` in Pass 1C when drawing into `this.targets.write.fbo` / `postTarget`), guaranteeing `sceneTex` is NOT the currently bound `FRAMEBUFFER` attachment!
+2. **`src/render/layers/moire.ts` & `src/render/shaders/moire.frag.glsl`**:
+   - In `MoireLayer.draw(frame, clock, options)`:
+     - Bind `options?.sceneTex ?? null` to `gl.TEXTURE1` (`uSceneTex = 1`, `uHasSceneTex = options?.sceneTex ? 1 : 0`).
+   - In `moire.frag.glsl`:
+     - Fix `evaluateGrid()` anti-aliasing so `nyquistFade = clamp(1.0 - fw * 0.12, 0.22, 1.0)` and `grid2` always maintains a minimum frequency/phase detuning (`max(freqDelta, 0.045)`) from `grid1` so `abs(grid1 - grid2)` never collapses to `0.0` across the entire `scale` (`6..80`), `contrast` (`0..1`), and `waveShape` (`0..1`) ranges.
+     - Compute the 2D interference gradient `vec2 moireGrad = vec2(dFdx(interference), dFdy(interference));`.
+     - When `uHasSceneTex == 1`:
+       - Sample `vec3 bg = texture(uSceneTex, vUv + moireGrad * (0.018 + 0.025 * uAudioWarp)).rgb;` (refracting underlying particle/waveform trails through the interference fringes!).
+       - Modulate the refracted trails with the interference loom (`vec3 woven = bg * mix(0.55, 1.65, interference) + moireCol * (0.35 + 0.65 * clamp(length(bg) * 1.5, 0.25, 1.0));`) so stamped layers illuminate, color-shift, and propagate through the Moiré pattern while still keeping the loom visible when solo.
+3. **`src/render/__tests__/generators.test.ts`**:
+   - Add unit test verifying `MoireLayer` binds `uSceneTex` on `TEXTURE1` when provided via `options.sceneTex`.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.36: `ChladniSandLayer` hexagonal/triangular/star trilinear plates & temporal morph + `FerrofluidLayer` backface culling, palette-infused shading, and organic fluid lobes
+
+### Target Files
+- `src/render/layers/chladniSand.ts`
+- `src/render/shaders/chladniSand.vert.glsl`
+- `src/render/layers/ferrofluid.ts`
+- `src/render/shaders/ferrofluid.vert.glsl`
+- `src/render/shaders/ferrofluid.frag.glsl`
+- `src/presets/layerSchemas.ts`
+- `src/render/__tests__/ferrofluid.test.ts`
+
+### Strict Invariants & Boundaries
+- Do NOT add a depth renderbuffer to `src/gl/fbo.ts`; instead, enable `gl.enable(gl.CULL_FACE)` + `gl.cullFace(gl.BACK)` in `FerrofluidLayer.draw()` and disable `gl.disable(gl.CULL_FACE)` immediately after drawing.
+- Expand `chladniSand` `plateMode` options with `'hexagon'`, `'triangle'`, `'starMandala'`, and `'morph'` (smooth temporal morphing between plate geometries).
+
+### Implementation Steps
+1. **`src/presets/layerSchemas.ts`**:
+   - Update `CHLADNI_SAND_SCHEMA.plateMode.options` to `['fullscreen', 'isometricPlate', 'radialMandala', 'hexagon', 'triangle', 'starMandala', 'morph']`.
+2. **`src/render/layers/chladniSand.ts` & `src/render/shaders/chladniSand.vert.glsl`**:
+   - In `chladniSand.ts`:
+     - Map `plateMode` to `uPlateMode` (`0..6`) and upload `uTime` (`clock.tSec`) so `'morph'` (`uPlateMode == 6`) and harmonic coordinate morphing evolve smoothly over time.
+   - In `chladniSand.vert.glsl`:
+     - Implement 3-axis trilinear wave evaluation `evalTrilinear(vec2 p, float n, float m, float triAsym)`:
+       - Wave vectors $e_1 = (1, 0)$, $e_2 = (-0.5, 0.8660254)$, $e_3 = (-0.5, -0.8660254)$.
+       - Standing wave potential $f(p) = \cos(n\pi u_1)\cos(m\pi u_2) + \cos(n\pi u_2)\cos(m\pi u_3) + \text{triAsym} \cdot \cos(n\pi u_3)\cos(m\pi u_1)$ with exact analytic gradient for the 3-step Newton-Raphson solver.
+     - Implement dihedral star/kaleidoscope folded wave `evalStarMandala(vec2 p, float n, float m)` (folding polar angle $\theta$ into 6-fold / 8-fold dihedral sectors before evaluating Bessel-Chladni standing waves).
+     - For `uPlateMode == 6` (`morph`) — and as a subtle harmonic evolution option — smoothly interpolate (`smoothstep`) the wave potential, gradient, and boundary SDF over a 16-second cycle between Square (`fullscreen`), Hexagon (`hexagon`), Triangle (`triangle`), and Star Mandala (`starMandala`).
+3. **`src/render/layers/ferrofluid.ts`, `ferrofluid.vert.glsl`, & `ferrofluid.frag.glsl`**:
+   - In `ferrofluid.ts`:
+     - Call `gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);` before `gl.drawElements(...)` and `gl.disable(gl.CULL_FACE);` in the cleanup block after drawing so the rear hemisphere never draws over the front hemisphere.
+   - In `ferrofluid.vert.glsl`:
+     - In `displace(vec3 dir)`: before adding the positive magnetic spikes, deform `baseRadius` with low-order 3D spherical-harmonic / signed simplex fluid lobes:
+       `float lobe2 = snoise(dir * 1.35 + vec3(uTime * 0.38, -uTime * 0.31, uTime * 0.27));`
+       `float lobe3 = sin(dir.x * 2.5 + uTime * 0.7) * cos(dir.y * 2.2 - uTime * 0.55) * sin(dir.z * 2.5 + uTime * 0.6);`
+       `float fluidBody = baseRadius * (1.0 + (0.22 * lobe2 + 0.14 * lobe3) * (0.65 + 0.6 * uSub + 0.4 * uMid));`
+       This makes the orb stretch oblong and form concave dimples/troughs like a true zero-gravity fluid droplet while spikes erupt from positive crests.
+   - In `ferrofluid.frag.glsl`:
+     - Infuse `uColorPrimary` and `uColorSecondary` into the metallic body (`fluidBase` and midtone reflections modulated by `NdotV`, surface curvature `vHeight`, and normal angle) instead of restricting color to `(1.0 - NdotV)^3` grazing edges.
+     - Apply a smooth Reinhard-style highlight roll-off (`col = col / (1.0 + col * 0.45) * 1.25`) so specular peaks stay rich and iridescent without clipping to harsh gray/white.
+4. **`src/render/__tests__/ferrofluid.test.ts`**:
+   - Add unit test verifying `gl.enable(gl.CULL_FACE)` and `gl.disable(gl.CULL_FACE)` are called around `FerrofluidLayer.draw()`.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.37: Apply user-tuned Preset JSON configurations across Flagship Presets `01`–`11`, `tex-dust-wave.json`, and `tex-ripple-field.json`
+
+### Target Files
+- `src/presets/builtin/01-curl-fluid-warp.json`
+- `src/presets/builtin/02-kaleidoscopic-mandala.json`
+- `src/presets/builtin/03-solarized-contour-rings.json`
+- `src/presets/builtin/04-mobius-dual-vortex.json`
+- `src/presets/builtin/05-rgb-aberration-vortex.json`
+- `src/presets/builtin/06-lissajous-vector-crt.json`
+- `src/presets/builtin/07-moire-interference-loom.json`
+- `src/presets/builtin/09-chladni-cymatic-sand.json`
+- `src/presets/builtin/10-phyllotaxis-spiral-bloom.json`
+- `src/presets/builtin/11-ferrofluid-magnetic-crown.json`
+- `src/presets/builtin/tex-dust-wave.json`
+- `src/presets/builtin/tex-ripple-field.json`
+- `src/presets/__tests__/presets.test.ts`
+
+### Strict Invariants & Boundaries
+- Apply the exact user-tuned JSON parameters for all 11 presets shared by the user:
+  - `01-curl-fluid-warp.json`: user's Curl Fluid Warp JSON + larger waveform `radius: 0.62`, `thickness: 2.4`, and a subtle trailing `particles` layer (`opacity: 0.55`, `blend: "add"`, `shape: "dot"`, `size: 1.6`, `swirlGain: 1.4`) to feed sparkling fluid tracers into the curl plumes.
+  - `02-kaleidoscopic-mandala.json`: user's ring-free Kaleidoscopic Mandala JSON (`waveform` circle + `particles` radial streak + `shockwave`, with reasonable `decay: 0.90`, `fade: 0.005` now that `add` blend and waveform ribbon thickness are fixed).
+  - `03-solarized-contour-rings.json`: user's Solarized Contour Rings JSON with softer ring `strokeNormGain: 0.012`.
+  - `04-mobius-dual-vortex.json`: user's ring-free Möbius Dual Vortex JSON (`particles` + `shockwave` + `crown` + `waveform` line).
+  - `05-rgb-aberration-vortex.json`: user's RGB Aberration Vortex JSON (`waveform` `star7` + `shockwave`).
+  - `06-lissajous-vector-crt.json`: user's Lissajous Vector CRT JSON with `thickness: 2.2`.
+  - `07-moire-interference-loom.json`: user's Moiré Interference Loom JSON (`particles` phyllotaxis streak + `moire` starburstLoom + `bassPulse`).
+  - `09-chladni-cymatic-sand.json`: user's Chladni Cymatic Sand JSON with `plateMode: "morph"`.
+  - `10-phyllotaxis-spiral-bloom.json`: user's Phyllotaxis Spiral Bloom JSON (`particles` phyllotaxis petal + subtle `rings` `opacity: 0.35` + `crown` `opacity: 0.45`).
+  - `11-ferrofluid-magnetic-crown.json`: user's Ferrofluid Magnetic Crown JSON.
+  - `tex-dust-wave.json`: user's improved Dust Wave JSON (`particles` phyllotaxis orb + `waveform` line with `stretchY: 1.36`).
+  - `tex-ripple-field.json`: add a trailing `particles` (`mode: "field"`, `opacity: 0.75`) layer and `thickness: 2.2` on `waveform` so `Ripple Field` is vibrant even between kicks.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: All preset schema/loader/safety tests pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+
+---
+
+## Slice 7.38: Fix `SpectralTerrainLayer` dark occlusion skirt canvas erasure & texture unit 0 unbinding
+
+### Target Files
+- `src/render/layers/spectralTerrain.ts`
+- `src/render/shaders/spectralTerrain.vert.glsl`
+- `src/render/shaders/spectralTerrain.frag.glsl`
+- `src/presets/builtin/08-spectral-ridge-terrain.json`
+- `src/render/__tests__/generators.test.ts`
+
+### Strict Invariants & Boundaries
+- Occlusion skirts must NEVER erase the pre-existing scene buffer down to black. Render skirts with zero-color alpha masking or subtle depth occlusion (`skirtAlpha = 0.0` or subtle `0.15` dark floor when solo) that preserves underlying layers and trails.
+- Protect texture unit 0: before uploading or binding `historyTex`, explicitly activate `gl.activeTexture(gl.TEXTURE5)`. Never unbind texture unit 0.
+
+### Implementation Steps
+1. **`src/render/layers/spectralTerrain.ts`**:
+   - In `updateHistoryTexture()`:
+     - Activate `gl.activeTexture(gl.TEXTURE5);` before binding `this.historyTex` and uploading `texSubImage2D`.
+     - Restore `gl.activeTexture(gl.TEXTURE0);` immediately afterward so unit 0 is never unbound.
+   - In `draw(frame, clock, options)`:
+     - For skirts: do not draw 64 full-screen black rectangles with `0.90` opacity over the canvas. Render skirts with `skirtOpacity: 0.15` and blend `gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)` so skirts feather subtly under the glowing ridges without obliterating previous layer passes.
+2. **`src/render/shaders/spectralTerrain.frag.glsl`**:
+   - For skirts (`isSkirt == 1`): output soft transparent dark-indigo tint (`vec4(vec3(0.005), 0.12 * uSkirtOpacity * uLayerOpacity)`) so when layered over other effects or feedback trails, it does not wipe the canvas black.
+   - For ridge ribbons (`isSkirt == 0`): output bright neon ridge line with vibrant elevation palette.
+3. **`src/presets/builtin/08-spectral-ridge-terrain.json` & `src/render/__tests__/generators.test.ts`**:
+   - Ensure Preset 08 has `skirtOpacity: 0.20`, `lineThickness: 2.2`, `blend: "max"`, `trails: true`.
+   - Update tests to verify texture unit isolation and non-destructive skirt blending.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.
+
+---
+
+## Slice 7.39: Double particle radial coverage + eliminate jarring physical position jumps in favor of smooth glow, breathing, velocity push, and controllable sliders
+
+### Target Files
+- `src/render/layers/particles.ts`
+- `src/render/shaders/particles.vert.glsl`
+- `src/render/shaders/particles.frag.glsl`
+- `src/render/layers/tunnel.ts`
+- `src/render/shaders/tunnel.frag.glsl`
+- `src/presets/layerSchemas.ts`
+- `src/render/__tests__/chladniPhyllo.test.ts`
+
+### Strict Invariants & Boundaries
+- Completely remove jarring instantaneous position jumps on the beat (`radius *= 1.0 + 0.15 * kick` in radial particles, `normR * (1.0 + 0.08 * kickWave)` in phyllotaxis, camera FOV kick hit in tunnel).
+- In their place, provide smooth velocity momentum push, subtle glow/sparkle breathing, and add explicit sliders:
+  - `beatReactivity`: `0.0..2.0`, default `1.0`, step `0.05` in `ParticleParams` (scaling beat glow & velocity push, where `0.0` = completely calm floating dust with zero kick reactions).
+  - In `TunnelLayer`: remove hardcoded +45% ring strobe and +30% density surge on sub-bass; wire beat glow to `beatReactivity` or `zoomPunch` so 0 = zero strobe.
+- Double particle radial coverage in `mode: "radial"`: scale `radius *= 2.0` and widen the edge fade envelope so particles comfortably fill the full 16:9 screen edge-to-edge at `Transform: 1.0`.
+
+### Implementation Steps
+1. **`src/presets/layerSchemas.ts`**:
+   - Add `beatReactivity` to `PARTICLES_SCHEMA`: `{ key: 'beatReactivity', label: 'Beat glow & push', kind: 'number', default: 1.0, min: 0.0, max: 2.0, step: 0.05 }`.
+   - Add `beatReactivity` to `TUNNEL_SCHEMA`: `{ key: 'beatReactivity', label: 'Beat glow & pulse', kind: 'number', default: 0.5, min: 0.0, max: 2.0, step: 0.05 }`.
+2. **`src/render/layers/particles.ts` & `src/render/shaders/particles.vert.glsl`**:
+   - In `particles.ts`:
+     - Upload `uBeatReactivity = this.p.beatReactivity ?? 1.0`.
+     - In `mode: "radial"`: add gentle kick velocity momentum push to particle lifetime rather than snapping their positions.
+   - In `particles.vert.glsl`:
+     - **Remove position jumps:**
+       - Delete `float punch = 1.0 + 0.15 * uKickEnv; radius *= punch;` in radial mode.
+       - Delete `(1.0 + 0.08 * kickWave)` in phyllotaxis mode.
+     - **Double radial coverage:**
+       - Scale `radius = (1.0 / mix(depthNear, depthFar, life)) * 2.1;`.
+       - Widen edge fade: `float vFade = smoothstep(0.0, 0.08, life) * (1.0 - smoothstep(0.85, 1.0, life));` so particles stay visible right up to the edge of the 16:9 viewport.
+     - **Smooth glow/breathing instead of size jumps:**
+       - Scale particle brightness/glow by `(1.0 + 0.35 * uKickEnv * uBeatReactivity)` instead of multiplying pointSize by 1.25.
+3. **`src/render/layers/tunnel.ts` & `src/render/shaders/tunnel.frag.glsl`**:
+   - In `tunnel.ts`:
+     - Remove the hardcoded `*(1 + 0.3 * Math.max(0, frame.env.sub - 0.2))` ring density surge. Density is now stable.
+     - Scale `uBeat` by `this.p.beatReactivity ?? 0.5`.
+   - In `tunnel.frag.glsl`:
+     - Soften ring flash from a harsh white strobe into an ambient rim glow. When `uBeatReactivity == 0`, `uBeat` is 0, giving a completely smooth flight with no flashing.
+4. **`src/render/__tests__/chladniPhyllo.test.ts`**:
+   - Add tests verifying `beatReactivity` uniform uploads in `ParticleLayer` and `TunnelLayer`, and non-displaced positions when `beatReactivity == 0`.
+
+### Verification
+- Run: `npm run typecheck && npm test && npm run build`
+- Expected: Pass with zero errors.
+
+### Communication Rule
+Output ONLY a 1-line receipt upon completion.

@@ -34,6 +34,7 @@ uniform float uDivergenceAngle; // divergence angle (e.g. 2.3999632 golden angle
 uniform float uPetalStretch;
 uniform int uSeedShape;     // 0 = orb, 1 = petal, 2 = star
 uniform float uKickEnv;
+uniform float uBeatReactivity;
 uniform sampler2D uTerrainTex;
 uniform float uTerrainDisplace;
 uniform float uTerrainWriteRow;
@@ -65,8 +66,8 @@ void main() {
     // Travelling kick ripple wave
     float kickWave = sin(normR * 12.0 - uFlowPhase * 4.0) * uKickEnv;
 
-    // Full-viewport radius: hypot(aspect, 1.0) * 1.05 with outward kick wave ripple
-    float r = normR * uFar * (1.0 + 0.08 * kickWave);
+    // Full-viewport radius: hypot(aspect, 1.0) * 1.05
+    float r = normR * uFar;
 
     // Spiral angle with smooth mid twist and subtle radial distortion
     float theta = uIdx * uDivergenceAngle + uTwistPhase + 0.06 * sin(normR * 8.0 - uFlowPhase * 2.0);
@@ -76,8 +77,9 @@ void main() {
 
     vLocal = CORNERS[gl_VertexID];
 
-    // Base quad size
-    float quadSize = mix(0.010, 0.022, hash01(id, 1.0)) * uSize * (0.8 + 0.4 * clamp(uEnergy, 0.0, 1.0));
+    // Coherent spiral-arm brightness wave along 8 and 13 Fibonacci parastichies (Slice 7.33)
+    float armWave = 0.5 + 0.5 * sin(theta * 8.0 - normR * 18.0 + uFlowPhase * 2.5) * cos(theta * 5.0 + normR * 12.0 - uTwistPhase * 2.0);
+    float quadSize = mix(0.016, 0.028, armWave) * uSize * (0.75 + 0.45 * normR);
 
     // Shape and orient each instanced quad according to uSeedShape:
     // 0 (orb): isotropic circular quad.
@@ -111,10 +113,7 @@ void main() {
     // vMix maps warm golden-amber core to electric cyan/emerald at outer petals
     vMix = clamp(normR * 0.82 + 0.18 * kickWave, 0.0, 1.0);
 
-    float twRate = mix(4.0, 12.0, hash01(id, 4.0));
-    float twPhase = hash01(id, 5.0) * TAU;
-    float tw = 0.5 + 0.5 * sin(uTwinkleTime * twRate + twPhase);
-    vTwinkle = tw * tw * tw;
+    vTwinkle = mix(0.72, 1.15, armWave);
 
     float cosR = cos(uRotation);
     float sinR = sin(uRotation);
@@ -137,7 +136,7 @@ void main() {
   // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/uFar, life).
   float depthNear = 1.0 / INNER_RIM;
   float depthFar = 1.0 / uFar;
-  float radius = 1.0 / mix(depthNear, depthFar, life);
+  float radius = (1.0 / mix(depthNear, depthFar, life)) * 2.1;
   // The swirl adds a small angular turn over the life, so trails bend gently.
   float angle = angleBase + swirlDir * uSwirl * life;
   vec2 dir = vec2(cos(angle), sin(angle));
@@ -174,14 +173,14 @@ void main() {
   }
   vec2 point = center - axis * streakLen * (1.0 - t) + perp * vLocal.y * halfWidth;
 
-  // Fade in and out over the life, so streaks appear near the centre and vanish at the edge.
-  vFade = sin(life * PI);
+  // Widen edge fade so streaks stay visible right up to the edge of the 16:9 viewport
+  vFade = smoothstep(0.0, 0.08, life) * (1.0 - smoothstep(0.85, 1.0, life));
 
-  // Twinkle: a sharp sine per particle, 6 to 14 rad/s, raised to a power so it flickers.
+  // Twinkle: softened so flow-field and radial particles stay smoothly visible as they drift
   float twRate = mix(6.0, 14.0, hash01(id, 4.0));
   float twPhase = hash01(id, 5.0) * TAU;
   float tw = 0.5 + 0.5 * sin(uTwinkleTime * twRate + twPhase);
-  vTwinkle = tw * tw * tw * tw;
+  vTwinkle = mix(0.45, 1.0, tw * tw);
 
   // Aspect correction: x is scaled by 1/aspect so streaks keep their true shape.
   // Transform (4.7): rotate, then zoom. Done on the height-normalised point, before the
