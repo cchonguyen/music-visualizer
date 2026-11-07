@@ -175,36 +175,36 @@ describe('Scene blend state ownership and transitions (Slice 7.8)', () => {
 
     scene.draw(makeMockFrame(), mockClock);
 
-    // Layer 1 ('max'): gl.MAX, ONE, ONE -> draw -> restore gl.MAX, ONE, ONE
+    // Layer 1 ('max'): gl.MAX, SRC_ALPHA, ONE -> draw -> restore gl.MAX, SRC_ALPHA, ONE
     expect(calls).toContain('blendEquation:MAX');
-    expect(calls).toContain('blendFunc:ONE,ONE');
+    expect(calls).toContain('blendFunc:SRC_ALPHA,ONE');
     expect(calls).toContain('draw-layer1');
 
-    // Layer 2 ('alpha'): gl.FUNC_ADD, SRC_ALPHA, ONE_MINUS_SRC_ALPHA -> draw -> restore gl.MAX, ONE, ONE
+    // Layer 2 ('alpha'): gl.FUNC_ADD, SRC_ALPHA, ONE_MINUS_SRC_ALPHA -> draw -> restore gl.MAX, SRC_ALPHA, ONE
     expect(calls).toContain('blendEquation:FUNC_ADD');
     expect(calls).toContain('blendFunc:SRC_ALPHA,ONE_MINUS_SRC_ALPHA');
     expect(calls).toContain('draw-layer2');
 
-    // Layer 3 ('add'): gl.FUNC_ADD, SRC_ALPHA, ONE -> draw -> restore gl.MAX, ONE, ONE
+    // Layer 3 ('add'): gl.FUNC_ADD, SRC_ALPHA, ONE -> draw -> restore gl.MAX, SRC_ALPHA, ONE
     expect(calls).toContain('blendFunc:SRC_ALPHA,ONE');
     expect(calls).toContain('draw-layer3');
 
-    // Layer 4 ('screen'): gl.FUNC_ADD, ONE, ONE_MINUS_SRC_COLOR -> draw -> restore gl.MAX, ONE, ONE
+    // Layer 4 ('screen'): gl.FUNC_ADD, ONE, ONE_MINUS_SRC_COLOR -> draw -> restore gl.MAX, SRC_ALPHA, ONE
     expect(calls).toContain('blendFunc:ONE,ONE_MINUS_SRC_COLOR');
     expect(calls).toContain('draw-layer4');
 
     // After each layer draw, restoration of MAX must occur immediately
     const l2Index = calls.indexOf('draw-layer2');
     expect(calls[l2Index + 1]).toBe('blendEquation:MAX');
-    expect(calls[l2Index + 2]).toBe('blendFunc:ONE,ONE');
+    expect(calls[l2Index + 2]).toBe('blendFunc:SRC_ALPHA,ONE');
 
     const l3Index = calls.indexOf('draw-layer3');
     expect(calls[l3Index + 1]).toBe('blendEquation:MAX');
-    expect(calls[l3Index + 2]).toBe('blendFunc:ONE,ONE');
+    expect(calls[l3Index + 2]).toBe('blendFunc:SRC_ALPHA,ONE');
 
     const l4Index = calls.indexOf('draw-layer4');
     expect(calls[l4Index + 1]).toBe('blendEquation:MAX');
-    expect(calls[l4Index + 2]).toBe('blendFunc:ONE,ONE');
+    expect(calls[l4Index + 2]).toBe('blendFunc:SRC_ALPHA,ONE');
   });
 
   it('passes opacity into each layer draw and sets layer.opacity / setOpacity', () => {
@@ -350,8 +350,8 @@ describe('buildScene preserving layer opacity and blend mode (Slice 7.8)', () =>
     expect(scene.layers).toHaveLength(2);
     const configs = scene.getLayerConfigs();
     expect(configs).toEqual([
-      { opacity: 0.75, blend: 'alpha' },
-      { opacity: 0.4, blend: 'add' },
+      { opacity: 0.75, blend: 'alpha', trails: true },
+      { opacity: 0.4, blend: 'add', trails: true },
     ]);
   });
 
@@ -370,7 +370,210 @@ describe('buildScene preserving layer opacity and blend mode (Slice 7.8)', () =>
 
     const scene = buildScene('test-def', preset);
     expect(scene.getLayerConfigs()).toEqual([
-      { opacity: 1.0, blend: 'max' },
+      { opacity: 1.0, blend: 'max', trails: true },
     ]);
+  });
+});
+
+describe('Slice 7.18: Blend defaults, screen mode, energy compensation, and trails pass split', () => {
+  it('defaults blend to max and uses SRC_ALPHA, ONE for max blend mode', () => {
+    const gl = createMockGl();
+    const calls: string[] = [];
+
+    const mockLayer: RenderLayer = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn(() => calls.push('draw-layer')),
+      dispose: vi.fn(),
+    };
+
+    (gl.blendEquation as ReturnType<typeof vi.fn>).mockImplementation((eq: number) => {
+      calls.push(`blendEquation:${eq === gl.MAX ? 'MAX' : eq === gl.FUNC_ADD ? 'FUNC_ADD' : eq}`);
+    });
+    (gl.blendFunc as ReturnType<typeof vi.fn>).mockImplementation((src: number, dst: number) => {
+      let srcName = `${src}`;
+      let dstName = `${dst}`;
+      if (src === gl.ONE) srcName = 'ONE';
+      if (src === gl.SRC_ALPHA) srcName = 'SRC_ALPHA';
+      if (dst === gl.ONE) dstName = 'ONE';
+      calls.push(`blendFunc:${srcName},${dstName}`);
+    });
+
+    const scene = new Scene('test-default-max', [mockLayer], [{}]); // blend not specified -> defaults to 'max'
+    expect(scene.getLayerConfigs()[0]?.blend).toBe('max');
+    expect(scene.getLayerConfigs()[0]?.trails).toBe(true);
+
+    scene.init(gl);
+    calls.length = 0;
+    scene.draw(makeMockFrame(), mockClock);
+
+    expect(calls).toContain('blendEquation:MAX');
+    expect(calls).toContain('blendFunc:SRC_ALPHA,ONE');
+    expect(calls).toContain('draw-layer');
+  });
+
+  it('sets screen blend mode with gl.FUNC_ADD and gl.ONE, gl.ONE_MINUS_SRC_COLOR', () => {
+    const gl = createMockGl();
+    const calls: string[] = [];
+
+    const mockLayer: RenderLayer = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn(() => calls.push('draw-screen')),
+      dispose: vi.fn(),
+    };
+
+    (gl.blendEquation as ReturnType<typeof vi.fn>).mockImplementation((eq: number) => {
+      calls.push(`blendEquation:${eq === gl.MAX ? 'MAX' : eq === gl.FUNC_ADD ? 'FUNC_ADD' : eq}`);
+    });
+    (gl.blendFunc as ReturnType<typeof vi.fn>).mockImplementation((src: number, dst: number) => {
+      let srcName = `${src}`;
+      let dstName = `${dst}`;
+      if (src === gl.ONE) srcName = 'ONE';
+      if (dst === gl.ONE_MINUS_SRC_COLOR) dstName = 'ONE_MINUS_SRC_COLOR';
+      calls.push(`blendFunc:${srcName},${dstName}`);
+    });
+
+    const scene = new Scene('test-screen', [mockLayer], [{ blend: 'screen' }]);
+    scene.init(gl);
+    calls.length = 0;
+    scene.draw(makeMockFrame(), mockClock);
+
+    expect(calls).toContain('blendEquation:FUNC_ADD');
+    expect(calls).toContain('blendFunc:ONE,ONE_MINUS_SRC_COLOR');
+    expect(calls).toContain('draw-screen');
+  });
+
+  it('attenuates additive and screen layer opacity under feedback decay > 0.05', () => {
+    const gl = createMockGl();
+    let receivedAddOpt: { opacity: number; uLayerOpacity: number } | null = null;
+    let receivedScreenOpt: { opacity: number; uLayerOpacity: number } | null = null;
+    let receivedMaxOpt: { opacity: number; uLayerOpacity: number } | null = null;
+
+    const layerAdd = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, _t, opt) => { receivedAddOpt = opt; }),
+      dispose: vi.fn(),
+    };
+    const layerScreen = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, _t, opt) => { receivedScreenOpt = opt; }),
+      dispose: vi.fn(),
+    };
+    const layerMax = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, _t, opt) => { receivedMaxOpt = opt; }),
+      dispose: vi.fn(),
+    };
+
+    const scene = new Scene(
+      'test-decay-attenuation',
+      [layerAdd as unknown as RenderLayer, layerScreen as unknown as RenderLayer, layerMax as unknown as RenderLayer],
+      [
+        { opacity: 1.0, blend: 'add', trails: true },
+        { opacity: 0.8, blend: 'screen', trails: true },
+        { opacity: 1.0, blend: 'max', trails: true },
+      ],
+    );
+    // decay = 0.90 (> 0.05). scaling factor = 1.0 - 0.90 * 0.82 = 0.262
+    scene.setFeedback({ decay: 0.9 });
+    scene.init(gl);
+
+    scene.draw(makeMockFrame(), mockClock);
+
+    const expectedAdd = 1.0 * (1.0 - 0.9 * 0.82);
+    const expectedScreen = 0.8 * (1.0 - 0.9 * 0.82);
+
+    expect(receivedAddOpt!.opacity).toBeCloseTo(expectedAdd, 5);
+    expect(receivedScreenOpt!.opacity).toBeCloseTo(expectedScreen, 5);
+    // max blend does not attenuate with decay
+    expect(receivedMaxOpt!.opacity).toBeCloseTo(1.0, 5);
+  });
+
+  it('does not scale opacity for decay <= 0.05 or when trails is false', () => {
+    const gl = createMockGl();
+    let receivedLowDecayOpt: { opacity: number; uLayerOpacity: number } | null = null;
+    let receivedNoTrailsOpt: { opacity: number; uLayerOpacity: number } | null = null;
+
+    const layerLowDecay = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, _t, opt) => { receivedLowDecayOpt = opt; }),
+      dispose: vi.fn(),
+    };
+    const layerNoTrails = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, _t, opt) => { receivedNoTrailsOpt = opt; }),
+      dispose: vi.fn(),
+    };
+
+    const scene = new Scene(
+      'test-decay-edge',
+      [layerLowDecay as unknown as RenderLayer, layerNoTrails as unknown as RenderLayer],
+      [
+        { opacity: 1.0, blend: 'add', trails: true },
+        { opacity: 1.0, blend: 'add', trails: false },
+      ],
+    );
+    scene.setFeedback({ decay: 0.04 }); // <= 0.05
+    scene.init(gl);
+
+    scene.draw(makeMockFrame(), mockClock);
+
+    expect(receivedLowDecayOpt!.opacity).toBeCloseTo(1.0, 5);
+    expect(receivedNoTrailsOpt!.opacity).toBeCloseTo(1.0, 5);
+  });
+
+  it('isolates trails: false overlay layers from feedback loop history', () => {
+    const gl = createMockGl();
+    const calls: string[] = [];
+
+    const trailingLayer: RenderLayer = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, target) => {
+        calls.push(`draw-trailing:fbo=${target.framebuffer ? 'write' : 'canvas'}`);
+      }),
+      dispose: vi.fn(),
+    };
+
+    const overlayLayer: RenderLayer = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f, _c, target) => {
+        calls.push(`draw-overlay:fbo=${target.framebuffer ? 'write' : 'canvas'}`);
+      }),
+      dispose: vi.fn(),
+    };
+
+    const scene = new Scene(
+      'test-trails-isolation',
+      [trailingLayer, overlayLayer],
+      [
+        { opacity: 1.0, blend: 'max', trails: true },
+        { opacity: 1.0, blend: 'alpha', trails: false },
+      ],
+    );
+
+    scene.init(gl);
+
+    // Frame 1 draw
+    calls.length = 0;
+    scene.draw(makeMockFrame(), mockClock);
+
+    // Order must be: draw trailing layer -> swap -> blit read to write -> draw overlay layer
+    expect(calls).toEqual([
+      'draw-trailing:fbo=write',
+      'draw-overlay:fbo=write',
+    ]);
+
+    // scene.texture should return outputTex (write buffer texture containing overlay)
+    const outTex = scene.texture;
+    expect(outTex).toBeDefined();
+    expect(scene.outputTexture()).toBe(outTex);
   });
 });

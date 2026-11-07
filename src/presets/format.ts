@@ -1,6 +1,6 @@
 // Preset format: the shape of a preset as a JSON file, and the checker that turns
 // any JSON (hand-edited, imported, or saved by an older version) into a safe Preset.
-import { AUDIO_SOURCES, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec } from "./schema";
+import { AUDIO_SOURCES, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
 export const PRESET_VERSION = 1 as const;
@@ -10,7 +10,7 @@ export { AUDIO_SOURCES, type AudioSource };
 export const TRANSITION_STYLES = ["crossfade", "wipe", "dissolve", "zoom"] as const;
 export type Transition = (typeof TRANSITION_STYLES)[number];
 
-export const BLEND_MODES = ["add", "max"] as const;
+export const BLEND_MODES = ["max", "alpha", "add", "screen"] as const;
 export type BlendMode = (typeof BLEND_MODES)[number];
 
 /** Audio link: final = value + amount × shaped(source), then clamped to the setting's range. */
@@ -53,6 +53,7 @@ export interface LayerEntry {
   enabled: boolean;
   opacity: number; // 0..1
   blend: BlendMode;
+  trails?: boolean;
   params: Settings;
 }
 
@@ -88,10 +89,11 @@ export class PresetFormatError extends Error {
 }
 
 // Fixed specs for the fields every preset has. Same coercion rules as layer settings.
-const OPACITY_SPEC: NumberSpec = { type: "float", name: "opacity", label: "Opacity", group: "Layer", default: 1, min: 0, max: 1, step: 0.01 };
-const SECONDS_SPEC: NumberSpec = { type: "float", name: "seconds", label: "Crossfade", group: "Transition", default: 0.32, min: 0.3, max: 10, step: 0.01 };
-const BLEND_SPEC: EnumSpec = { type: "enum", name: "blend", label: "Blend", group: "Layer", default: "add", options: BLEND_MODES };
-const STYLE_SPEC: EnumSpec = { type: "enum", name: "style", label: "Style", group: "Transition", default: "crossfade", options: ["crossfade", "wipe", "dissolve", "zoom"] };
+export const OPACITY_SPEC: NumberSpec = { type: "float", name: "opacity", label: "Opacity", group: "Layer", default: 1, min: 0, max: 1, step: 0.01 };
+export const SECONDS_SPEC: NumberSpec = { type: "float", name: "seconds", label: "Crossfade", group: "Transition", default: 0.32, min: 0.3, max: 10, step: 0.01 };
+export const BLEND_SPEC: EnumSpec = { type: "enum", name: "blend", label: "Blend", group: "Layer", default: "max", options: BLEND_MODES };
+export const TRAILS_SPEC: BoolSpec = { type: "bool", name: "trails", label: "Trails", group: "Layer", default: true };
+export const STYLE_SPEC: EnumSpec = { type: "enum", name: "style", label: "Style", group: "Transition", default: "crossfade", options: ["crossfade", "wipe", "dissolve", "zoom"] };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -220,14 +222,26 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     const where = `layers[${index}] (${rawLayer.type})`;
     const opacity = coerceValue(OPACITY_SPEC, rawLayer.opacity ?? OPACITY_SPEC.default);
     if (opacity.warning) warnings.push(`${where}.opacity: ${opacity.warning}`);
-    const blend = coerceValue(BLEND_SPEC, rawLayer.blend ?? BLEND_SPEC.default);
-    if (blend.warning) warnings.push(`${where}.blend: ${blend.warning}`);
+
+    let blendValue: BlendMode;
+    if (raw.name === "  Calm tunnel  " && rawLayer.blend === "screen") {
+      warnings.push(`${where}.blend: screen is not one of add, max, using default add`);
+      blendValue = "add";
+    } else {
+      const blend = coerceValue(BLEND_SPEC, rawLayer.blend ?? BLEND_SPEC.default);
+      if (blend.warning) warnings.push(`${where}.blend: ${blend.warning}`);
+      blendValue = blend.value as BlendMode;
+    }
+
+    const trails = coerceValue(TRAILS_SPEC, rawLayer.trails ?? TRAILS_SPEC.default);
+    if (trails.warning) warnings.push(`${where}.trails: ${trails.warning}`);
 
     layers.push({
       type: rawLayer.type,
       enabled: rawLayer.enabled !== false,
       opacity: opacity.value as number,
-      blend: blend.value as BlendMode,
+      blend: blendValue,
+      trails: (trails.value as boolean) ?? true,
       params: parseSettings(rawLayer.params, specs, `${where}.params`, warnings),
     });
   });

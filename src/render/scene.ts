@@ -43,15 +43,41 @@ const UNIFORMS = [
 
 export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
 
-export interface SceneLayerConfig {
+export interface LayerEntry {
   opacity?: number;
   blend?: BlendMode;
+  trails?: boolean;
+}
+
+export type SceneLayerConfig = LayerEntry;
+
+export function applyLayerBlend(gl: WebGL2RenderingContext, blend: BlendMode): void {
+  gl.enable(gl.BLEND);
+  switch (blend) {
+    case 'alpha':
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      break;
+    case 'add':
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      break;
+    case 'screen':
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR);
+      break;
+    case 'max':
+    default:
+      gl.blendEquation(gl.MAX);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      break;
+  }
 }
 
 export class Scene {
   readonly name: string;
   readonly layers: RenderLayer[];
-  private layerConfigs: { opacity: number; blend: BlendMode }[] = [];
+  private layerConfigs: { opacity: number; blend: BlendMode; trails: boolean }[] = [];
   private gl: WebGL2RenderingContext | null = null;
   private pp: PingPong | null = null;
   private prog: WebGLProgram | null = null;
@@ -66,6 +92,7 @@ export class Scene {
   private mobiusPolePolarity = 1.0;
   private uni = new Map<string, WebGLUniformLocation | null>();
   private foregroundOpacity = 1.0;
+  private outputTex: WebGLTexture | null = null;
 
   constructor(name: string, layers: RenderLayer[], configs: SceneLayerConfig[] = []) {
     this.name = name;
@@ -73,6 +100,7 @@ export class Scene {
     this.layerConfigs = layers.map((_, i) => ({
       opacity: configs[i]?.opacity ?? 1.0,
       blend: configs[i]?.blend ?? 'max',
+      trails: configs[i]?.trails ?? true,
     }));
   }
 
@@ -80,19 +108,28 @@ export class Scene {
     this.layerConfigs = this.layers.map((_, i) => ({
       opacity: configs[i]?.opacity ?? 1.0,
       blend: configs[i]?.blend ?? 'max',
+      trails: configs[i]?.trails ?? true,
     }));
   }
 
   setLayerConfig(index: number, config: Partial<SceneLayerConfig>): void {
     if (!this.layerConfigs[index]) {
-      this.layerConfigs[index] = { opacity: 1.0, blend: 'max' };
+      this.layerConfigs[index] = { opacity: 1.0, blend: 'max', trails: true };
     }
     if (config.opacity !== undefined) this.layerConfigs[index].opacity = config.opacity;
     if (config.blend !== undefined) this.layerConfigs[index].blend = config.blend;
+    if (config.trails !== undefined) this.layerConfigs[index].trails = config.trails;
   }
 
-  getLayerConfigs(): readonly { opacity: number; blend: BlendMode }[] {
+  getLayerConfigs(): readonly { opacity: number; blend: BlendMode; trails: boolean }[] {
     return this.layerConfigs;
+  }
+
+  get feedback(): Record<string, ParamValue> & { decay: number } {
+    return {
+      ...this.fb,
+      decay: Number(this.fb.decay ?? FEEDBACK_DEFAULTS.decay),
+    };
   }
 
   /** Sets the trail motion and colour settings. Read on the next frame. */
@@ -138,6 +175,7 @@ export class Scene {
   init(gl: WebGL2RenderingContext): void {
     this.gl = gl;
     this.prog = compileProgram(gl, FULLSCREEN_VERT, feedbackSrc, `feedback:${this.name}`);
+    this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
     this.uni.clear();
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
@@ -162,9 +200,13 @@ export class Scene {
   }
 
   /** The finished image of the last draw (valid after draw()). */
+  get texture(): WebGLTexture {
+    if (!this.pp) throw new Error(`Scene ${this.name}: texture before init`);
+    return this.outputTex ?? this.pp.read.texture;
+  }
+
   outputTexture(): WebGLTexture {
-    if (!this.pp) throw new Error(`Scene ${this.name}: outputTexture before init`);
-    return this.pp.read.texture;
+    return this.texture;
   }
 
   draw(frame: AudioFrame, clock: RenderClock): void {
@@ -185,7 +227,7 @@ export class Scene {
       height: pp.height,
     };
 
-    // 1) Decay last frame into the write target (blending off: this is a copy).
+    // 1A) Decay last frame into the write target (blending off: this is a copy).
     bindTarget(gl, target);
     gl.disable(gl.BLEND);
     gl.useProgram(this.prog);
@@ -211,60 +253,109 @@ export class Scene {
       clock.timeSec,
     );
 
-    // 2) Layers draw on top. Scene is the sole owner of GL blend state before each
-    // layer draw, restoring MAX blend immediately after each layer draw (Slice 7.8).
+    // 1B) Trailing Layers (trails !== false): draw into write target with energy-compensated opacity.
+    const decay = this.feedback.decay;
     for (let i = 0; i < this.layers.length; i++) {
       const layer = this.layers[i];
       if (!layer) continue;
-      const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max' };
-      const opacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
-      const blend = cfg.blend ?? 'max';
+      const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max', trails: true };
+      if (cfg.trails === false) continue;
 
-      gl.enable(gl.BLEND);
-      switch (blend) {
-        case 'alpha':
-          gl.blendEquation(gl.FUNC_ADD);
-          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-          break;
-        case 'add':
-          gl.blendEquation(gl.FUNC_ADD);
-          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-          break;
-        case 'screen':
-          gl.blendEquation(gl.FUNC_ADD);
-          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR);
-          break;
-        case 'max':
-        default:
-          gl.blendEquation(gl.MAX);
-          gl.blendFunc(gl.ONE, gl.ONE);
-          break;
+      let effectiveOpacity = cfg.opacity ?? 1.0;
+      if (decay > 0.05 && (cfg.blend === 'add' || cfg.blend === 'screen')) {
+        effectiveOpacity *= (1.0 - decay * 0.82);
       }
+      effectiveOpacity *= this.foregroundOpacity;
+
+      applyLayerBlend(gl, cfg.blend);
 
       if ('opacity' in layer) {
-        (layer as unknown as { opacity: number }).opacity = opacity;
+        (layer as unknown as { opacity: number }).opacity = effectiveOpacity;
       }
       if (typeof (layer as unknown as { setOpacity?: (o: number) => void }).setOpacity === 'function') {
-        (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(opacity);
+        (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(effectiveOpacity);
       }
 
       (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: { opacity: number; uLayerOpacity: number }) => void)(
         frame,
         clock,
         target,
-        { opacity, uLayerOpacity: opacity },
+        { opacity: effectiveOpacity, uLayerOpacity: effectiveOpacity },
       );
 
       // Restore default GL blend state immediately after each layer draw
       gl.blendEquation(gl.MAX);
-      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
     }
     gl.disable(gl.BLEND);
     gl.blendEquation(gl.FUNC_ADD);
     gl.bindVertexArray(null);
 
-    // 3) The finished image becomes "previous" and is what outputTexture() returns.
+    // Swap: pp.read now holds the pure feedback loop state for the next frame.
     pp.swap();
+
+    // 1C) Sharp Overlay Layers: if any enabled layer has trails === false,
+    // copy pp.read.texture into pp.write.fbo, draw trails: false layers on top, and point outputTex to pp.write.texture.
+    const hasOverlay = this.layers.some((_, i) => (this.layerConfigs[i]?.trails ?? true) === false);
+    if (hasOverlay) {
+      if (!this.blitProg) {
+        this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
+      }
+      const writeTarget = {
+        kind: 'fbo' as const,
+        framebuffer: pp.write.framebuffer,
+        texture: pp.write.texture,
+        width: pp.width,
+        height: pp.height,
+      };
+      bindTarget(gl, writeTarget);
+      gl.viewport(0, 0, pp.width, pp.height);
+      gl.disable(gl.BLEND);
+      gl.useProgram(this.blitProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
+      const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+      if (uSrc !== null) gl.uniform1i(uSrc, 0);
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindVertexArray(null);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+
+      for (let i = 0; i < this.layers.length; i++) {
+        const layer = this.layers[i];
+        if (!layer) continue;
+        const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max', trails: true };
+        if (cfg.trails !== false) continue;
+
+        const overlayOpacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
+        applyLayerBlend(gl, cfg.blend);
+
+        if ('opacity' in layer) {
+          (layer as unknown as { opacity: number }).opacity = overlayOpacity;
+        }
+        if (typeof (layer as unknown as { setOpacity?: (o: number) => void }).setOpacity === 'function') {
+          (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(overlayOpacity);
+        }
+
+        (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: { opacity: number; uLayerOpacity: number }) => void)(
+          frame,
+          clock,
+          writeTarget,
+          { opacity: overlayOpacity, uLayerOpacity: overlayOpacity },
+        );
+
+        // Restore default GL blend state immediately after each layer draw
+        gl.blendEquation(gl.MAX);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      }
+      gl.disable(gl.BLEND);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.bindVertexArray(null);
+
+      this.outputTex = pp.write.texture;
+    } else {
+      this.outputTex = null;
+    }
   }
 
   private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number): void {
@@ -333,6 +424,7 @@ export class Scene {
     this.blitProg = null;
     this.vao = null;
     this.gl = null;
+    this.outputTex = null;
     this.foregroundOpacity = 1.0;
   }
 }
