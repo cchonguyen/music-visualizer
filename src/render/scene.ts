@@ -13,9 +13,22 @@ import { advanceSceneTransform } from './sceneTransformStore';
 import type { ParamValue } from '../presets/schema';
 import { getRenderScale, scaledBufferSize } from '../gl/size';
 
+export const FEEDBACK_WARP_DEFAULTS = {
+  warpMode: 'classic',
+  kaleidoN: 6,
+  portalRadius: 0.0,
+  rgbSplit: 0.0,
+  decayRgb: [1.0, 1.0, 1.0] as [number, number, number],
+  sobel: 0.0,
+  solarize: 0.0,
+  mobiusPoleOffset: 0.35,
+};
+
 const UNIFORMS = [
   'uPrev', 'uCentre', 'uDrift', 'uStretch', 'uZoom', 'uRot', 'uWarp', 'uWarpScale', 'uWarpSpeed',
   'uTime', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
+  'uWarpMode', 'uKaleidoN', 'uPortalRadius', 'uRgbSplit', 'uDecayRgb', 'uSobel', 'uSolarize',
+  'uSolarizePhase', 'uMobiusPoleOffset', 'uMobiusPolePolarity', 'uWarpAmp',
 ] as const;
 
 export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
@@ -38,7 +51,8 @@ export class Scene {
   /** Render scale the feedback buffer was last sized for (slice 5.2). */
   private appliedScale: number | null = null;
   /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
-  private fb: Record<string, number | string> = { ...FEEDBACK_DEFAULTS };
+  private fb: Record<string, ParamValue> = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS };
+  private mobiusPolePolarity = 1.0;
   private uni = new Map<string, WebGLUniformLocation | null>();
 
   constructor(name: string, layers: RenderLayer[], configs: SceneLayerConfig[] = []) {
@@ -71,7 +85,7 @@ export class Scene {
 
   /** Sets the trail motion and colour settings. Read on the next frame. */
   setFeedback(values: Record<string, ParamValue>): void {
-    this.fb = { ...FEEDBACK_DEFAULTS, ...values };
+    this.fb = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS, ...values };
   }
 
   init(gl: WebGL2RenderingContext): void {
@@ -111,6 +125,10 @@ export class Scene {
     if (gl && this.pp && getRenderScale() !== this.appliedScale) this.applyScale();
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
+
+    if (frame?.kickPulse) {
+      this.mobiusPolePolarity = -this.mobiusPolePolarity;
+    }
 
     const target = {
       kind: 'fbo' as const,
@@ -222,6 +240,36 @@ export class Scene {
     gl.uniform2f(u('uTexel'), 1 / Math.max(width, 1), 1 / Math.max(height, 1));
     gl.uniform1f(u('uDecay'), n('decay'));
     gl.uniform1f(u('uFade'), n('fade'));
+
+    const WARP_MODES: Record<string, number> = {
+      classic: 0,
+      curl: 1,
+      polarFold: 2,
+      mobius: 3,
+      rgbSplit: 4,
+    };
+    const modeKey = String(this.fb.warpMode ?? 'classic');
+    const warpModeInt = WARP_MODES[modeKey] ?? 0;
+    gl.uniform1i?.(u('uWarpMode')!, warpModeInt);
+
+    gl.uniform1f?.(u('uKaleidoN')!, n('kaleidoN') || 6);
+    gl.uniform1f?.(u('uPortalRadius')!, n('portalRadius') || 0.0);
+    gl.uniform1f?.(u('uRgbSplit')!, n('rgbSplit') || 0.0);
+
+    const dRgb = this.fb.decayRgb;
+    const decayRgb: [number, number, number] =
+      Array.isArray(dRgb) && dRgb.length === 3
+        ? [Number(dRgb[0]), Number(dRgb[1]), Number(dRgb[2])]
+        : [1.0, 1.0, 1.0];
+    gl.uniform3f?.(u('uDecayRgb')!, decayRgb[0], decayRgb[1], decayRgb[2]);
+
+    gl.uniform1f?.(u('uSobel')!, n('sobel') || 0.0);
+    gl.uniform1f?.(u('uSolarize')!, n('solarize') || 0.0);
+    gl.uniform1f?.(u('uSolarizePhase')!, timeSec * 2.0);
+    const poleOffset = n('mobiusPoleOffset');
+    gl.uniform1f?.(u('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.35);
+    gl.uniform1f?.(u('uMobiusPolePolarity')!, this.mobiusPolePolarity);
+    gl.uniform1f?.(u('uWarpAmp')!, n('warp') || 0.0);
   }
 
   dispose(): void {

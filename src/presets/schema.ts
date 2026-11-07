@@ -11,7 +11,9 @@ export const AUDIO_SOURCES = [
 ] as const;
 export type AudioSource = (typeof AUDIO_SOURCES)[number];
 
-export type ParamValue = number | boolean | string;
+export type Vec3 = [number, number, number];
+
+export type ParamValue = number | boolean | string | Vec3 | undefined;
 
 interface BaseSpec {
   name: string; // stable key used in preset files, e.g. "density"
@@ -43,7 +45,15 @@ export interface ColourSpec extends BaseSpec {
   default: string; // "#rrggbb"
 }
 
-export type ParamSpec = NumberSpec | BoolSpec | EnumSpec | ColourSpec;
+export interface Vec3Spec extends BaseSpec {
+  type: "vec3";
+  default: Vec3;
+  min?: number;
+  max?: number;
+  step?: number;
+}
+
+export type ParamSpec = NumberSpec | BoolSpec | EnumSpec | ColourSpec | Vec3Spec;
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
@@ -73,6 +83,11 @@ export function assertValidSpec(spec: ParamSpec): void {
       return;
     case "colour":
       if (!HEX_COLOUR.test(spec.default)) fail('default must look like "#rrggbb"');
+      return;
+    case "vec3":
+      if (!Array.isArray(spec.default) || spec.default.length !== 3 || !spec.default.every(Number.isFinite)) {
+        fail("default must be an array of 3 finite numbers");
+      }
       return;
   }
 }
@@ -113,6 +128,19 @@ export function coerceValue(spec: ParamSpec, raw: unknown): CoerceResult {
       return typeof raw === "string" && HEX_COLOUR.test(raw)
         ? { value: raw.toLowerCase() }
         : { value: spec.default, warning: `not a "#rrggbb" colour, using ${spec.default}` };
+    case "vec3": {
+      if (Array.isArray(raw) && raw.length === 3 && raw.every((n) => typeof n === "number" && Number.isFinite(n))) {
+        const min = spec.min ?? -Infinity;
+        const max = spec.max ?? Infinity;
+        const clamped: Vec3 = [
+          Math.min(max, Math.max(min, raw[0])),
+          Math.min(max, Math.max(min, raw[1])),
+          Math.min(max, Math.max(min, raw[2])),
+        ];
+        return { value: clamped };
+      }
+      return { value: [...spec.default], warning: `not a 3-element numeric vector, using default [${spec.default.join(", ")}]` };
+    }
   }
 }
 
@@ -122,3 +150,85 @@ export function defaultsFor(specs: readonly ParamSpec[]): Record<string, ParamVa
   for (const spec of specs) out[spec.name] = spec.default;
   return out;
 }
+
+/** Extended feedback warp parameters (Slice 7.11). */
+export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
+  {
+    type: "enum",
+    name: "warpMode",
+    label: "Warp mode",
+    group: "Warp",
+    default: "classic",
+    options: ["classic", "curl", "polarFold", "mobius", "rgbSplit"],
+  },
+  {
+    type: "int",
+    name: "kaleidoN",
+    label: "Kaleidoscope folds",
+    group: "Warp",
+    default: 6,
+    min: 4,
+    max: 16,
+    step: 1,
+  },
+  {
+    type: "float",
+    name: "portalRadius",
+    label: "Portal radius",
+    group: "Warp",
+    default: 0.0,
+    min: 0.0,
+    max: 0.25,
+    step: 0.005,
+  },
+  {
+    type: "float",
+    name: "rgbSplit",
+    label: "RGB split",
+    group: "Warp",
+    default: 0.0,
+    min: 0.0,
+    max: 0.08,
+    step: 0.001,
+  },
+  {
+    type: "vec3",
+    name: "decayRgb",
+    label: "Decay RGB multiplier",
+    group: "Trail",
+    default: [1.0, 1.0, 1.0],
+    min: 0.0,
+    max: 2.0,
+    step: 0.01,
+  },
+  {
+    type: "float",
+    name: "sobel",
+    label: "Sobel edge detect",
+    group: "Trail",
+    default: 0.0,
+    min: 0.0,
+    max: 1.0,
+    step: 0.01,
+  },
+  {
+    type: "float",
+    name: "solarize",
+    label: "Solarize",
+    group: "Colour",
+    default: 0.0,
+    min: 0.0,
+    max: 1.0,
+    step: 0.01,
+  },
+  {
+    type: "float",
+    name: "mobiusPoleOffset",
+    label: "Möbius pole offset",
+    group: "Warp",
+    default: 0.35,
+    min: 0.1,
+    max: 0.8,
+    step: 0.01,
+  },
+];
