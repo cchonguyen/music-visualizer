@@ -10,6 +10,8 @@ uniform float uCap;     // estimated luminance cap from BrightnessLimiter
 uniform float uSafety;  // 1.0 = apply limits, 0.0 = off (tests / debugging)
 uniform int uStyle;     // transition style while two scenes blend (T1): 0 crossfade, 1 wipe, 2 dissolve, 3 zoom-through
 uniform float uT;       // transition progress, 0 = all A, 1 = all B (only used when both weights > 0)
+uniform float uCalm;    // 1.0 = Calm mode enabled, 0.0 = normal
+uniform float uReversalDamp; // 0.0..1.0 damping from rapid reversals (> 3 reversals/sec)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -43,6 +45,35 @@ void main() {
         c = mix(c, vec3(sum / 3.0), a);
       }
     }
+
+    // High-frequency stripe guard (SYSTEM_SPEC.md:94):
+    // Softly attenuate local contrast when spatial oscillations exceed safe thresholds.
+    float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float dLuma = fwidth(luma);
+    float stripeGuard = smoothstep(0.15, 0.45, dLuma);
+    if (stripeGuard > 0.0) {
+      c = mix(c, vec3(luma), stripeGuard * 0.6);
+    }
+
+    // Calm mode: reduce contrast excursions from midpoint luminance by 50% and cap peak saturation.
+    if (uCalm > 0.5) {
+      c = 0.5 + (c - 0.5) * 0.5;
+      float maxC = max(c.r, max(c.g, c.b));
+      float minC = min(c.r, min(c.g, c.b));
+      float sat = maxC > 0.0001 ? (maxC - minC) / maxC : 0.0;
+      float maxSat = 0.75;
+      if (sat > maxSat) {
+        float curLuma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(curLuma), c, maxSat / sat);
+      }
+    }
+
+    // Alternating dark/light frames (> 3 reversals/sec): increase damping.
+    if (uReversalDamp > 0.0) {
+      float dampFactor = clamp(uReversalDamp, 0.0, 1.0);
+      c = mix(c, vec3(0.5), dampFactor * 0.5);
+    }
+
     // Luminance cap: scale down anything brighter than the cap.
     float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
     if (L > uCap) c *= uCap / max(L, 0.0001);
