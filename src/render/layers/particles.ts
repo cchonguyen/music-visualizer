@@ -81,6 +81,9 @@ export class ParticleLayer implements RenderLayer {
   private uTexOn: WebGLUniformLocation | null = null;
   private uTexGain: WebGLUniformLocation | null = null;
   private uTexHigh: WebGLUniformLocation | null = null;
+  private uMode: WebGLUniformLocation | null = null;
+  private uSubTwist: WebGLUniformLocation | null = null;
+  private uFlowSpeed: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
 
   /** Hue drift clock (turns). Advances by hueDrift per second; wrapped to 0..1 when sent to the shader. */
@@ -127,6 +130,9 @@ export class ParticleLayer implements RenderLayer {
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
     this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
+    this.uMode = gl.getUniformLocation(this.program, 'uMode');
+    this.uSubTwist = gl.getUniformLocation(this.program, 'uSubTwist');
+    this.uFlowSpeed = gl.getUniformLocation(this.program, 'uFlowSpeed');
     this.band.init(gl);
     this.phase.reset();
     this.twinkle.reset();
@@ -193,6 +199,10 @@ export class ParticleLayer implements RenderLayer {
     // Particle shape (4.6): 0 streak, 1 dot, 2 star, 3 ring. Unknown names fall back to streak.
     const shapeIndex = Math.max(0, PARTICLE_SHAPES.indexOf(this.p.shape));
     gl.uniform1i(this.uShape, shapeIndex);
+    const isPhyllotaxis = this.p.mode === 'phyllotaxis';
+    gl.uniform1i(this.uMode, isPhyllotaxis ? 1 : 0);
+    gl.uniform1f(this.uSubTwist, (this.calm ? 0 : (frame.norm?.sub ?? 0)) * 5.0);
+    gl.uniform1f(this.uFlowSpeed, 2.5);
     // Transforms (4.7): rotation in radians, zoom (1 = none). Identity at the defaults.
     // Follow scene transform (2026-11-06): add the scene's accumulated turn and current zoom when on.
     gl.uniform1f(this.uRotation, this.p.rotation + (follow ? scene.angle : 0));
@@ -233,6 +243,9 @@ export class ParticleLayer implements RenderLayer {
     this.uTexOn = null;
     this.uTexGain = null;
     this.uTexHigh = null;
+    this.uMode = null;
+    this.uSubTwist = null;
+    this.uFlowSpeed = null;
     this.uPhase = null;
     this.uAspect = null;
     this.uAccent = null;

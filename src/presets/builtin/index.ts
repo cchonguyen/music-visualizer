@@ -1,7 +1,7 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
 import { BLEND_MODES, parsePreset, type Preset, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
-import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
+import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
 import bars from './bars.json';
@@ -33,6 +33,8 @@ import preset05 from './05-rgb-aberration-vortex.json';
 import preset06 from './06-lissajous-vector-crt.json';
 import preset07 from './07-moire-interference-loom.json';
 import preset08 from './08-spectral-ridge-terrain.json';
+import preset09 from './09-chladni-cymatic-sand.json';
+import preset10 from './10-phyllotaxis-spiral-bloom.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -50,6 +52,12 @@ for (const spec of FEEDBACK_WARP_SPECS) {
 const ringsSpecs = LAYER_SPECS.rings;
 if (ringsSpecs && !ringsSpecs.some((s) => s.name === 'mode')) {
   (ringsSpecs as ParamSpec[]).push(RINGS_MODE_SPEC);
+}
+
+// Extend particles schema with layout mode option (Slice 7.14)
+const particleSpecs = LAYER_SPECS.particles;
+if (particleSpecs && !particleSpecs.some((s) => s.name === 'mode')) {
+  (particleSpecs as ParamSpec[]).push(PARTICLE_MODE_SPEC);
 }
 
 // Extend waveform schema mode with star7 and lissajous
@@ -79,6 +87,7 @@ export const SCHEMAS: SchemaRegistry = {
     ...LAYER_SPECS,
     moire: MOIRE_SPECS,
     spectralTerrain: SPECTRAL_TERRAIN_SPECS,
+    chladniSand: CHLADNI_SPECS,
   },
 };
 
@@ -127,6 +136,17 @@ export const FLAGSHIP_PRESETS_07_08: readonly { id: string; preset: Preset; warn
   { id: '08-spectral-ridge-terrain', ...parsePreset(preset08, SCHEMAS) },
 ];
 
-export const ALL_PRESETS = [...BUILTIN_PRESETS, ...FLAGSHIP_PRESETS, ...FLAGSHIP_PRESETS_07_08];
+/** Flagship Presets 09–10 (Slice 7.14). */
+export const FLAGSHIP_PRESETS_09_10: readonly { id: string; preset: Preset; warnings: string[] }[] = [
+  { id: '09-chladni-cymatic-sand', ...parsePreset(preset09, SCHEMAS) },
+  { id: '10-phyllotaxis-spiral-bloom', ...parsePreset(preset10, SCHEMAS) },
+];
+
+export const ALL_PRESETS = [
+  ...BUILTIN_PRESETS,
+  ...FLAGSHIP_PRESETS,
+  ...FLAGSHIP_PRESETS_07_08,
+  ...FLAGSHIP_PRESETS_09_10,
+];
 
 

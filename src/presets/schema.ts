@@ -271,6 +271,9 @@ declare module "./layerSchemas" {
   interface RingsParams {
     mode?: string;
   }
+  interface ParticleParams {
+    mode?: 'radial' | 'phyllotaxis';
+  }
   interface MoireParams {
     scale: number;
     speed: number;
@@ -283,6 +286,14 @@ declare module "./layerSchemas" {
     horizonY: number;
     foregroundY: number;
     brightness: number;
+  }
+  interface ChladniSandParams {
+    scale: number;
+    brightness: number;
+    pointSize: number;
+    attraction: number;
+    jitter: number;
+    color: string;
   }
 }
 
@@ -332,5 +343,44 @@ export const SPECTRAL_TERRAIN_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "foregroundY", label: "Foreground Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.foregroundY, min: -0.9, max: 0.2, step: 0.01 },
   { type: "float", name: "brightness", label: "Ridge brightness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.01 },
 ];
+
+/** Particle layout mode options (Slice 7.14). */
+export const PARTICLE_MODE_SPEC: EnumSpec = {
+  type: "enum",
+  name: "mode",
+  label: "Layout mode",
+  group: "Shape",
+  default: "radial",
+  options: ["radial", "phyllotaxis"],
+};
+
+/** Chladni sand parameters and schema (Slice 7.14). */
+export interface ChladniSandParams {
+  scale: number;
+  brightness: number;
+  pointSize: number;
+  attraction: number;
+  jitter: number;
+  color: string;
+}
+
+export const CHLADNI_DEFAULTS: ChladniSandParams = {
+  scale: 1.0,
+  brightness: 1.2,
+  pointSize: 1.0,
+  attraction: 1.0,
+  jitter: 1.0,
+  color: "#f0c558",
+};
+
+export const CHLADNI_SPECS: readonly ParamSpec[] = [
+  { type: "float", name: "scale", label: "Pattern scale", group: "Sand", default: CHLADNI_DEFAULTS.scale, min: 0.1, max: 3.0, step: 0.05 },
+  { type: "float", name: "brightness", label: "Sand brightness", group: "Sand", default: CHLADNI_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05 },
+  { type: "float", name: "pointSize", label: "Grain size", group: "Sand", default: CHLADNI_DEFAULTS.pointSize, min: 0.5, max: 4.0, step: 0.1 },
+  { type: "float", name: "attraction", label: "Nodal attraction", group: "Sand", default: CHLADNI_DEFAULTS.attraction, min: 0.1, max: 3.0, step: 0.05 },
+  { type: "float", name: "jitter", label: "Kick jitter", group: "Sand", default: CHLADNI_DEFAULTS.jitter, min: 0.0, max: 3.0, step: 0.05 },
+  { type: "colour", name: "color", label: "Sand colour", group: "Colour", default: CHLADNI_DEFAULTS.color },
+];
+
 
 

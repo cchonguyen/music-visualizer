@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "Phyllotaxis Spiral Bloom",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.88
+  },
+  "layers": [
+    {
+      "type": "particles",
+      "params": {
+        "mode": "phyllotaxis",
+        "shape": "dot",
+        "size": 2.2,
+        "brightness": 1.4
+      }
+    }
+  ],
+  "post": {}
+}

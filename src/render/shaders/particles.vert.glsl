@@ -25,6 +25,9 @@ uniform float uWarp;        // scene wave warp (morph), 0..1, only used when fol
 uniform float uWarpScale;   // scene wave count
 uniform float uWarpSpeed;   // scene wave speed
 uniform float uTime;        // scene time in seconds
+uniform int uMode;          // 0 = radial (default), 1 = phyllotaxis
+uniform float uSubTwist;    // sub-bass twist for phyllotaxis
+uniform float uFlowSpeed;   // wave flow speed
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
@@ -43,6 +46,42 @@ float hash01(float index, float salt) {
 
 void main() {
   float id = float(gl_InstanceID);
+
+  if (uMode == 1) {
+    // Phyllotaxis spiral bloom (Slice 7.14)
+    // Golden angle polar coordinates r = c * sqrt(i), theta = i * (2.3999632 + uSubTwist * 0.0015)
+    float wave = sin(id * 0.06 - uTime * uFlowSpeed);
+    vMix = clamp(0.5 + 0.5 * wave, 0.0, 1.0);
+
+    float c = 0.038 * min(uFar, 1.25);
+    float r = c * sqrt(id + 1.0);
+    float theta = id * (2.3999632 + uSubTwist * 0.0015);
+    vec2 pos = vec2(cos(theta), sin(theta)) * r;
+
+    vec2 dir = (r > 0.001) ? pos / r : vec2(0.0, 1.0);
+    vec2 perp = vec2(-dir.y, dir.x);
+
+    vLocal = CORNERS[gl_VertexID];
+    float scaleWave = 0.7 + 0.5 * wave;
+    float quadSize = mix(0.008, 0.018, hash01(id, 1.0)) * uSize * scaleWave * (0.8 + 0.4 * clamp(uEnergy, 0.0, 1.0));
+
+    vec2 origin = vec2(uSway.x * uAspect, uSway.y) * 0.2;
+    vec2 point = origin + pos + (dir * vLocal.x + perp * vLocal.y) * quadSize;
+
+    vFade = smoothstep(0.0, 0.04, r) * (1.0 - smoothstep(0.65 * uFar, 1.05 * uFar, r));
+
+    float twRate = mix(4.0, 12.0, hash01(id, 4.0));
+    float twPhase = hash01(id, 5.0) * TAU;
+    float tw = 0.5 + 0.5 * sin(uTwinkleTime * twRate + twPhase);
+    vTwinkle = tw * tw * tw;
+
+    float cosR = cos(uRotation);
+    float sinR = sin(uRotation);
+    vec2 turned = (vec2(cosR * point.x - sinR * point.y, sinR * point.x + cosR * point.y) * uStretch) / uZoom + uCentre;
+    gl_Position = vec4(turned.x / uAspect, turned.y, 0.0, 1.0);
+    return;
+  }
+
   float seed = hash01(id, 0.0);                    // spawn offset along the life cycle
   vec2 aSeed = vec2(seed, hash01(id, 6.0));
   vMix = aSeed.y;
