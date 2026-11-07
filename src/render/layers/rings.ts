@@ -55,6 +55,9 @@ export class RingsLayer implements RenderLayer {
   private uTexGain: WebGLUniformLocation | null = null;
   private uTexSub: WebGLUniformLocation | null = null;
   private uTexMid: WebGLUniformLocation | null = null;
+  private uMode: WebGLUniformLocation | null = null;
+  private uTime: WebGLUniformLocation | null = null;
+  private uMid: WebGLUniformLocation | null = null;
   private readonly band = new BandTexture();
 
   init(gl: WebGL2RenderingContext): void {
@@ -73,6 +76,9 @@ export class RingsLayer implements RenderLayer {
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
     this.uTexSub = gl.getUniformLocation(this.program, 'uTexSub');
     this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
+    this.uMode = gl.getUniformLocation(this.program, 'uMode');
+    this.uTime = gl.getUniformLocation(this.program, 'uTime');
+    this.uMid = gl.getUniformLocation(this.program, 'uMid');
     this.band.init(gl);
     this.vao = createVao(gl);
   }
@@ -105,6 +111,8 @@ export class RingsLayer implements RenderLayer {
 
     const palette: Palette = getPalette(getCurrentPalette());
     const aspect = target.width / Math.max(target.height, 1);
+    const modeStr = this.p.mode ?? (this.p as any).shape ?? 'rings';
+    const mode = modeStr === 'orbitTriangles' ? 1 : modeStr === 'polarGrid' ? 2 : 0;
 
     gl.useProgram(this.program);
     gl.uniform1i(this.uCount, count); // must follow useProgram, or the call is an invalid operation
@@ -113,6 +121,9 @@ export class RingsLayer implements RenderLayer {
     gl.uniform1f(this.uAspect, aspect);
     gl.uniform1f(this.uSides, this.p.sides);
     gl.uniform1f(this.uFilled, this.p.style === 'filled' ? 1 : 0);
+    gl.uniform1i(this.uMode, mode);
+    gl.uniform1f(this.uTime, _clock.timeSec);
+    gl.uniform1f(this.uMid, unit(frame.norm.mid));
     gl.uniform3f(this.uBase, palette.base[0], palette.base[1], palette.base[2]);
     gl.uniform3f(this.uAccent, palette.accentB[0], palette.accentB[1], palette.accentB[2]);
     // Band texture (6.3): always bound so the samplers have a valid texture; updated only when on.
@@ -146,6 +157,9 @@ export class RingsLayer implements RenderLayer {
     this.uTexGain = null;
     this.uTexSub = null;
     this.uTexMid = null;
+    this.uMode = null;
+    this.uTime = null;
+    this.uMid = null;
     this.gl = null;
   }
 }

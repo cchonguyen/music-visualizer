@@ -232,3 +232,44 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     step: 0.01,
   },
 ];
+
+/** Rings shape/mode options (Slice 7.12). */
+export const RINGS_MODE_SPEC: ParamSpec = {
+  type: "enum",
+  name: "mode",
+  label: "Ring mode",
+  group: "Shape",
+  default: "rings",
+  options: ["rings", "orbitTriangles", "polarGrid"],
+};
+
+/** Post CRT scanline and barrel distortion options (Slice 7.12). */
+export const POST_CRT_SPECS: readonly ParamSpec[] = [
+  {
+    type: "float",
+    name: "crtScanlines",
+    label: "CRT scanlines",
+    group: "CRT",
+    default: 0.0,
+    min: 0.0,
+    max: 1.0,
+    step: 0.01,
+  },
+  {
+    type: "float",
+    name: "crtBarrel",
+    label: "CRT barrel distortion",
+    group: "CRT",
+    default: 0.0,
+    min: 0.0,
+    max: 0.2,
+    step: 0.005,
+  },
+];
+
+declare module "./layerSchemas" {
+  interface RingsParams {
+    mode?: string;
+  }
+}
+

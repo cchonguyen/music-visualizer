@@ -16,6 +16,8 @@ uniform float uVignette;  // 0..1 darker edges
 uniform float uChroma;    // red/blue split, in uv
 uniform float uBloomAmt;  // 0 = off
 uniform float uBloomThr;  // brightness above this glows
+uniform float uCrtScanlines; // 0..1 (default 0, Slice 7.12)
+uniform float uCrtBarrel;    // 0..0.2 (default 0, Slice 7.12)
 
 in vec2 vUv;
 out vec4 outColor;
@@ -37,6 +39,13 @@ void main() {
     uv = 0.5 + length(p) * vec2(cos(a), sin(a));
   }
 
+  // CRT barrel distortion (Slice 7.12)
+  if (uCrtBarrel > 0.0) {
+    vec2 p = uv - 0.5;
+    float dist = dot(p, p);
+    uv = 0.5 + p * (1.0 + uCrtBarrel * dist * 4.0);
+  }
+
   vec3 c = vec3(
     texture(uImg, uv + vec2(uChroma, 0.0)).r,
     texture(uImg, uv).g,
@@ -52,6 +61,12 @@ void main() {
   if (uBloomAmt > 0.0) {
     vec3 g = texture(uBloom, vUv).rgb;
     c += max(g - uBloomThr, 0.0) * uBloomAmt;
+  }
+
+  // CRT scanlines (Slice 7.12)
+  if (uCrtScanlines > 0.0) {
+    float scanline = sin(vUv.y * 800.0) * 0.5 + 0.5;
+    c *= 1.0 - uCrtScanlines * 0.5 * scanline;
   }
 
   float d = length(vUv - 0.5);

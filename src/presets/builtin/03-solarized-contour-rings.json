@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "Solarized Contour Rings",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "sobel": 0.85,
+    "solarize": 0.8,
+    "decay": 0.96
+  },
+  "layers": [
+    {
+      "type": "rings",
+      "params": {
+        "maxRings": 5,
+        "strokeBase": 0.005
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {
+        "style": "ring",
+        "ringStart": { "value": 0.16, "link": { "source": "kickEnv", "amount": 0.3, "smooth": 0.1 } }
+      }
+    }
+  ],
+  "post": {}
+}

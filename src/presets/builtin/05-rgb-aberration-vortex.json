@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "name": "RGB Aberration Vortex",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "warpMode": "rgbSplit",
+    "rgbSplit": 0.03,
+    "decay": 0.94
+  },
+  "layers": [
+    {
+      "type": "waveform",
+      "params": {
+        "mode": "star7",
+        "amplitude": 1.0
+      }
+    },
+    {
+      "type": "shockwave",
+      "params": {
+        "style": "ring",
+        "ringSec": 0.4
+      }
+    }
+  ],
+  "post": {}
+}

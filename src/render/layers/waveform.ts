@@ -31,6 +31,8 @@ export class WaveformLayer implements RenderLayer {
   private uMode: WebGLUniformLocation | null = null;
   private uAspect: WebGLUniformLocation | null = null;
   private uAmp: WebGLUniformLocation | null = null;
+  private uDelta: WebGLUniformLocation | null = null;
+  private delta = 0;
   private gl: WebGL2RenderingContext | null = null;
   private program: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
@@ -55,6 +57,7 @@ export class WaveformLayer implements RenderLayer {
     this.uMode = gl.getUniformLocation(this.program, 'uMode');
     this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
     this.uAmp = gl.getUniformLocation(this.program, 'uAmp');
+    this.uDelta = gl.getUniformLocation(this.program, 'uDelta');
     this.uAlpha = gl.getUniformLocation(this.program, 'uAlpha');
     this.uRes = gl.getUniformLocation(this.program, 'uRes');
     this.uTexOn = gl.getUniformLocation(this.program, 'uTexOn');
@@ -76,7 +79,10 @@ export class WaveformLayer implements RenderLayer {
     const n = frame.waveform.length;
     // A line strip needs at least two vertices; nothing to draw otherwise.
     if (n < 2) return;
-    const circle = this.p.mode === 'circle';
+    if (frame.kickPulse) {
+      this.delta += 0.4;
+    }
+    const mode = this.p.mode === 'circle' ? 1 : this.p.mode === 'star7' ? 2 : this.p.mode === 'lissajous' ? 3 : 0;
 
     // Recreate the texture only when the sample count changes; otherwise reuse it.
     if (!this.tex || this.tex.length !== n) {
@@ -92,9 +98,10 @@ export class WaveformLayer implements RenderLayer {
     gl.bindTexture(gl.TEXTURE_2D, this.tex.texture);
     gl.uniform1i(this.uWave, 0);
     gl.uniform1i(this.uCount, n);
-    gl.uniform1i(this.uMode, circle ? 1 : 0);
+    gl.uniform1i(this.uMode, mode);
     gl.uniform1f(this.uAspect, target.width / Math.max(target.height, 1));
     gl.uniform1f(this.uAmp, this.p.amplitude);
+    gl.uniform1f(this.uDelta, this.delta);
     const opacity = options?.uLayerOpacity ?? options?.opacity ?? this.opacity;
     gl.uniform1f(this.uAlpha, opacity); // layer opacity
     gl.uniform2f(this.uRes, target.width, target.height);
@@ -106,7 +113,8 @@ export class WaveformLayer implements RenderLayer {
     gl.uniform1i(this.uTexHigh, texUnit + 2);
 
     gl.bindVertexArray(this.vao);
-    gl.drawArrays(gl.LINE_STRIP, 0, circle ? n + 1 : n);
+    const vertexCount = mode === 3 ? 1024 : (mode === 1 || mode === 2) ? n + 1 : n;
+    gl.drawArrays(gl.LINE_STRIP, 0, vertexCount);
     gl.bindVertexArray(null);
   }
 
@@ -123,6 +131,10 @@ export class WaveformLayer implements RenderLayer {
     this.vao = null;
     this.uWave = null;
     this.uCount = null;
+    this.uMode = null;
+    this.uAspect = null;
+    this.uAmp = null;
+    this.uDelta = null;
     this.uAlpha = null;
     this.uRes = null;
     this.uTexOn = null;
