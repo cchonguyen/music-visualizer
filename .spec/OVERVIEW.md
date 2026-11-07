@@ -4,9 +4,13 @@
 A desktop web app (Chrome or Edge) that draws live visuals in time with music. It can play a file you pick, or visualize what your computer is playing from a browser tab or the whole system (you approve the screen-share prompt and tick "share audio"). Everything runs locally: nothing is uploaded or stored, and no account is needed.
 
 ## Current Build Status
-- **Live:** https://music-visualizer.charliechonguyen.com (Stage 1 test build; workers.dev backup). Test signals verified by the lead agent; your Mac/Windows check is pending.
+- **Live:** https://music-visualizer.charliechonguyen.com (custom domain; workers.dev backup). Stages 1 to 2.5 deployed 2026-11-04.
+- **Stage 3:** parked. Deferred items are listed in `docs/stage4-parked.md`.
+- **Stage 4 (presets, effects, Preset Studio):** built in code 2026-11-05. Owner visual sign-off is still open for the slices marked 🖐 in `.spec/PROGRESS.md`.
+- **projectM-inspired features:** slices 5.1 to 5.3, 5.11 and 6.1 are done. Slices 5.4 to 5.10 are pending.
+- **Stage 7:** architecture spec and slice briefs are on main (`.spec/specs/`). Slices 7.8 to 7.17 are queued and not started.
 - **In Progress:** none
-- **Up Next:** your device test (`docs/stage1-test-report.md`), then Stage 2 visuals.
+- **Up Next:** your visual sign-off on Stage 4, then the next slice you choose from `.spec/PROGRESS.md`.
 
 ## Scope Change
 - 2026-11-04: rescoped to desktop first. iPhone and phone versions are deferred. Reason: system audio can't be captured on iPhone, and desktop allows heavier visuals.
