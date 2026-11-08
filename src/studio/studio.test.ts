@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as toastModule from '../ui/toast';
 import {
   DELETE_CONFIRM_MS,
   deleteAnnouncement,
@@ -112,6 +113,8 @@ interface MockElement {
   label?: string;
   selected?: boolean;
   firstChild?: MockElement | null;
+  parentElement?: MockElement | null;
+  before?(...nodes: any[]): void;
 }
 
 function createMockElement(tagName: string): MockElement {
@@ -191,20 +194,45 @@ function createMockElement(tagName: string): MockElement {
         if (typeof node === 'string') {
           const textNode = createMockElement('span');
           textNode.textContent = node;
+          textNode.parentElement = el;
           el.children.push(textNode);
         } else if (node) {
+          node.parentElement = el;
           el.children.push(node);
         }
       }
     },
     appendChild(node: MockElement) {
+      node.parentElement = el;
       el.children.push(node);
       return node;
     },
     removeChild(node: MockElement) {
       const idx = el.children.indexOf(node);
-      if (idx !== -1) el.children.splice(idx, 1);
+      if (idx !== -1) {
+        node.parentElement = null;
+        el.children.splice(idx, 1);
+      }
       return node;
+    },
+    before(...nodes: (MockElement | string)[]) {
+      if (!el.parentElement) return;
+      const idx = el.parentElement.children.indexOf(el);
+      if (idx !== -1) {
+        const addedNodes: MockElement[] = [];
+        for (const n of nodes) {
+          if (typeof n === 'string') {
+            const span = createMockElement('span');
+            span.textContent = n;
+            span.parentElement = el.parentElement;
+            addedNodes.push(span);
+          } else if (n) {
+            n.parentElement = el.parentElement;
+            addedNodes.push(n);
+          }
+        }
+        el.parentElement.children.splice(idx, 0, ...addedNodes);
+      }
     },
     replaceChildren(...nodes: (MockElement | string)[]) {
       el.children = [];
@@ -320,7 +348,23 @@ function createMockPane() {
     if (options?.options) {
       selectEl = createMockElement('select');
       selectEl.className = 'tp-lstv_s';
+      if (typeof options.options === 'object') {
+        const doc = selectEl.ownerDocument;
+        for (const [text, val] of Object.entries(options.options)) {
+          const opt = doc ? doc.createElement('option') : createMockElement('option');
+          opt.value = String(val);
+          opt.textContent = text;
+          selectEl.appendChild(opt);
+        }
+      }
       element.appendChild(selectEl);
+    } else {
+      const inputEl = createMockElement('input');
+      inputEl.value = String(target[prop] ?? '');
+      if (options?.readonly) {
+        inputEl.setAttribute('readonly', 'readonly');
+      }
+      element.appendChild(inputEl);
     }
 
     const item = {
@@ -363,6 +407,10 @@ function createMockPane() {
   const addButton = (options: any) => {
     const element = createMockElement('button');
     element.className = 'tp-btnv';
+    const buttonChild = createMockElement('button');
+    buttonChild.className = 'tp-btnv_b';
+    buttonChild.textContent = options?.title ?? '';
+    element.appendChild(buttonChild);
     const listeners: Record<string, ((ev: any) => void)[]> = {};
     const btn = {
       title: options?.title ?? '',
@@ -377,6 +425,8 @@ function createMockPane() {
         listeners[event]?.forEach((fn) => fn({}));
       },
     };
+    element.addEventListener('click', () => btn.fire('click'));
+    buttonChild.addEventListener('click', () => btn.fire('click'));
     buttons.push(btn);
     return btn;
   };
@@ -1352,5 +1402,417 @@ describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
 
     // Should not throw even if no select element is in the binding or body
     expect(() => studio.bind('mock')).not.toThrow();
+  });
+});
+
+describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', () => {
+  function setupTest() {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    const folders = [
+      { id: 'folder-chill', name: 'Chill Beats', createdAt: 1000 },
+      { id: 'folder-energy', name: 'High Energy', createdAt: 2000 },
+    ];
+
+    const presets: Record<string, any> = {
+      crown: {
+        id: 'crown',
+        builtin: true,
+        preset: {
+          name: 'Crown',
+          tags: ['built-in'],
+          transition: { style: 'crossfade', seconds: 0.32 },
+          feedback: {},
+          layers: [],
+          post: {},
+        },
+        savedJson: '{}',
+      },
+      '13-solar-crown-eclipse': {
+        id: '13-solar-crown-eclipse',
+        builtin: true,
+        preset: {
+          name: '13 · Solar Crown Eclipse',
+          tags: ['built-in'],
+          transition: { style: 'crossfade', seconds: 0.32 },
+          feedback: {},
+          layers: [],
+          post: {},
+        },
+        savedJson: '{}',
+      },
+      'user-1': {
+        id: 'user-1',
+        builtin: false,
+        folderId: undefined,
+        preset: {
+          name: 'Custom Ambient',
+          tags: [],
+          transition: { style: 'crossfade', seconds: 1 },
+          feedback: {},
+          layers: [],
+          post: {},
+        },
+        savedJson: '{}',
+      },
+      'user-in-folder': {
+        id: 'user-in-folder',
+        builtin: false,
+        folderId: 'folder-chill',
+        preset: {
+          name: 'Chill Vibes',
+          tags: ['favourite'],
+          transition: { style: 'crossfade', seconds: 1 },
+          feedback: {},
+          layers: [],
+          post: {},
+        },
+        savedJson: '{}',
+      },
+    };
+
+    const session = {
+      get: vi.fn((id: string) => presets[id]),
+      list: vi.fn(() => Object.values(presets)),
+      listCategorized: vi.fn(() => ({
+        system: {
+          showcase: [presets['13-solar-crown-eclipse']],
+          flagship: [],
+          classics: [presets['crown']],
+        },
+        user: {
+          folders: [
+            { folder: folders[0]!, entries: [presets['user-in-folder']] },
+            { folder: folders[1]!, entries: [] },
+          ],
+          unfiled: [presets['user-1']],
+        },
+      })),
+      getFolders: vi.fn(() => [...folders]),
+      createFolder: vi.fn((name: string) => {
+        const created = { id: `folder-${Date.now()}`, name, createdAt: Date.now() };
+        folders.push(created);
+        return created;
+      }),
+      renameFolder: vi.fn((folderId: string, newName: string) => {
+        const found = folders.find((f) => f.id === folderId);
+        if (found) found.name = newName;
+      }),
+      deleteFolder: vi.fn((folderId: string) => {
+        const idx = folders.findIndex((f) => f.id === folderId);
+        if (idx !== -1) folders.splice(idx, 1);
+        for (const p of Object.values(presets)) {
+          if (p.folderId === folderId) {
+            p.folderId = undefined;
+          }
+        }
+      }),
+      getPresetFolder: vi.fn((presetId: string) => presets[presetId]?.folderId),
+      setPresetFolder: vi.fn((presetId: string, folderId: string | undefined) => {
+        if (presets[presetId]) presets[presetId].folderId = folderId;
+      }),
+      setPresetTags: vi.fn((presetId: string, tags: string[]) => {
+        if (presets[presetId]) presets[presetId].preset.tags = [...tags];
+      }),
+      isDirty: () => false,
+      commit: vi.fn(),
+      save: vi.fn((id: string) => {
+        if (presets[id]?.builtin) throw new Error('Built-in presets are read-only. Use "Save as" to keep a copy.');
+      }),
+      saveAs: vi.fn((_fromId: string, _name: string) => `user-new-${Date.now()}`),
+      duplicate: vi.fn((_fromId: string) => `user-dup-${Date.now()}`),
+      remove: vi.fn(),
+      canUndo: () => false,
+      canRedo: () => false,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      sceneOf: () => ({ layers: [], setFeedback: vi.fn() }),
+      refreshPost: vi.fn(),
+      rebuild: vi.fn(),
+      exportJson: () => '{}',
+    } as any;
+
+    let mockPaneInstance: any = null;
+    const mockPaneFactory = () => {
+      mockPaneInstance = createMockPane();
+      return mockPaneInstance;
+    };
+
+    const switchTo = vi.fn((id: string) => {
+      studio.bind(id);
+    });
+
+    const studio = new Studio(container as any, {
+      session,
+      switchTo,
+      paneFactory: mockPaneFactory,
+    });
+
+    return { container, session, studio, getPane: () => mockPaneInstance, switchTo, folders, presets };
+  }
+
+  it('renders read-only system preset affordances (category indicator, read-only name, disabled folder dropdown, hidden delete)', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    studio.bind('crown');
+    const pane = getPane();
+
+    // 1. Category indicator should be present with subfolder label
+    const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
+    expect(categoryBinding).toBeDefined();
+    expect(categoryBinding.options.readonly).toBe(true);
+    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Classics & Textures');
+
+    // 2. Name field should be read-only
+    const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
+    expect(nameBinding).toBeDefined();
+    expect(nameBinding.options.readonly).toBe(true);
+
+    // 3. Folder assignment dropdown must NOT exist for built-ins
+    const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
+    expect(folderBinding).toBeUndefined();
+
+    // 4. Folder action buttons must NOT exist
+    const renameFolderBtn = pane.buttons.find((b: any) => b.title === 'Rename folder');
+    const deleteFolderBtn = pane.buttons.find((b: any) => b.title === 'Delete folder');
+    const addFolderBtn = pane.buttons.find((b: any) => b.title === 'Add folder');
+    expect(renameFolderBtn).toBeUndefined();
+    expect(deleteFolderBtn).toBeUndefined();
+    expect(addFolderBtn).toBeUndefined();
+
+    // 5. Delete button must NOT exist for built-ins
+    const deleteBtn = pane.buttons.find((b: any) => b.title === 'Delete');
+    expect(deleteBtn).toBeUndefined();
+
+    // 6. Save button should be read-only indicator and clicking shows toast
+    const saveBtn = pane.buttons.find((b: any) => b.title.startsWith('Save (Read-only)'));
+    expect(saveBtn).toBeDefined();
+    saveBtn.fire('click');
+    expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Built-in presets are read-only'));
+
+    // 7. Save as and Duplicate buttons are active
+    const saveAsBtn = pane.buttons.find((b: any) => b.title === 'Save as…');
+    const duplicateBtn = pane.buttons.find((b: any) => b.title === 'Duplicate');
+    expect(saveAsBtn).toBeDefined();
+    expect(duplicateBtn).toBeDefined();
+
+    // 8. Favourite toggle calls session.setPresetTags
+    const favBinding = pane.bindings.find((b: any) => b.prop === 'favourite');
+    expect(favBinding).toBeDefined();
+    favBinding.fire('change', true);
+    expect(session.setPresetTags).toHaveBeenCalledWith('crown', expect.arrayContaining(['favourite']));
+
+    showToastSpy.mockRestore();
+  });
+
+  it('renders Showcase category indicator for Stage 9 showcase presets', () => {
+    const { studio, getPane } = setupTest();
+    studio.bind('13-solar-crown-eclipse');
+    const pane = getPane();
+
+    const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
+    expect(categoryBinding).toBeDefined();
+    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Stage 9 Showcase (13–20)');
+  });
+
+  it('renders user preset controls with folder assignment dropdown, editable name, and active Delete', () => {
+    const { studio, getPane, session } = setupTest();
+    studio.bind('user-1');
+    const pane = getPane();
+
+    // 1. Category indicator should NOT be present for user presets
+    const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
+    expect(categoryBinding).toBeUndefined();
+
+    // 2. Name should be editable (not read-only)
+    const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
+    expect(nameBinding).toBeDefined();
+    expect(nameBinding.options.readonly).toBeFalsy();
+    nameBinding.fire('change', 'New Name');
+    expect(session.commit).toHaveBeenCalledWith('user-1');
+
+    // 3. Folder assignment dropdown should be present
+    const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
+    expect(folderBinding).toBeDefined();
+    expect(folderBinding.options.label).toBe('Folder');
+    expect(folderBinding.target.folder).toBe(''); // unfiled
+    expect(folderBinding.options.options).toEqual(
+      expect.objectContaining({
+        '(Unfiled)': '',
+        'Chill Beats': 'folder-chill',
+        'High Energy': 'folder-energy',
+        '+ New Folder…': '__new_folder__',
+      }),
+    );
+
+    // 4. When unfiled, only "Add folder" button is shown (no Rename or Delete folder)
+    expect(pane.buttons.find((b: any) => b.title === 'Rename folder')).toBeUndefined();
+    expect(pane.buttons.find((b: any) => b.title === 'Delete folder')).toBeUndefined();
+    expect(pane.buttons.find((b: any) => b.title === 'Add folder')).toBeDefined();
+
+    // 5. Delete preset button is active
+    expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeDefined();
+  });
+
+  it('moves preset to an existing user folder via folder dropdown', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    studio.bind('user-1');
+    const pane = getPane();
+    const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
+
+    // Move to "Chill Beats"
+    folderBinding.fire('change', 'folder-chill');
+    expect(session.setPresetFolder).toHaveBeenCalledWith('user-1', 'folder-chill');
+    expect(showToastSpy).toHaveBeenCalledWith('Moved to Chill Beats');
+
+    // After moving, studio rebinds: new pane instance should have 'folder-chill' selected and folder action buttons
+    const updatedPane = getPane();
+    const updatedFolderBinding = updatedPane.bindings.find((b: any) => b.prop === 'folder');
+    expect(updatedFolderBinding.target.folder).toBe('folder-chill');
+    expect(updatedPane.buttons.find((b: any) => b.title === 'Rename folder')).toBeDefined();
+    expect(updatedPane.buttons.find((b: any) => b.title === 'Delete folder')).toBeDefined();
+
+    showToastSpy.mockRestore();
+  });
+
+  it('unfiles preset when selecting (Unfiled) from folder dropdown', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    studio.bind('user-in-folder');
+    const pane = getPane();
+    const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
+    expect(folderBinding.target.folder).toBe('folder-chill');
+
+    // Select "(Unfiled)" (empty string)
+    folderBinding.fire('change', '');
+    expect(session.setPresetFolder).toHaveBeenCalledWith('user-in-folder', undefined);
+    expect(showToastSpy).toHaveBeenCalledWith('Preset unfiled');
+
+    showToastSpy.mockRestore();
+  });
+
+  it('prompts and creates new folder when selecting "+ New Folder…" from dropdown', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue('Synthetics');
+
+    studio.bind('user-1');
+    const pane = getPane();
+    const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
+
+    folderBinding.fire('change', '__new_folder__');
+    expect(promptSpy).toHaveBeenCalled();
+    expect(session.createFolder).toHaveBeenCalledWith('Synthetics');
+    expect(session.setPresetFolder).toHaveBeenCalledWith('user-1', expect.stringContaining('folder-'));
+    expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Created folder "Synthetics"'));
+
+    promptSpy.mockRestore();
+    showToastSpy.mockRestore();
+  });
+
+  it('prompts and creates new folder when clicking "Add folder" button', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue('Deep Focus');
+
+    studio.bind('user-1');
+    const pane = getPane();
+    const addFolderBtn = pane.buttons.find((b: any) => b.title === 'Add folder');
+    expect(addFolderBtn).toBeDefined();
+
+    addFolderBtn.fire('click');
+    expect(promptSpy).toHaveBeenCalled();
+    expect(session.createFolder).toHaveBeenCalledWith('Deep Focus');
+    expect(session.setPresetFolder).toHaveBeenCalledWith('user-1', expect.stringContaining('folder-'));
+    expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Created folder "Deep Focus"'));
+
+    promptSpy.mockRestore();
+    showToastSpy.mockRestore();
+  });
+
+  it('renames folder when clicking "Rename folder" button', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue('Lofi Beats');
+
+    studio.bind('user-in-folder');
+    const pane = getPane();
+    const renameBtn = pane.buttons.find((b: any) => b.title === 'Rename folder');
+    expect(renameBtn).toBeDefined();
+
+    renameBtn.fire('click');
+    expect(promptSpy).toHaveBeenCalledWith(expect.stringContaining('Rename folder "Chill Beats"'), 'Chill Beats');
+    expect(session.renameFolder).toHaveBeenCalledWith('folder-chill', 'Lofi Beats');
+    expect(showToastSpy).toHaveBeenCalledWith('Folder renamed to "Lofi Beats"');
+
+    promptSpy.mockRestore();
+    showToastSpy.mockRestore();
+  });
+
+  it('deletes folder with confirmation when clicking "Delete folder" button and unfiles presets', () => {
+    const { studio, getPane, session } = setupTest();
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const confirmSpy = vi.spyOn(studio, 'confirmAction').mockReturnValue(true);
+
+    studio.bind('user-in-folder');
+    const pane = getPane();
+    const deleteFolderBtn = pane.buttons.find((b: any) => b.title === 'Delete folder');
+    expect(deleteFolderBtn).toBeDefined();
+
+    deleteFolderBtn.fire('click');
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Delete folder "Chill Beats"? Presets inside will be moved to Unfiled.'));
+    expect(session.deleteFolder).toHaveBeenCalledWith('folder-chill');
+    expect(showToastSpy).toHaveBeenCalledWith('Folder "Chill Beats" deleted');
+
+    // After folder deletion, the preset is unfiled
+    const updatedPane = getPane();
+    const updatedFolderBinding = updatedPane.bindings.find((b: any) => b.prop === 'folder');
+    expect(updatedFolderBinding.target.folder).toBe('');
+    expect(updatedPane.buttons.find((b: any) => b.title === 'Rename folder')).toBeUndefined();
+    expect(updatedPane.buttons.find((b: any) => b.title === 'Delete folder')).toBeUndefined();
+
+    confirmSpy.mockRestore();
+    showToastSpy.mockRestore();
+  });
+
+  it('cancelling prompt or confirm does not create, rename, or delete folders', () => {
+    const { studio, session } = setupTest();
+    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue(null);
+    const confirmSpy = vi.spyOn(studio, 'confirmAction').mockReturnValue(false);
+
+    // Cancel create
+    studio.bind('user-1');
+    studio.handleNewFolder('user-1');
+    expect(session.createFolder).not.toHaveBeenCalled();
+
+    // Cancel rename
+    studio.bind('user-in-folder');
+    studio.handleRenameFolder('user-in-folder', 'folder-chill');
+    expect(session.renameFolder).not.toHaveBeenCalled();
+
+    // Cancel delete
+    studio.handleDeleteFolder('user-in-folder', 'folder-chill');
+    expect(session.deleteFolder).not.toHaveBeenCalled();
+
+    promptSpy.mockRestore();
+    confirmSpy.mockRestore();
+  });
+
+  it('studio.refresh() rebinds and synchronizes state', () => {
+    const { studio, getPane } = setupTest();
+    studio.bind('user-1');
+    const paneBefore = getPane();
+
+    studio.refresh();
+    const paneAfter = getPane();
+    expect(paneAfter).not.toBeNull();
+    expect(paneAfter).not.toBe(paneBefore);
   });
 });

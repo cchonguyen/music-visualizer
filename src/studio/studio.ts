@@ -7,11 +7,11 @@ import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
-import { SCHEMAS } from '../presets/builtin';
+import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
-import type { PresetSession, SessionEntry } from '../presets/session';
+import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
 import { isSpecVisible, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
@@ -367,6 +367,87 @@ export class Studio {
     }
   }
 
+  /** Refresh studio panel for the current preset (Slice 10.4). */
+  refresh(): void {
+    if (this.id) {
+      this.bind(this.id);
+    }
+  }
+
+  /** Prompt user for folder name via prompt or prompt fallback. */
+  promptForFolderName(message: string, defaultValue = ''): string | null {
+    if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+      const res = window.prompt(message, defaultValue);
+      return res !== null ? res.trim() : null;
+    }
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).prompt === 'function') {
+      const res = (globalThis as any).prompt(message, defaultValue);
+      return res !== null ? res.trim() : null;
+    }
+    return null;
+  }
+
+  /** Confirm action via window.confirm or confirm fallback. */
+  confirmAction(message: string): boolean {
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      return window.confirm(message);
+    }
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).confirm === 'function') {
+      return (globalThis as any).confirm(message);
+    }
+    return true;
+  }
+
+  handleNewFolder(presetId: string): void {
+    const name = this.promptForFolderName('Enter new folder name:');
+    if (!name) {
+      this.bind(presetId);
+      return;
+    }
+    const session = this.opts.session;
+    try {
+      const folder = session.createFolder(name);
+      session.setPresetFolder(presetId, folder.id);
+      showToast(`Created folder "${folder.name}"`);
+      this.bind(presetId);
+    } catch (err) {
+      showToast((err as Error).message);
+      this.bind(presetId);
+    }
+  }
+
+  handleRenameFolder(presetId: string, folderId: string): void {
+    const session = this.opts.session;
+    const folders = typeof session.getFolders === 'function' ? session.getFolders() : [];
+    const current = folders.find((f) => f.id === folderId);
+    const currentName = current ? current.name : '';
+    const newName = this.promptForFolderName(`Rename folder "${currentName}":`, currentName);
+    if (!newName || newName === currentName) return;
+    try {
+      session.renameFolder(folderId, newName);
+      showToast(`Folder renamed to "${newName}"`);
+      this.bind(presetId);
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  }
+
+  handleDeleteFolder(presetId: string, folderId: string): void {
+    const session = this.opts.session;
+    const folders = typeof session.getFolders === 'function' ? session.getFolders() : [];
+    const current = folders.find((f) => f.id === folderId);
+    const folderName = current ? current.name : 'this folder';
+    const confirmed = this.confirmAction(`Delete folder "${folderName}"? Presets inside will be moved to Unfiled.`);
+    if (!confirmed) return;
+    try {
+      session.deleteFolder(folderId);
+      showToast(`Folder "${folderName}" deleted`);
+      this.bind(presetId);
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  }
+
   /** (Re)build the panel for preset `id`. Call after every switch or structure change. */
   bind(id: string): void {
     this.id = id;
@@ -423,14 +504,124 @@ export class Studio {
       renderPresetSelectHierarchy(selectEl, session, id);
       selectEl.addEventListener?.('change', () => onSelectPreset(selectEl.value));
     }
-    pane.addBinding(preset as unknown as Record<string, unknown>, 'name', { label: 'Name' });
+    // Category indicator for built-ins (Slice 10.4)
+    if (entry.builtin) {
+      const subfolder = getSystemSubfolder(id) ?? 'classics';
+      const subfolderLabel = SYSTEM_SUBFOLDER_LABELS[subfolder] ?? 'Built-in';
+      const categoryText = `System Preset (Read-Only) · ${subfolderLabel}`;
+      const categoryHolder = { category: categoryText };
+      const categoryBinding = pane.addBinding(categoryHolder, 'category', {
+        label: 'Category',
+        readonly: true,
+      });
+      if (categoryBinding?.element) {
+        categoryBinding.element.classList?.add('studio-category-indicator');
+        categoryBinding.element.setAttribute?.('data-category', categoryText);
+      }
+    }
+
+    const nameBinding = pane.addBinding(preset as unknown as Record<string, unknown>, 'name', {
+      label: 'Name',
+      readonly: entry.builtin,
+    });
+    if (entry.builtin) {
+      if (nameBinding?.element) {
+        const input = nameBinding.element.querySelector?.('input') as HTMLInputElement | null;
+        if (input) {
+          input.disabled = true;
+          input.readOnly = true;
+        }
+      }
+    } else {
+      nameBinding.on('change', () => session.commit(id));
+    }
+
+    // Folder controls for user presets (Slice 10.4)
+    if (!entry.builtin) {
+      const currentFolderId = (typeof session.getPresetFolder === 'function' ? session.getPresetFolder(id) : entry.folderId) ?? '';
+      const folderOptions: Record<string, string> = {
+        '(Unfiled)': '',
+      };
+      const userFolders: readonly UserPresetFolder[] = typeof session.getFolders === 'function' ? session.getFolders() : [];
+      for (const f of userFolders) {
+        folderOptions[f.name] = f.id;
+      }
+      folderOptions['+ New Folder…'] = '__new_folder__';
+
+      const folderHolder = { folder: currentFolderId };
+      const folderBinding = pane.addBinding(folderHolder, 'folder', {
+        label: 'Folder',
+        options: folderOptions,
+      });
+
+      const onSelectFolder = (chosenFolder: string) => {
+        if (chosenFolder === '__new_folder__') {
+          this.handleNewFolder(id);
+        } else if (!chosenFolder) {
+          if (typeof session.setPresetFolder === 'function') {
+            session.setPresetFolder(id, undefined);
+          } else {
+            entry.folderId = undefined;
+          }
+          showToast('Preset unfiled');
+          this.bind(id);
+        } else {
+          if (typeof session.setPresetFolder === 'function') {
+            session.setPresetFolder(id, chosenFolder);
+          } else {
+            entry.folderId = chosenFolder;
+          }
+          const f = userFolders.find((x) => x.id === chosenFolder);
+          showToast(`Moved to ${f ? f.name : 'folder'}`);
+          this.bind(id);
+        }
+      };
+      folderBinding.on('change', (ev: { value: unknown }) => onSelectFolder(String(ev.value)));
+      const folderSelectEl = folderBinding?.element?.querySelector?.('select') as HTMLSelectElement | null;
+      if (folderSelectEl) {
+        folderSelectEl.addEventListener?.('change', () => onSelectFolder(folderSelectEl.value));
+      }
+
+      // Folder management buttons
+      const folderBtnElements: HTMLElement[] = [];
+      const addFolderBtn = (title: string, onClick: () => void) => {
+        const btn = pane.addButton({ title });
+        btn.on('click', onClick);
+        folderBtnElements.push(btn.element);
+        return btn;
+      };
+
+      if (currentFolderId) {
+        addFolderBtn('Rename folder', () => this.handleRenameFolder(id, currentFolderId));
+        addFolderBtn('Delete folder', () => this.handleDeleteFolder(id, currentFolderId));
+      }
+      addFolderBtn('Add folder', () => this.handleNewFolder(id));
+
+      const docForFolder = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+      if (folderBtnElements.length > 0 && docForFolder) {
+        const folderRow = docForFolder.createElement('div');
+        folderRow.className = 'studio-folder-actions';
+        if (folderBtnElements[0] && typeof (folderBtnElements[0] as any).before === 'function') {
+          (folderBtnElements[0] as any).before(folderRow);
+        }
+        if (typeof folderRow.append === 'function') {
+          folderRow.append(...folderBtnElements);
+        }
+      }
+    }
+
     const dirty = session.isDirty(id) ? ' · unsaved changes' : '';
     // Tags for the auto-cycle (T2): "favourite" and "skip".
     const tagHolder = { favourite: preset.tags.includes('favourite'), skip: preset.tags.includes('skip') };
     const setTag = (tag: string, on: boolean) => {
-      preset.tags = preset.tags.filter((t) => t !== tag);
-      if (on) preset.tags.push(tag);
-      session.commit(id);
+      const currentTags = preset.tags.filter((t) => t !== tag);
+      if (on) currentTags.push(tag);
+      if (typeof session.setPresetTags === 'function') {
+        session.setPresetTags(id, currentTags);
+      } else {
+        preset.tags = currentTags;
+        session.commit(id);
+      }
     };
     pane.addBinding(tagHolder, 'favourite', { label: 'Favourite (auto-cycle)' }).on('change', (ev) => setTag('favourite', Boolean(ev.value)));
     pane.addBinding(tagHolder, 'skip', { label: 'Skip in auto-cycle' }).on('change', (ev) => setTag('skip', Boolean(ev.value)));
@@ -446,7 +637,13 @@ export class Studio {
       tiles.push(btn.element);
       return btn;
     };
-    tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
+    if (entry.builtin) {
+      tile(pane.addButton({ title: 'Save (Read-only)' })).on('click', () => {
+        showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
+      });
+    } else {
+      tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
+    }
     tile(pane.addButton({ title: 'Save as…' })).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
     tile(pane.addButton({ title: 'Duplicate' })).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),

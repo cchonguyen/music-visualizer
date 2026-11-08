@@ -273,6 +273,15 @@ dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--focus); out
 .studio .studio-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
 .studio .studio-tiles > .tp-btnv { margin: 0; min-width: 0; }
 .studio .studio-tiles .tp-btnv_b { width: 100%; height: 44px; min-height: 44px; margin: 0; padding: 0 .25rem; }
+/* Studio folder action buttons & category indicator (slice 10.4) */
+.studio .studio-folder-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
+.studio .studio-folder-actions > .tp-btnv { flex: 1 1 0; margin: 0; min-width: 0; }
+.studio .studio-folder-actions .tp-btnv_b { width: 100%; min-height: 32px; padding: 0 4px; font-size: var(--ui-text-size); }
+.studio .studio-category-indicator input,
+.studio .studio-category-indicator .tp-txtv_i { color: var(--muted); font-style: italic; }
+@media (max-width: 599px) {
+  .studio .studio-folder-actions .tp-btnv_b { min-height: 44px; }
+}
 /* Shared Studio rules (slice 10.4): same look at every width. Safe on desktop: colours, track and fill only, no touch sizes. */
 .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
 .studio .tp-sldv { touch-action: none; }
