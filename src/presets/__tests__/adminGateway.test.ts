@@ -373,6 +373,32 @@ describe('AdminGateway & Session Security Verification', () => {
       expect(gateway.getState().adminEmail).toBe('charliechonguyen@gmail.com');
     });
 
+    it('calls the default fetch without a gateway receiver so Cloudflare identity check does not throw Illegal invocation', async () => {
+      const originalFetch = globalThis.fetch;
+      const stubFetch = function (this: unknown) {
+        if (this !== undefined && this !== globalThis) {
+          throw new TypeError('Illegal invocation');
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ authenticated: true, email: 'charliechonguyen@gmail.com' }), {
+            status: 200,
+          }),
+        );
+      };
+      try {
+        globalThis.fetch = stubFetch as unknown as typeof fetch;
+        const config: RemoteConfig = {
+          supabaseUrl: 'https://example.supabase.co',
+          anonKey: 'anon-key-123',
+        };
+        const gateway = new AdminGateway({ mock: false, config, storage: memStorage });
+        await expect(gateway.checkCloudflareAccess()).resolves.toBe(true);
+        expect(gateway.isAdmin()).toBe(true);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
     it('rejects non-matching emails even when adminEmail option is omitted', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
