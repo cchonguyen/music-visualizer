@@ -22,7 +22,7 @@ export const REVERSAL_WINDOW_SEC = 1.0;
 /** Max safe flashes/reversals per second before damping engages. */
 export const MAX_REVERSALS_PER_SEC = 3;
 /** Minimum luminance delta between frames to be considered a directional change. */
-export const REVERSAL_THRESHOLD = 0.05;
+export const REVERSAL_THRESHOLD = 0.12;
 
 /** Expose calm factor: 0.5 when Calm mode is enabled, 1.0 when disabled. */
 export function calmFactor(calm: boolean): number {

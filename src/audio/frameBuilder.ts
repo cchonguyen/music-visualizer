@@ -267,23 +267,30 @@ export class FrameBuilder {
     const midOnset = this.midDetector.step(midFlux, timeSec);
     const highOnset = this.highDetector.step(highFlux, timeSec);
 
+    const hasSubEnergy =
+      frame.raw.sub > 0.08 &&
+      frame.norm.sub > 0.30 &&
+      ((frame.loudness as unknown as { isSignal?: boolean })?.isSignal ?? true);
+    const isKick = subOnset.beat && hasSubEnergy;
+
     frame.fluxByBand.sub = subFlux;
     frame.fluxByBand.mid = midFlux;
     frame.fluxByBand.high = highFlux;
     frame.flux = subFlux;
 
-    frame.beatByBand.sub = subOnset.beat;
+    frame.beatByBand.sub = isKick;
     frame.beatByBand.mid = midOnset.beat;
     frame.beatByBand.high = highOnset.beat;
-    frame.beat = subOnset.beat;
-    frame.beatStrength = subOnset.strength;
+    frame.beat = isKick;
+    frame.beatStrength = isKick ? subOnset.strength : 0;
 
-    if (subOnset.beat) {
+    if (isKick) {
       this.kickEnv = 1.0;
       frame.kickPulse = true;
     } else {
       frame.kickPulse = false;
       this.kickEnv *= Math.pow(0.88, dtSec * 60);
+      if (this.kickEnv < 0.01) this.kickEnv = 0.0;
     }
     frame.kickEnv = this.kickEnv;
 

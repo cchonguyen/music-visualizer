@@ -14,8 +14,8 @@
       "blend": "max",
       "params": {
         "speed": 1.0,
-        "feed": 0.042,
-        "kill": 0.062,
+        "feed": 0.037,
+        "kill": 0.060,
         "du": 0.16,
         "dv": 0.08,
         "brightness": 1.25,

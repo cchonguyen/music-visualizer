@@ -5,6 +5,7 @@ import { AudioEngine } from './audio/engine';
 import { estimateLatencyMs } from './audio/latency';
 import type { AudioFrame } from './audio/types';
 import type { RenderLayer } from './render/layer';
+import type { Preset } from './presets/format';
 import { GlHost } from './gl/context';
 import { BassPulseLayer } from './render/layers/bassPulse';
 import { WaveformLayer } from './render/layers/waveform';
@@ -29,17 +30,18 @@ import { Studio } from './studio/studio';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
-import { setupControls, sourceName, type ControlsState } from './ui/controls';
+import { isEditableTarget, setupControls, sourceName, type ControlsState } from './ui/controls';
 import { DebugPanel } from './ui/debugPanel';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
+import { getGlobalDirector } from './render/globalDirector';
 
 /** Calm mode scales the bass pulse down (motion reduction for sensitive viewers). */
 const CALM_SCALE = 0.35;
 /** Keep the latest beat times for the latency estimate (about 30 s of kicks). */
 const MAX_BEATS = 60;
 
-/** Calm, section contrast and accent swap reach only the tunnel, particles and shockwave (as before 4.3). */
+/** Calm, section contrast and accent swap reach the tunnel, particles, shockwave and rings. */
 function flagLayer(layer: RenderLayer, calm: boolean, contrast: number, swap: number): void {
   if (layer instanceof TunnelLayer || layer instanceof ParticleLayer) {
     layer.calm = calm;
@@ -48,6 +50,8 @@ function flagLayer(layer: RenderLayer, calm: boolean, contrast: number, swap: nu
   } else if (layer instanceof ShockwaveLayer) {
     layer.calm = calm;
     layer.accentSwap = swap;
+  } else if (layer instanceof RingsLayer) {
+    layer.calm = calm;
   }
 }
 
@@ -70,6 +74,7 @@ function start(): void {
   // Freeze (k) holds the picture; while frozen, . draws exactly one frame (frameStep.ts).
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isEditableTarget(e.target)) return;
     if (e.key === 'k' || e.key === 'K') {
       showToast(host.stepper.toggle() ? 'Frozen. Press . to step a frame.' : 'Running again.');
       return;
@@ -84,6 +89,7 @@ function start(): void {
   let compositor: Compositor | null = null;
   let session: PresetSession | null = null;
   const linkRunner = new LinkRunner();
+  const director = getGlobalDirector();
   // Auto-cycle (T2): off by default. Keys: C timer, B beat, X shuffle.
   const cycle: CycleOptions = { ...DEFAULT_CYCLE };
   const cycler = new AutoCycler();
@@ -138,6 +144,7 @@ function start(): void {
       cycler.reset();
       liveSession.show(id);
       crownOn = hasCrownLayer(liveSession.get(id)?.preset);
+      director.notifyPresetChanged(liveSession.get(id)?.preset);
       storePresetId(id);
       if (announce) showToast(liveSession.get(id)!.preset.name);
       if (studio.visible) studio.bind(id);
@@ -165,6 +172,7 @@ function start(): void {
     // No automatic blend: the view changes only when a key is pressed.
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'c' || e.key === 'C' || e.key === 'b' || e.key === 'B' || e.key === 'x' || e.key === 'X') {
         const k = e.key.toLowerCase();
         if (k === 'c') cycle.mode = cycle.mode === 'timer' ? 'off' : 'timer';
@@ -190,9 +198,11 @@ function start(): void {
     });
     // A/B compare (slice S4): hold A to see the saved copy of the preset on screen; release to return.
     window.addEventListener('keydown', (e) => {
+      if (isEditableTarget(e.target)) return;
       if ((e.key === 'a' || e.key === 'A') && !e.repeat && !e.ctrlKey && !e.metaKey) liveSession.compare(currentId, true);
     });
     window.addEventListener('keyup', (e) => {
+      if (isEditableTarget(e.target)) return;
       if (e.key === 'a' || e.key === 'A') liveSession.compare(currentId, false);
     });
   }
@@ -201,14 +211,123 @@ function start(): void {
   if (!session) document.getElementById('studio-open')!.hidden = true;
 
   const state: ControlsState = {
-    calm: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    calm: director.isCalm() || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     fileName: '',
   };
   const controls = setupControls(engine, state);
   const panel = new DebugPanel();
 
+  const isCalmFriendlyPreset = (preset?: Preset | null): boolean => {
+    if (!preset) return false;
+    if (!preset.tags.includes('calm')) return false;
+    const intenseTags = ['strobe', 'shockwave', 'moire', 'intense'];
+    return !preset.tags.some((t) => intenseTags.includes(t));
+  };
+
+  const switchToCalmPresetIfNeeded = () => {
+    if (!session || !switchShown) return;
+    const currentEntry = session.get(session.shownId ?? '');
+    if (!currentEntry || !isCalmFriendlyPreset(currentEntry.preset)) {
+      const all = session.list();
+      const curl = all.find((e) => e.id === '01-curl-fluid-warp');
+      const calmPreset = curl ?? all.find((e) => e.preset.tags.includes('calm'));
+      if (calmPreset && calmPreset.id !== session.shownId) {
+        switchShown(calmPreset.id);
+      }
+    }
+  };
+
+  director.subscribeExperienceChange((mode) => {
+    state.calm = director.isCalm();
+    if (compositor) compositor.calm = state.calm;
+    if (mode === 'calm') {
+      switchToCalmPresetIfNeeded();
+    }
+  });
+
+  const handleExportLook = () => {
+    if (!session) return;
+    const shownId = session.shownId ?? 'crown';
+    const entry = session.get(shownId);
+    const text = session.exportJson(shownId, true);
+    const name = (entry?.preset.name ?? 'experience-look').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name}-look.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported Look · ${entry?.preset.name ?? 'Look'}`);
+  };
+
+  const handleImportAssetFile = async (file: File) => {
+    if (!session) return;
+    try {
+      const text = await file.text();
+      const res = session.importAsset(text);
+      if (res.kind === 'preset') {
+        if (res.id && switchShown) {
+          switchShown(res.id);
+        }
+        showToast(`Imported Preset · ${res.name}`);
+      } else if (res.kind === 'palette') {
+        const expColorSelect = document.getElementById('exp-color-select') as HTMLSelectElement | null;
+        if (expColorSelect && res.id && !expColorSelect.querySelector(`option[value="${res.id}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = res.id;
+          opt.textContent = res.name;
+          expColorSelect.appendChild(opt);
+          expColorSelect.value = res.id;
+        }
+        director.updateSettings({ colorMood: res.id as any });
+        showToast(`Imported Palette · ${res.name}`);
+      } else if (res.kind === 'bundle') {
+        showToast(`Imported Bundle · ${res.name}`);
+      }
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  };
+
+  window.addEventListener('export-experience-look', () => {
+    handleExportLook();
+  });
+
+  window.addEventListener('import-experience-look', (e: Event) => {
+    const customEvent = e as CustomEvent<{ file: File }>;
+    if (customEvent.detail?.file) {
+      void handleImportAssetFile(customEvent.detail.file);
+    }
+  });
+
+  document.getElementById('exp-export-btn')?.addEventListener('click', handleExportLook);
+
+  const expImportInput = document.getElementById('exp-import-input') as HTMLInputElement | null;
+  expImportInput?.addEventListener('change', () => {
+    const file = expImportInput.files?.[0];
+    if (file) {
+      void handleImportAssetFile(file);
+      expImportInput.value = '';
+    }
+  });
+
+  window.addEventListener(
+    'drop',
+    (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (file && (file.type === 'application/json' || file.name.endsWith('.json'))) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        document.body.classList.remove('drag-over');
+        void handleImportAssetFile(file);
+      }
+    },
+    true,
+  );
+
   // Dev-only handle for automated checks; stripped from production builds.
-  if (import.meta.env.DEV) (window as unknown as { __mv: unknown }).__mv = { engine, host, compositor, session };
+  if (import.meta.env.DEV) (window as unknown as { __mv: unknown }).__mv = { engine, host, compositor, session, director };
 
   const beatTimes: number[] = [];
   engine.on('source-changed', () => (beatTimes.length = 0));
@@ -264,6 +383,15 @@ function start(): void {
       flagLayer(layer, state.calm, contrast, swapMix);
     }
 
+    if (director.isCalm() !== state.calm) {
+      director.setCalm(state.calm);
+    }
+    director.advance(dtSec, frame, contrast);
+    if (compositor) {
+      compositor.calm = state.calm;
+      compositor.setDirectorState(director.getCameraUniforms(), director.getColorUniforms());
+    }
+
     // Visual gain bends the reaction curve (gainStore.shapeReaction): low = calmer, high =
     // more contrast. Applied to the reaction values only, not the full-screen level.
     const g = getVisualGain();
@@ -279,9 +407,10 @@ function start(): void {
     // Auto-cycle (T2): pick the next preset when the timer or a strong beat says so.
     if (session && switchShown && cycle.mode !== 'off') {
       const shownId = session.shownId ?? 'crown';
-      const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags })), cycle);
+      const cycleOpts: CycleOptions = { ...cycle, calmOnly: state.calm };
+      const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags })), cycleOpts);
       const strongBeat = frame.beat && frame.beatStrength >= 0.8;
-      const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycle);
+      const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycleOpts);
       if (pick) switchShown(pick);
     }
     // Audio links (E2): the shown preset's linked settings follow the music, once per frame.

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "name": "Solar Crown Eclipse",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "zoom": 1.018,
+    "decay": 0.93,
+    "decayRgb": [0.96, 0.93, 0.97]
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "opacity": 0.35,
+      "blend": "screen",
+      "params": {
+        "ringDensity": 0.45,
+        "ringContrast": 0.35,
+        "ringContrastCalm": 0.18,
+        "flightMode": "dropReverse",
+        "sides": 0,
+        "swirlPulse": 0.25,
+        "wallTexture": 0.35,
+        "hueSpread": 0.4
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "bars",
+        "sampleCount": 64,
+        "effectLength": 0.38,
+        "thickness": 3.0,
+        "barGap": 0.25,
+        "peakCaps": true,
+        "extrudeDirection": "outward",
+        "symmetry": "wrap",
+        "normalMode": "radial",
+        "propMode": "single",
+        "size": 0.42,
+        "audioSource": "spectrum",
+        "colorMode": "palette",
+        "glow": 0.8
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "pulsingLine",
+        "propMode": "shockwave",
+        "propSpeed": 0.9,
+        "thickness": 3.5,
+        "size": 0.42,
+        "glow": 1.2,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    },
+    {
+      "type": "particles",
+      "blend": "add",
+      "opacity": 0.6,
+      "params": {
+        "shape": "dot",
+        "brightness": 1.1,
+        "calmSparkleScale": 0.3,
+        "flashSparkleScale": 0.25,
+        "swirlGain": 1.2
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.75
+  }
+}

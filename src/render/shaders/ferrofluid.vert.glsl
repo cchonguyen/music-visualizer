@@ -19,6 +19,7 @@ uniform float uRotSpeed;
 out vec3 vNormal;    // View-space perturbed surface normal
 out vec3 vView;      // View-space direction to eye
 out float vSpike;    // Local spike height
+out float vHeight;   // Local total surface height above base
 out vec3 vLocalPos;  // Displaced model-space position
 
 // Ashima Arts / Stefan Gustavson Simplex 3D Noise
@@ -85,10 +86,26 @@ float snoise(vec3 v) {
   return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
 
-// Evaluates 3D surface displacement along normal
-float evalDisplacement(vec3 p, float freq, float sharpExp, float kickVal, float time) {
-  vec3 c1 = p * freq + vec3(0.0, time * 0.35, 0.0);
-  vec3 c2 = p * (freq * 2.1) - vec3(time * 0.25, 0.0, time * 0.25);
+// Organic fluid lobes & sharp magnetic spike extrusion on unit sphere direction
+vec3 displace(vec3 dir) {
+  float baseRadius = uRadius * (1.0 + 0.35 * clamp(u_sub, 0.0, 1.0));
+  float uSub = clamp(u_sub, 0.0, 1.0);
+  float uMid = clamp(u_mid, 0.0, 1.0);
+
+  // Low-order 3D spherical-harmonic / signed simplex fluid lobes
+  float lobe2 = snoise(dir * 1.35 + vec3(uTime * 0.38, -uTime * 0.31, uTime * 0.27));
+  float lobe3 = sin(dir.x * 2.5 + uTime * 0.7) * cos(dir.y * 2.2 - uTime * 0.55) * sin(dir.z * 2.5 + uTime * 0.6);
+  float fluidBody = baseRadius * (1.0 + (0.22 * lobe2 + 0.14 * lobe3) * (0.65 + 0.6 * uSub + 0.4 * uMid));
+
+  // Spike spatial frequency controlled by mid-band
+  float spikeFreq = uSpikeFreq * mix(2.6, 6.2, uMid);
+
+  // Sharpness exponent driven by kick envelope
+  float sharpExp = mix(uSpikeSharp, uSpikeSharp + 3.0, clamp(u_kickEnv, 0.0, 1.0));
+  float kickVal = clamp(u_kickEnv, 0.0, 1.0);
+
+  vec3 c1 = dir * spikeFreq + vec3(0.0, uTime * 0.35, 0.0);
+  vec3 c2 = dir * (spikeFreq * 2.1) - vec3(uTime * 0.25, 0.0, uTime * 0.25);
 
   float n1 = snoise(c1);
   float n2 = 0.5 * snoise(c2);
@@ -96,28 +113,13 @@ float evalDisplacement(vec3 p, float freq, float sharpExp, float kickVal, float 
 
   // Sharp magnetic spike extrusion: power curve transforms harmonic mounds into sharp cones
   float sharp = pow(clamp(raw, 0.0, 1.0), sharpExp);
-
-  // Harmonic fluid wobble
-  float wobble = 0.06 * sin(2.5 * p.y + time * 1.6) * cos(2.5 * p.x + time * 1.3);
-
-  // Kick envelope drives magnetic spike extrusion height
   float extrusion = uSpikeAmp * (0.15 + 1.25 * kickVal) * sharp;
 
-  return wobble + extrusion;
+  return dir * (fluidBody + extrusion);
 }
 
 void main() {
   vec3 p = normalize(aPosition);
-
-  // Base radius modulated by sub-bass
-  float baseRadius = uRadius * (1.0 + 0.35 * clamp(u_sub, 0.0, 1.0));
-
-  // Spike spatial frequency controlled by mid-band
-  float spikeFreq = uSpikeFreq * mix(2.6, 6.2, clamp(u_mid, 0.0, 1.0));
-
-  // Sharpness exponent driven by kick envelope
-  float sharpExp = mix(uSpikeSharp, uSpikeSharp + 3.0, clamp(u_kickEnv, 0.0, 1.0));
-  float kickVal = clamp(u_kickEnv, 0.0, 1.0);
 
   // Orthonormal tangent basis on sphere at p
   vec3 up = abs(p.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
@@ -129,13 +131,9 @@ void main() {
   vec3 p1 = normalize(p + eps * T1);
   vec3 p2 = normalize(p + eps * T2);
 
-  float d0 = evalDisplacement(p, spikeFreq, sharpExp, kickVal, uTime);
-  float d1 = evalDisplacement(p1, spikeFreq, sharpExp, kickVal, uTime);
-  float d2 = evalDisplacement(p2, spikeFreq, sharpExp, kickVal, uTime);
-
-  vec3 pos0 = p * (baseRadius + d0);
-  vec3 pos1 = p1 * (baseRadius + d1);
-  vec3 pos2 = p2 * (baseRadius + d2);
+  vec3 pos0 = displace(p);
+  vec3 pos1 = displace(p1);
+  vec3 pos2 = displace(p2);
 
   vec3 v1 = pos1 - pos0;
   vec3 v2 = pos2 - pos0;
@@ -174,7 +172,8 @@ void main() {
 
   vNormal = worldNormal;
   vView = V;
-  vSpike = d0;
+  vHeight = length(pos0) - uRadius;
+  vSpike = vHeight;
   vLocalPos = pos0;
 
   // Perspective projection

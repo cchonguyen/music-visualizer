@@ -11,6 +11,7 @@ uniform vec3 uColorPink;
 uniform vec3 uColorCobalt;
 uniform float uBrightness;
 uniform float uSpecular;
+uniform float uLayerOpacity;
 
 void main() {
   // Sample state texture linearly
@@ -37,23 +38,30 @@ void main() {
   float specAngle = max(dot(normal, halfVec), 0.0);
   float spec = pow(specAngle, 28.0) * uSpecular;
 
-  // Coral ridges emerge where chemical V forms structures
-  float ridge = smoothstep(0.12, 0.40, vVal);
-  float peak = smoothstep(0.35, 0.55, vVal);
+  // Rich 3-stop gradient:
+  // dark transparent background (vVal < 0.06)
+  // uColorCobalt along the outer coral troughs/slopes (smoothstep(0.05, 0.24, vVal))
+  // uColorPink on the active growing ridge crests (smoothstep(0.22, 0.42, vVal))
+  float trough = smoothstep(0.05, 0.24, vVal);
+  float crest = smoothstep(0.22, 0.42, vVal);
 
-  // Embossed neon pink and cobalt palette
   vec3 baseCobalt = uColorCobalt * 0.45;
-  vec3 ridgeColor = mix(uColorCobalt, uColorPink, ridge);
-  vec3 col = mix(baseCobalt, ridgeColor, ridge);
+  vec3 col = mix(baseCobalt, uColorCobalt, trough);
+  col = mix(col, uColorPink, crest);
 
   // Shading combination: ambient + diffuse
   vec3 shaded = col * (0.35 + 0.65 * diff);
 
-  // Neon glow on ridge peaks
-  shaded += uColorPink * (peak * 0.45);
+  // 3D normal specular highlight
+  shaded += vec3(1.0, 0.95, 0.98) * spec * (0.3 + 0.7 * crest);
 
-  // Specular highlight
-  shaded += vec3(1.0, 0.95, 0.98) * spec * (0.4 + 0.6 * ridge);
+  shaded *= uBrightness;
 
-  fragColor = vec4(shaded * uBrightness, 1.0);
+  // Multiply output col *= mask * uLayerOpacity where mask = smoothstep(0.03, 0.12, vVal)
+  // so empty chemical background (vVal ≈ 0) is transparent (alpha = 0) and layers cleanly with trails
+  float mask = smoothstep(0.03, 0.12, vVal);
+  float effectiveAlpha = mask * uLayerOpacity;
+  shaded *= effectiveAlpha;
+
+  fragColor = vec4(shaded, effectiveAlpha);
 }

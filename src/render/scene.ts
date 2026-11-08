@@ -2,7 +2,7 @@
 // Per frame: decay last frame into `write`, add the layers on top (additive),
 // then swap. After the swap, `outputTexture()` is the finished image.
 import type { AudioFrame } from '../audio/types';
-import { PingPong } from '../gl/fbo';
+import { PingPong, clampSize, type PassTarget } from '../gl/fbo';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { createVao } from '../gl/vao';
 import type { RenderClock } from './clock';
@@ -10,6 +10,7 @@ import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
 import { advanceSceneTransform } from './sceneTransformStore';
+import { clearTerrainState, getTerrainState } from './terrainStore';
 import type { ParamValue } from '../presets/schema';
 import { getRenderScale, scaledBufferSize } from '../gl/size';
 
@@ -31,7 +32,22 @@ export const FEEDBACK_WARP_DEFAULTS = {
   decayRgb: [1.0, 1.0, 1.0] as [number, number, number],
   sobel: 0.0,
   solarize: 0.0,
-  mobiusPoleOffset: 0.35,
+  mobiusPoleOffset: 0.48,
+  curlOctaves: 2,
+  curlTurbulence: 0.45,
+  curlFlowPattern: 'plumes',
+  radialFold: 0.0,
+  mandalaTile: 0.0,
+  mandalaCounterSpin: 0.25,
+  mandalaKickFlare: 0.35,
+  mandalaPattern: 'auto',
+  contourFreq: 7.85,
+  contourWidth: 0.45,
+  colorSpread: 0.65,
+  mobiusFlow: 0.85,
+  mobiusSwirl: 0.65,
+  mobiusWander: 0.55,
+  mobiusMode: 'auto',
 };
 
 const UNIFORMS = [
@@ -39,19 +55,56 @@ const UNIFORMS = [
   'uTime', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
   'uWarpMode', 'uKaleidoN', 'uPortalRadius', 'uRgbSplit', 'uDecayRgb', 'uSobel', 'uSolarize',
   'uSolarizePhase', 'uMobiusPoleOffset', 'uMobiusPolePolarity', 'uWarpAmp',
+  'uCurlOctaves', 'uCurlTurbulence', 'uCurlFlowPattern',
+  'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin', 'uMandalaKickFlare',
+  'uContourFreq', 'uContourWidth', 'uColorSpread',
+  'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl', 'uMobiusMode',
+  'uKick', 'uSub', 'uHigh',
 ] as const;
 
 export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
 
-export interface SceneLayerConfig {
+export interface LayerEntry {
   opacity?: number;
   blend?: BlendMode;
+  trails?: boolean;
+}
+
+export type SceneLayerConfig = LayerEntry;
+
+export interface LayerDrawOptions {
+  opacity?: number;
+  uLayerOpacity?: number;
+  sceneTex?: WebGLTexture | null;
+}
+
+export function applyLayerBlend(gl: WebGL2RenderingContext, blend: BlendMode): void {
+  gl.enable(gl.BLEND);
+  switch (blend) {
+    case 'alpha':
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      break;
+    case 'add':
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      break;
+    case 'screen':
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR);
+      break;
+    case 'max':
+    default:
+      gl.blendEquation(gl.MAX);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      break;
+  }
 }
 
 export class Scene {
   readonly name: string;
   readonly layers: RenderLayer[];
-  private layerConfigs: { opacity: number; blend: BlendMode }[] = [];
+  private layerConfigs: { opacity: number; blend: BlendMode; trails: boolean }[] = [];
   private gl: WebGL2RenderingContext | null = null;
   private pp: PingPong | null = null;
   private prog: WebGLProgram | null = null;
@@ -64,8 +117,14 @@ export class Scene {
   /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
   private fb: Record<string, ParamValue> = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS };
   private mobiusPolePolarity = 1.0;
+  private poleOrbitPhase = 0.0;
+  private screenDriftPhase = 0.0;
+  private lastPoleA: [number, number] = [-0.48, 0.0];
+  private lastPoleB: [number, number] = [0.48, 0.0];
   private uni = new Map<string, WebGLUniformLocation | null>();
   private foregroundOpacity = 1.0;
+  private outputTex: WebGLTexture | null = null;
+  private snapshotTarget: PassTarget | null = null;
 
   constructor(name: string, layers: RenderLayer[], configs: SceneLayerConfig[] = []) {
     this.name = name;
@@ -73,6 +132,7 @@ export class Scene {
     this.layerConfigs = layers.map((_, i) => ({
       opacity: configs[i]?.opacity ?? 1.0,
       blend: configs[i]?.blend ?? 'max',
+      trails: configs[i]?.trails ?? true,
     }));
   }
 
@@ -80,19 +140,28 @@ export class Scene {
     this.layerConfigs = this.layers.map((_, i) => ({
       opacity: configs[i]?.opacity ?? 1.0,
       blend: configs[i]?.blend ?? 'max',
+      trails: configs[i]?.trails ?? true,
     }));
   }
 
   setLayerConfig(index: number, config: Partial<SceneLayerConfig>): void {
     if (!this.layerConfigs[index]) {
-      this.layerConfigs[index] = { opacity: 1.0, blend: 'max' };
+      this.layerConfigs[index] = { opacity: 1.0, blend: 'max', trails: true };
     }
     if (config.opacity !== undefined) this.layerConfigs[index].opacity = config.opacity;
     if (config.blend !== undefined) this.layerConfigs[index].blend = config.blend;
+    if (config.trails !== undefined) this.layerConfigs[index].trails = config.trails;
   }
 
-  getLayerConfigs(): readonly { opacity: number; blend: BlendMode }[] {
+  getLayerConfigs(): readonly { opacity: number; blend: BlendMode; trails: boolean }[] {
     return this.layerConfigs;
+  }
+
+  get feedback(): Record<string, ParamValue> & { decay: number } {
+    return {
+      ...this.fb,
+      decay: Number(this.fb.decay ?? FEEDBACK_DEFAULTS.decay),
+    };
   }
 
   /** Sets the trail motion and colour settings. Read on the next frame. */
@@ -135,15 +204,48 @@ export class Scene {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  private allocateSnapshot(gl: WebGL2RenderingContext, width: number, height: number): PassTarget {
+    const size = clampSize(width, height);
+    const texture = gl.createTexture();
+    const framebuffer = gl.createFramebuffer();
+    if (!texture || !framebuffer) throw new Error('could not create snapshot target');
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size.width, size.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      throw new Error(`snapshot framebuffer incomplete (status ${status})`);
+    }
+    return { framebuffer, texture };
+  }
+
+  private freeSnapshot(): void {
+    const gl = this.gl;
+    if (gl && this.snapshotTarget) {
+      gl.deleteTexture(this.snapshotTarget.texture);
+      gl.deleteFramebuffer(this.snapshotTarget.framebuffer);
+      this.snapshotTarget = null;
+    }
+  }
+
   init(gl: WebGL2RenderingContext): void {
     this.gl = gl;
     this.prog = compileProgram(gl, FULLSCREEN_VERT, feedbackSrc, `feedback:${this.name}`);
+    this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
     this.uni.clear();
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
     const b = scaledBufferSize(this.w, this.h, getRenderScale());
     this.pp = new PingPong(gl, b.width, b.height);
     this.appliedScale = getRenderScale();
+    this.snapshotTarget = this.allocateSnapshot(gl, b.width, b.height);
     for (const l of this.layers) l.init(gl);
   }
 
@@ -158,13 +260,21 @@ export class Scene {
   private applyScale(): void {
     const b = scaledBufferSize(this.w, this.h, getRenderScale());
     this.pp?.resize(b.width, b.height);
+    if (this.gl) {
+      this.freeSnapshot();
+      this.snapshotTarget = this.allocateSnapshot(this.gl, b.width, b.height);
+    }
     this.appliedScale = getRenderScale();
   }
 
   /** The finished image of the last draw (valid after draw()). */
+  get texture(): WebGLTexture {
+    if (!this.pp) throw new Error(`Scene ${this.name}: texture before init`);
+    return this.outputTex ?? this.pp.read.texture;
+  }
+
   outputTexture(): WebGLTexture {
-    if (!this.pp) throw new Error(`Scene ${this.name}: outputTexture before init`);
-    return this.pp.read.texture;
+    return this.texture;
   }
 
   draw(frame: AudioFrame, clock: RenderClock): void {
@@ -173,9 +283,32 @@ export class Scene {
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 
-    if (frame?.kickPulse) {
-      this.mobiusPolePolarity = -this.mobiusPolePolarity;
+    const hasTerrain = this.layers.some(
+      (layer) => Boolean(layer && (('type' in layer && (layer as unknown as { type: string }).type === 'spectralTerrain') || layer.constructor?.name === 'SpectralTerrainLayer'))
+    );
+    const prevTerrain = hasTerrain ? getTerrainState(gl) : null;
+    if (hasTerrain) {
+      clearTerrainState(gl);
     }
+    const terrainFlow = prevTerrain && prevTerrain.active && prevTerrain.terrainFlow > 0 ? prevTerrain.terrainFlow : 0;
+    const terrainBiasDriftY = terrainFlow > 0 ? -0.012 * terrainFlow : 0;
+
+    const dt = typeof frame?.dtSec === 'number' && Number.isFinite(frame.dtSec) && frame.dtSec > 0 ? frame.dtSec : 1 / 60;
+    const normMid = frame?.norm?.mid ?? (frame?.env?.mid ?? 0.5);
+    const normSub = frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5);
+    this.poleOrbitPhase += dt * (0.28 + normMid * 0.45);
+    this.screenDriftPhase += dt * (0.19 + normSub * 0.35);
+
+    const mobiusWander = Number(this.fb.mobiusWander ?? FEEDBACK_WARP_DEFAULTS.mobiusWander);
+    const centerX = Math.sin(this.screenDriftPhase) * 0.24 * mobiusWander;
+    const centerY = Math.cos(this.screenDriftPhase * 0.77) * 0.16 * mobiusWander;
+    const poleOffset = Number(this.fb.mobiusPoleOffset ?? FEEDBACK_WARP_DEFAULTS.mobiusPoleOffset);
+    const sep = poleOffset * (1.0 + 0.18 * mobiusWander * Math.sin(this.poleOrbitPhase * 0.63));
+    const ang = this.poleOrbitPhase * 0.45 * mobiusWander;
+    const cosAng = Math.cos(ang);
+    const sinAng = Math.sin(ang);
+    this.lastPoleA = [centerX - sep * cosAng, centerY - sep * sinAng];
+    this.lastPoleB = [centerX + sep * cosAng, centerY + sep * sinAng];
 
     const target = {
       kind: 'fbo' as const,
@@ -185,13 +318,13 @@ export class Scene {
       height: pp.height,
     };
 
-    // 1) Decay last frame into the write target (blending off: this is a copy).
+    // 1A) Decay last frame into the write target (blending off: this is a copy).
     bindTarget(gl, target);
     gl.disable(gl.BLEND);
     gl.useProgram(this.prog);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
-    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height);
+    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame, terrainBiasDriftY);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -211,48 +344,57 @@ export class Scene {
       clock.timeSec,
     );
 
-    // 2) Layers draw on top. Scene is the sole owner of GL blend state before each
-    // layer draw, restoring MAX blend immediately after each layer draw (Slice 7.8).
+    // 1B) Trailing Layers (trails !== false): draw into write target with energy-compensated opacity.
+    const decay = this.feedback.decay;
     for (let i = 0; i < this.layers.length; i++) {
       const layer = this.layers[i];
       if (!layer) continue;
-      const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max' };
-      const opacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
-      const blend = cfg.blend ?? 'max';
+      const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max', trails: true };
+      if (cfg.trails === false) continue;
 
-      gl.enable(gl.BLEND);
-      switch (blend) {
-        case 'alpha':
-          gl.blendEquation(gl.FUNC_ADD);
-          gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-          break;
-        case 'add':
-          gl.blendEquation(gl.FUNC_ADD);
-          gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-          break;
-        case 'screen':
-          gl.blendEquation(gl.FUNC_ADD);
-          gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_COLOR);
-          break;
-        case 'max':
-        default:
-          gl.blendEquation(gl.MAX);
-          gl.blendFunc(gl.ONE, gl.ONE);
-          break;
+      let effectiveOpacity = cfg.opacity ?? 1.0;
+      if (decay > 0.05 && (cfg.blend === 'add' || cfg.blend === 'screen')) {
+        effectiveOpacity *= (1.0 - decay * 0.45);
       }
+      effectiveOpacity *= this.foregroundOpacity;
+
+      const isMoire = ('type' in layer && (layer as unknown as { type: string }).type === 'moire') || layer.constructor?.name === 'MoireLayer';
+      let sceneTex: WebGLTexture | null = null;
+      if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
+        gl.viewport(0, 0, pp.width, pp.height);
+        gl.disable(gl.BLEND);
+        gl.useProgram(this.blitProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, target.texture);
+        const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+        if (uSrc !== null) gl.uniform1i(uSrc, 0);
+        gl.bindVertexArray(this.vao);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindVertexArray(null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        bindTarget(gl, target);
+        sceneTex = this.snapshotTarget.texture;
+      }
+
+      applyLayerBlend(gl, cfg.blend);
 
       if ('opacity' in layer) {
-        (layer as unknown as { opacity: number }).opacity = opacity;
+        (layer as unknown as { opacity: number }).opacity = effectiveOpacity;
       }
       if (typeof (layer as unknown as { setOpacity?: (o: number) => void }).setOpacity === 'function') {
-        (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(opacity);
+        (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(effectiveOpacity);
       }
 
-      (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: { opacity: number; uLayerOpacity: number }) => void)(
+      const drawOpts: LayerDrawOptions = { opacity: effectiveOpacity, uLayerOpacity: effectiveOpacity };
+      if (sceneTex) drawOpts.sceneTex = sceneTex;
+
+      (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: LayerDrawOptions) => void)(
         frame,
         clock,
         target,
-        { opacity, uLayerOpacity: opacity },
+        drawOpts,
       );
 
       // Restore default GL blend state immediately after each layer draw
@@ -263,16 +405,102 @@ export class Scene {
     gl.blendEquation(gl.FUNC_ADD);
     gl.bindVertexArray(null);
 
-    // 3) The finished image becomes "previous" and is what outputTexture() returns.
+    // Swap: pp.read now holds the pure feedback loop state for the next frame.
     pp.swap();
+
+    // 1C) Sharp Overlay Layers: if any enabled layer has trails === false,
+    // copy pp.read.texture into pp.write.fbo, draw trails: false layers on top, and point outputTex to pp.write.texture.
+    const hasOverlay = this.layers.some((_, i) => (this.layerConfigs[i]?.trails ?? true) === false);
+    if (hasOverlay) {
+      if (!this.blitProg) {
+        this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
+      }
+      const writeTarget = {
+        kind: 'fbo' as const,
+        framebuffer: pp.write.framebuffer,
+        texture: pp.write.texture,
+        width: pp.width,
+        height: pp.height,
+      };
+      bindTarget(gl, writeTarget);
+      gl.viewport(0, 0, pp.width, pp.height);
+      gl.disable(gl.BLEND);
+      gl.useProgram(this.blitProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
+      const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+      if (uSrc !== null) gl.uniform1i(uSrc, 0);
+      gl.bindVertexArray(this.vao);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindVertexArray(null);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+
+      for (let i = 0; i < this.layers.length; i++) {
+        const layer = this.layers[i];
+        if (!layer) continue;
+        const cfg = this.layerConfigs[i] ?? { opacity: 1.0, blend: 'max', trails: true };
+        if (cfg.trails !== false) continue;
+
+        const overlayOpacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
+        const isMoire = ('type' in layer && (layer as unknown as { type: string }).type === 'moire') || layer.constructor?.name === 'MoireLayer';
+        let sceneTex: WebGLTexture | null = null;
+        if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
+          gl.viewport(0, 0, pp.width, pp.height);
+          gl.disable(gl.BLEND);
+          gl.useProgram(this.blitProg);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, writeTarget.texture);
+          const uSrc = gl.getUniformLocation(this.blitProg, 'uSrc');
+          if (uSrc !== null) gl.uniform1i(uSrc, 0);
+          gl.bindVertexArray(this.vao);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
+          gl.bindVertexArray(null);
+          gl.bindTexture(gl.TEXTURE_2D, null);
+
+          bindTarget(gl, writeTarget);
+          sceneTex = this.snapshotTarget.texture;
+        }
+
+        applyLayerBlend(gl, cfg.blend);
+
+        if ('opacity' in layer) {
+          (layer as unknown as { opacity: number }).opacity = overlayOpacity;
+        }
+        if (typeof (layer as unknown as { setOpacity?: (o: number) => void }).setOpacity === 'function') {
+          (layer as unknown as { setOpacity: (o: number) => void }).setOpacity(overlayOpacity);
+        }
+
+        const drawOpts: LayerDrawOptions = { opacity: overlayOpacity, uLayerOpacity: overlayOpacity };
+        if (sceneTex) drawOpts.sceneTex = sceneTex;
+
+        (layer.draw as (f: AudioFrame, c: RenderClock, t: RenderTarget, opt?: LayerDrawOptions) => void)(
+          frame,
+          clock,
+          writeTarget,
+          drawOpts,
+        );
+
+        // Restore default GL blend state immediately after each layer draw
+        gl.blendEquation(gl.MAX);
+        gl.blendFunc(gl.ONE, gl.ONE);
+      }
+      gl.disable(gl.BLEND);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.bindVertexArray(null);
+
+      this.outputTex = pp.write.texture;
+    } else {
+      this.outputTex = null;
+    }
   }
 
-  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number): void {
+  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number, frame?: AudioFrame, terrainBiasDriftY = 0): void {
     const n = (key: string) => Number(this.fb[key]);
     const u = (name: string) => this.uni.get(name) ?? null;
     gl.uniform1i(u('uPrev'), 0);
     gl.uniform2f(u('uCentre'), n('centreX'), n('centreY'));
-    gl.uniform2f(u('uDrift'), n('driftX'), n('driftY'));
+    gl.uniform2f(u('uDrift'), n('driftX'), n('driftY') + terrainBiasDriftY);
     gl.uniform2f(u('uStretch'), n('stretchX'), n('stretchY'));
     gl.uniform1f(u('uZoom'), n('zoom'));
     gl.uniform1f(u('uRot'), n('rotate'));
@@ -299,7 +527,12 @@ export class Scene {
     const warpModeInt = WARP_MODES[modeKey] ?? 0;
     gl.uniform1i?.(u('uWarpMode')!, warpModeInt);
 
-    gl.uniform1f?.(u('uKaleidoN')!, n('kaleidoN') || 6);
+    let kaleidoFolds = n('kaleidoN') || 6;
+    if (this.fb.mandalaPattern && this.fb.mandalaPattern !== 'auto') {
+      const parsed = parseInt(String(this.fb.mandalaPattern), 10);
+      if (!Number.isNaN(parsed) && parsed > 0) kaleidoFolds = parsed;
+    }
+    gl.uniform1f?.(u('uKaleidoN')!, kaleidoFolds);
     gl.uniform1f?.(u('uPortalRadius')!, n('portalRadius') || 0.0);
     gl.uniform1f?.(u('uRgbSplit')!, n('rgbSplit') || 0.0);
 
@@ -314,15 +547,60 @@ export class Scene {
     gl.uniform1f?.(u('uSolarize')!, n('solarize') || 0.0);
     gl.uniform1f?.(u('uSolarizePhase')!, timeSec * 2.0);
     const poleOffset = n('mobiusPoleOffset');
-    gl.uniform1f?.(u('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.35);
+    gl.uniform1f?.(u('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.48);
     gl.uniform1f?.(u('uMobiusPolePolarity')!, this.mobiusPolePolarity);
     gl.uniform1f?.(u('uWarpAmp')!, n('warp') || 0.0);
+
+    // Slice 7.22 Curl uniforms:
+    gl.uniform1i?.(u('uCurlOctaves')!, Math.max(1, Math.min(3, Math.round(n('curlOctaves') || 2))));
+    gl.uniform1f?.(u('uCurlTurbulence')!, Number(this.fb.curlTurbulence ?? 0.45));
+    const CURL_PATTERNS: Record<string, number> = {
+      plumes: 0,
+      eddies: 1,
+      outflow: 2,
+      inflow: 3,
+    };
+    const flowKey = String(this.fb.curlFlowPattern ?? 'plumes');
+    gl.uniform1i?.(u('uCurlFlowPattern')!, CURL_PATTERNS[flowKey] ?? 0);
+
+    // Slice 7.22 Mandala uniforms:
+    gl.uniform1f?.(u('uRadialFold')!, Number(this.fb.radialFold ?? 0.0));
+    gl.uniform1f?.(u('uMandalaTile')!, Number(this.fb.mandalaTile ?? 0.0));
+    gl.uniform1f?.(u('uMandalaCounterSpin')!, Number(this.fb.mandalaCounterSpin ?? 0.25));
+    gl.uniform1f?.(u('uMandalaKickFlare')!, Number(this.fb.mandalaKickFlare ?? 0.35));
+
+    // Slice 7.22 Solarize uniforms:
+    gl.uniform1f?.(u('uContourFreq')!, Number(this.fb.contourFreq ?? 7.85));
+    gl.uniform1f?.(u('uContourWidth')!, Number(this.fb.contourWidth ?? 0.45));
+    gl.uniform1f?.(u('uColorSpread')!, Number(this.fb.colorSpread ?? 0.65));
+
+    // Slice 7.22 / 7.34 Möbius dipole uniforms:
+    gl.uniform2f?.(u('uMobiusPoleA')!, this.lastPoleA[0], this.lastPoleA[1]);
+    gl.uniform2f?.(u('uMobiusPoleB')!, this.lastPoleB[0], this.lastPoleB[1]);
+    gl.uniform1f?.(u('uMobiusFlow')!, Number(this.fb.mobiusFlow ?? 0.85));
+    gl.uniform1f?.(u('uMobiusSwirl')!, Number(this.fb.mobiusSwirl ?? 0.65));
+    const MOBIUS_MODES: Record<string, number> = {
+      auto: 0,
+      dipoleFlow: 1,
+      doubleVortex: 2,
+      figureEight: 3,
+      breathingOrbit: 4,
+    };
+    const mobiusModeKey = String(this.fb.mobiusMode ?? 'auto');
+    const mobiusModeInt = MOBIUS_MODES[mobiusModeKey] ?? 0;
+    gl.uniform1i?.(u('uMobiusMode')!, mobiusModeInt);
+
+    // Audio modulations:
+    gl.uniform1f?.(u('uKick')!, frame?.kickEnv ?? (frame?.raw?.sub ?? 0.0));
+    gl.uniform1f?.(u('uSub')!, frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5));
+    gl.uniform1f?.(u('uHigh')!, frame?.norm?.high ?? (frame?.env?.high ?? 0.5));
   }
 
   dispose(): void {
     const gl = this.gl;
     for (const l of this.layers) l.dispose();
     this.pp?.dispose();
+    this.freeSnapshot();
     if (gl) {
       if (this.prog) gl.deleteProgram(this.prog);
       if (this.blitProg) gl.deleteProgram(this.blitProg);
@@ -333,6 +611,7 @@ export class Scene {
     this.blitProg = null;
     this.vao = null;
     this.gl = null;
+    this.outputTex = null;
     this.foregroundOpacity = 1.0;
   }
 }

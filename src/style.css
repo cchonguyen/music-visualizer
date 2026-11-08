@@ -95,6 +95,19 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
   /* Calm, Render quality and Aspect correction in three columns on one line (slice 11.8). Labels sit above each control. */
   .controls .display-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; align-items: start; }
   .display-row > .group-label { grid-column: 1 / -1; }
+  .controls .display-row .experience-item { display: contents; }
+  .controls .display-row .experience-panel {
+    grid-column: 1 / -1;
+    order: 1;
+    position: static;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: .6rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
   .display-row > label { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: .25rem; min-height: 44px; min-width: 0; font-size: var(--ui-text-size); line-height: var(--ui-text-lh); }
   .display-row > label input[type="checkbox"] { min-height: 44px; min-width: 44px; }
   .display-row > label select { width: 100%; min-width: 0; min-height: 44px; }
@@ -109,8 +122,79 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
 .notice.info { background: #1d2a3a; border-color: #36a; }
 body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px; }
 
-.toast { position: fixed; top: 1rem; right: 1rem; background: rgba(0,0,0,.6); border: 1px solid var(--border); padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
+/* Experience HUD Card (Slice 8.2) */
+.experience-item { position: relative; }
+.experience-panel {
+  width: 260px;
+  min-width: 260px;
+  max-width: calc(100vw - 2rem);
+  padding: .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.experience-panel[hidden] { display: none; }
+.exp-header { display: flex; justify-content: space-between; align-items: center; }
+.exp-title { font-weight: 600; font-size: var(--ui-text-size); color: var(--text); }
+.exp-hint { font-size: .8em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.exp-modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.exp-mode-btn {
+  font-size: var(--ui-text-size);
+  padding: .4rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: rgba(255, 255, 255, .05);
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s, background .15s;
+}
+.exp-mode-btn:hover { background: rgba(255, 255, 255, .1); }
+.exp-mode-btn.active {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, .15);
+  font-weight: 600;
+}
+.exp-controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.exp-field { display: flex; flex-direction: column; gap: .25rem; font-size: .8em; color: var(--muted); }
+.exp-field select {
+  width: 100%;
+  font-size: var(--ui-text-size);
+  padding: .3rem .4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface);
+  color: var(--text);
+}
+.exp-actions-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .4rem;
+  padding-top: .3rem;
+  border-top: 1px solid var(--border);
+}
+.exp-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8em;
+  padding: .35rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: center;
+}
+.exp-action-btn:hover { color: var(--text); border-color: var(--text); }
+.exp-import-label { margin: 0; }
+
+.toast { position: fixed; top: 1rem; right: 1rem; z-index: 10; background: rgba(18, 18, 18, .85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
 .toast.shown { opacity: 1; }
+.toast-content { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .55rem; }
+.toast-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.4); flex-shrink: 0; display: inline-block; }
+.toast-title { font-weight: 600; color: #fff; }
+.toast-detail { color: var(--muted, #aaa); font-size: .85em; }
 /* Studio (slice 9.3). Desktop: right-side panel, 320px, 12px inset. Under 600px: bottom sheet (see media query below). */
 .studio {
   position: fixed; top: 12px; right: 12px; bottom: 12px; width: 320px; max-width: 90vw; overflow-y: auto; z-index: 5;
@@ -189,6 +273,15 @@ dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--focus); out
 .studio .studio-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
 .studio .studio-tiles > .tp-btnv { margin: 0; min-width: 0; }
 .studio .studio-tiles .tp-btnv_b { width: 100%; height: 44px; min-height: 44px; margin: 0; padding: 0 .25rem; }
+/* Studio folder action buttons & category indicator (slice 10.4) */
+.studio .studio-folder-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
+.studio .studio-folder-actions > .tp-btnv { flex: 1 1 0; margin: 0; min-width: 0; }
+.studio .studio-folder-actions .tp-btnv_b { width: 100%; min-height: 32px; padding: 0 4px; font-size: var(--ui-text-size); }
+.studio .studio-category-indicator input,
+.studio .studio-category-indicator .tp-txtv_i { color: var(--muted); font-style: italic; }
+@media (max-width: 599px) {
+  .studio .studio-folder-actions .tp-btnv_b { min-height: 44px; }
+}
 /* Shared Studio rules (slice 10.4): same look at every width. Safe on desktop: colours, track and fill only, no touch sizes. */
 .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
 .studio .tp-sldv { touch-action: none; }

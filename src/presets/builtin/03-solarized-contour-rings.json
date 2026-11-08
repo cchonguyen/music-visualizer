@@ -4,23 +4,35 @@
   "tags": ["built-in", "flagship"],
   "transition": { "style": "crossfade", "seconds": 0.32 },
   "feedback": {
-    "sobel": 0.85,
-    "solarize": 0.8,
-    "decay": 0.96
+    "warpMode": "curl",
+    "warp": 0.28,
+    "warpScale": 2.2,
+    "curlOctaves": 2,
+    "sobel": 0.22,
+    "solarize": 0.78,
+    "contourFreq": 6.5,
+    "contourWidth": 0.42,
+    "colorSpread": 0.85,
+    "zoom": 1.022,
+    "decay": 0.86,
+    "decayRgb": [0.90, 0.92, 0.95]
   },
   "layers": [
     {
-      "type": "rings",
+      "type": "shape",
+      "blend": "max",
+      "trails": true,
       "params": {
-        "maxRings": 5,
-        "strokeBase": 0.005
-      }
-    },
-    {
-      "type": "shockwave",
-      "params": {
-        "style": "ring",
-        "ringStart": { "value": 0.16, "link": { "source": "kickEnv", "amount": 0.3, "smooth": 0.1 } }
+        "baseShape": "circle",
+        "effectType": "pulsingLine",
+        "propMode": "concentric",
+        "propCount": 5,
+        "propSpacing": 0.22,
+        "propSpeed": 0.6,
+        "propDirection": "outward",
+        "thickness": 4.0,
+        "audioSource": "sub",
+        "colorMode": "palette"
       }
     }
   ],

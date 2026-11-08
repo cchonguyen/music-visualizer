@@ -18,14 +18,18 @@ import type { RenderTarget } from '../layer';
 function createMockGl(): WebGL2RenderingContext & {
   calls: string[];
   depthTestEnabled: boolean;
+  cullFaceEnabled: boolean;
   uniformValues: Map<string, any>;
 } {
   const uniformValues = new Map<string, any>();
   const calls: string[] = [];
   let depthTestEnabled = false;
+  let cullFaceEnabled = false;
 
   const gl = {
     DEPTH_TEST: 0x0b71,
+    CULL_FACE: 0x0b44,
+    BACK: 0x0405,
     LEQUAL: 0x0203,
     DEPTH_BUFFER_BIT: 0x00000100,
     ARRAY_BUFFER: 0x8892,
@@ -40,6 +44,9 @@ function createMockGl(): WebGL2RenderingContext & {
     get depthTestEnabled() {
       return depthTestEnabled;
     },
+    get cullFaceEnabled() {
+      return cullFaceEnabled;
+    },
     uniformValues,
 
     getExtension: vi.fn().mockReturnValue(null),
@@ -47,13 +54,22 @@ function createMockGl(): WebGL2RenderingContext & {
       if (cap === 0x0b71) {
         depthTestEnabled = true;
         calls.push('enable:DEPTH_TEST');
+      } else if (cap === 0x0b44) {
+        cullFaceEnabled = true;
+        calls.push('enable:CULL_FACE');
       }
     }),
     disable: vi.fn((cap: number) => {
       if (cap === 0x0b71) {
         depthTestEnabled = false;
         calls.push('disable:DEPTH_TEST');
+      } else if (cap === 0x0b44) {
+        cullFaceEnabled = false;
+        calls.push('disable:CULL_FACE');
       }
+    }),
+    cullFace: vi.fn((mode: number) => {
+      calls.push(`cullFace:${mode}`);
     }),
     depthFunc: vi.fn((func: number) => {
       calls.push(`depthFunc:${func}`);
@@ -103,6 +119,7 @@ function createMockGl(): WebGL2RenderingContext & {
   return gl as unknown as WebGL2RenderingContext & {
     calls: string[];
     depthTestEnabled: boolean;
+    cullFaceEnabled: boolean;
     uniformValues: Map<string, any>;
   };
 }
@@ -244,6 +261,29 @@ describe('Ferrofluid Shaders & GL Invariants (Slice 7.15)', () => {
 
     // Verify depth test is disabled after draw() completes
     expect(gl.depthTestEnabled).toBe(false);
+
+    layer.dispose();
+  });
+
+  it('enforces backface culling enabled during draw() and disabled immediately afterward', () => {
+    const gl = createMockGl();
+    const layer = new FerrofluidLayer();
+    layer.init(gl);
+
+    expect(gl.cullFaceEnabled).toBe(false);
+
+    layer.draw(makeMockFrame(), mockClock, mockTarget);
+
+    const enableIdx = gl.calls.indexOf('enable:CULL_FACE');
+    const cullFaceCall = gl.calls.find((c) => c.startsWith('cullFace:'));
+    const drawIdx = gl.calls.findIndex((c) => c.startsWith('drawElements'));
+    const disableIdx = gl.calls.lastIndexOf('disable:CULL_FACE');
+
+    expect(enableIdx).toBeGreaterThanOrEqual(0);
+    expect(cullFaceCall).toBe(`cullFace:${gl.BACK}`);
+    expect(drawIdx).toBeGreaterThan(enableIdx);
+    expect(disableIdx).toBeGreaterThan(drawIdx);
+    expect(gl.cullFaceEnabled).toBe(false);
 
     layer.dispose();
   });

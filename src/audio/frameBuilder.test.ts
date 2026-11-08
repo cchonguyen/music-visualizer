@@ -292,4 +292,69 @@ describe("FrameBuilder kickEnv and kickPulse (Slice 7.10)", () => {
     expect(fAfter.kickPulse).toBe(false);
     expect(fAfter.kickEnv).toBe(0);
   });
+
+  it("snaps kickEnv cleanly to 0.0 after decay drops below 0.01", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    builder.build(0, emptySpectrum(), silentWaveform);
+    for (let i = 1; i < 30; i++) builder.build(i * STEP_SEC, emptySpectrum(), silentWaveform);
+    const fKick = builder.build(30 * STEP_SEC, kickSpectrum(), silentWaveform);
+    expect(fKick.kickPulse).toBe(true);
+    expect(fKick.kickEnv).toBe(1.0);
+
+    // After ~40 silent frames at 60fps (0.88^40 ~ 0.0058 < 0.01), kickEnv must snap to exact 0.0
+    let fDecay = fKick;
+    for (let i = 31; i <= 80; i++) {
+      fDecay = builder.build(i * STEP_SEC, emptySpectrum(), silentWaveform);
+    }
+    expect(fDecay.kickEnv).toBe(0.0);
+    expect(fDecay.kickPulse).toBe(false);
+  });
+});
+
+describe("Slice 7.44 rock-solid kick & beat detection gating", () => {
+  it("rejects sub beats when raw sub is below 0.08 even if flux rises", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    builder.build(0, emptySpectrum(), silentWaveform);
+
+    // Provide a faint sub signal (e.g. byte 10 out of 255 -> 10/255 ~ 0.039 < 0.08)
+    const faintSub = emptySpectrum();
+    const start = binForFrequency(20, SAMPLE_RATE, FFT_SIZE);
+    const end = Math.min(BIN_COUNT, Math.round((120 * FFT_SIZE) / SAMPLE_RATE));
+    for (let i = start; i < end; i++) faintSub[i] = 10;
+
+    for (let i = 1; i < 30; i++) builder.build(i * STEP_SEC, emptySpectrum(), silentWaveform);
+    const frame = builder.build(30 * STEP_SEC, faintSub, silentWaveform);
+
+    expect(frame.raw.sub).toBeLessThan(0.08);
+    expect(frame.beat).toBe(false);
+    expect(frame.beatByBand.sub).toBe(false);
+    expect(frame.kickPulse).toBe(false);
+  });
+
+  it("enforces 220ms refractory cooldown between kick pulses", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    builder.build(0, emptySpectrum(), silentWaveform);
+    for (let i = 1; i < 30; i++) builder.build(i * STEP_SEC, emptySpectrum(), silentWaveform);
+
+    // First kick at frame 30 (0.50 s)
+    const f1 = builder.build(30 * STEP_SEC, kickSpectrum(), silentWaveform);
+    expect(f1.beat).toBe(true);
+    expect(f1.kickPulse).toBe(true);
+
+    // Empty spectrum on frame 31
+    builder.build(31 * STEP_SEC, emptySpectrum(), silentWaveform);
+
+    // Second kick at frame 39 (0.65 s, 150 ms later — within 220 ms cooldown)
+    const f2 = builder.build(39 * STEP_SEC, kickSpectrum(), silentWaveform);
+    expect(f2.beat).toBe(false);
+    expect(f2.kickPulse).toBe(false);
+
+    // Empty spectrum on frame 40
+    builder.build(40 * STEP_SEC, emptySpectrum(), silentWaveform);
+
+    // Third kick at frame 46 (0.766 s, > 266 ms after frame 30 — past 220 ms cooldown)
+    const f3 = builder.build(46 * STEP_SEC, kickSpectrum(), silentWaveform);
+    expect(f3.beat).toBe(true);
+    expect(f3.kickPulse).toBe(true);
+  });
 });

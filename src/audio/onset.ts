@@ -29,7 +29,11 @@ export function spectralFlux(
   return count > 0 ? sum / count : 0;
 }
 
-interface OnsetDetectorOptions {
+export const DEFAULT_COOLDOWN_MS = 220;
+export const DEFAULT_RELEASE_RATIO = 0.95;
+export const DEFAULT_FLUX_FLOOR = 0.035;
+
+export interface OnsetDetectorOptions {
   triggerRatio?: number;
   releaseRatio?: number;
   cooldownMs?: number;
@@ -89,10 +93,10 @@ export class OnsetDetector {
 
   constructor(opts: OnsetDetectorOptions = {}) {
     this.fixedTriggerRatio = opts.triggerRatio ?? null;
-    this.releaseRatio = opts.releaseRatio ?? 1.05;
-    this.cooldownSec = (opts.cooldownMs ?? 150) / 1000;
+    this.releaseRatio = opts.releaseRatio ?? DEFAULT_RELEASE_RATIO;
+    this.cooldownSec = (opts.cooldownMs ?? DEFAULT_COOLDOWN_MS) / 1000;
     this.meanTauSec = (opts.meanTauMs ?? 500) / 1000;
-    this.fluxFloor = opts.fluxFloor ?? 0.02;
+    this.fluxFloor = opts.fluxFloor ?? DEFAULT_FLUX_FLOOR;
   }
 
   step(flux: number, timeSec: number): OnsetResult {

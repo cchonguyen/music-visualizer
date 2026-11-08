@@ -6,6 +6,7 @@
 // estimate exists but has zero paired samples.
 
 import type { AudioFrame, BandLevels } from "../audio/types";
+import { isEditableTarget } from "./controls";
 
 /** Shape of one latency estimate, matching src/audio/latency.ts. */
 export interface PanelLatency {
@@ -138,6 +139,7 @@ export class DebugPanel {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     // Bare "d" only, so shortcuts with modifiers never toggle the panel.
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isEditableTarget(e.target)) return;
     if (e.key !== "d" && e.key !== "D") return;
     this.toggle();
   };

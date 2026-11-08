@@ -19,6 +19,7 @@ import { RELEASE_TAU_SEC, releaseEnvelope } from './releaseEnvelope';
 import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import type { Scene } from './scene';
 import type { ParamValue } from '../presets/schema';
+import type { CameraUniforms, ColorUniforms } from './globalDirector';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import blurSrc from './shaders/blur.frag.glsl?raw';
@@ -106,6 +107,8 @@ export class Compositor implements RenderLayer {
   // Uniform locations, cached per program (a name can be missing from one program and present in another).
   private locs = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
   private post: PostValues = { ...POST_IDENTITY };
+  private directorCam: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
+  private directorColor: ColorUniforms = { shadowTint: [1, 1, 1], highlightTint: [1, 1, 1], spatialSpread: 0, gradAngle: 0, intensity: 0, cycleAngle: 0 };
   private transition = 0; // 0 crossfade, 1 wipe, 2 dissolve, 3 zoom-through (T1), 4 morph (Slice 7.16)
   private morphing = false;
   private morphElapsed = 0;
@@ -188,6 +191,45 @@ export class Compositor implements RenderLayer {
     this.post = next;
   }
 
+  /** Global Director camera and color uniforms (Sector 483, Slice 7.31). */
+  setDirectorState(cam: CameraUniforms, color: ColorUniforms): void {
+    this.directorCam = { ...cam };
+    this.directorColor = {
+      ...color,
+      shadowTint: [color.shadowTint[0], color.shadowTint[1], color.shadowTint[2]],
+      highlightTint: [color.highlightTint[0], color.highlightTint[1], color.highlightTint[2]],
+    };
+  }
+
+  hasDirectorEffect(): boolean {
+    const c = this.directorCam;
+    return (
+      c.zoom !== 1 ||
+      c.panX !== 0 ||
+      c.panY !== 0 ||
+      c.roll !== 0 ||
+      c.tiltX !== 0 ||
+      c.tiltY !== 0 ||
+      this.directorColor.intensity > 0
+    );
+  }
+
+  hasPost(): boolean {
+    const p = this.post;
+    const postActive = (
+      p.hueShift !== 0 ||
+      p.saturation !== 1 ||
+      p.contrast !== 1 ||
+      p.gamma !== 1 ||
+      p.brightness !== 0 ||
+      p.mirror >= 2 ||
+      p.vignette > 0 ||
+      p.chroma > 0 ||
+      p.bloom > 0
+    );
+    return postActive || this.hasDirectorEffect();
+  }
+
   /** Calm mode toggle. Scales contrast excursions and caps peak saturation. */
   setCalm(calm: boolean): void {
     this.calm = calm;
@@ -220,6 +262,11 @@ export class Compositor implements RenderLayer {
     }
     if (!map.has(name)) map.set(name, gl.getUniformLocation(prog, name));
     return map.get(name) ?? null;
+  }
+
+  private loc(prog: WebGLProgram | null, name: string): WebGLUniformLocation | null {
+    if (!prog) return null;
+    return this.u(prog, name);
   }
 
   /** Set how much each scene shows (0..1). Weights are normalised by the caller. */
@@ -286,11 +333,7 @@ export class Compositor implements RenderLayer {
   }
 
   private postActive(): boolean {
-    const p = this.post;
-    return (
-      p.hueShift !== 0 || p.saturation !== 1 || p.contrast !== 1 || p.gamma !== 1 || p.brightness !== 0 ||
-      p.mirror >= 2 || p.vignette > 0 || p.chroma > 0 || p.bloom > 0
-    );
+    return this.hasPost();
   }
 
   draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
@@ -506,8 +549,21 @@ export class Compositor implements RenderLayer {
     gl.uniform1f(this.u(prog, 'uMirror'), p.mirror);
     gl.uniform1f(this.u(prog, 'uVignette'), p.vignette);
     gl.uniform1f(this.u(prog, 'uChroma'), p.chroma);
-    gl.uniform1f(this.u(prog, 'uBloomAmt'), p.bloom);
-    gl.uniform1f(this.u(prog, 'uBloomThr'), p.bloomThreshold);
+    gl.uniform1f(this.loc(prog, 'uBloomAmt'), p.bloom);
+    gl.uniform1f(this.loc(prog, 'uBloomThr'), p.bloomThreshold);
+
+    // Global Director uniforms (Sector 483, Slice 7.31)
+    gl.uniform2f(this.loc(this.postProg, 'uCamPan'), this.directorCam.panX, this.directorCam.panY);
+    gl.uniform1f(this.loc(this.postProg, 'uCamZoom'), this.directorCam.zoom);
+    gl.uniform1f(this.loc(this.postProg, 'uCamRoll'), this.directorCam.roll);
+    gl.uniform2f(this.loc(this.postProg, 'uCamTilt'), this.directorCam.tiltX, this.directorCam.tiltY);
+    gl.uniform3fv(this.loc(this.postProg, 'uColorShadowTint'), this.directorColor.shadowTint);
+    gl.uniform3fv(this.loc(this.postProg, 'uColorHighlightTint'), this.directorColor.highlightTint);
+    gl.uniform1f(this.loc(this.postProg, 'uColorSpatialSpread'), this.directorColor.spatialSpread);
+    gl.uniform1f(this.loc(this.postProg, 'uColorGradAngle'), this.directorColor.gradAngle);
+    gl.uniform1f(this.loc(this.postProg, 'uColorIntensity'), this.directorColor.intensity);
+    gl.uniform1f(this.loc(this.postProg, 'uColorCycleAngle'), this.directorColor.cycleAngle ?? 0);
+
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);

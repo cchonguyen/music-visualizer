@@ -7,7 +7,19 @@
   "layers": [
     { "type": "tunnel", "params": { "ringDensity": 0.5, "beatAttackSec": 0.08, "ringContrast": 0.5, "ringContrastCalm": 0.25 } },
     { "type": "particles", "params": { "brightness": 1, "calmSparkleScale": 0.3, "flashSparkleScale": 0.2 } },
-    { "type": "shockwave", "params": { "ringStart": 0.16, "ringEnd": 0.95, "ringSec": 0.35 } }
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "solidLine",
+        "propMode": "shockwave",
+        "propSpeed": 1.0,
+        "thickness": 3.0,
+        "glow": 0.8,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    }
   ],
   "post": {}
 }

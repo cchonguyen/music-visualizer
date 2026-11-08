@@ -1,10 +1,9 @@
 #version 300 es
 precision highp float;
 
-// Feedback warp (slice E1) with colour drift and blur (slice E3). Each frame, last frame's image
-// is moved (zoom, rotate, drift, stretch, wave warp), tinted (hue drift), softened (blur) and dimmed.
-// With the default settings (zoom 1, rotate 0, everything else 0, decay 0.92, fade 0.004) this is
-// the same as the old decay pass, so the look is unchanged until a preset changes them.
+// Feedback warp overhaul (Slice 7.22): Multi-octave Simplex curl (4 flow styles),
+// mirror-continuous mandala with radial fold & wallpaper tiling,
+// dynamic wandering Möbius dipole flow, and luminance-gated topographic solarize.
 uniform sampler2D uPrev;
 uniform vec2 uCentre;     // centre of zoom and rotate, in uv (0,0 = screen middle)
 uniform vec2 uDrift;      // slide per frame, in uv
@@ -23,7 +22,7 @@ uniform vec2 uTexel;      // 1 / size in pixels
 uniform float uDecay;     // persistence per frame
 uniform float uFade;      // subtracted per frame
 
-// Slice 7.11 uniforms:
+// Slice 7.11 / 7.22 uniforms:
 uniform int uWarpMode;          // 0: classic, 1: curl, 2: polarFold, 3: mobius, 4: rgbSplit
 uniform float uKaleidoN;        // 4..16, default 6
 uniform float uPortalRadius;    // 0.0..0.25, default 0.0
@@ -32,9 +31,34 @@ uniform vec3 uDecayRgb;         // default vec3(1.0, 1.0, 1.0)
 uniform float uSobel;           // 0.0..1.0, default 0.0
 uniform float uSolarize;        // 0.0..1.0, default 0.0
 uniform float uSolarizePhase;   // phase modulation for solarize
-uniform float uMobiusPoleOffset;// 0.1..0.8, default 0.35
-uniform float uMobiusPolePolarity; // +1.0 or -1.0, flipped on kickPulse
+uniform float uMobiusPoleOffset;// 0.2..0.85, default 0.48
+uniform float uMobiusPolePolarity; // legacy polarity uniform (+1.0)
 uniform float uWarpAmp;         // warp amplitude
+
+// Slice 7.22 uniforms:
+uniform int uCurlOctaves;       // 1..3, default 2
+uniform float uCurlTurbulence;  // 0.0..1.0, default 0.45
+uniform int uCurlFlowPattern;   // 0: plumes, 1: eddies, 2: outflow, 3: inflow
+
+uniform float uRadialFold;      // 0.0..1.0, default 0.0
+uniform float uMandalaTile;     // 0.0..1.0, default 0.0
+uniform float uMandalaCounterSpin; // -1.0..1.0, default 0.25
+uniform float uMandalaKickFlare;// 0.0..1.0, default 0.35
+
+uniform float uContourFreq;     // 2.0..16.0, default 7.85
+uniform float uContourWidth;    // 0.1..1.0, default 0.45
+uniform float uColorSpread;     // 0.0..1.0, default 0.65
+
+uniform vec2 uMobiusPoleA;      // live moving pole A
+uniform vec2 uMobiusPoleB;      // live moving pole B
+uniform float uMobiusFlow;      // 0.0..2.0, default 0.85
+uniform float uMobiusSwirl;     // -2.0..2.0, default 0.65
+uniform int uMobiusMode;        // 0: auto, 1: dipoleFlow, 2: doubleVortex, 3: figureEight, 4: breathingOrbit
+
+// Audio modulation uniforms:
+uniform float uKick;
+uniform float uSub;
+uniform float uHigh;
 
 in vec2 vUv;
 out vec4 outColor;
@@ -50,12 +74,113 @@ vec3 hueRotate(vec3 c, float a) {
   return c * cs + cross(k, c) * sn + k * dot(k, c) * (1.0 - cs);
 }
 
-// 2D curl noise advection field (divergence-free flow from potential field)
+// 2D rotation matrix
+mat2 rot2(float a) {
+  float c = cos(a);
+  float s = sin(a);
+  return mat2(c, s, -s, c);
+}
+
+// 5-tap neighborhood blur of previous frame
+vec3 blurPrev(vec2 coord, float blurAmount) {
+  vec3 base = texture(uPrev, coord).rgb;
+  vec3 neighbors = texture(uPrev, coord + vec2(uTexel.x, 0.0) * 1.5).rgb
+                 + texture(uPrev, coord - vec2(uTexel.x, 0.0) * 1.5).rgb
+                 + texture(uPrev, coord + vec2(0.0, uTexel.y) * 1.5).rgb
+                 + texture(uPrev, coord - vec2(0.0, uTexel.y) * 1.5).rgb;
+  return mix(base, (base + neighbors) * 0.2, blurAmount);
+}
+
+// 2D Simplex Noise (Ian McEwan, Ashima Arts)
+vec3 permute(vec3 x) {
+  return mod(((x * 34.0) + 1.0) * x, 289.0);
+}
+
+float snoise(vec2 v) {
+  const vec4 C = vec4(0.211324865405187,
+                      0.366025403784439,
+                     -0.577350269189626,
+                      0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v -   i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod(i, 289.0);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+        + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+  m = m * m;
+  m = m * m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
+// Retain curlField helper
 vec2 curlField(vec2 pos, float t, float scale) {
   float s = scale * TWO_PI;
   float dpsi_dy = -s * sin(s * pos.x + t) * sin(s * pos.y + t) + s * cos(2.0 * s * pos.y + 0.7 * t) * cos(2.0 * s * pos.x - 0.5 * t);
   float dpsi_dx =  s * cos(s * pos.x + t) * cos(s * pos.y + t) - s * sin(2.0 * s * pos.y + 0.7 * t) * sin(2.0 * s * pos.x - 0.5 * t);
   return vec2(dpsi_dy, -dpsi_dx);
+}
+
+// Time-varying potential field blending two counter-rotating layers
+float curlPotential(vec2 p, float t) {
+  vec2 p1 = rot2(t * 0.18) * p;
+  vec2 p2 = rot2(-t * 0.14) * p + vec2(sin(t * 0.35), cos(t * 0.29)) * 1.4;
+  return snoise(p1) * 0.55 + snoise(p2) * 0.45;
+}
+
+// Multi-octave Simplex stream-function curl noise
+vec2 curlNoise(vec2 pos, float t, int octaves, float turbulence, float high) {
+  vec2 vel = vec2(0.0);
+  float freq = 1.0;
+  float amp = 1.0;
+  float eps = 0.01;
+  float turbWeight = turbulence * (0.5 + high * 0.8);
+
+  for (int i = 0; i < 3; i++) {
+    if (i >= octaves) break;
+    float weight = (i == 0) ? 1.0 : turbWeight * amp;
+    vec2 p = pos * freq;
+    float ti = t * (0.6 + 0.4 * float(i + 1));
+    float n1 = curlPotential(p + vec2(0.0, eps), ti);
+    float n2 = curlPotential(p - vec2(0.0, eps), ti);
+    float n3 = curlPotential(p + vec2(eps, 0.0), ti);
+    float n4 = curlPotential(p - vec2(eps, 0.0), ti);
+    vec2 c = vec2((n1 - n2) / (2.0 * eps), -(n3 - n4) / (2.0 * eps));
+    vel += c * weight;
+    freq *= 2.1;
+    amp *= 0.5;
+  }
+  return vel;
+}
+
+// Complex arithmetic helpers for Möbius dipole step
+vec2 cMul(vec2 c1, vec2 c2) {
+  return vec2(c1.x * c2.x - c1.y * c2.y, c1.x * c2.y + c1.y * c2.x);
+}
+
+vec2 cDiv(vec2 c1, vec2 c2) {
+  float d = max(dot(c2, c2), 1e-7);
+  return vec2(c1.x * c2.x + c1.y * c2.y, c1.y * c2.x - c1.x * c2.y) / d;
+}
+
+vec2 cLog(vec2 z) {
+  float r = max(length(z), 1e-7);
+  return vec2(log(r), atan(z.y, z.x));
+}
+
+vec2 cExp(vec2 w) {
+  float r = exp(clamp(w.x, -12.0, 12.0));
+  return vec2(r * cos(w.y), r * sin(w.y));
 }
 
 void main() {
@@ -68,45 +193,111 @@ void main() {
   p /= uZoom;
   p /= uStretch;
 
-  // Warp modes (Slice 7.11)
+  // Warp modes
   if (uWarpMode == 1) {
-    // 'curl': 2D simplex/sine curl-noise advection (uWarpAmp)
-    float amp = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
+    // Multi-octave Simplex curl with 4 flow styles
     p.x *= uAspect;
-    p += amp * 0.01 * curlField(p, uTime * uWarpSpeed, uWarpScale);
+    vec2 samplePos = p * (uWarpScale * 2.0);
+    vec2 vel = curlNoise(samplePos, uTime * uWarpSpeed, uCurlOctaves, uCurlTurbulence, uHigh);
+    vec2 radial = length(p) > 1e-4 ? normalize(p) : vec2(0.0, 1.0);
+
+    if (uCurlFlowPattern == 0) {
+      // 0 ('plumes'): slowly precessing, breathing flow vector
+      vec2 flowVec = vec2(sin(uTime * 0.22 + p.y * 2.5), cos(uTime * 0.17 + p.x * 2.5)) * 0.22 + radial * (0.18 * sin(uTime * 0.31));
+      vel = vel * 0.75 + flowVec;
+    } else if (uCurlFlowPattern == 1) {
+      // 1 ('eddies'): balanced stationary whirlpools
+      vel = vel * 1.1;
+    } else if (uCurlFlowPattern == 2) {
+      // 2 ('outflow'): radial outward expansion
+      vel = vel * 0.5 + radial * 0.85;
+    } else if (uCurlFlowPattern == 3) {
+      // 3 ('inflow'): inward vortex suction
+      vec2 tang = vec2(-radial.y, radial.x);
+      vel = vel * 0.5 - radial * 0.75 + tang * 0.65;
+    }
+
+    float warpAmt = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
+    p += vel * (warpAmt * 0.032);
     p.x /= uAspect;
   } else if (uWarpMode == 2) {
-    // 'polarFold': Fold polar angle theta via abs(mod(theta, TWO_PI / uKaleidoN) - PI / uKaleidoN)
-    // and apply center portal mask smoothstep(0.0, uPortalRadius, r)
+    // Kaleidoscopic Mandala with radial fold & wallpaper tiling
     p.x *= uAspect;
+
+    // Wallpaper / Fractal crystal tiling
+    if (uMandalaTile > 0.001) {
+      vec2 gridP = p * 1.5;
+      vec2 tiledP = abs(mod(gridP + 1.0, 2.0) - 1.0) - 0.5;
+      p = mix(p, tiledP, uMandalaTile);
+    }
+
     float r = length(p);
-    float theta = atan(p.y, p.x);
+    float theta = atan(p.y, p.x) + uTime * uMandalaCounterSpin * 0.5;
     float foldedTheta = abs(mod(theta, TWO_PI / uKaleidoN) - PI / uKaleidoN);
+
+    // Concentric radial accordion folding
+    if (uRadialFold > 0.001) {
+      float accordion = abs(sin(r * 10.0 - uTime * 0.8));
+      r = mix(r, accordion * 0.35 + 0.05, uRadialFold * 0.6);
+    }
+
     float portalMask = uPortalRadius > 1e-5 ? smoothstep(0.0, uPortalRadius, r) : 1.0;
     p = vec2(cos(foldedTheta), sin(foldedTheta)) * (r * portalMask);
     p.x /= uAspect;
   } else if (uWarpMode == 3) {
-    // 'mobius': Complex-plane transformation f(z) = (a*z + b) / (c*z + d)
-    // with denominator magnitude guarded by max(denomMag, 1e-4) to prevent NaNs at singularities;
-    // flip pole polarity when kickPulse fires.
+    // Smooth Incremental Möbius Dipole Flow with dynamic moving poles & Jacobian compensation
     p.x *= uAspect;
-    vec2 pole = vec2(uMobiusPoleOffset * uMobiusPolePolarity, 0.0);
-    vec2 b = -pole;
-    vec2 c = pole;
-    vec2 d = vec2(1.0, 0.0);
-    vec2 num = p + b;
-    vec2 denom = vec2(c.x * p.x - c.y * p.y + d.x, c.x * p.y + c.y * p.x + d.y);
-    float denomMag = length(denom);
-    float safeDenomMag = max(denomMag, 1e-4);
-    denom = denom * (safeDenomMag / max(denomMag, 1e-7));
-    float denomMagSq = safeDenomMag * safeDenomMag;
-    p = vec2(num.x * denom.x + num.y * denom.y, num.y * denom.x - num.x * denom.y) / denomMagSq;
+    vec2 a = uMobiusPoleA;
+    vec2 b = uMobiusPoleB;
+    if (distance(a, b) < 1e-3) {
+      a = vec2(-uMobiusPoleOffset, 0.0);
+      b = vec2(uMobiusPoleOffset, 0.0);
+    }
+    float poleOff = max(distance(a, b) * 0.5, uMobiusPoleOffset);
+    float centerBoost = mix(2.4, 1.0, smoothstep(0.0, poleOff * 1.2, length(p)));
+
+    int mMode = (uMobiusMode == 0) ? int(mod(floor(uTime / 14.0), 4.0)) : (uMobiusMode - 1);
+    float flowFactor = uMobiusFlow;
+    float swirlFactor = uMobiusSwirl;
+    if (mMode == 0) {
+      // 0: dipole source-to-sink arc
+      flowFactor *= 1.35;
+      swirlFactor *= 0.25;
+    } else if (mMode == 1) {
+      // 1: counter-rotating double vortex
+      flowFactor *= 0.30;
+      swirlFactor *= 1.40;
+    } else if (mMode == 2) {
+      // 2: lemniscate figure-eight cross-flow
+      float crossPhase = sin(uTime * 0.75);
+      flowFactor *= (0.85 + 0.45 * crossPhase);
+      swirlFactor *= (crossPhase >= 0.0 ? 1.15 : -1.15);
+    } else {
+      // 3: breathing orbital exchange
+      float breathe = 0.5 + 0.5 * sin(uTime * 0.95);
+      flowFactor *= mix(0.5, 1.3, breathe);
+      swirlFactor *= mix(1.3, 0.5, breathe);
+    }
+
+    vec2 za = p - a;
+    vec2 zb = p - b;
+    vec2 zeta = cDiv(za, zb);
+    vec2 w = cLog(zeta);
+
+    float warpAmt = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
+    w += vec2(flowFactor, swirlFactor) * (0.115 * centerBoost * warpAmt);
+
+    vec2 expW = cExp(w);
+    vec2 num = a - cMul(b, expW);
+    vec2 den = vec2(1.0, 0.0) - expW;
+    p = cDiv(num, den);
     p.x /= uAspect;
   } else if (uWarpMode == 4) {
-    // 'rgbSplit': Tangential curl vec2(-p.y, p.x) / max(length(p), 0.05)
+    // 'rgbSplit': Tangential curl with temporal swirl wave
     p.x *= uAspect;
+    float swirlWave = 1.0 + 0.45 * sin(length(p) * 6.0 - uTime * uWarpSpeed * 1.2);
     vec2 tang = vec2(-p.y, p.x) / max(length(p), 0.05);
-    p += tang * (uRgbSplit > 0.0 ? uRgbSplit * 0.5 : 0.01);
+    p += tang * ((uRgbSplit > 0.0 ? uRgbSplit * 0.5 : 0.01) * swirlWave);
     p.x /= uAspect;
   } else {
     // 'classic': wave warp
@@ -121,18 +312,20 @@ void main() {
   // Fetch color from previous frame
   vec3 c;
   if (uWarpMode == 4 && uRgbSplit > 0.0) {
-    // 3-tap sampling of uPrev (Red at zoom + uRgbSplit, Green at zoom, Blue at zoom - uRgbSplit with rotational offset)
-    float rotOffset = uRgbSplit * 1.5;
-    float csR = cos(-rotOffset);
-    float snR = sin(-rotOffset);
-    vec2 pR = vec2(csR * p.x - snR * p.y, snR * p.x + csR * p.y) / (1.0 + uRgbSplit);
+    // 3-tap sampling of uPrev with temporal swirl variety & dynamic chromatic displacement
+    float splitAngle = uRgbSplit * (1.5 + 0.6 * sin(uTime * 0.65 + length(p) * 4.0));
+    vec2 dispAxis = vec2(cos(uTime * 0.42), sin(uTime * 0.42)) * uRgbSplit * 0.35 * (0.5 + 0.5 * sin(uTime * 0.9));
+
+    float csR = cos(-splitAngle);
+    float snR = sin(-splitAngle);
+    vec2 pR = vec2(csR * p.x - snR * p.y, snR * p.x + csR * p.y) / (1.0 + uRgbSplit) + dispAxis;
     vec2 uvR = mix(clamp(pR + 0.5 + uCentre, 0.0, 1.0), fract(pR + 0.5 + uCentre), uWrap);
 
     vec2 uvG = uv;
 
-    float csB = cos(rotOffset);
-    float snB = sin(rotOffset);
-    vec2 pB = vec2(csB * p.x - snB * p.y, snB * p.x + csB * p.y) * (1.0 + uRgbSplit);
+    float csB = cos(splitAngle);
+    float snB = sin(splitAngle);
+    vec2 pB = vec2(csB * p.x - snB * p.y, snB * p.x + csB * p.y) * (1.0 + uRgbSplit) - dispAxis;
     vec2 uvB = mix(clamp(pB + 0.5 + uCentre, 0.0, 1.0), fract(pB + 0.5 + uCentre), uWrap);
 
     c = vec3(
@@ -145,11 +338,7 @@ void main() {
   }
 
   if (uBlur > 0.0) {
-    vec3 n = texture(uPrev, uv + vec2(uTexel.x, 0.0) * 1.5).rgb
-           + texture(uPrev, uv - vec2(uTexel.x, 0.0) * 1.5).rgb
-           + texture(uPrev, uv + vec2(0.0, uTexel.y) * 1.5).rgb
-           + texture(uPrev, uv - vec2(0.0, uTexel.y) * 1.5).rgb;
-    c = mix(c, (c + n) * 0.2, uBlur);
+    c = blurPrev(uv, uBlur);
   }
 
   // Post-fetch transforms
@@ -170,10 +359,32 @@ void main() {
     c = mix(c, sobelEdge, uSobel);
   }
 
-  if (uSolarize > 0.0) {
-    // 0.5 + 0.5 * sin(col.rgb * 6.28318 * 1.25 + uSolarizePhase)
-    vec3 solar = 0.5 + 0.5 * sin(c * 6.28318 * 1.25 + uSolarizePhase);
-    c = mix(c, solar, uSolarize);
+  if (uSolarize > 0.001) {
+    // Luminance-Gated Topographic Solarize with wide, silky contour range
+    float lum = dot(c, vec3(0.299, 0.587, 0.114));
+    float smoothLum = dot(blurPrev(uv, max(uBlur, 0.35)), vec3(0.299, 0.587, 0.114));
+    float gate = smoothstep(0.035, 0.14, lum);
+    float phase = uSolarizePhase;
+    float effFreq = uContourFreq * mix(1.0, 0.55, uSolarize * uSolarize);
+    float band = mix(0.62, 1.18, pow(0.5 + 0.5 * sin(smoothLum * effFreq * 3.14159265 + phase), mix(3.2, 1.1, uContourWidth)));
+
+    // 3-stop neon palette (cyan -> magenta -> gold/emerald controlled by uColorSpread)
+    vec3 colCyan = vec3(0.05, 0.85, 1.0);
+    vec3 colMagenta = vec3(1.0, 0.1, 0.7);
+    vec3 colGold = vec3(1.0, 0.85, 0.15);
+    vec3 colEmerald = vec3(0.1, 0.95, 0.55);
+    vec3 colWarm = mix(colGold, colEmerald, uColorSpread * 0.5);
+
+    float palT = fract(smoothLum * 2.0 + phase * 0.1);
+    vec3 palCol;
+    if (palT < 0.5) {
+      palCol = mix(colCyan, colMagenta, palT * 2.0);
+    } else {
+      palCol = mix(colMagenta, colWarm, (palT - 0.5) * 2.0);
+    }
+    vec3 isolineCol = mix(c, palCol, uColorSpread) * band;
+    vec3 solarized = mix(c, isolineCol, gate);
+    c = mix(c, solarized, uSolarize);
   }
 
   c = hueRotate(c, uHueDrift);

@@ -6,17 +6,52 @@
   "feedback": {
     "warpMode": "polarFold",
     "kaleidoN": 8,
-    "portalRadius": 0.08,
-    "decay": 0.95
+    "mandalaPattern": "auto",
+    "radialFold": 0.48,
+    "mandalaTile": 0.35,
+    "mandalaCounterSpin": 0.3,
+    "mandalaKickFlare": 0.4,
+    "zoom": 1.038,
+    "rotate": 0.015,
+    "decay": 0.90,
+    "fade": 0.005,
+    "decayRgb": [0.92, 0.90, 0.96]
   },
   "layers": [
     {
-      "type": "rings",
+      "type": "shape",
+      "blend": "add",
+      "trails": false,
       "params": {
-        "mode": "orbitTriangles",
-        "strokeBase": 0.005,
-        "texture": true,
-        "textureGain": 1.2
+        "baseShape": "circle",
+        "size": 0.5,
+        "effectType": "waveform",
+        "thickness": 2.2,
+        "colorMode": "palette",
+        "audioSource": "waveform",
+        "symmetry": "wrap",
+        "propMode": "single"
+      }
+    },
+    {
+      "type": "particles",
+      "blend": "add",
+      "params": {
+        "shape": "streak",
+        "swirlGain": 1.2
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "solidLine",
+        "propMode": "shockwave",
+        "propSpeed": 0.875,
+        "thickness": 3.0,
+        "glow": 0.8,
+        "audioSource": "sub",
+        "colorMode": "palette"
       }
     }
   ],

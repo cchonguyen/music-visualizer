@@ -3,10 +3,31 @@
   "name": "Dust Wave",
   "tags": ["built-in"],
   "transition": { "style": "crossfade", "seconds": 0.32 },
-  "feedback": { "decay": 0.9, "fade": 0.005 },
+  "feedback": { "decay": 0.9, "fade": 0.005, "stretchY": 1.36 },
   "layers": [
-    { "type": "waveform", "params": { "mode": "line", "amplitude": 1.1, "texture": true, "textureGain": 1.6 } },
-    { "type": "particles", "params": { "shape": "dot", "size": 0.5, "brightness": 1.1, "swirlGain": 0.2, "texture": true, "textureGain": 0.9 } }
+    {
+      "type": "waveform",
+      "params": {
+        "mode": "line",
+        "amplitude": 1.1,
+        "thickness": 2.2,
+        "texture": true,
+        "textureGain": 1.6
+      }
+    },
+    {
+      "type": "particles",
+      "params": {
+        "mode": "phyllotaxis",
+        "seedShape": "orb",
+        "shape": "dot",
+        "size": 1.8,
+        "brightness": 1.1,
+        "swirlGain": 0.2,
+        "texture": true,
+        "textureGain": 0.9
+      }
+    }
   ],
   "post": { "contrast": 1.08, "vignette": 0.1 }
 }

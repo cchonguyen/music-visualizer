@@ -13,6 +13,7 @@ uniform float uFeed;
 uniform float uKill;
 uniform float u_mid;
 uniform float u_centroid;
+uniform float u_kickEnv;
 uniform float uInjectRing;
 
 void main() {
@@ -38,17 +39,13 @@ void main() {
   vec2 n_bl = texture(uState, uv - dx - dy).rg;
   vec2 n_br = texture(uState, uv + dx - dy).rg;
 
-  vec2 lap = (n_up + n_down + n_left + n_right) * 0.20
+  vec2 lap = ((n_up + n_down + n_left + n_right) * 0.20
            + (n_tl + n_tr + n_bl + n_br) * 0.05
-           - vec2(u, v);
+           - vec2(u, v)) * 4.2;
 
-  // Map u_mid and u_centroid to shift Feed F (0.035..0.055) and Kill K (0.060..0.065)
-  // between mitosis spots and labyrinthine coral stripes.
-  float fAudio = mix(0.035, 0.055, clamp(u_mid, 0.0, 1.0));
-  float kAudio = mix(0.060, 0.065, clamp(u_centroid, 0.0, 1.0));
-
-  float F = clamp(fAudio + (uFeed - 0.042), 0.020, 0.080);
-  float K = clamp(kAudio + (uKill - 0.062), 0.040, 0.080);
+  // Respect user u_feed and u_kill sliders directly with subtle audio modulation
+  float F = clamp(uFeed + (u_mid - 0.35) * 0.008, 0.015, 0.095);
+  float K = clamp(uKill + (u_centroid - 0.5) * 0.005, 0.040, 0.075);
 
   // Reaction-diffusion Gray-Scott simulation
   // Du = 0.16, Dv = 0.08 by default
@@ -62,11 +59,18 @@ void main() {
   // Inject fresh chemical V along a central ring whenever kickPulse or kickEnv > 0.7 fires
   if (uInjectRing > 0.0) {
     vec2 p = uv - vec2(0.5);
-    float r = length(p);
-    float ringMask = smoothstep(0.04, 0.0, abs(r - 0.24));
-    nextV = mix(nextV, 0.5, ringMask * clamp(uInjectRing, 0.0, 1.0));
-    nextU = mix(nextU, 0.5, ringMask * clamp(uInjectRing, 0.0, 1.0) * 0.5);
+    float dist = length(p);
+    if (dist >= 0.15 && dist <= 0.23) {
+      float noise = fract(sin(dot(vUv * 64.0, vec2(12.9898, 78.233)) + u_kickEnv * 7.1) * 43758.5453);
+      float ringMask = smoothstep(0.04, 0.0, abs(dist - 0.19)) * (0.6 + 0.4 * noise);
+      nextV = mix(nextV, 0.5 * (0.8 + 0.4 * noise), ringMask * clamp(uInjectRing, 0.0, 1.0));
+      nextU = mix(nextU, 0.5, ringMask * clamp(uInjectRing, 0.0, 1.0) * 0.5);
+    }
   }
+
+  // Gently damp V near the outer border so coral ridges constantly branch and never lock into a flat full-screen sheet
+  float border = smoothstep(0.0, 0.06, min(uv.x, min(uv.y, min(1.0 - uv.x, 1.0 - uv.y))));
+  nextV *= (0.90 + 0.10 * border);
 
   fragColor = vec4(nextU, nextV, 0.0, 1.0);
 }

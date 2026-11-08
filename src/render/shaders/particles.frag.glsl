@@ -18,6 +18,8 @@ uniform float uHue;        // total hue rotation in turns (shift + drift), combi
 uniform float uTexOn;      // 1 = band texture on (6.2), 0 = off: output identical to before
 uniform float uTexGain;    // 0..2: how strongly the band texture modulates
 uniform sampler2D uTexHigh; // high-band waveform row (6.2)
+uniform float uKickEnv;
+uniform float uBeatReactivity;
 
 out vec4 fragColor;
 
@@ -58,7 +60,11 @@ void main() {
 
   // White core near the middle of the quad, fading to the accent colour outward.
   float core = 1.0 - smoothstep(0.0, 0.6, r);
-  vec3 tint = mix(uAccent, uAccentA, step(0.5, vMix));
+  float mixT = smoothstep(0.15, 0.85, vMix);
+  vec3 midTone = (uAccent + uAccentA) * 0.5;
+  vec3 baseGradient = mixT < 0.5 ? mix(uAccent, midTone, mixT * 2.0) : mix(midTone, uAccentA, (mixT - 0.5) * 2.0);
+  vec3 irid = 0.5 + 0.5 * cos(6.2831853 * (mixT + vec3(0.0, 0.33, 0.67)));
+  vec3 tint = mix(baseGradient, irid, 0.15);
   vec3 colour = mix(tint, vec3(1.0), core);
 
   // NOTE(spec): hue shift is skipped at uHue == 0.0 so the default output is unchanged.
@@ -72,6 +78,8 @@ void main() {
   if (uTexOn > 0.5) {
     level *= max(0.0, 1.0 + uTexGain * (texture(uTexHigh, vec2(vTwinkle, 0.5)).r - 0.5));
   }
-  vec3 out_colour = colour * shape * uBrightness * level;
-  fragColor = vec4(min(out_colour, vec3(0.9)), 1.0);
+  float beatGlow = 1.0 + 0.35 * uKickEnv * uBeatReactivity;
+  vec3 out_colour = colour * shape * uBrightness * level * beatGlow;
+  float a = clamp(max(out_colour.r, max(out_colour.g, out_colour.b)), 0.0, 1.0);
+  fragColor = vec4(min(out_colour, vec3(0.95)), a);
 }

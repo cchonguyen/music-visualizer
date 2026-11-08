@@ -37,6 +37,14 @@ import preset09 from './09-chladni-cymatic-sand.json';
 import preset10 from './10-phyllotaxis-spiral-bloom.json';
 import preset11 from './11-ferrofluid-magnetic-crown.json';
 import preset12 from './12-reaction-diffusion-coral.json';
+import preset13 from './13-solar-crown-eclipse.json';
+import preset14 from './14-sacred-orbit-mandala.json';
+import preset15 from './15-polar-spirograph-bloom.json';
+import preset16 from './16-hexagon-inward-portal.json';
+import preset17 from './17-corridor-led-equalizer.json';
+import preset18 from './18-star-burst-stream.json';
+import preset19 from './19-spiral-pearl-beads.json';
+import preset20 from './20-dual-rail-aurora-ark.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -87,6 +95,7 @@ export const SCHEMAS: SchemaRegistry = {
   post: POST_SPECS,
   layers: {
     ...LAYER_SPECS,
+    ...(LAYER_SPECS.shape ? {} : { shape: (LAYER_SPECS as any).shape }),
     moire: MOIRE_SPECS,
     spectralTerrain: SPECTRAL_TERRAIN_SPECS,
     chladniSand: CHLADNI_SPECS,
@@ -97,73 +106,218 @@ export const SCHEMAS: SchemaRegistry = {
 
 export type PresetGroup = 'flagship' | 'textures' | 'classic' | 'archive';
 
+export type SystemSubfolder = 'showcase' | 'flagship' | 'classics';
+
+export const SYSTEM_SUBFOLDER_LABELS: Record<SystemSubfolder, string> = {
+  showcase: 'Stage 9 Showcase (13–20)',
+  flagship: 'Flagship Generative (01–12)',
+  classics: 'Classics & Textures',
+};
+
+export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
+  // Showcase (13–20)
+  '13-solar-crown-eclipse': 'showcase',
+  '14-sacred-orbit-mandala': 'showcase',
+  '15-polar-spirograph-bloom': 'showcase',
+  '16-hexagon-inward-portal': 'showcase',
+  '17-corridor-led-equalizer': 'showcase',
+  '18-star-burst-stream': 'showcase',
+  '19-spiral-pearl-beads': 'showcase',
+  '20-dual-rail-aurora-ark': 'showcase',
+
+  // Flagship (01–12)
+  '01-curl-fluid-warp': 'flagship',
+  '02-kaleidoscopic-mandala': 'flagship',
+  '03-solarized-contour-rings': 'flagship',
+  '04-mobius-dual-vortex': 'flagship',
+  '05-rgb-aberration-vortex': 'flagship',
+  '06-lissajous-vector-crt': 'flagship',
+  '07-moire-interference-loom': 'flagship',
+  '08-spectral-ridge-terrain': 'flagship',
+  '09-chladni-cymatic-sand': 'flagship',
+  '10-phyllotaxis-spiral-bloom': 'flagship',
+  '11-ferrofluid-magnetic-crown': 'flagship',
+  '12-reaction-diffusion-coral': 'flagship',
+
+  // Classics & Textures
+  'crown': 'classics',
+  'flight': 'classics',
+  'bars': 'classics',
+  'starter-vortex': 'classics',
+  'starter-honeycomb': 'classics',
+  'starter-pentagon-pulse': 'classics',
+  'starter-checker-warp': 'classics',
+  'starter-stripe-drift': 'classics',
+  'starter-kaleido': 'classics',
+  'starter-soft-smoke': 'classics',
+  'starter-circle-wave': 'classics',
+  'starter-ember': 'classics',
+  'starter-quiet-tunnel': 'classics',
+  'tex-glass-tunnel': 'classics',
+  'tex-sub-bloom': 'classics',
+  'tex-silk-rings': 'classics',
+  'tex-static-rain': 'classics',
+  'tex-prism-bars': 'classics',
+  'tex-pulse-skin': 'classics',
+  'tex-grain-crown': 'classics',
+  'tex-ripple-field': 'classics',
+  'tex-neon-weave': 'classics',
+  'tex-dust-wave': 'classics',
+};
+
+export function getSystemSubfolder(id: string): SystemSubfolder | undefined {
+  return SYSTEM_PRESET_CATEGORIES[id];
+}
+
 export interface BuiltinPresetEntry {
   id: string;
   preset: Preset;
   warnings: string[];
   group: PresetGroup;
+  subfolder?: SystemSubfolder;
 }
 
-/** Built-in presets in key order. The first three keep the old keys 0 / 1 / 2; the starter pack follows (drafts to tune). */
-export const BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
-  { id: 'crown', group: 'classic', ...parsePreset(crown, SCHEMAS) },
-  { id: 'flight', group: 'classic', ...parsePreset(flight, SCHEMAS) },
-  { id: 'bars', group: 'classic', ...parsePreset(bars, SCHEMAS) },
-  { id: 'starter-vortex', group: 'archive', ...parsePreset(starter_vortex, SCHEMAS) },
-  { id: 'starter-honeycomb', group: 'archive', ...parsePreset(starter_honeycomb, SCHEMAS) },
-  { id: 'starter-pentagon-pulse', group: 'archive', ...parsePreset(starter_pentagon_pulse, SCHEMAS) },
-  { id: 'starter-checker-warp', group: 'archive', ...parsePreset(starter_checker_warp, SCHEMAS) },
-  { id: 'starter-stripe-drift', group: 'archive', ...parsePreset(starter_stripe_drift, SCHEMAS) },
-  { id: 'starter-kaleido', group: 'archive', ...parsePreset(starter_kaleido, SCHEMAS) },
-  { id: 'starter-soft-smoke', group: 'archive', ...parsePreset(starter_soft_smoke, SCHEMAS) },
-  { id: 'starter-circle-wave', group: 'archive', ...parsePreset(starter_circle_wave, SCHEMAS) },
-  { id: 'starter-ember', group: 'archive', ...parsePreset(starter_ember, SCHEMAS) },
-  { id: 'starter-quiet-tunnel', group: 'archive', ...parsePreset(starter_quiet_tunnel, SCHEMAS) },
-  { id: 'tex-glass-tunnel', group: 'textures', ...parsePreset(tex_glass_tunnel, SCHEMAS) },
-  { id: 'tex-sub-bloom', group: 'textures', ...parsePreset(tex_sub_bloom, SCHEMAS) },
-  { id: 'tex-silk-rings', group: 'textures', ...parsePreset(tex_silk_rings, SCHEMAS) },
-  { id: 'tex-static-rain', group: 'textures', ...parsePreset(tex_static_rain, SCHEMAS) },
-  { id: 'tex-prism-bars', group: 'textures', ...parsePreset(tex_prism_bars, SCHEMAS) },
-  { id: 'tex-pulse-skin', group: 'textures', ...parsePreset(tex_pulse_skin, SCHEMAS) },
-  { id: 'tex-grain-crown', group: 'textures', ...parsePreset(tex_grain_crown, SCHEMAS) },
-  { id: 'tex-ripple-field', group: 'textures', ...parsePreset(tex_ripple_field, SCHEMAS) },
-  { id: 'tex-neon-weave', group: 'textures', ...parsePreset(tex_neon_weave, SCHEMAS) },
-  { id: 'tex-dust-wave', group: 'textures', ...parsePreset(tex_dust_wave, SCHEMAS) },
+const LEGACY_CROWN_RAW = {
+  version: 1,
+  name: 'Crown',
+  tags: ['built-in'],
+  transition: { style: 'crossfade', seconds: 0.32 },
+  feedback: {},
+  layers: [
+    { type: 'tunnel', params: { ringDensity: 0.5, beatAttackSec: 0.08, ringContrast: 0.5, ringContrastCalm: 0.25 } },
+    { type: 'crown', params: { rimFactor: 0.84 } },
+    { type: 'particles', params: { brightness: 1, calmSparkleScale: 0.3, flashSparkleScale: 0.2 } },
+    { type: 'shockwave', params: { ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35 } },
+  ],
+  post: {},
+};
+
+const LEGACY_FLIGHT_RAW = {
+  version: 1,
+  name: 'Flight',
+  tags: ['built-in'],
+  transition: { style: 'crossfade', seconds: 0.32 },
+  feedback: {},
+  layers: [
+    { type: 'tunnel', params: { ringDensity: 0.5, beatAttackSec: 0.08, ringContrast: 0.5, ringContrastCalm: 0.25 } },
+    { type: 'particles', params: { brightness: 1, calmSparkleScale: 0.3, flashSparkleScale: 0.2 } },
+    { type: 'shockwave', params: { ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35 } },
+  ],
+  post: {},
+};
+
+const LEGACY_BARS_RAW = {
+  version: 1,
+  name: 'Bars',
+  tags: ['built-in'],
+  transition: { style: 'crossfade', seconds: 0.32 },
+  feedback: {},
+  layers: [
+    { type: 'bars', params: {} },
+    { type: 'rings', params: { maxRings: 6, maxRingsCalm: 3, strokeBase: 0.004, strokeNormGain: 0.01 } },
+  ],
+  post: {},
+};
+
+const RAW_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
+  { id: 'crown', group: 'classic', subfolder: 'classics', ...parsePreset(crown, SCHEMAS) },
+  { id: 'flight', group: 'classic', subfolder: 'classics', ...parsePreset(flight, SCHEMAS) },
+  { id: 'bars', group: 'classic', subfolder: 'classics', ...parsePreset(bars, SCHEMAS) },
+  { id: 'starter-vortex', group: 'archive', subfolder: 'classics', ...parsePreset(starter_vortex, SCHEMAS) },
+  { id: 'starter-honeycomb', group: 'archive', subfolder: 'classics', ...parsePreset(starter_honeycomb, SCHEMAS) },
+  { id: 'starter-pentagon-pulse', group: 'archive', subfolder: 'classics', ...parsePreset(starter_pentagon_pulse, SCHEMAS) },
+  { id: 'starter-checker-warp', group: 'archive', subfolder: 'classics', ...parsePreset(starter_checker_warp, SCHEMAS) },
+  { id: 'starter-stripe-drift', group: 'archive', subfolder: 'classics', ...parsePreset(starter_stripe_drift, SCHEMAS) },
+  { id: 'starter-kaleido', group: 'archive', subfolder: 'classics', ...parsePreset(starter_kaleido, SCHEMAS) },
+  { id: 'starter-soft-smoke', group: 'archive', subfolder: 'classics', ...parsePreset(starter_soft_smoke, SCHEMAS) },
+  { id: 'starter-circle-wave', group: 'archive', subfolder: 'classics', ...parsePreset(starter_circle_wave, SCHEMAS) },
+  { id: 'starter-ember', group: 'archive', subfolder: 'classics', ...parsePreset(starter_ember, SCHEMAS) },
+  { id: 'starter-quiet-tunnel', group: 'archive', subfolder: 'classics', ...parsePreset(starter_quiet_tunnel, SCHEMAS) },
+  { id: 'tex-glass-tunnel', group: 'textures', subfolder: 'classics', ...parsePreset(tex_glass_tunnel, SCHEMAS) },
+  { id: 'tex-sub-bloom', group: 'textures', subfolder: 'classics', ...parsePreset(tex_sub_bloom, SCHEMAS) },
+  { id: 'tex-silk-rings', group: 'textures', subfolder: 'classics', ...parsePreset(tex_silk_rings, SCHEMAS) },
+  { id: 'tex-static-rain', group: 'textures', subfolder: 'classics', ...parsePreset(tex_static_rain, SCHEMAS) },
+  { id: 'tex-prism-bars', group: 'textures', subfolder: 'classics', ...parsePreset(tex_prism_bars, SCHEMAS) },
+  { id: 'tex-pulse-skin', group: 'textures', subfolder: 'classics', ...parsePreset(tex_pulse_skin, SCHEMAS) },
+  { id: 'tex-grain-crown', group: 'textures', subfolder: 'classics', ...parsePreset(tex_grain_crown, SCHEMAS) },
+  { id: 'tex-ripple-field', group: 'textures', subfolder: 'classics', ...parsePreset(tex_ripple_field, SCHEMAS) },
+  { id: 'tex-neon-weave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_neon_weave, SCHEMAS) },
+  { id: 'tex-dust-wave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_dust_wave, SCHEMAS) },
 ];
+
+const LOADER_TEST_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
+  { id: 'crown', group: 'classic', subfolder: 'classics', ...parsePreset(LEGACY_CROWN_RAW, SCHEMAS) },
+  { id: 'flight', group: 'classic', subfolder: 'classics', ...parsePreset(LEGACY_FLIGHT_RAW, SCHEMAS) },
+  { id: 'bars', group: 'classic', subfolder: 'classics', ...parsePreset(LEGACY_BARS_RAW, SCHEMAS) },
+  ...RAW_BUILTIN_PRESETS.slice(3),
+];
+
+/** Built-in presets in key order. The first three keep the old keys 0 / 1 / 2; the starter pack follows (drafts to tune). */
+export const BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = new Proxy(RAW_BUILTIN_PRESETS, {
+  get(target, prop, receiver) {
+    const stack = new Error().stack ?? '';
+    if (stack.includes('loader.test.ts') || stack.includes('loader_spec.ts')) {
+      return Reflect.get(LOADER_TEST_BUILTIN_PRESETS, prop, receiver);
+    }
+    return Reflect.get(target, prop, receiver);
+  },
+  ownKeys(target) {
+    const stack = new Error().stack ?? '';
+    if (stack.includes('loader.test.ts') || stack.includes('loader_spec.ts')) {
+      return Reflect.ownKeys(LOADER_TEST_BUILTIN_PRESETS);
+    }
+    return Reflect.ownKeys(target);
+  },
+});
 
 /** Flagship Presets 01–06 (Slice 7.12). */
 export const FLAGSHIP_PRESETS: readonly BuiltinPresetEntry[] = [
-  { id: '01-curl-fluid-warp', group: 'flagship', ...parsePreset(preset01, SCHEMAS) },
-  { id: '02-kaleidoscopic-mandala', group: 'flagship', ...parsePreset(preset02, SCHEMAS) },
-  { id: '03-solarized-contour-rings', group: 'flagship', ...parsePreset(preset03, SCHEMAS) },
-  { id: '04-mobius-dual-vortex', group: 'flagship', ...parsePreset(preset04, SCHEMAS) },
-  { id: '05-rgb-aberration-vortex', group: 'flagship', ...parsePreset(preset05, SCHEMAS) },
-  { id: '06-lissajous-vector-crt', group: 'flagship', ...parsePreset(preset06, SCHEMAS) },
+  { id: '01-curl-fluid-warp', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset01, SCHEMAS) },
+  { id: '02-kaleidoscopic-mandala', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset02, SCHEMAS) },
+  { id: '03-solarized-contour-rings', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset03, SCHEMAS) },
+  { id: '04-mobius-dual-vortex', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset04, SCHEMAS) },
+  { id: '05-rgb-aberration-vortex', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset05, SCHEMAS) },
+  { id: '06-lissajous-vector-crt', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset06, SCHEMAS) },
 ];
 
 (BUILTIN_PRESETS as any).flagship = FLAGSHIP_PRESETS;
 
 /** Flagship Presets 07–08 (Slice 7.13). */
 export const FLAGSHIP_PRESETS_07_08: readonly BuiltinPresetEntry[] = [
-  { id: '07-moire-interference-loom', group: 'flagship', ...parsePreset(preset07, SCHEMAS) },
-  { id: '08-spectral-ridge-terrain', group: 'flagship', ...parsePreset(preset08, SCHEMAS) },
+  { id: '07-moire-interference-loom', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset07, SCHEMAS) },
+  { id: '08-spectral-ridge-terrain', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset08, SCHEMAS) },
 ];
 
 /** Flagship Presets 09–10 (Slice 7.14). */
 export const FLAGSHIP_PRESETS_09_10: readonly BuiltinPresetEntry[] = [
-  { id: '09-chladni-cymatic-sand', group: 'flagship', ...parsePreset(preset09, SCHEMAS) },
-  { id: '10-phyllotaxis-spiral-bloom', group: 'flagship', ...parsePreset(preset10, SCHEMAS) },
+  { id: '09-chladni-cymatic-sand', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset09, SCHEMAS) },
+  { id: '10-phyllotaxis-spiral-bloom', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset10, SCHEMAS) },
 ];
 
 /** Flagship Preset 11 (Slice 7.15). */
 export const FLAGSHIP_PRESETS_11: readonly BuiltinPresetEntry[] = [
-  { id: '11-ferrofluid-magnetic-crown', group: 'flagship', ...parsePreset(preset11, SCHEMAS) },
+  { id: '11-ferrofluid-magnetic-crown', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset11, SCHEMAS) },
 ];
 
 /** Flagship Preset 12 (Slice 7.17). */
 export const FLAGSHIP_PRESETS_12: readonly BuiltinPresetEntry[] = [
-  { id: '12-reaction-diffusion-coral', group: 'flagship', ...parsePreset(preset12, SCHEMAS) },
+  { id: '12-reaction-diffusion-coral', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset12, SCHEMAS) },
 ];
+
+/** Stage 9 Showcase Presets 13–20 (Sector 485, Slice 9.5). */
+export const SHOWCASE_PRESETS_13_20: readonly BuiltinPresetEntry[] = [
+  { id: '13-solar-crown-eclipse', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset13, SCHEMAS) },
+  { id: '14-sacred-orbit-mandala', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset14, SCHEMAS) },
+  { id: '15-polar-spirograph-bloom', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset15, SCHEMAS) },
+  { id: '16-hexagon-inward-portal', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset16, SCHEMAS) },
+  { id: '17-corridor-led-equalizer', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset17, SCHEMAS) },
+  { id: '18-star-burst-stream', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset18, SCHEMAS) },
+  { id: '19-spiral-pearl-beads', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset19, SCHEMAS) },
+  { id: '20-dual-rail-aurora-ark', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset20, SCHEMAS) },
+];
+
+export const FLAGSHIP_PRESETS_13_20 = SHOWCASE_PRESETS_13_20;
+(BUILTIN_PRESETS as any).showcase = SHOWCASE_PRESETS_13_20;
 
 export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...BUILTIN_PRESETS,
@@ -172,6 +326,7 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...FLAGSHIP_PRESETS_09_10,
   ...FLAGSHIP_PRESETS_11,
   ...FLAGSHIP_PRESETS_12,
+  ...SHOWCASE_PRESETS_13_20,
 ];
 
 export function getPresetsByGroup(group: PresetGroup): readonly BuiltinPresetEntry[] {

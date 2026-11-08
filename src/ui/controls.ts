@@ -3,11 +3,65 @@
 import type { AudioEngine, SourceKind } from '../audio/engine';
 import type { TestSignal } from '../audio/testSignals';
 import { showNotice } from './notices';
+import { showToast } from './toast';
 import { cyclePalette } from '../render/paletteStore';
 import { getVisualGain, setVisualGain } from '../render/gainStore';
 import { getBeatSensitivity, setBeatSensitivity } from '../audio/onset';
 import { getRenderScale, RENDER_SCALES, setRenderScale } from '../gl/size';
 import { getAspectCorrect, setAspectCorrect } from '../render/compositor';
+import {
+  getGlobalDirector,
+  DIRECTOR_PALETTES,
+  type ExperienceMode,
+  type CameraMode,
+  type ColorMood,
+} from '../render/globalDirector';
+
+export const EXPERIENCE_LABELS: Record<string, string> = {
+  cinematic: 'Cinematic',
+  calm: 'Calm',
+  minimal: 'Minimal',
+  colorWalk: 'Color Walk',
+  custom: 'Custom',
+};
+
+export interface ExperienceToastInfo {
+  title: string;
+  detail: string;
+  swatch: [[number, number, number], [number, number, number]];
+}
+
+export const EXPERIENCE_TOAST_DATA: Record<string, ExperienceToastInfo> = {
+  cinematic: {
+    title: 'Mode: Cinematic',
+    detail: 'Auto Camera · Dynamic Color',
+    swatch: [DIRECTOR_PALETTES.cyberpunk.shadowTint, DIRECTOR_PALETTES.cyberpunk.highlightTint],
+  },
+  calm: {
+    title: 'Mode: Calm',
+    detail: 'Still Anchor · Bioluminescent',
+    swatch: [DIRECTOR_PALETTES.biolum.shadowTint, DIRECTOR_PALETTES.biolum.highlightTint],
+  },
+  minimal: {
+    title: 'Mode: Minimal',
+    detail: 'Camera Off · Native Color',
+    swatch: [[0.2, 0.2, 0.2], [0.8, 0.8, 0.8]],
+  },
+  colorWalk: {
+    title: 'Mode: Color Walk',
+    detail: 'Still Anchor · Prismatic Color',
+    swatch: [DIRECTOR_PALETTES.prismatic.shadowTint, DIRECTOR_PALETTES.prismatic.highlightTint],
+  },
+};
+
+export function triggerExperienceToast(mode: ExperienceMode): void {
+  const info = EXPERIENCE_TOAST_DATA[mode];
+  if (info) {
+    showToast(info.title, { detail: info.detail, swatch: info.swatch });
+  } else {
+    showToast(`Mode: ${EXPERIENCE_LABELS[mode] ?? mode}`);
+  }
+}
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -93,6 +147,19 @@ export interface ControlsState {
   fileName: string;
 }
 
+/** Returns true if the target is an editable form control or contenteditable element. */
+export function isEditableTarget(target: EventTarget | null): boolean {
+  if (!target) return false;
+  const el = target as Partial<HTMLElement>;
+  const tag = el.tagName?.toUpperCase();
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return true;
+  if (el.isContentEditable) return true;
+  if (typeof (target as Element).closest === 'function') {
+    return Boolean((target as Element).closest('input, select, textarea, [contenteditable="true"], [contenteditable=""]'));
+  }
+  return false;
+}
+
 export function setupControls(engine: AudioEngine, state: ControlsState): { tick(): void } {
   const controls = $<HTMLElement>('controls');
   const fileInput = $<HTMLInputElement>('file-input');
@@ -102,7 +169,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const seek = $<HTMLInputElement>('seek');
   const time = $<HTMLSpanElement>('time');
   const volume = $<HTMLInputElement>('volume');
-  const calm = $<HTMLInputElement>('calm');
+  const calm = document.getElementById('calm') as HTMLInputElement | null;
   const fsBtn = $<HTMLButtonElement>('fs-btn');
   const sourceLabel = $<HTMLSpanElement>('source-label');
   const playback = $<HTMLElement>('playback');
@@ -110,7 +177,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   controls.hidden = false;
   engine.setVolume(Number(volume.value));
-  calm.checked = state.calm;
+  if (calm) calm.checked = state.calm;
 
   const loadFile = (file: File | undefined) => {
     if (!file) return;
@@ -179,7 +246,131 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     engine.setVolume(Number(volume.value));
     syncVolumeText();
   });
-  calm.addEventListener('change', () => (state.calm = calm.checked));
+  if (calm) {
+    calm.addEventListener('change', () => {
+      state.calm = calm.checked;
+      getGlobalDirector().setCalm(calm.checked);
+    });
+  }
+
+  // Experience Mode & Global Director HUD (Slice 8.2)
+  const experienceLabel = document.getElementById('experience-label') as HTMLSpanElement | null;
+  const modeButtons = controls ? [...controls.querySelectorAll<HTMLButtonElement>('.exp-mode-btn')] : [];
+  const expCameraSelect = document.getElementById('exp-camera-select') as HTMLSelectElement | null;
+  const expColorSelect = document.getElementById('exp-color-select') as HTMLSelectElement | null;
+  const expExportBtn = document.getElementById('exp-export-btn') as HTMLButtonElement | null;
+  const expImportInput = document.getElementById('exp-import-input') as HTMLInputElement | null;
+
+  const syncExperienceUI = (mode?: ExperienceMode) => {
+    const director = getGlobalDirector();
+    const currentMode = mode ?? director.getExperienceMode();
+    state.calm = director.isCalm();
+    if (calm) calm.checked = state.calm;
+    if (experienceLabel) {
+      experienceLabel.textContent = `Experience: ${EXPERIENCE_LABELS[currentMode] ?? currentMode}`;
+    }
+    for (const btn of modeButtons) {
+      const isActive = btn.dataset.mode === currentMode;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', String(isActive));
+    }
+    const settings = director.getSettings();
+    if (expCameraSelect) expCameraSelect.value = settings.cameraMode;
+    if (expColorSelect) expColorSelect.value = settings.colorMood;
+  };
+
+  syncExperienceUI();
+
+  for (const btn of modeButtons) {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode as ExperienceMode | undefined;
+      if (!mode) return;
+      getGlobalDirector().setExperienceMode(mode);
+      syncExperienceUI(mode);
+      triggerExperienceToast(mode);
+    });
+  }
+
+  expCameraSelect?.addEventListener('change', () => {
+    getGlobalDirector().updateSettings({ cameraMode: expCameraSelect.value as CameraMode });
+    syncExperienceUI();
+  });
+
+  expColorSelect?.addEventListener('change', () => {
+    getGlobalDirector().updateSettings({ colorMood: expColorSelect.value as ColorMood });
+    syncExperienceUI();
+  });
+
+  expExportBtn?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('export-experience-look', { bubbles: true }));
+  });
+
+  expImportInput?.addEventListener('change', () => {
+    const file = expImportInput.files?.[0];
+    if (file) {
+      window.dispatchEvent(new CustomEvent('import-experience-look', { detail: { file }, bubbles: true }));
+      expImportInput.value = '';
+    }
+  });
+
+  getGlobalDirector().subscribeExperienceChange((mode) => {
+    syncExperienceUI(mode);
+  });
+
+  // Global Director HUD mode (slice 7.32). Optional in test mock DOM.
+  const directorSelect = document.getElementById('director-mode') as HTMLSelectElement | null;
+  if (directorSelect) {
+    const s = getGlobalDirector().getSettings();
+    if (s.cameraMode === 'off' && s.colorMood === 'native') {
+      directorSelect.value = 'off';
+    } else if (s.cameraMode === 'off') {
+      directorSelect.value = 'colorOnly';
+    } else if (s.colorMood === 'native') {
+      directorSelect.value = 'cameraOnly';
+    } else if (s.cameraIntensity <= 0.35 && s.colorIntensity <= 0.3) {
+      directorSelect.value = 'subtle';
+    } else {
+      directorSelect.value = 'auto';
+    }
+
+    directorSelect.addEventListener('change', () => {
+      const mode = directorSelect.value;
+      if (mode === 'auto') {
+        getGlobalDirector().updateSettings({
+          cameraMode: 'auto',
+          cameraIntensity: 0.65,
+          colorMood: 'auto',
+          colorIntensity: 0.45,
+        });
+      } else if (mode === 'subtle') {
+        getGlobalDirector().updateSettings({
+          cameraMode: 'auto',
+          cameraIntensity: 0.3,
+          colorMood: 'auto',
+          colorIntensity: 0.25,
+        });
+      } else if (mode === 'cameraOnly') {
+        const cur = getGlobalDirector().getSettings();
+        getGlobalDirector().updateSettings({
+          cameraMode: 'auto',
+          cameraIntensity: cur.cameraIntensity > 0 ? cur.cameraIntensity : 0.65,
+          colorMood: 'native',
+        });
+      } else if (mode === 'colorOnly') {
+        const cur = getGlobalDirector().getSettings();
+        getGlobalDirector().updateSettings({
+          cameraMode: 'off',
+          colorMood: 'auto',
+          colorIntensity: cur.colorIntensity > 0 ? cur.colorIntensity : 0.45,
+        });
+      } else if (mode === 'off') {
+        getGlobalDirector().updateSettings({
+          cameraMode: 'off',
+          colorMood: 'native',
+        });
+      }
+    });
+  }
 
   // Beat sensitivity: higher means more onsets are reported as beats (slice 5.1). Markup is in index.html.
   const beatInput = $<HTMLInputElement>('beat-sensitivity');
@@ -360,9 +551,9 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
 
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // Let form controls and text inputs keep their own keys.
+    if (isEditableTarget(e.target)) return;
     const tag = (e.target as HTMLElement | null)?.tagName;
-    // Let form controls keep their own keys (e.g. arrows on sliders).
-    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     // While the list is open, only ? (close) and Esc (native) act; no other key should play or switch.
     if (shortcutsDialog.open) {
       if (e.key === '?') shortcutsDialog.close();
@@ -399,6 +590,13 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       case 'P':
         showNotice(`Palette: ${cyclePalette()}`, 'info', 2000);
         break;
+      case 'm':
+      case 'M': {
+        const nextMode = getGlobalDirector().cycleExperienceMode();
+        syncExperienceUI(nextMode);
+        triggerExperienceToast(nextMode);
+        break;
+      }
     }
   });
 

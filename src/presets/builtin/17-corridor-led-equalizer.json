@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "name": "Corridor LED Equalizer",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.91,
+    "decayRgb": [0.93, 0.93, 0.96]
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "opacity": 0.28,
+      "blend": "screen",
+      "params": {
+        "pattern": "grid",
+        "flightMode": "forward",
+        "sides": 4,
+        "ringDensity": 0.35,
+        "ringContrast": 0.45,
+        "swirlPulse": 0.0,
+        "wallTexture": 0.4
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "edgeLine",
+        "edgeMode": "dualHorizontal",
+        "effectType": "segmentedBars",
+        "sampleCount": 64,
+        "ledSegments": 12,
+        "peakCaps": true,
+        "barGap": 0.25,
+        "effectLength": 0.42,
+        "extrudeDirection": "outward",
+        "symmetry": "wrap",
+        "audioSource": "spectrum",
+        "colorMode": "frequencyGradient",
+        "glow": 0.6
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.6,
+    "crtScanlines": 0.2
+  }
+}

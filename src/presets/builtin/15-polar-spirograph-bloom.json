@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "Polar Spirograph Bloom",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "zoom": 1.02,
+    "rotate": 0.008,
+    "decay": 0.93,
+    "decayRgb": [0.95, 0.92, 0.97]
+  },
+  "layers": [
+    {
+      "type": "particles",
+      "opacity": 0.35,
+      "blend": "add",
+      "params": {
+        "shape": "dot",
+        "brightness": 0.85,
+        "calmSparkleScale": 0.25,
+        "flashSparkleScale": 0.2,
+        "swirlGain": 0.8,
+        "size": 1.8
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "figure8",
+        "effectType": "waveform",
+        "sampleCount": 96,
+        "thickness": 2.2,
+        "size": 0.35,
+        "propMode": "polar",
+        "propCount": 12,
+        "propSpacing": 0.25,
+        "propSpeed": 0.45,
+        "propSelfSpin": 0.2,
+        "symmetry": "mirror",
+        "audioSource": "waveform",
+        "colorMode": "palette",
+        "glow": 0.7
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.7
+  }
+}

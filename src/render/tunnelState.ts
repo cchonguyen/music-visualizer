@@ -5,6 +5,8 @@
 // freely without the camera jumping backward.
 
 import { Phase } from './clock';
+import type { AudioFrame } from '../audio/types';
+import type { TunnelParams } from '../presets/layerSchemas';
 
 /** Steady flight speed, in depth units per second. */
 export const BASE_SPEED = 0.3;
@@ -139,3 +141,120 @@ export class FlightState {
     this.phase.reset();
   }
 }
+
+export interface StepTunnelFrame {
+  time?: number;
+  energy?: number;
+  sectionContrast?: number;
+  sub?: number;
+  kick?: number;
+  norm?: {
+    sub?: number;
+    kick?: number;
+    [key: string]: number | undefined;
+  };
+  beatByBand?: {
+    sub?: boolean;
+    [key: string]: boolean | undefined;
+  };
+  [key: string]: unknown;
+}
+
+export interface StepTunnelParams extends Partial<TunnelParams> {
+  calm?: boolean;
+  scale?: number;
+  [key: string]: unknown;
+}
+
+/** Tunnel state tracking breakdown flight reversal, velocity slew, and horizon sway. */
+export class TunnelState {
+  flightSign: number = 1;
+  velocityMultiplier: number = 1;
+  reverseCooldownSec: number = 18;
+  reverseHoldSec: number = 0;
+  horizonSwayPhase: number = 0;
+  vanishX: number = 0;
+  vanishY: number = 0;
+  forwardPhase: number = 0;
+  slewEnergy: number = 0;
+
+  constructor(init?: Partial<TunnelState>) {
+    if (init) Object.assign(this, init);
+  }
+}
+
+export function createTunnelState(init?: Partial<TunnelState>): TunnelState {
+  return new TunnelState(init);
+}
+
+/**
+ * Step tunnel motion, breakdown reversal timing, velocity smoothing, and horizon sway.
+ */
+export function stepTunnel(
+  state: TunnelState,
+  frame: StepTunnelFrame | AudioFrame | any,
+  dt: number,
+  params: StepTunnelParams = {},
+): { forwardDelta: number; forwardPhase: number } {
+  const dtSec = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+  const sub = frame?.norm?.sub ?? frame?.sub ?? 0;
+  state.reverseCooldownSec += dtSec;
+  state.horizonSwayPhase += dtSec * (0.45 + sub * 0.85);
+
+  // Horizontal and vertical vanishing-point sway disabled: rock-solid dead-center
+  state.vanishX = 0;
+  state.vanishY = 0;
+
+  const flightMode = params.flightMode ?? 'dropReverse';
+  const reverseOnBreakdown = params.reverseOnBreakdown !== false;
+
+  let target: number;
+
+  if (flightMode === 'forward' || (!reverseOnBreakdown && flightMode === 'dropReverse')) {
+    target = 1.0;
+  } else if (flightMode === 'reverse') {
+    target = -0.75;
+  } else if (flightMode === 'pendulum') {
+    const t = frame?.time ?? 0;
+    target = Math.sin(t * 0.28);
+  } else {
+    // flightMode === 'dropReverse' with reverseOnBreakdown !== false
+    const contrast = frame?.sectionContrast ?? 0;
+    const energy = frame?.energy ?? 0;
+    const kick = frame?.norm?.kick ?? frame?.kick ?? 0;
+
+    if (state.flightSign > 0) {
+      if (state.reverseCooldownSec >= 18.0 && (contrast < -0.06 || energy < 0.18)) {
+        state.flightSign = -1;
+        state.reverseCooldownSec = 0;
+        state.reverseHoldSec = 4.5;
+      }
+    } else {
+      state.reverseHoldSec = Math.max(0, state.reverseHoldSec - dtSec);
+      if (state.reverseHoldSec <= 0 && (kick > 0.45 || contrast > 0.05 || state.reverseCooldownSec >= 8.0)) {
+        state.flightSign = 1;
+        state.reverseCooldownSec = 0;
+      }
+    }
+    target = state.flightSign > 0 ? 1.0 : -0.65;
+  }
+
+  // Smoothly slew velocityMultiplier toward target with 1.4s time constant
+  const alpha = dtSec > 0 ? 1 - Math.exp(-dtSec / 1.4) : 0;
+  state.velocityMultiplier += (target - state.velocityMultiplier) * alpha;
+
+  // Smooth energy for flightRate with a 250ms inertia follower so forward speed accelerates and coasts smoothly
+  const rawEnergy = clamp01(frame?.energy ?? 0);
+  const energyAlpha = dtSec > 0 ? 1 - Math.exp(-dtSec / 0.25) : 0;
+  state.slewEnergy = (state.slewEnergy ?? 0) + (rawEnergy - (state.slewEnergy ?? 0)) * energyAlpha;
+
+  // Multiply forward delta by state.velocityMultiplier
+  const calm = params.calm ?? false;
+  const scale = params.scale ?? 1;
+  const baseRate = flightRate(state.slewEnergy, calm, scale);
+  const forwardDelta = dtSec * baseRate * state.velocityMultiplier;
+  state.forwardPhase += forwardDelta;
+
+  return { forwardDelta, forwardPhase: state.forwardPhase };
+}
+

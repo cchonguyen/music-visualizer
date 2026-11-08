@@ -10,17 +10,33 @@
   },
   "layers": [
     {
-      "type": "waveform",
+      "type": "shape",
       "params": {
-        "mode": "star7",
-        "amplitude": 1.0
+        "baseShape": "star",
+        "sides": 7,
+        "starInner": 0.5,
+        "size": 0.45,
+        "effectType": "waveform",
+        "thickness": 2.2,
+        "effectLength": 0.35,
+        "reactivity": 1.0,
+        "audioSource": "waveform",
+        "colorMode": "palette",
+        "symmetry": "wrap",
+        "propMode": "single"
       }
     },
     {
-      "type": "shockwave",
+      "type": "shape",
       "params": {
-        "style": "ring",
-        "ringSec": 0.4
+        "baseShape": "circle",
+        "effectType": "solidLine",
+        "propMode": "shockwave",
+        "propSpeed": 0.875,
+        "thickness": 3.0,
+        "glow": 0.8,
+        "audioSource": "sub",
+        "colorMode": "palette"
       }
     }
   ],

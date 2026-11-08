@@ -18,6 +18,9 @@ import { BrightnessLimiter } from '../safety';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderTarget } from '../layer';
+import { getTerrainState, setTerrainState, clearTerrainState } from '../terrainStore';
+import { ParticleLayer } from '../layers/particles';
+import { Scene } from '../scene';
 
 function createMockGl(): WebGL2RenderingContext {
   const activeTextures: number[] = [];
@@ -107,11 +110,16 @@ function createMockGl(): WebGL2RenderingContext {
     useProgram: vi.fn(),
     getUniformLocation: vi.fn().mockImplementation((_prog, name) => ({ name })),
     uniform1f: vi.fn(),
+    uniform1fv: vi.fn(),
     uniform1i: vi.fn(),
     uniform2f: vi.fn(),
     uniform3f: vi.fn(),
     uniform3fv: vi.fn(),
     uniformMatrix4fv: vi.fn(),
+    getExtension: vi.fn().mockReturnValue(null),
+    checkFramebufferStatus: vi.fn().mockReturnValue(0x8cd5),
+    framebufferTexture2D: vi.fn(),
+    drawArraysInstanced: vi.fn(),
     drawArrays: vi.fn(),
   };
 
@@ -126,6 +134,11 @@ function createDummyAudioFrame(): AudioFrame {
   return {
     waveform: new Float32Array(512),
     spectrum,
+    bandWaveforms: {
+      sub: new Float32Array(128),
+      mid: new Float32Array(128),
+      high: new Float32Array(128),
+    },
     sampleRate: 48000,
     bands: { sub: 0.7, bass: 0.6, mid: 0.5, high: 0.4 },
     norm: { sub: 0.65, bass: 0.55, mid: 0.45, high: 0.35 },
@@ -176,6 +189,14 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_mid');
     expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_sub');
     expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'u_kickEnv');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uContrast');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uWaveShape');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uColorSpread');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uPatternMode');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uAudioWarp');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uLayerOpacity');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uColorA');
+    expect(gl.getUniformLocation).toHaveBeenCalledWith(expect.anything(), 'uColorB');
   });
 
   it('draws fullscreen quad and passes audio/kickEnv uniforms', () => {
@@ -184,7 +205,7 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     layer.init(gl);
 
     const frame = createDummyAudioFrame();
-    layer.draw(frame, dummyClock, dummyTarget);
+    layer.draw(frame, dummyClock, dummyTarget, { uLayerOpacity: 0.85 });
 
     expect(gl.useProgram).toHaveBeenCalled();
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
@@ -194,6 +215,30 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_sub' }), frame.norm.sub);
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'u_kickEnv' }), frame.kickEnv);
     expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uScale' }), 32);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uContrast' }), 0.60);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uWaveShape' }), 0.25);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uColorSpread' }), 0.80);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uAudioWarp' }), 0.65);
+    expect(gl.uniform1i).toHaveBeenCalledWith(expect.objectContaining({ name: 'uPatternMode' }), 0);
+    expect(gl.uniform1f).toHaveBeenCalledWith(expect.objectContaining({ name: 'uLayerOpacity' }), 0.85);
+  });
+
+  it('supports all 4 Loom pattern modes and maps patternMode to integer uniforms', () => {
+    const gl = createMockGl();
+    const modes = [
+      { mode: 'starburstLoom' as const, expected: 0 },
+      { mode: 'twinCircles' as const, expected: 1 },
+      { mode: 'doubleSpirals' as const, expected: 2 },
+      { mode: 'warpedCrossGrid' as const, expected: 3 },
+    ];
+
+    const frame = createDummyAudioFrame();
+    for (const { mode, expected } of modes) {
+      const layer = new MoireLayer({ patternMode: mode });
+      layer.init(gl);
+      layer.draw(frame, dummyClock, dummyTarget);
+      expect(gl.uniform1i).toHaveBeenCalledWith(expect.objectContaining({ name: 'uPatternMode' }), expected);
+    }
   });
 
   it('enforces fwidth derivative anti-aliasing and spatial frequency caps in moire.frag.glsl (SYSTEM_SPEC.md:94)', () => {
@@ -207,6 +252,85 @@ describe('Slice 7.13: MoireLayer and moire.frag.glsl', () => {
     expect(moireFragSrc).toMatch(/0\.08/);
     // Must include radial phase inversion ring driven by kickEnv
     expect(moireFragSrc).toContain('u_kickEnv');
+    // Slice 7.25: stencil alpha and loom parameters
+    expect(moireFragSrc).toContain('uPatternMode');
+    expect(moireFragSrc).toContain('uLayerOpacity');
+    expect(moireFragSrc).toContain('uContrast');
+    expect(moireFragSrc).toContain('uWaveShape');
+    expect(moireFragSrc).toContain('uColorSpread');
+    expect(moireFragSrc).toContain('uAudioWarp');
+    expect(moireFragSrc).toMatch(/clamp\(moire \* uContrast,\s*0\.0,\s*1\.0\)\s*\* uLayerOpacity/);
+    expect(moireFragSrc).toContain('fragColor = vec4(col * a, a)');
+  });
+
+  it('binds uSceneTex on TEXTURE1 when provided via options.sceneTex (Slice 7.35)', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    const mockSceneTex = { id: 'mockSceneTex' } as unknown as WebGLTexture;
+    layer.draw(frame, dummyClock, dummyTarget, { sceneTex: mockSceneTex });
+
+    const activeUnits = (gl as any)._activeTextures;
+    expect(activeUnits).toContain(gl.TEXTURE1);
+    expect((gl as any)._boundTextures.get(gl.TEXTURE1)).toBe(mockSceneTex);
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uSceneTex' }),
+      1,
+    );
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uHasSceneTex' }),
+      1,
+    );
+  });
+
+  it('sets uHasSceneTex to 0 when sceneTex is not provided (Slice 7.35)', () => {
+    const gl = createMockGl();
+    const layer = new MoireLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uHasSceneTex' }),
+      0,
+    );
+  });
+
+  it('verifies moire.frag.glsl contains uSceneTex, uHasSceneTex, wide Nyquist roll-off, and refraction gradient (Slice 7.35)', () => {
+    expect(moireFragSrc).toContain('uniform sampler2D uSceneTex;');
+    expect(moireFragSrc).toContain('uniform int uHasSceneTex;');
+    expect(moireFragSrc).toContain('1.0 - fw * 0.12');
+    expect(moireFragSrc).toContain('max(freqDelta, 0.045)');
+    expect(moireFragSrc).toContain('dFdx(interference)');
+    expect(moireFragSrc).toContain('dFdy(interference)');
+    expect(moireFragSrc).toContain('mix(0.55, 1.65, interference)');
+  });
+
+  it('Scene passes snapshot texture to MoireLayer as sceneTex during draw (Slice 7.35)', () => {
+    const gl = createMockGl();
+    const moireLayer = new MoireLayer();
+    const drawSpy = vi.spyOn(moireLayer, 'draw');
+    const scene = new Scene('moireScene', [moireLayer]);
+    scene.init(gl);
+
+    const frame = createDummyAudioFrame();
+    scene.draw(frame, dummyClock);
+
+    expect(drawSpy).toHaveBeenCalledWith(
+      frame,
+      dummyClock,
+      expect.anything(),
+      expect.objectContaining({
+        sceneTex: expect.anything(),
+      }),
+    );
+    const lastCall = drawSpy.mock.calls[0];
+    const optionsPassed = lastCall?.[3] as any;
+    expect(optionsPassed?.sceneTex).not.toBeNull();
+    expect(optionsPassed?.sceneTex).toBeDefined();
   });
 
   it('disposes resources cleanly', () => {
@@ -335,9 +459,42 @@ describe('Slice 7.13: SpectralTerrainLayer and shaders', () => {
     // Line draw calls: LINE_STRIP with 128 vertices
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.LINE_STRIP, 0, TERRAIN_BINS);
 
-    // Blending enabled with SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+    // Blending enabled with ONE, ONE_MINUS_SRC_ALPHA for skirts and SRC_ALPHA, ONE for lines
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND);
-    expect(gl.blendFunc).toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE);
+  });
+
+  it('protects texture unit 0: never unbinds texture unit 0 during history upload or draw (Slice 7.38)', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    // Bind a dummy texture to TEXTURE0 before terrain draw
+    const dummyTex0 = { id: 'dummyTex0' } as unknown as WebGLTexture;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, dummyTex0);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    // Verify TEXTURE0 was never unbound (boundTexture for TEXTURE0 is still dummyTex0)
+    expect((gl as any)._boundTextures.get(gl.TEXTURE0)).toBe(dummyTex0);
+  });
+
+  it('defaults skirtOpacity to 0.15 and applies non-destructive skirt blendFunc (Slice 7.38)', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uSkirtOpacity' }),
+      0.15,
+    );
+    expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   });
 
   it('disposes all buffers, textures, and program', () => {
@@ -429,6 +586,13 @@ describe('Slice 7.13: Flagship Presets 07 and 08', () => {
     const moireLayer = p7.layers.find((l) => l.type === 'moire');
     expect(moireLayer).toBeDefined();
     expect(moireLayer!.enabled).toBe(true);
+    expect(moireLayer!.blend).toBe('max');
+    expect(moireLayer!.trails).toBe(false);
+    expect(moireLayer!.params.patternMode?.value).toBe('starburstLoom');
+    expect(moireLayer!.params.contrast?.value).toBe(0.65);
+    expect(moireLayer!.params.waveShape?.value).toBe(0.35);
+    expect(moireLayer!.params.colorSpread?.value).toBe(0.85);
+    expect(moireLayer!.params.audioWarp?.value).toBe(0.70);
 
     const scene = buildScene('test-07', p7);
     expect(scene.layers[0]).toBeInstanceOf(MoireLayer);
@@ -442,6 +606,10 @@ describe('Slice 7.13: Flagship Presets 07 and 08', () => {
     const terrainLayer = p8.layers.find((l) => l.type === 'spectralTerrain');
     expect(terrainLayer).toBeDefined();
     expect(terrainLayer!.enabled).toBe(true);
+    expect(terrainLayer!.blend).toBe('max');
+    expect(terrainLayer!.trails).toBe(true);
+    expect(terrainLayer!.params.skirtOpacity?.value).toBe(0.20);
+    expect(terrainLayer!.params.lineThickness?.value).toBe(2.2);
 
     const pulseLayer = p8.layers.find((l) => l.type === 'bassPulse');
     expect(pulseLayer).toBeDefined();
@@ -460,5 +628,132 @@ describe('Slice 7.13: Flagship Presets 07 and 08', () => {
       expect(cap).toBeGreaterThanOrEqual(0.15);
       expect(cap).toBeLessThanOrEqual(1.0);
     }
+  });
+});
+
+describe('Slice 7.27: Spectral Terrain Option A & Option B (terrainStore + displacement)', () => {
+  it('manages terrainStore get/set/clear per WebGL context', () => {
+    const gl = createMockGl();
+    const defaultState = getTerrainState(gl);
+    expect(defaultState.active).toBe(false);
+    expect(defaultState.historyTex).toBeNull();
+    expect(defaultState.writeRow).toBe(0);
+    expect(defaultState.rows).toBe(64);
+
+    const dummyTex = {} as WebGLTexture;
+    setTerrainState(gl, {
+      active: true,
+      historyTex: dummyTex,
+      writeRow: 12,
+      rows: 64,
+      terrainFlow: 0.45,
+    });
+
+    const activeState = getTerrainState(gl);
+    expect(activeState.active).toBe(true);
+    expect(activeState.historyTex).toBe(dummyTex);
+    expect(activeState.writeRow).toBe(12);
+    expect(activeState.terrainFlow).toBe(0.45);
+
+    clearTerrainState(gl);
+    const clearedState = getTerrainState(gl);
+    expect(clearedState.active).toBe(false);
+    expect(clearedState.historyTex).toBeNull();
+  });
+
+  it('SpectralTerrainLayer publishes active state to terrainStore on draw', () => {
+    const gl = createMockGl();
+    clearTerrainState(gl);
+    const layer = new SpectralTerrainLayer({ terrainFlow: 0.42 });
+    layer.init(gl);
+
+    const frame = createDummyAudioFrame();
+    layer.draw(frame, dummyClock, dummyTarget);
+
+    const state = getTerrainState(gl);
+    expect(state.active).toBe(true);
+    expect(state.historyTex).toBe(layer.getHistoryTexture());
+    expect(state.writeRow).toBe(layer.writeRow);
+    expect(state.rows).toBe(64);
+    expect(state.terrainFlow).toBe(0.42);
+  });
+
+  it('Scene biases feedback driftY downhill when terrain is active in previous frame (Option A)', () => {
+    const gl = createMockGl();
+    const terrainLayer = new SpectralTerrainLayer({ terrainFlow: 0.5 });
+    const scene = new Scene('terrainScene', [terrainLayer]);
+    scene.init(gl);
+
+    const frame = createDummyAudioFrame();
+    // Frame 1: terrain draws and publishes terrainState
+    scene.draw(frame, dummyClock);
+
+    // After Frame 1 draw, terrainStore has active: true and terrainFlow: 0.5
+    expect(getTerrainState(gl).active).toBe(true);
+
+    // Frame 2: Scene.draw reads previous frame's terrainState and clears it,
+    // applying downhill drift bias driftY -= 0.012 * terrainFlow = -0.006
+    scene.draw(frame, dummyClock);
+
+    expect(gl.uniform2f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uDrift' }),
+      0, // driftX
+      -0.006, // driftY biased by -0.012 * 0.5
+    );
+  });
+
+  it('ParticleLayer binds TEXTURE5 and uploads displacement uniforms when terrainDisplace > 0 (Option B)', () => {
+    const gl = createMockGl();
+    clearTerrainState(gl);
+
+    const mockTex = { id: 'terrainHistoryTex' } as unknown as WebGLTexture;
+    setTerrainState(gl, {
+      active: true,
+      historyTex: mockTex,
+      writeRow: 15,
+      rows: 64,
+      terrainFlow: 0.4,
+    });
+
+    const particles = new ParticleLayer({ terrainDisplace: 0.5 });
+    particles.init(gl);
+
+    const frame = createDummyAudioFrame();
+    particles.draw(frame, dummyClock, dummyTarget);
+
+    // Verify TEXTURE5 (0x84c5) was bound to terrain history texture
+    const activeUnits = (gl as any)._activeTextures;
+    expect(activeUnits).toContain(gl.TEXTURE5);
+    expect((gl as any)._boundTextures.get(gl.TEXTURE5)).toBe(mockTex);
+
+    // Verify uniforms
+    expect(gl.uniform1i).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainTex' }),
+      5,
+    );
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainDisplace' }),
+      0.5,
+    );
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainWriteRow' }),
+      15,
+    );
+  });
+
+  it('ParticleLayer uploads uTerrainDisplace = 0 when terrain is inactive or terrainDisplace is 0', () => {
+    const gl = createMockGl();
+    clearTerrainState(gl);
+
+    const particles = new ParticleLayer({ terrainDisplace: 0.0 });
+    particles.init(gl);
+
+    const frame = createDummyAudioFrame();
+    particles.draw(frame, dummyClock, dummyTarget);
+
+    expect(gl.uniform1f).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'uTerrainDisplace' }),
+      0.0,
+    );
   });
 });

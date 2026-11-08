@@ -55,9 +55,10 @@ void main() {
       c = mix(c, vec3(luma), stripeGuard * 0.6);
     }
 
-    // Calm mode: reduce contrast excursions from midpoint luminance by 50% and cap peak saturation.
+    // Calm mode: dark-preserving highlight roll-off and cap peak saturation.
     if (uCalm > 0.5) {
-      c = 0.5 + (c - 0.5) * 0.5;
+      float contrastFactor = 0.5;
+      c = c / (1.0 + c * (1.0 - contrastFactor)) * contrastFactor;
       float maxC = max(c.r, max(c.g, c.b));
       float minC = min(c.r, min(c.g, c.b));
       float sat = maxC > 0.0001 ? (maxC - minC) / maxC : 0.0;
@@ -68,10 +69,9 @@ void main() {
       }
     }
 
-    // Alternating dark/light frames (> 3 reversals/sec): increase damping.
+    // Alternating dark/light frames (> 3 reversals/sec): increase damping toward black.
     if (uReversalDamp > 0.0) {
-      float dampFactor = clamp(uReversalDamp, 0.0, 1.0);
-      c = mix(c, vec3(0.5), dampFactor * 0.5);
+      c *= (1.0 - uReversalDamp * 0.35);
     }
 
     // Luminance cap: scale down anything brighter than the cap.

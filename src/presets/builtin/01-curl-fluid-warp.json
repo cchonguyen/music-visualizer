@@ -5,17 +5,40 @@
   "transition": { "style": "crossfade", "seconds": 0.32 },
   "feedback": {
     "warpMode": "curl",
-    "decay": 0.97,
-    "decayRgb": [0.99, 0.97, 1.0]
+    "warp": { "value": 0.58, "link": { "source": "mid", "amount": 0.35, "smooth": 0.15 } },
+    "warpScale": 2.8,
+    "warpSpeed": { "value": 0.85, "link": { "source": "bass", "amount": 0.4, "smooth": 0.15 } },
+    "curlOctaves": 3,
+    "curlTurbulence": 0.55,
+    "curlFlowPattern": "plumes",
+    "decay": 0.92,
+    "decayRgb": [0.95, 0.91, 0.96],
+    "hueDrift": 0.018
   },
   "layers": [
     {
-      "type": "waveform",
+      "type": "shape",
       "params": {
-        "mode": "line",
-        "amplitude": { "value": 0.85, "link": { "source": "sub", "amount": 0.35, "smooth": 0.15 } },
-        "texture": true,
-        "textureGain": { "value": 1.0, "link": { "source": "mid", "amount": 0.4, "smooth": 0.2 } }
+        "baseShape": "circle",
+        "size": 0.62,
+        "effectType": "waveform",
+        "thickness": 2.4,
+        "colorMode": "frequencyGradient",
+        "effectLength": 0.35,
+        "reactivity": { "value": 0.85, "link": { "source": "sub", "amount": 0.35, "smooth": 0.15 } },
+        "audioSource": "waveform",
+        "symmetry": "wrap",
+        "propMode": "single"
+      }
+    },
+    {
+      "type": "particles",
+      "opacity": 0.55,
+      "blend": "add",
+      "params": {
+        "shape": "dot",
+        "size": 1.6,
+        "swirlGain": 1.4
       }
     }
   ],

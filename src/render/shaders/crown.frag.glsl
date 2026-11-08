@@ -15,6 +15,8 @@ uniform vec3 uAccent;       // palette accent (A, or the swapped colour)
 uniform float uTexOn;      // 1 = band texture on (6.4), 0 = off: output identical to before
 uniform float uTexGain;    // 0..2: how strongly the band texture modulates
 uniform sampler2D uTexMid; // mid-band row, sampled by angle (bar brightness)
+uniform float uLayerOpacity;
+uniform float uSize;
 
 in vec2 vUv;
 out vec4 outColor;
@@ -31,7 +33,7 @@ float barLight(float r, float theta, int i) {
   // Distance past the end of the segment, so the bar has a clean tip.
   float past = max(max(R0 - along, along - (R0 + len)), 0.0);
   float d = length(vec2(across, past));
-  float core = 1.0 - smoothstep(0.0015, 0.003, d);   // thin bright stroke
+  float core = 1.0 - smoothstep(0.0015, 0.0045, d);   // thin bright stroke
   float glow = exp(-d * d / (0.01 * 0.01));          // soft halo
   // Fade out bars that are almost silent, so they do not show as dots.
   return (0.7 * core + 0.3 * glow) * smoothstep(0.0, 0.05, h);
@@ -41,10 +43,10 @@ void main() {
   float aspect = uRes.x / max(uRes.y, 1.0);
   // Aspect-correct clip coordinates: the screen height spans -1..1, x is scaled by aspect,
   // so bars stay round on a 16:9 canvas.
-  vec2 q = (vUv * 2.0 - 1.0) * vec2(aspect, 1.0) - uCentre;
+  vec2 q = ((vUv * 2.0 - 1.0) * vec2(aspect, 1.0) - uCentre) / max(uSize, 0.1);
   float r = length(q);
   if (r < R0 - 0.02 || r > R0 + MAX_LEN + 0.02) {
-    outColor = vec4(0.0, 0.0, 0.0, 1.0);
+    outColor = vec4(0.0, 0.0, 0.0, 0.0);
     return;
   }
   float theta = atan(q.y, q.x);
@@ -63,6 +65,8 @@ void main() {
     texMul = max(0.0, 1.0 + uTexGain * (midS - 0.5));
   }
 
-  // Dim by design: the crown supports the flight, it does not compete with it.
-  outColor = vec4(uAccent * 0.6 * clamp(light * texMul, 0.0, 1.0), 1.0);
+  // Boosted base intensity so crown has strong visual presence when layered.
+  vec3 col = uAccent * 0.95 * light * texMul * uLayerOpacity;
+  float a = clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0);
+  outColor = vec4(col, a);
 }
