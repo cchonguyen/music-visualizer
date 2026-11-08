@@ -2196,3 +2196,153 @@ describe('Studio Expand All and Collapse All buttons', () => {
     }
   });
 });
+
+describe('Slice 11.7: Non-Disruptive Studio Admin Login Popup & Background Session Detection', () => {
+  it('Studio.setVisible(true) triggers adminGateway.checkCloudflareAccess() when not yet admin', async () => {
+    const { container, studio, adminGateway } = setupTest({ admin: false });
+    container.hidden = true;
+
+    const checkSpy = vi
+      .spyOn(adminGateway, 'checkCloudflareAccess')
+      .mockResolvedValue(true);
+
+    studio.setVisible(true);
+
+    expect(container.hidden).toBe(false);
+    expect(checkSpy).toHaveBeenCalledTimes(1);
+
+    checkSpy.mockRestore();
+  });
+
+  it('promptAdminLogin in production mode opens /admin popup and completes authentication via mv-admin-authenticated message event without reload', async () => {
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const prevWindow = (globalThis as any).window;
+    const messageListeners: ((ev: any) => void)[] = [];
+    const mockPopup = {
+      closed: false,
+      close: vi.fn(() => {
+        mockPopup.closed = true;
+      }),
+    };
+
+    const mockWindow = {
+      location: {
+        hostname: 'music-visualizer.charliechonguyen.com',
+        origin: 'https://music-visualizer.charliechonguyen.com',
+        href: 'https://music-visualizer.charliechonguyen.com/',
+      },
+      screenX: 0,
+      screenY: 0,
+      outerWidth: 1280,
+      outerHeight: 800,
+      open: vi.fn(() => mockPopup),
+      addEventListener: vi.fn((type: string, cb: (ev: any) => void) => {
+        if (type === 'message') messageListeners.push(cb);
+      }),
+      removeEventListener: vi.fn((type: string, cb: (ev: any) => void) => {
+        if (type === 'message') {
+          const idx = messageListeners.indexOf(cb);
+          if (idx >= 0) messageListeners.splice(idx, 1);
+        }
+      }),
+    };
+    (globalThis as any).window = mockWindow;
+
+    try {
+      let verifiedState = false;
+      const mockGateway = {
+        isAdmin: () => verifiedState,
+        getState: () => ({
+          isAdmin: verifiedState,
+          adminEmail: 'charliechonguyen@gmail.com',
+        }),
+        login: vi.fn(),
+        logout: vi.fn(),
+        getHeaders: () => ({}),
+        subscribe: () => () => {},
+        checkCloudflareAccess: vi.fn(async () => verifiedState),
+      };
+
+      const loginPromise = promptAdminLogin(mockGateway as any);
+
+      expect(mockWindow.open).toHaveBeenCalledWith(
+        '/admin',
+        'mv-cf-access',
+        expect.stringContaining('popup,width=520,height=680'),
+      );
+
+      // Simulate popup completing Cloudflare Access OTP and posting mv-admin-authenticated
+      verifiedState = true;
+      for (const listener of [...messageListeners]) {
+        listener({
+          origin: 'https://music-visualizer.charliechonguyen.com',
+          data: { type: 'mv-admin-authenticated', verified: true },
+        });
+      }
+
+      const result = await loginPromise;
+      expect(result).toEqual({ success: true });
+      expect(mockPopup.close).toHaveBeenCalled();
+      expect(mockWindow.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function));
+    } finally {
+      (globalThis as any).window = prevWindow;
+      showToastSpy.mockRestore();
+    }
+  });
+
+  it('promptAdminLogin in production mode falls back to /admin navigation and sets sessionStorage mv.returnToStudio when popup is blocked or navigateFn is provided', async () => {
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const prevWindow = (globalThis as any).window;
+    const prevSessionStorage = (globalThis as any).sessionStorage;
+
+    const storageMap = new Map<string, string>();
+    const mockSessionStorage = {
+      getItem: (k: string) => storageMap.get(k) ?? null,
+      setItem: (k: string, v: string) => void storageMap.set(k, v),
+      removeItem: (k: string) => void storageMap.delete(k),
+    };
+    (globalThis as any).sessionStorage = mockSessionStorage;
+
+    const mockWindow = {
+      location: {
+        hostname: 'music-visualizer.charliechonguyen.com',
+        origin: 'https://music-visualizer.charliechonguyen.com',
+        href: 'https://music-visualizer.charliechonguyen.com/',
+      },
+      open: vi.fn(() => null), // Simulate popup blocker returning null
+    };
+    (globalThis as any).window = mockWindow;
+
+    try {
+      const mockGateway = {
+        isAdmin: () => false,
+        getState: () => ({ isAdmin: false }),
+        login: vi.fn(),
+        logout: vi.fn(),
+        getHeaders: () => ({}),
+        subscribe: () => () => {},
+        checkCloudflareAccess: vi.fn(async () => false),
+      };
+
+      // 1. With custom navigateFn
+      const navFn = vi.fn();
+      const res1 = await promptAdminLogin(mockGateway as any, undefined, navFn);
+      expect(res1.success).toBe(false);
+      expect(navFn).toHaveBeenCalledWith('/admin');
+      expect(mockSessionStorage.getItem('mv.returnToStudio')).toBe('true');
+
+      storageMap.clear();
+
+      // 2. With blocked popup (window.open returns null)
+      const res2 = await promptAdminLogin(mockGateway as any);
+      expect(res2.success).toBe(false);
+      expect(mockWindow.open).toHaveBeenCalled();
+      expect(mockSessionStorage.getItem('mv.returnToStudio')).toBe('true');
+      expect(mockWindow.location.href).toBe('/admin');
+    } finally {
+      (globalThis as any).window = prevWindow;
+      (globalThis as any).sessionStorage = prevSessionStorage;
+      showToastSpy.mockRestore();
+    }
+  });
+});

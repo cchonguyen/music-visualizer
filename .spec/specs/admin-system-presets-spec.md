@@ -315,3 +315,34 @@ When an administrator modifies a system preset in Studio:
     - `src/presets/__tests__/presetSyncIntegration.test.ts` [NEW]
   - Coords: `[400, 410, 487]`
   - Verify: `npm run typecheck && npx vitest run src/presets/__tests__/presetSyncIntegration.test.ts && npm run build`
+
+- **Slice 11.6: Cloudflare Worker `/admin/api/identity` Edge Handler & `AdminGateway` Identity Verification** `[CORE / DATA]`
+  - Target files:
+    - `wrangler.jsonc`
+    - `src/worker.ts` [NEW]
+    - `src/presets/adminGateway.ts`
+    - `src/presets/__tests__/adminGateway.test.ts`
+  - Coords: `[400, 410, 487]`
+  - Contract:
+    1. `wrangler.jsonc`: Set `"main": "src/worker.ts"` and update `"assets"` to `{ "directory": "./dist", "not_found_handling": "single-page-application", "binding": "ASSETS", "run_worker_first": ["/admin/api/*"] }`.
+    2. `src/worker.ts`: Handle `GET /admin/api/identity` at the Cloudflare Worker edge. Require both `cf-access-authenticated-user-email` and `cf-access-jwt-assertion` headers; decode and validate the JWT payload (`iss === 'https://winter-wind-069c.cloudflareaccess.com'`, `aud` contains `'516db2b4f5b279ae34450adb290e7413ab7ed73ac85b63219959081d498cd4ab'`, `exp > now`, and `email` matches header case-insensitively); enforce `email.toLowerCase() === 'charliechonguyen@gmail.com'`; return `200 { email }` with `Cache-Control: no-store` (or `401`/`403` with `Cache-Control: no-store`). Delegate all other requests to `env.ASSETS.fetch(request)`.
+    3. `src/presets/adminGateway.ts`: Default `adminEmail` to `'charliechonguyen@gmail.com'` (`options.adminEmail ?? import.meta.env?.VITE_ADMIN_EMAIL ?? 'charliechonguyen@gmail.com'`). Update `checkCloudflareAccess()` to fetch `/admin/api/identity` with `{ credentials: 'include', redirect: 'manual', cache: 'no-store' }` and verify case-insensitive match against `this.adminEmail`.
+    4. `src/presets/__tests__/adminGateway.test.ts`: Add unit tests for `/admin/api/identity` fetch options (`credentials: 'include'`, `redirect: 'manual'`, `cache: 'no-store'`), default `'charliechonguyen@gmail.com'` allowlist enforcement, rejection of non-matching emails, and `opaqueredirect` (`ok: false`) handling.
+  - Verify: `npm run typecheck && npx vitest run src/presets/__tests__/adminGateway.test.ts && npm run build`
+
+- **Slice 11.7: Non-Disruptive Studio Admin Login Popup, Top-Level `/admin` Startup & Auto-Reopen Studio** `[CORE / DATA]`
+  - Target files:
+    - `src/studio/adminControls.ts`
+    - `src/studio/studio.ts`
+    - `src/studio/studio.test.ts`
+    - `src/main.ts`
+  - Coords: `[400, 410, 487]`
+  - Contract:
+    1. `src/studio/adminControls.ts`: Keep `promptAdminLogin(adminGateway, promptFn?, navigateFn?) => Promise<{ success: boolean; error?: string }>`. On production (`!isLocalOrTest`):
+       - If `adminGateway.isAdmin()` is already `true`, return `{ success: true }` immediately.
+       - If a custom `navigateFn` is provided, call `await adminGateway.checkCloudflareAccess()`; if `true` return `{ success: true }`, otherwise set `sessionStorage.setItem('mv.returnToStudio', 'true')`, call `navigateFn('/admin')`, and return `{ success: false, error: 'Redirecting to Cloudflare Access login...' }`.
+       - When using default browser navigation (`!navigateFn`), open `window.open('/admin', 'mv-cf-access', 'popup,width=520,height=680')` synchronously inside the click gesture before any `await`; if `window.open` returns `null` (popup blocked), set `sessionStorage.setItem('mv.returnToStudio', 'true')` and navigate to `/admin`. Otherwise, wait for `window` `'message'` (`event.origin === window.location.origin && event.data?.type === 'mv-admin-authenticated'`) or popup `closed`, then resolve with `await adminGateway.checkCloudflareAccess()`.
+    2. `src/studio/studio.ts`: In `setVisible(true)`, if `!this.adminGateway?.isAdmin()`, trigger `void this.adminGateway?.checkCloudflareAccess().then((ok) => { if (ok && this.visible && this.boundPresetId) this.bind(this.boundPresetId); })`.
+    3. `src/main.ts`: Capture `const launchedOnAdminPath = window.location.pathname.startsWith('/admin')` at module top-level before `start()`. Run `void adminGateway.checkCloudflareAccess().then((isAdmin) => { ... })` at top-level load: if `launchedOnAdminPath`, rewrite URL via `window.history.replaceState({}, '', '/')`, and if `window.opener && !window.opener.closed`, post `{ type: 'mv-admin-authenticated', isAdmin }` to `window.opener` (`window.location.origin`) and call `window.close()`. Inside `start()`, if `launchedOnAdminPath || sessionStorage.getItem('mv.returnToStudio') === 'true'`, remove `mv.returnToStudio`, call `studio.setVisible(true)`, and `studio.bind(currentId)`.
+    4. `src/studio/studio.test.ts`: Add unit tests verifying popup `postMessage` handshake, popup-blocked fallback (`mv.returnToStudio`), and background session detection on `studio.setVisible(true)`.
+  - Verify: `npm run typecheck && npx vitest run src/studio/studio.test.ts && npm run build`

@@ -68,22 +68,13 @@ export function renderAdminBadge(container: HTMLElement, isAdmin: boolean): HTML
 export async function promptAdminLogin(
   adminGateway: IAdminGateway,
   promptFn?: (msg: string, defaultVal?: string) => string | null,
-  navigateFn: (url: string) => void = (url) => {
-    if (typeof window !== 'undefined' && window.location) {
-      window.location.href = url;
-    }
-  },
+  navigateFn?: (url: string) => void,
 ): Promise<{ success: boolean; error?: string }> {
-  // 1. Check if already authenticated with Cloudflare Access edge identity
-  if (typeof adminGateway.checkCloudflareAccess === 'function') {
-    const verified = await adminGateway.checkCloudflareAccess();
-    if (verified) {
-      showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
-      return { success: true };
-    }
+  if (adminGateway.isAdmin()) {
+    return { success: true };
   }
 
-  // 2. Local dev check (strictly localhost or 127.0.0.1)
+  // Local dev check (strictly localhost or 127.0.0.1 or test environment)
   const isLocalOrTest =
     typeof window === 'undefined' ||
     !window.location?.hostname ||
@@ -92,6 +83,16 @@ export async function promptAdminLogin(
     window.location.hostname === '';
 
   if (isLocalOrTest) {
+    // 1. Check if already authenticated with Cloudflare Access edge identity
+    if (typeof adminGateway.checkCloudflareAccess === 'function') {
+      const verified = await adminGateway.checkCloudflareAccess();
+      if (verified) {
+        showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+        return { success: true };
+      }
+    }
+
+    // 2. Local passkey prompt fallback
     const prompt =
       promptFn ??
       ((msg, d) => {
@@ -113,10 +114,155 @@ export async function promptAdminLogin(
     return res;
   }
 
-  // 3. In production: Redirect directly to Cloudflare Access login gate at /admin
-  showToast('Redirecting to Cloudflare Access login...');
-  navigateFn('/admin');
-  return { success: true };
+  // 3. Production flow (!isLocalOrTest)
+  if (typeof navigateFn === 'function') {
+    if (typeof adminGateway.checkCloudflareAccess === 'function') {
+      const verified = await adminGateway.checkCloudflareAccess();
+      if (verified) {
+        showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+        return { success: true };
+      }
+    }
+    try {
+      sessionStorage.setItem('mv.returnToStudio', 'true');
+    } catch {
+      // ignore storage errors
+    }
+    showToast('Redirecting to Cloudflare Access login...');
+    navigateFn('/admin');
+    return { success: false, error: 'Redirecting to Cloudflare Access...' };
+  }
+
+  if (typeof window !== 'undefined') {
+    let popup: Window | null = null;
+    if (typeof window.open === 'function') {
+      const width = 520;
+      const height = 680;
+      const left =
+        typeof window.screenX === 'number' && typeof window.outerWidth === 'number'
+          ? Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2))
+          : 100;
+      const top =
+        typeof window.screenY === 'number' && typeof window.outerHeight === 'number'
+          ? Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2))
+          : 100;
+      popup = window.open(
+        '/admin',
+        'mv-cf-access',
+        `popup,width=${width},height=${height},left=${left},top=${top}`,
+      );
+    }
+
+    if (popup) {
+      return await new Promise<{ success: boolean; error?: string }>((resolve) => {
+        let settled = false;
+        let pollTimer: ReturnType<typeof setInterval> | null = null;
+        let checking = false;
+
+        const finish = (result: { success: boolean; error?: string }) => {
+          if (settled) return;
+          settled = true;
+          if (pollTimer !== null) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+          }
+          if (typeof window.removeEventListener === 'function') {
+            window.removeEventListener('message', onMessage);
+          }
+          resolve(result);
+        };
+
+        const verifyNow = async (options?: { fromClose?: boolean; fromPoll?: boolean }) => {
+          if (settled) return;
+          if (adminGateway.isAdmin()) {
+            try {
+              popup.close?.();
+            } catch {
+              // ignore
+            }
+            showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+            finish({ success: true });
+            return;
+          }
+          if (checking && options?.fromPoll) return;
+          checking = true;
+          try {
+            const verified =
+              typeof adminGateway.checkCloudflareAccess === 'function'
+                ? await adminGateway.checkCloudflareAccess()
+                : adminGateway.isAdmin();
+            if (verified || adminGateway.isAdmin()) {
+              try {
+                popup.close?.();
+              } catch {
+                // ignore
+              }
+              showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+              finish({ success: true });
+              return;
+            }
+            if (options?.fromClose) {
+              finish({ success: false, error: 'Authentication cancelled or not completed.' });
+            }
+          } finally {
+            checking = false;
+          }
+        };
+
+        const onMessage = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          const data = event.data;
+          if (
+            data === 'cf-login-success' ||
+            (data && typeof data === 'object' && data.type === 'mv-admin-authenticated')
+          ) {
+            void verifyNow();
+          }
+        };
+
+        if (typeof window.addEventListener === 'function') {
+          window.addEventListener('message', onMessage);
+        }
+
+        void verifyNow();
+
+        pollTimer = setInterval(() => {
+          if (settled) return;
+          if (popup.closed) {
+            if (pollTimer !== null) {
+              clearInterval(pollTimer);
+              pollTimer = null;
+            }
+            void verifyNow({ fromClose: true });
+            return;
+          }
+          void verifyNow({ fromPoll: true });
+        }, 500);
+      });
+    }
+
+    // Popup blocked or unavailable: check existing session first, then fall back to top-level navigation
+    if (
+      typeof adminGateway.checkCloudflareAccess === 'function' &&
+      (await adminGateway.checkCloudflareAccess())
+    ) {
+      showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+      return { success: true };
+    }
+
+    try {
+      sessionStorage.setItem('mv.returnToStudio', 'true');
+    } catch {
+      // ignore storage errors
+    }
+    showToast('Redirecting to Cloudflare Access login...');
+    if (window.location) {
+      window.location.href = '/admin';
+    }
+    return { success: false, error: 'Redirecting to Cloudflare Access...' };
+  }
+
+  return { success: false, error: 'Redirecting to Cloudflare Access...' };
 }
 
 /**
