@@ -88,7 +88,11 @@ export class AdminGateway implements IAdminGateway {
     this.config = options.config ?? getRemoteConfig();
     this.mock = Boolean(options.mock);
     this.adminEmail = options.adminEmail;
-    this.fetchFn = options.fetchFn ?? (typeof fetch !== 'undefined' ? fetch : undefined);
+    this.fetchFn =
+      options.fetchFn ??
+      (typeof fetch !== 'undefined'
+        ? (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init)
+        : undefined);
 
     if (this.mock && options.defaultAdmin) {
       this.state = {
