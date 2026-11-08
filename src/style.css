@@ -489,34 +489,6 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     min-height: 44px;
   }
 
-  /* Onboarding toast on phone docks at the top */
-  .onboarding-toast {
-    bottom: auto;
-    top: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100vw - 1.5rem);
-    max-width: calc(100vw - 1.5rem);
-    animation: toastSlideDownMobile 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-  .onboarding-toast.dismissed {
-    transform: translate(-50%, -10px);
-  }
-  @keyframes toastSlideDownMobile {
-    from {
-      opacity: 0;
-      transform: translate(-50%, -12px);
-    }
-    to {
-      opacity: 1;
-      transform: translate(-50%, 0);
-    }
-  }
-  .onboarding-toast-dismiss {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
   /* Value buttons (slice 11.8): Volume, Visual gain and Beat sensitivity in three columns on one line. Name sits above the value. The opened slider drops to a full-width row below. */
   .controls .value-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
   .controls .value-group > .group-label { grid-column: 1 / -1; }
@@ -770,6 +742,36 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 .onboarding-toast-dismiss:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 599px) {
+  /* Onboarding toast on phone docks at the top */
+  .onboarding-toast {
+    bottom: auto;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100vw - 1.5rem);
+    max-width: calc(100vw - 1.5rem);
+    animation: toastSlideDownMobile 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .onboarding-toast.dismissed {
+    transform: translate(-50%, -10px);
+  }
+  @keyframes toastSlideDownMobile {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -12px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+  .onboarding-toast-dismiss {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 .shortcuts-actions {
