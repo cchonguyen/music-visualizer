@@ -21,7 +21,8 @@
 - `npm run typecheck` — TypeScript check
 - `npm test` — unit tests (Vitest)
 - `npm run build` — production build to `dist/`
-- `npm run deploy` — build and deploy to Cloudflare (check `npx wrangler whoami` first)
+- `npm run deploy` — disabled locally; production deploys run via GitHub Actions on PR merge to `main`
+- `npm run deploy:ci` — CI-only deploy script used by GitHub Actions
 - Free-model slices: `~/OpenBot/Agents/agent-29a801b6-9741-4a30-91c7-ffeb35065c9e/scripts/run-slice.sh <id> <model>` (OpenBot's bundled OpenCode)
 
 ## Autonomous Issue Lifecycle

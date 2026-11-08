@@ -153,10 +153,7 @@ npm run build
 ```
 
 ### Production Deployment
-Deploys to Cloudflare Workers static assets:
-```bash
-npm run deploy
-```
+Production deployments to Cloudflare Workers are automated via GitHub Actions on every pull request merged into `main`. Local manual deploys from worktrees are disabled to prevent state overwrites.
 
 ---
 

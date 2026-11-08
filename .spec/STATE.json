@@ -1,10 +1,10 @@
 {
   "schemaVersion": "2.2",
-  "updatedAt": "2026-11-08T05:50:00.000Z",
+  "updatedAt": "2026-11-08T13:13:58.012Z",
   "projectId": "music-visualizer",
   "worktreeId": "consolidate_hud_popups",
-  "branch": "consolidate_hud_popups",
-  "currentIntent": "Stage 12: Consolidated HUD & Segmented Pill Architecture",
+  "branch": "hardened_ci_cd_deployment_guardrails",
+  "currentIntent": "Hardened CI/CD Deployment Guardrails and Worktree Isolation",
   "stage": "Claimed",
   "pendingDecisions": [],
   "recentDecisions": [],
