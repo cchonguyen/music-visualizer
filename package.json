@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "echo 'ERROR: Local deploys are disabled to prevent worktree overwrites. Merge your PR to main to trigger automated GitHub Actions deployment.' && exit 1",
+    "deploy:ci": "npm run build && wrangler deploy"
   },
   "devDependencies": {
     "@tweakpane/core": "2.0.5",
