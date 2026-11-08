@@ -584,27 +584,30 @@ if (typeof window !== 'undefined') {
         // ignore storage errors
       }
     }
-    try {
-      window.history.replaceState({}, '', '/');
-    } catch {
-      // ignore history errors
-    }
   }
   if (typeof adminGateway.checkCloudflareAccess === 'function') {
     void adminGateway.checkCloudflareAccess().then((verified) => {
       if (isAuthPopup && window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage(
-            { type: 'mv-admin-authenticated', verified, isAdmin: verified },
-            window.location.origin,
-          );
-        } catch {
-          // ignore postMessage errors
+        if (verified) {
+          try {
+            window.opener.postMessage(
+              { type: 'mv-admin-authenticated', verified: true, isAdmin: true },
+              window.location.origin,
+            );
+          } catch {
+            // ignore postMessage errors
+          }
+          try {
+            window.close();
+          } catch {
+            // ignore window.close errors
+          }
         }
+      } else if (launchedOnAdminPath) {
         try {
-          window.close();
+          window.history.replaceState({}, '', '/');
         } catch {
-          // ignore window.close errors
+          // ignore history errors
         }
       }
     });
