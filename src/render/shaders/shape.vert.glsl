@@ -211,11 +211,15 @@ void evaluateBaseCurve(
     T0 = (lenDiff > 0.0001) ? (diff / lenDiff) : vec2(1.0, 0.0);
     N0 = vec2(-T0.y, T0.x);
   } else if (uBaseShape == 6) {
-    // spiral
+    // Logarithmic spiral: r(theta) = a * exp(b * theta)
+    // Parameterized by u in [0, 1]: theta = TAU * uSpiralTurns * u
+    // r(u) = effSize * exp(-k * (1.0 - u)), where k controls geometric expansion
     float theta = TAU * uSpiralTurns * u;
-    float r = effSize * (0.08 + 0.92 * u);
+    float k = 3.0;
+    float r = effSize * exp(-k * (1.0 - u));
     P0 = r * vec2(cos(theta), sin(theta));
-    vec2 dr = effSize * 0.92 * vec2(cos(theta), sin(theta)) + r * TAU * uSpiralTurns * vec2(-sin(theta), cos(theta));
+    // Tangent dr/du = r * (k * (cos, sin) + TAU * uSpiralTurns * (-sin, cos))
+    vec2 dr = k * vec2(cos(theta), sin(theta)) + TAU * uSpiralTurns * vec2(-sin(theta), cos(theta));
     float lenDr = length(dr);
     T0 = (lenDr > 0.0001) ? (dr / lenDr) : vec2(cos(theta), sin(theta));
     N0 = vec2(-T0.y, T0.x);
@@ -289,7 +293,9 @@ void main() {
   if (uEffectType == 0) { // solidLine
     maxAmp = 0.0;
   }
-  float delta = maxAmp * uEffectLength;
+  // Scale element size & effect amplitude as it goes toward the center on spirals
+  float spiralScale = (uBaseShape == 6) ? clamp(length(P0) / effSize, 0.15, 1.0) : 1.0;
+  float delta = maxAmp * uEffectLength * spiralScale;
 
   if (uEffectType == 3) { // harmonicWave
     delta += 0.15 * sin(u * 16.0 * PI + uTime * 4.0) * audioAmp * uEffectLength;
@@ -331,7 +337,7 @@ void main() {
       vLocalUv = vec2(side, tSide);
     } else {
       // Line/wave ribbons
-      float halfWidth = 0.003 * uThickness;
+      float halfWidth = 0.003 * uThickness * spiralScale;
       vec2 ribNorm = (uBaseShape <= 1) ? N0 : vec2(-T0.y, T0.x);
       P = extrudeTip + side * halfWidth * ribNorm;
       vLocalUv = vec2(side, 0.5);
@@ -339,7 +345,7 @@ void main() {
   } else {
     // Discrete elements (bars, segmentedBars, dots)
     int vertId = gl_VertexID;
-    float barWidth = (effSize / float(max(1, uSampleCount))) * 0.5 * (uThickness / 3.0);
+    float barWidth = (effSize / float(max(1, uSampleCount))) * 0.5 * (uThickness / 3.0) * spiralScale;
     vec2 widthOffset = T0 * barWidth;
 
     if (uEffectType == 6) { // dots
@@ -347,7 +353,7 @@ void main() {
         (vertId == 0 || vertId == 2) ? -1.0 : 1.0,
         (vertId == 0 || vertId == 1) ? -1.0 : 1.0
       );
-      float dotRadius = 0.008 * uThickness;
+      float dotRadius = 0.008 * uThickness * spiralScale;
       P = extrudeTip + qCorner.x * T0 * dotRadius + qCorner.y * N0 * dotRadius;
       vLocalUv = qCorner;
     } else {
