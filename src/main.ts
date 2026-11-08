@@ -35,6 +35,89 @@ import { DebugPanel } from './ui/debugPanel';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector } from './render/globalDirector';
+import { adminGateway, AdminGateway } from './presets/adminGateway';
+import {
+  loadCachedPresets,
+  saveCachedPresets,
+  normalizeSubfolder,
+  type RemotePresetRecord,
+} from './presets/remotePresets';
+import { getRemoteConfig, type RemoteConfig } from './config/remoteConfig';
+
+export interface SyncSystemPresetsOptions {
+  storage?: Storage;
+  fetchFn?: typeof fetch;
+  studio?: { refreshPresetDropdown: () => void } | null;
+}
+
+/**
+ * Asynchronously fetch system presets from remote endpoint,
+ * apply them to the preset session, persist active presets to local cache,
+ * and refresh the Studio dropdown if available.
+ *
+ * In offline mode or upon network failure, catches gracefully and logs
+ * informational message without interrupting visualizer playback.
+ */
+export async function syncSystemPresets(
+  session: PresetSession,
+  config: RemoteConfig = getRemoteConfig(),
+  options: SyncSystemPresetsOptions = {},
+): Promise<RemotePresetRecord[]> {
+  try {
+    const fetchFn = options.fetchFn ?? (typeof fetch !== 'undefined' ? fetch : undefined);
+    if (!fetchFn) return [];
+    if (!config.supabaseUrl || !config.anonKey) {
+      console.info('Using local/cached system presets (remote not configured).');
+      return [];
+    }
+
+    const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
+    const url = `${baseUrl}/rest/v1/system_presets?select=id,name,subfolder,preset_data,sort_order,tags,updated_at,is_deleted&order=sort_order.asc,updated_at.desc`;
+
+    const response = await fetchFn(url, {
+      method: 'GET',
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.warn(`Remote presets fetch failed: ${response.status} ${response.statusText}`);
+      return [];
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    const records: RemotePresetRecord[] = data
+      .filter((item: unknown): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      .map((item) => ({
+        id: String(item['id'] ?? ''),
+        name: String(item['name'] || item['id'] || ''),
+        subfolder: normalizeSubfolder(item['subfolder']),
+        preset_data: item['preset_data'] as Preset,
+        sort_order: typeof item['sort_order'] === 'number' ? item['sort_order'] : 0,
+        tags: Array.isArray(item['tags']) ? (item['tags'] as unknown[]).map(String) : [],
+        updated_at: typeof item['updated_at'] === 'string' ? item['updated_at'] : new Date().toISOString(),
+        ...(item['is_deleted'] !== undefined ? { is_deleted: Boolean(item['is_deleted']) } : {}),
+      }));
+
+    if (records.length > 0) {
+      session.applyRemoteSystemPresets(records);
+      const activeRecords = records.filter((r) => !r.is_deleted);
+      saveCachedPresets(activeRecords, options.storage);
+      if (options.studio && typeof options.studio.refreshPresetDropdown === 'function') {
+        options.studio.refreshPresetDropdown();
+      }
+    }
+    return records;
+  } catch {
+    console.info('Using local/cached system presets.');
+    return [];
+  }
+}
 
 /** Calm mode scales the bass pulse down (motion reduction for sensitive viewers). */
 const CALM_SCALE = 0.35;
@@ -132,8 +215,12 @@ function start(): void {
     const comp = new Compositor([]);
     compositor = comp;
     host.addLayer(comp);
-    session = new PresetSession(comp, SCHEMAS, safeStorage());
+    session = new PresetSession(comp, SCHEMAS, safeStorage(), adminGateway);
     for (const b of ALL_PRESETS) session.addBuiltin(b.id, b.preset);
+    const cached = loadCachedPresets(safeStorage());
+    if (cached?.presets && cached.presets.length > 0) {
+      session.applyRemoteSystemPresets(cached.presets);
+    }
     for (const problem of session.loadUserPresets()) console.warn('Saved preset skipped:', problem);
     const liveSession = session;
     const order = () => liveSession.list().map((e) => e.id);
@@ -154,9 +241,23 @@ function start(): void {
       switchTo: (id) => switchTo(id, true),
       frameMs: () => frameMs,
       linkMeter: (key) => linkRunner.meterByKey(key),
+      adminGateway,
     });
     switchTo(currentId);
     switchShown = (id) => switchTo(id, true);
+
+    // Background asynchronous sync of system presets with local cache persistence
+    syncSystemPresets(liveSession, getRemoteConfig(), { storage: safeStorage(), studio })
+      .then((records) => {
+        if (records && records.length > 0) {
+          liveSession.applyRemoteSystemPresets(records);
+          saveCachedPresets(records, safeStorage());
+          studio.refreshPresetDropdown();
+        }
+      })
+      .catch(() => {
+        console.info('Using local/cached system presets.');
+      });
     // Studio button and E key share one toggle. Escape closes Studio unless the shortcuts dialog is open.
     const toggleStudio = () => {
       studio.setVisible(!studio.visible);
@@ -427,7 +528,13 @@ function start(): void {
   });
 }
 
-export { hasCrownLayer };
+export {
+  hasCrownLayer,
+  adminGateway,
+  AdminGateway,
+  loadCachedPresets,
+  start,
+};
 
 if (typeof window !== 'undefined') {
   const problems = browserSupportProblems();

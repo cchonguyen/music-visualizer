@@ -1,5 +1,5 @@
 # Stage 12: Consolidated HUD & Segmented Pill Architecture Specification
-<!-- Coords: [400, 410, 487] -->
+<!-- Coords: [400, 410, 488] -->
 
 ## 1. Overview & Architectural Motivation
 

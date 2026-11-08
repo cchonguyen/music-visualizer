@@ -925,3 +925,51 @@ dialog#shortcuts .short { display: none; }
 @media (max-width: 599px) {
   .close-btn, #controls-close, #controls-show { min-width: 44px; min-height: 44px; }
 }
+
+/* Studio Admin Mode (Slice 11.4) */
+.studio-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: var(--ui-text-size);
+  font-weight: 600;
+  color: #ffd700;
+  background: rgba(255, 215, 0, 0.15);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  border-radius: var(--radius-sm);
+  padding: .15rem .5rem;
+  letter-spacing: .02em;
+  user-select: none;
+}
+.studio-admin-badge[hidden] {
+  display: none !important;
+}
+.studio-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: .5rem .75rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.studio-admin-action-btn {
+  font-size: var(--ui-text-size);
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .25rem .6rem;
+  cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+.studio-admin-action-btn:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+.studio-admin-action-btn.admin-active {
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.5);
+  background: rgba(255, 215, 0, 0.1);
+}
+
