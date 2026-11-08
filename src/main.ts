@@ -124,6 +124,13 @@ const CALM_SCALE = 0.35;
 /** Keep the latest beat times for the latency estimate (about 30 s of kicks). */
 const MAX_BEATS = 60;
 
+/**
+ * Capture whether the application initially loaded on the `/admin` Cloudflare Access gate
+ * before URL normalization or user click on `#start-btn`.
+ */
+const launchedOnAdminPath =
+  typeof window !== 'undefined' && Boolean(window.location?.pathname?.startsWith('/admin'));
+
 /** Calm, section contrast and accent swap reach the tunnel, particles, shockwave and rings. */
 function flagLayer(layer: RenderLayer, calm: boolean, contrast: number, swap: number): void {
   if (layer instanceof TunnelLayer || layer instanceof ParticleLayer) {
@@ -257,6 +264,24 @@ function start(): void {
           window.history.replaceState({}, '', '/');
         }
       });
+    }
+
+    // Automatically reopen Preset Studio if user launched via /admin or returned from Cloudflare Access redirect
+    let shouldReturnToStudio = launchedOnAdminPath;
+    try {
+      if (
+        typeof sessionStorage !== 'undefined' &&
+        sessionStorage.getItem('mv.returnToStudio') === 'true'
+      ) {
+        shouldReturnToStudio = true;
+        sessionStorage.removeItem('mv.returnToStudio');
+      }
+    } catch {
+      // ignore storage errors
+    }
+    if (shouldReturnToStudio) {
+      studio.setVisible(true);
+      studio.bind(currentId);
     }
 
     // Background asynchronous sync of system presets with local cache persistence
@@ -550,6 +575,40 @@ export {
 };
 
 if (typeof window !== 'undefined') {
+  const isAuthPopup = Boolean(launchedOnAdminPath && window.opener && !window.opener.closed);
+  if (launchedOnAdminPath) {
+    if (!isAuthPopup) {
+      try {
+        sessionStorage.setItem('mv.returnToStudio', 'true');
+      } catch {
+        // ignore storage errors
+      }
+    }
+    try {
+      window.history.replaceState({}, '', '/');
+    } catch {
+      // ignore history errors
+    }
+  }
+  if (typeof adminGateway.checkCloudflareAccess === 'function') {
+    void adminGateway.checkCloudflareAccess().then((verified) => {
+      if (isAuthPopup && window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage(
+            { type: 'mv-admin-authenticated', verified, isAdmin: verified },
+            window.location.origin,
+          );
+        } catch {
+          // ignore postMessage errors
+        }
+        try {
+          window.close();
+        } catch {
+          // ignore window.close errors
+        }
+      }
+    });
+  }
   const problems = browserSupportProblems();
   if (problems.length) showNotice(problems.join(' '), 'error', 0);
   document.getElementById('start-btn')?.addEventListener('click', start, { once: true });

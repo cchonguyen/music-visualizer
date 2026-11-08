@@ -373,9 +373,23 @@ export class Studio {
   setVisible(visible: boolean): void {
     if (visible === this.visible) return;
     if (visible) {
-      this.opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      this.opener =
+        typeof document !== 'undefined' &&
+        typeof HTMLElement !== 'undefined' &&
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       this.container.hidden = false;
-      requestAnimationFrame(() => this.focusFirst());
+      if (
+        this.adminGateway &&
+        !this.adminGateway.isAdmin() &&
+        typeof this.adminGateway.checkCloudflareAccess === 'function'
+      ) {
+        void this.adminGateway.checkCloudflareAccess();
+      }
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => this.focusFirst());
+      }
     } else {
       this.container.hidden = true;
       const back = this.opener;
