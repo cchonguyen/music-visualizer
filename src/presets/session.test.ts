@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PresetSession, USER_PRESETS_KEY, type SceneHost } from './session';
+import {
+  PresetSession,
+  USER_PRESETS_KEY,
+  SYSTEM_TAG_OVERRIDES_KEY,
+  type SceneHost,
+} from './session';
 import { parsePreset, PresetFormatError, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
 import { BUILTIN_PRESETS, SCHEMAS } from './builtin';
@@ -49,6 +54,7 @@ describe('built-in presets', () => {
     expect(() => session.save('crown')).toThrow(/read-only/);
     expect(() => session.rename('crown', 'x')).toThrow(/cannot be renamed/);
     expect(() => session.remove('crown')).toThrow(/cannot be deleted/);
+    expect(() => session.setPresetFolder('crown', 'some-folder')).toThrow(/Cannot move built-in/);
   });
 });
 
@@ -206,4 +212,50 @@ describe('undo and redo', () => {
     expect(session.isDirty('crown')).toBe(true); // compare changes no data
   });
 });
+
+describe('system preset tag overrides and categorization', () => {
+  it('persists and hydrates system preset tag overrides', () => {
+    session.setPresetTags('crown', ['favourite']);
+    expect(session.get('crown')!.preset.tags).toEqual(['favourite']);
+    expect(session.isDirty('crown')).toBe(false);
+
+    // Verify stored in localStorage under SYSTEM_TAG_OVERRIDES_KEY
+    const rawStored = storage.getItem(SYSTEM_TAG_OVERRIDES_KEY);
+    expect(rawStored).toBeTruthy();
+    expect(JSON.parse(rawStored!)).toEqual({ crown: ['favourite'] });
+
+    // In a fresh session, addBuiltin rehydrates the tag override
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    for (const b of BUILTIN_PRESETS) fresh.addBuiltin(b.id, b.preset);
+    expect(fresh.get('crown')!.preset.tags).toEqual(['favourite']);
+  });
+
+  it('sets and persists tags for user presets', () => {
+    const id = session.saveAs('flight', 'Custom Flight');
+    session.setPresetTags(id, ['favourite', 'night']);
+    expect(session.get(id)!.preset.tags).toEqual(['favourite', 'night']);
+
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    fresh.loadUserPresets();
+    expect(fresh.get(id)!.preset.tags).toEqual(['favourite', 'night']);
+  });
+
+  it('listCategorized() partitions presets into system and user categories', () => {
+    const folder = session.createFolder('Favorites');
+    const userPreset1 = session.saveAs('flight', 'Flight 1');
+    const userPreset2 = session.saveAs('bars', 'Bars 2');
+    session.setPresetFolder(userPreset1, folder.id);
+
+    const categorized = session.listCategorized();
+    expect(categorized.system.classics.map((e) => e.id)).toContain('crown');
+    expect(categorized.system.classics.map((e) => e.id)).toContain('flight');
+
+    expect(categorized.user.folders).toHaveLength(1);
+    expect(categorized.user.folders[0]!.folder.name).toBe('Favorites');
+    expect(categorized.user.folders[0]!.entries.map((e) => e.id)).toEqual([userPreset1]);
+
+    expect(categorized.user.unfiled.map((e) => e.id)).toEqual([userPreset2]);
+  });
+});
+
 

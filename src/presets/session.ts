@@ -20,6 +20,7 @@ import {
   type PaletteDef,
   type GlobalDirectorSettings,
 } from '../render/globalDirector';
+import { getSystemSubfolder } from './builtin';
 
 if (!(GlobalDirector.prototype as any).registerPalette) {
   (GlobalDirector.prototype as any).registerPalette = function (this: GlobalDirector, palette: DirectorPaletteAsset) {
@@ -44,6 +45,38 @@ if (!(GlobalDirector.prototype as any).getDirectorProfile) {
 
 export const USER_PRESETS_KEY = 'mv.userPresets';
 export const CUSTOM_PALETTES_KEY = 'mv.customDirectorPalettes';
+export const SYSTEM_TAG_OVERRIDES_KEY = 'mv.systemPresetTagOverrides';
+export const USER_PRESET_FOLDERS_KEY = 'mv.userPresetFolders';
+
+export interface UserPresetFolder {
+  /** Unique stable ID, e.g. "folder-1731000000-abc123" */
+  id: string;
+  /** Display name shown in UI, e.g. "Chill Ambient" */
+  name: string;
+  /** Creation timestamp in epoch milliseconds */
+  createdAt: number;
+}
+
+export interface StoredUserPreset {
+  id: string;
+  preset: Preset;
+  folderId?: string;
+}
+
+export interface CategorizedPresets {
+  system: {
+    showcase: SessionEntry[];
+    flagship: SessionEntry[];
+    classics: SessionEntry[];
+  };
+  user: {
+    folders: Array<{
+      folder: UserPresetFolder;
+      entries: SessionEntry[];
+    }>;
+    unfiled: SessionEntry[];
+  };
+}
 
 export function registerPaletteInDirector(palette: DirectorPaletteAsset, director = getGlobalDirector()): void {
   (DIRECTOR_PALETTES as Record<string, PaletteDef>)[palette.id] = {
@@ -71,6 +104,7 @@ export interface SessionEntry {
   builtin: boolean;
   preset: Preset; // working copy (what the Studio edits)
   savedJson: string; // last saved state, to detect unsaved changes
+  folderId?: string;
 }
 
 const HISTORY_LIMIT = 100;
@@ -86,6 +120,8 @@ export class PresetSession {
   private lastPushAt = new Map<string, number>();
   private undoStack = new Map<string, string[]>();
   private redoStack = new Map<string, string[]>();
+  private folders: UserPresetFolder[] = [];
+  private systemTagOverrides: Record<string, string[]> = {};
 
   constructor(
     private readonly host: SceneHost,
@@ -93,10 +129,21 @@ export class PresetSession {
     private readonly storage: Storage | undefined,
   ) {
     this.loadCustomPalettes();
+    this.loadUserPresetFolders();
+    this.loadSystemTagOverrides();
   }
 
   addBuiltin(id: string, preset: Preset): void {
-    this.entries.set(id, { id, builtin: true, preset: structuredClone(preset), savedJson: JSON.stringify(preset) });
+    const clone = structuredClone(preset);
+    if (this.systemTagOverrides[id]) {
+      clone.tags = [...this.systemTagOverrides[id]];
+    }
+    this.entries.set(id, {
+      id,
+      builtin: true,
+      preset: clone,
+      savedJson: JSON.stringify(clone),
+    });
   }
 
   /** Loads user presets saved in this browser. Bad entries are skipped, not fatal. */
@@ -112,8 +159,15 @@ export class PresetSession {
     for (const item of raw) {
       try {
         const id = String((item as { id: unknown }).id);
+        const folderId = (item as { folderId?: unknown }).folderId;
         const { preset } = parsePreset((item as { preset: unknown }).preset, this.registry);
-        this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset) });
+        this.entries.set(id, {
+          id,
+          builtin: false,
+          preset,
+          savedJson: JSON.stringify(preset),
+          folderId: typeof folderId === 'string' ? folderId : undefined,
+        });
       } catch (err) {
         skipped.push((err as Error).message);
       }
@@ -243,12 +297,13 @@ export class PresetSession {
   }
 
   /** New user preset from the working copy of `fromId`. Returns the new id. */
-  saveAs(fromId: string, name: string): string {
+  saveAs(fromId: string, name: string, folderId?: string): string {
     const from = this.require(fromId);
     const preset = structuredClone(from.preset);
     preset.name = name.trim() || preset.name;
     const id = `user-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-    this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset) });
+    const effectiveFolderId = folderId !== undefined ? (folderId.trim() || undefined) : from.folderId;
+    this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset), folderId: effectiveFolderId });
     this.persist();
     return id;
   }
@@ -265,14 +320,183 @@ export class PresetSession {
     if (entry.builtin) throw new Error('Built-in presets cannot be deleted.');
     if (this.scenes.has(id)) {
       if (this.current === id) throw new Error('Switch to another preset before deleting this one.');
-    this.undoStack.delete(id);
-    this.redoStack.delete(id);
-    this.committed.delete(id);
+      this.undoStack.delete(id);
+      this.redoStack.delete(id);
+      this.committed.delete(id);
       this.host.removeScene(id);
       this.scenes.delete(id);
     }
     this.entries.delete(id);
     this.persist();
+  }
+
+  // --- Tag Customization for System Presets ---
+  loadSystemTagOverrides(): Record<string, string[]> {
+    let overrides: Record<string, string[]> = {};
+    try {
+      const raw = this.storage?.getItem(SYSTEM_TAG_OVERRIDES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          overrides = parsed as Record<string, string[]>;
+        }
+      }
+    } catch {
+      // ignore unreadable storage
+    }
+    this.systemTagOverrides = overrides;
+    for (const [id, tags] of Object.entries(overrides)) {
+      const entry = this.entries.get(id);
+      if (entry && entry.builtin) {
+        entry.preset.tags = [...tags];
+        entry.savedJson = JSON.stringify(entry.preset);
+      }
+    }
+    return overrides;
+  }
+
+  setPresetTags(presetId: string, tags: string[]): void {
+    const entry = this.require(presetId);
+    entry.preset.tags = [...tags];
+    if (entry.savedJson) {
+      try {
+        const saved = JSON.parse(entry.savedJson);
+        saved.tags = [...tags];
+        entry.savedJson = JSON.stringify(saved);
+      } catch {
+        entry.savedJson = JSON.stringify(entry.preset);
+      }
+    } else {
+      entry.savedJson = JSON.stringify(entry.preset);
+    }
+    if (entry.builtin) {
+      this.systemTagOverrides[presetId] = [...tags];
+      try {
+        this.storage?.setItem(SYSTEM_TAG_OVERRIDES_KEY, JSON.stringify(this.systemTagOverrides));
+      } catch {
+        // ignore storage error
+      }
+    } else {
+      this.persist();
+    }
+  }
+
+  // --- Folder Management ---
+  loadUserPresetFolders(): UserPresetFolder[] {
+    let folders: UserPresetFolder[] = [];
+    try {
+      const raw = this.storage?.getItem(USER_PRESET_FOLDERS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          folders = parsed.filter(
+            (f) => f && typeof f.id === 'string' && typeof f.name === 'string' && typeof f.createdAt === 'number',
+          );
+        }
+      }
+    } catch {
+      // ignore unreadable storage
+    }
+    this.folders = folders;
+    return folders;
+  }
+
+  private persistFolders(): void {
+    try {
+      this.storage?.setItem(USER_PRESET_FOLDERS_KEY, JSON.stringify(this.folders));
+    } catch {
+      // ignore
+    }
+  }
+
+  getFolders(): readonly UserPresetFolder[] {
+    return this.folders;
+  }
+
+  createFolder(name: string): UserPresetFolder {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Folder name cannot be empty.');
+    const folder: UserPresetFolder = {
+      id: `folder-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+      name: trimmed,
+      createdAt: Date.now(),
+    };
+    this.folders.push(folder);
+    this.persistFolders();
+    return folder;
+  }
+
+  renameFolder(folderId: string, newName: string): void {
+    const trimmed = newName.trim();
+    if (!trimmed) throw new Error('Folder name cannot be empty.');
+    const folder = this.folders.find((f) => f.id === folderId);
+    if (!folder) throw new Error(`Folder "${folderId}" not found.`);
+    folder.name = trimmed;
+    this.persistFolders();
+  }
+
+  deleteFolder(folderId: string): void {
+    const idx = this.folders.findIndex((f) => f.id === folderId);
+    if (idx === -1) return;
+    this.folders.splice(idx, 1);
+    for (const entry of this.entries.values()) {
+      if (entry.folderId === folderId) {
+        entry.folderId = undefined;
+      }
+    }
+    this.persistFolders();
+    this.persist();
+  }
+
+  setPresetFolder(presetId: string, folderId: string | undefined): void {
+    const entry = this.require(presetId);
+    if (entry.builtin) {
+      throw new Error('Cannot move built-in system presets.');
+    }
+    entry.folderId = folderId ? folderId.trim() : undefined;
+    this.persist();
+  }
+
+  getPresetFolder(presetId: string): string | undefined {
+    return this.entries.get(presetId)?.folderId;
+  }
+
+  // --- Categorized Querying ---
+  listCategorized(): CategorizedPresets {
+    const result: CategorizedPresets = {
+      system: {
+        showcase: [],
+        flagship: [],
+        classics: [],
+      },
+      user: {
+        folders: this.folders.map((folder) => ({
+          folder,
+          entries: [],
+        })),
+        unfiled: [],
+      },
+    };
+
+    const folderMap = new Map<string, SessionEntry[]>();
+    for (const group of result.user.folders) {
+      folderMap.set(group.folder.id, group.entries);
+    }
+
+    for (const entry of this.entries.values()) {
+      if (entry.builtin) {
+        const subfolder = getSystemSubfolder(entry.id) ?? 'classics';
+        result.system[subfolder].push(entry);
+      } else {
+        if (entry.folderId && folderMap.has(entry.folderId)) {
+          folderMap.get(entry.folderId)!.push(entry);
+        } else {
+          result.user.unfiled.push(entry);
+        }
+      }
+    }
+
+    return result;
   }
 
   /** Loads custom palettes saved in this browser and registers them with GlobalDirector. */
@@ -523,7 +747,11 @@ export class PresetSession {
   private persist(): void {
     const userPresets = [...this.entries.values()]
       .filter((e) => !e.builtin)
-      .map((e) => ({ id: e.id, preset: e.savedJson ? JSON.parse(e.savedJson) : e.preset }));
+      .map((e) => ({
+        id: e.id,
+        preset: e.savedJson ? JSON.parse(e.savedJson) : e.preset,
+        ...(e.folderId ? { folderId: e.folderId } : {}),
+      }));
     try {
       this.storage?.setItem(USER_PRESETS_KEY, JSON.stringify(userPresets));
     } catch {
