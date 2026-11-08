@@ -148,7 +148,7 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
   });
 
   it('includes startup onboarding toast and guide re-summon button', () => {
-    expect(indexHtml).toContain('id="onboarding-toast"');
+    expect(indexHtml).toContain('id="onboarding-toast" class="onboarding-toast" role="status" aria-live="polite" hidden');
     expect(indexHtml).toContain('id="dismiss-toast-btn"');
     expect(indexHtml).toContain('Ready to visualize audio');
     expect(dialog).toContain('id="reopen-toast-btn"');

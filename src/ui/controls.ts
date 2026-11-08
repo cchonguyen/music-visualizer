@@ -265,6 +265,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   if (experiencePanel) attachSwipeDismiss(experiencePanel, () => setExperienceOpen(false));
 
   controls.hidden = false;
+  if (onboardingToast) onboardingToast.hidden = false;
   engine.setVolume(Number(volume.value));
   if (calm) calm.checked = state.calm;
 
