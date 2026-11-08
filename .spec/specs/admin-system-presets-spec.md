@@ -397,7 +397,7 @@ Worker secrets `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` are already set by
   - Verify: `npm run typecheck && npm test && npm run build`
 
 - **Slice 11.9: System preset saves and deletes reach Supabase** `[CORE / DATA]`
-  - Target files: `src/presets/remotePresets.ts`, `src/presets/__tests__/remotePresets.test.ts`, `src/presets/session.ts`, `src/presets/session.test.ts`, `src/studio/studio.ts`, `src/studio/adminControls.ts`, `src/main.ts`
+  - Target files: `src/presets/remotePresets.ts`, `src/presets/__tests__/remotePresets.test.ts`, `src/presets/session.ts`, `src/presets/session.test.ts`, `src/studio/studio.ts`, `src/studio/studio.test.ts`, `src/studio/adminControls.ts`, `src/main.ts`
   - Contract:
     1. `upsertRemotePreset` / `softDeleteRemotePreset`: when `adminToken === 'cf-access-verified'`, call same-origin `/admin/api/presets`
        (POST) or `/admin/api/presets?id=<encoded>` (PATCH) with `credentials: 'same-origin'` and only `Content-Type: application/json`
