@@ -404,6 +404,8 @@ function createMockPane() {
 
   const addFolder = (options: any) => {
     const folder = createMockPane();
+    (folder as any).expanded = options?.expanded ?? true;
+    (folder as any).title = options?.title ?? '';
     folders.push({ options, folder });
     return folder;
   };
@@ -2113,3 +2115,84 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
   });
 });
 
+describe('Studio Expand All and Collapse All buttons', () => {
+  it('bindSection returns created section and group folders', () => {
+    const pane = createMockPane();
+    const specs = LAYER_SPECS.tunnel!;
+    const layer = defaultLayer('tunnel');
+    const { folders } = bindSection(pane, 'Tunnel', specs, layer.params);
+
+    expect(folders.length).toBeGreaterThan(0);
+    // Initially all created folders should start collapsed
+    for (const f of folders) {
+      expect(f.expanded).toBe(false);
+    }
+  });
+
+  it('renders Expand All and Collapse All buttons that toggle folder expansion', () => {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    let activePane: any = null;
+    const mockPaneFactory = () => {
+      activePane = createMockPane();
+      return activePane;
+    };
+
+    const session: any = {
+      get: vi.fn().mockReturnValue({
+        id: 'test',
+        preset: {
+          name: 'Test',
+          tags: [],
+          transition: { style: 'crossfade', seconds: 0.5 },
+          feedback: {},
+          layers: [{ type: 'tunnel', enabled: true, opacity: 1, blend: 'add', params: {} }],
+          post: {},
+        },
+      }),
+      list: vi.fn().mockReturnValue([]),
+      listCategorized: vi.fn().mockReturnValue({
+        system: { showcase: [], flagship: [], classics: [] },
+        user: { folders: [], unfiled: [] },
+      }),
+      isDirty: vi.fn().mockReturnValue(false),
+      canUndo: () => false,
+      canRedo: () => false,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      sceneOf: vi.fn().mockReturnValue({ layers: [{}], setFeedback: vi.fn() }),
+      commit: vi.fn(),
+      refreshPost: vi.fn(),
+    };
+
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory: mockPaneFactory,
+    });
+
+    studio.bind('test');
+
+    const expandBtn = activePane.buttons.find((b: any) => b.title === 'Expand All');
+    const collapseBtn = activePane.buttons.find((b: any) => b.title === 'Collapse All');
+
+    expect(expandBtn).toBeDefined();
+    expect(collapseBtn).toBeDefined();
+
+    // Trigger Expand All
+    expandBtn.fire('click');
+    expect(activePane.folders.length).toBeGreaterThan(0);
+    for (const entry of activePane.folders) {
+      expect(entry.folder.expanded).toBe(true);
+    }
+
+    // Trigger Collapse All
+    collapseBtn.fire('click');
+    for (const entry of activePane.folders) {
+      expect(entry.folder.expanded).toBe(false);
+    }
+  });
+});

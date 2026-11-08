@@ -287,6 +287,8 @@ export class Studio {
   private adminUnsubscribe?: () => void;
   private adminBadgeEl: HTMLElement | null = null;
   private footerEl: HTMLElement | null = null;
+  /** All collapsible section and group folders in the active panel. */
+  private sectionFolders: Array<{ expanded: boolean }> = [];
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -553,6 +555,7 @@ export class Studio {
     renderHelperContent(this.helperBar, null);
     this.saveAsField = null;
     this.presetSelectEl = null;
+    this.sectionFolders = [];
     const pane: Pane = this.opts.paneFactory
       ? (this.opts.paneFactory({ container: this.body, title: 'Preset Studio' }) as unknown as Pane)
       : new Pane({ container: this.body, title: 'Preset Studio' });
@@ -837,6 +840,7 @@ export class Studio {
 
     // --- Global Director (Sector 483, Slice 7.32) -----------------------------------
     const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
+    this.sectionFolders.push(dirFolder);
     buildGlobalDirectorControls(dirFolder);
 
     // --- Layer stack ----------------------------------------------------------------
@@ -885,6 +889,24 @@ export class Studio {
     });
 
     // --- Settings -------------------------------------------------------------------
+    pane.addBlade({ view: 'separator' });
+    const expandBtn = pane.addButton({ title: 'Expand All' });
+    const collapseBtn = pane.addButton({ title: 'Collapse All' });
+    expandBtn.on('click', () => this.expandAll());
+    collapseBtn.on('click', () => this.collapseAll());
+
+    const docForExpand = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+    if (docForExpand) {
+      const expandRow = docForExpand.createElement('div');
+      expandRow.className = 'studio-folder-actions';
+      if (expandBtn.element && typeof (expandBtn.element as any).before === 'function') {
+        (expandBtn.element as any).before(expandRow);
+      }
+      if (typeof expandRow.append === 'function') {
+        expandRow.append(expandBtn.element, collapseBtn.element);
+      }
+    }
+
     // Settings for every enabled layer. Live layers are matched by their order among the enabled ones.
     let live = 0;
     for (let i = 0; i < preset.layers.length; i++) {
@@ -1046,7 +1068,7 @@ export class Studio {
   }
 
   private bindSection(pane: Pane, title: string, specs: readonly ParamSpec[], settings: Settings, apply: () => void): void {
-    bindSection(
+    const res = bindSection(
       pane,
       title,
       specs,
@@ -1055,6 +1077,23 @@ export class Studio {
       () => this.opts.session.commit(this.id),
       (spec) => renderHelperContent(this.helperBar, spec),
     );
+    if (res.folders) {
+      this.sectionFolders.push(...res.folders);
+    }
+  }
+
+  /** Expand all collapsible section and category headers in Studio. */
+  expandAll(): void {
+    for (const folder of this.sectionFolders) {
+      folder.expanded = true;
+    }
+  }
+
+  /** Collapse all collapsible section and category headers in Studio. */
+  collapseAll(): void {
+    for (const folder of this.sectionFolders) {
+      folder.expanded = false;
+    }
   }
 
   /** Randomise or mutate every unlocked layer (and feedback/post), as one undo step. */
@@ -1397,12 +1436,16 @@ export function bindSection(
   apply?: () => void,
   onCommit?: () => void,
   onHelperUpdate?: (spec: ParamSpec | null) => void,
-): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void } {
-  if (specs.length === 0) return { specBindings: [], updateVisibility: () => {} };
+): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void; folders: any[] } {
+  if (specs.length === 0) return { specBindings: [], updateVisibility: () => {}, folders: [] };
+  const folders: any[] = [];
   const sectionTitle = title.charAt(0).toUpperCase() + title.slice(1);
   const sectionFolder = typeof pane.addFolder === 'function'
     ? pane.addFolder({ title: sectionTitle, expanded: false })
     : pane;
+  if (sectionFolder && sectionFolder !== pane) {
+    folders.push(sectionFolder);
+  }
 
   const holder: Record<string, ParamValue> = {};
   for (const spec of specs) {
@@ -1443,6 +1486,9 @@ export function bindSection(
     const target = groupName && typeof sectionFolder.addFolder === 'function'
       ? sectionFolder.addFolder({ title: groupName, expanded: false })
       : sectionFolder;
+    if (target && target !== sectionFolder && target !== pane) {
+      folders.push(target);
+    }
     for (const spec of groupSpecs) {
       const push = () => {
         onCommit?.();
@@ -1463,7 +1509,7 @@ export function bindSection(
 
   updateVisibility();
 
-  return { specBindings, updateVisibility };
+  return { specBindings, updateVisibility, folders };
 }
 
 export function bindSpec(
