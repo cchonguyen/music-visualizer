@@ -148,6 +148,7 @@ export class PresetSession {
 
   /** Loads user presets saved in this browser. Bad entries are skipped, not fatal. */
   loadUserPresets(): string[] {
+    this.loadUserPresetFolders();
     const skipped: string[] = [];
     let raw: unknown = [];
     try {
@@ -159,14 +160,15 @@ export class PresetSession {
     for (const item of raw) {
       try {
         const id = String((item as { id: unknown }).id);
-        const folderId = (item as { folderId?: unknown }).folderId;
+        const rawFolderId = (item as { folderId?: unknown }).folderId;
+        const folderId = typeof rawFolderId === 'string' && rawFolderId.trim() ? rawFolderId.trim() : undefined;
         const { preset } = parsePreset((item as { preset: unknown }).preset, this.registry);
         this.entries.set(id, {
           id,
           builtin: false,
           preset,
           savedJson: JSON.stringify(preset),
-          folderId: typeof folderId === 'string' ? folderId : undefined,
+          folderId,
         });
       } catch (err) {
         skipped.push((err as Error).message);
@@ -302,10 +304,20 @@ export class PresetSession {
     const preset = structuredClone(from.preset);
     preset.name = name.trim() || preset.name;
     const id = `user-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-    const effectiveFolderId = folderId !== undefined ? (folderId.trim() || undefined) : from.folderId;
+    let effectiveFolderId = folderId !== undefined ? (folderId ? folderId.trim() : undefined) : from.folderId;
+    if (effectiveFolderId && !this.folders.some((f) => f.id === effectiveFolderId)) {
+      effectiveFolderId = undefined;
+    }
     this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset), folderId: effectiveFolderId });
     this.persist();
     return id;
+  }
+
+  /** Duplicates a preset, keeping it in the same folder if applicable. */
+  duplicate(fromId: string, name?: string): string {
+    const from = this.require(fromId);
+    const newName = name ?? `${from.preset.name} copy`;
+    return this.saveAs(fromId, newName, from.folderId);
   }
 
   rename(id: string, name: string): void {
@@ -417,7 +429,7 @@ export class PresetSession {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Folder name cannot be empty.');
     const folder: UserPresetFolder = {
-      id: `folder-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
+      id: `folder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: trimmed,
       createdAt: Date.now(),
     };
@@ -449,16 +461,33 @@ export class PresetSession {
   }
 
   setPresetFolder(presetId: string, folderId: string | undefined): void {
-    const entry = this.require(presetId);
+    const entry = this.entries.get(presetId);
+    if (!entry) {
+      throw new Error(`unknown preset "${presetId}"`);
+    }
     if (entry.builtin) {
       throw new Error('Cannot move built-in system presets.');
     }
-    entry.folderId = folderId ? folderId.trim() : undefined;
+    let targetFolderId: string | undefined = undefined;
+    if (folderId !== undefined && folderId !== null) {
+      const clean = folderId.trim();
+      if (clean) {
+        const exists = this.folders.some((f) => f.id === clean);
+        if (!exists) {
+          throw new Error(`Folder "${clean}" not found.`);
+        }
+        targetFolderId = clean;
+      }
+    }
+    entry.folderId = targetFolderId;
     this.persist();
   }
 
   getPresetFolder(presetId: string): string | undefined {
-    return this.entries.get(presetId)?.folderId;
+    const entry = this.entries.get(presetId);
+    if (!entry || entry.builtin || !entry.folderId) return undefined;
+    if (!this.folders.some((f) => f.id === entry.folderId)) return undefined;
+    return entry.folderId;
   }
 
   // --- Categorized Querying ---
