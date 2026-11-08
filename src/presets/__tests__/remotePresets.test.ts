@@ -342,3 +342,96 @@ describe('softDeleteRemotePreset', () => {
     expect(res.error).toBe('Network error');
   });
 });
+
+describe('system preset writes via the same-origin admin proxy (Slice 11.9)', () => {
+  const emptyConfig: RemoteConfig = { supabaseUrl: '', anonKey: '' };
+
+  it('upsert POSTs the record to the proxy with same-origin credentials and only Content-Type', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '' });
+
+    const res = await upsertRemotePreset(sampleRecord, emptyConfig, 'cf-access-verified', mockFetch as unknown as typeof fetch);
+    expect(res.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    const [calledUrl, calledInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('/admin/api/presets');
+    expect(calledInit.method).toBe('POST');
+    expect(calledInit.credentials).toBe('same-origin');
+    expect(calledInit.headers).toEqual({ 'Content-Type': 'application/json' });
+
+    const body = JSON.parse(calledInit.body as string);
+    expect(body).toMatchObject({
+      id: sampleRecord.id,
+      name: sampleRecord.name,
+      subfolder: 'showcase',
+      sort_order: 15,
+      tags: sampleRecord.tags,
+      is_deleted: false,
+    });
+    expect(body.preset_data).toEqual(sampleRecord.preset_data);
+  });
+
+  it('upsert via the proxy ignores Supabase config and sends no service or anon headers', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => '' });
+
+    await upsertRemotePreset(sampleRecord, testConfig, 'cf-access-verified', mockFetch as unknown as typeof fetch);
+
+    const [calledUrl, calledInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('/admin/api/presets');
+    const headers = calledInit.headers as Record<string, string>;
+    expect(headers).not.toHaveProperty('apikey');
+    expect(headers).not.toHaveProperty('Authorization');
+    expect(headers).not.toHaveProperty('x-supabase-url');
+  });
+
+  it('softDelete PATCHes the proxy with an encoded id and the is_deleted body', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 204, text: async () => '' });
+
+    const res = await softDeleteRemotePreset('target id/x', emptyConfig, 'cf-access-verified', mockFetch as unknown as typeof fetch);
+    expect(res.success).toBe(true);
+
+    const [calledUrl, calledInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe('/admin/api/presets?id=target%20id%2Fx');
+    expect(calledInit.method).toBe('PATCH');
+    expect(calledInit.credentials).toBe('same-origin');
+    expect(calledInit.headers).toEqual({ 'Content-Type': 'application/json' });
+    const body = JSON.parse(calledInit.body as string);
+    expect(body.is_deleted).toBe(true);
+    expect(typeof body.updated_at).toBe('string');
+  });
+
+  it('returns the proxy error body when the write is rejected', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      text: async () => '{"reason":"email_not_allowed"}',
+    });
+
+    const res = await upsertRemotePreset(sampleRecord, emptyConfig, 'cf-access-verified', mockFetch as unknown as typeof fetch);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('email_not_allowed');
+  });
+
+  it('returns the network error when the proxy cannot be reached', async () => {
+    const mockFetch = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
+
+    const res = await softDeleteRemotePreset('target-id', emptyConfig, 'cf-access-verified', mockFetch as unknown as typeof fetch);
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('Failed to fetch');
+  });
+
+  it('direct path is unchanged for other tokens: no credentials option, still needs config', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 201, text: async () => '' });
+
+    await upsertRemotePreset(sampleRecord, testConfig, 'admin-token-jwt', mockFetch as unknown as typeof fetch);
+    const [calledUrl, calledInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toBe(`${testConfig.supabaseUrl}/rest/v1/system_presets`);
+    expect(calledInit.credentials).toBeUndefined();
+
+    const unconfigured = await upsertRemotePreset(sampleRecord, emptyConfig, 'admin-token-jwt', mockFetch as unknown as typeof fetch);
+    expect(unconfigured.error).toBe('Remote endpoint not configured');
+    const deleted = await softDeleteRemotePreset('x', emptyConfig, 'admin-token-jwt', mockFetch as unknown as typeof fetch);
+    expect(deleted.error).toBe('Remote endpoint not configured');
+  });
+});

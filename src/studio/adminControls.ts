@@ -275,7 +275,7 @@ export function adminLogout(adminGateway: IAdminGateway): void {
  */
 export function saveSystemPresetAction(session: PresetSession, id: string): void {
   session.saveSystemPreset(id);
-  showToast('System preset saved remotely & propagated to all users');
+  showToast('System preset saved');
 }
 
 /**

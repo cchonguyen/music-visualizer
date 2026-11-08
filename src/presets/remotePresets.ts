@@ -197,9 +197,41 @@ export async function fetchRemotePresets(
   }
 }
 
+/** Admin token set by the Cloudflare Access handshake (adminGateway). Writes go through the same-origin proxy. */
+export const CF_ACCESS_ADMIN_TOKEN = 'cf-access-verified';
+/** Same-origin Worker proxy for system preset writes (Slice 11.8). */
+export const ADMIN_PRESETS_PROXY_PATH = '/admin/api/presets';
+
+/** Same-origin proxy write: the Worker holds the service key and checks the Access cookie. */
+async function proxyPresetWrite(
+  url: string,
+  method: 'POST' | 'PATCH',
+  body: unknown,
+  fetchFn: typeof fetch,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetchFn(url, {
+      method,
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      return { success: false, error: errText || `HTTP ${response.status}: ${response.statusText}` };
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * Upsert a system preset record to Supabase via PostgREST.
  * Requires admin token or service role credentials.
+ * With the Cloudflare Access token, writes go through the same-origin proxy and need no Supabase config.
  */
 export async function upsertRemotePreset(
   preset: RemotePresetRecord,
@@ -207,14 +239,6 @@ export async function upsertRemotePreset(
   adminToken?: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<{ success: boolean; error?: string }> {
-  if (!config.supabaseUrl || !config.anonKey) {
-    return { success: false, error: 'Remote endpoint not configured' };
-  }
-
-  const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
-  const url = `${baseUrl}/rest/v1/system_presets`;
-  const authToken = adminToken || config.anonKey;
-
   const payload = {
     id: preset.id,
     name: preset.name,
@@ -225,6 +249,18 @@ export async function upsertRemotePreset(
     is_deleted: false,
     updated_at: new Date().toISOString(),
   };
+
+  if (adminToken === CF_ACCESS_ADMIN_TOKEN) {
+    return proxyPresetWrite(ADMIN_PRESETS_PROXY_PATH, 'POST', payload, fetchFn);
+  }
+
+  if (!config.supabaseUrl || !config.anonKey) {
+    return { success: false, error: 'Remote endpoint not configured' };
+  }
+
+  const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
+  const url = `${baseUrl}/rest/v1/system_presets`;
+  const authToken = adminToken || config.anonKey;
 
   try {
     const response = await fetchFn(url, {
@@ -259,6 +295,20 @@ export async function softDeleteRemotePreset(
   adminToken?: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<{ success: boolean; error?: string }> {
+  const payload = {
+    is_deleted: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (adminToken === CF_ACCESS_ADMIN_TOKEN) {
+    return proxyPresetWrite(
+      `${ADMIN_PRESETS_PROXY_PATH}?id=${encodeURIComponent(id)}`,
+      'PATCH',
+      payload,
+      fetchFn,
+    );
+  }
+
   if (!config.supabaseUrl || !config.anonKey) {
     return { success: false, error: 'Remote endpoint not configured' };
   }
@@ -266,11 +316,6 @@ export async function softDeleteRemotePreset(
   const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
   const url = `${baseUrl}/rest/v1/system_presets?id=eq.${encodeURIComponent(id)}`;
   const authToken = adminToken || config.anonKey;
-
-  const payload = {
-    is_deleted: true,
-    updated_at: new Date().toISOString(),
-  };
 
   try {
     const response = await fetchFn(url, {

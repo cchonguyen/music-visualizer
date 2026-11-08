@@ -40,6 +40,8 @@ import {
   loadCachedPresets,
   saveCachedPresets,
   normalizeSubfolder,
+  upsertRemotePreset,
+  softDeleteRemotePreset,
   type RemotePresetRecord,
 } from './presets/remotePresets';
 import { getRemoteConfig, type RemoteConfig } from './config/remoteConfig';
@@ -222,7 +224,20 @@ function start(): void {
     const comp = new Compositor([]);
     compositor = comp;
     host.addLayer(comp);
-    session = new PresetSession(comp, SCHEMAS, safeStorage(), adminGateway);
+    session = new PresetSession(comp, SCHEMAS, safeStorage(), {
+      adminGateway,
+      remoteWriter: {
+        upsert: (record, token) => upsertRemotePreset(record, getRemoteConfig(), token),
+        softDelete: (id, token) => softDeleteRemotePreset(id, getRemoteConfig(), token),
+        onResult: (r) => {
+          if (!r.success) {
+            showToast(`Not saved to the server: ${r.error}`);
+          } else {
+            showToast(r.op === 'delete' ? 'Deleted for everyone' : 'Saved for everyone');
+          }
+        },
+      },
+    });
     for (const b of ALL_PRESETS) session.addBuiltin(b.id, b.preset);
     const cached = loadCachedPresets(safeStorage());
     if (cached?.presets && cached.presets.length > 0) {

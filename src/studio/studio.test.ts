@@ -1943,7 +1943,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(saveBtn).toBeDefined();
     saveBtn.fire('click');
     expect(session.saveSystemPreset).toHaveBeenCalledWith('crown');
-    expect(showToastSpy).toHaveBeenCalledWith('System preset saved remotely & propagated to all users');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset saved');
 
     // 5. Delete button is present with 2-tap confirmation protocol
     const deleteBtn = pane.buttons.find((b: any) => b.title === 'Delete');
@@ -2092,7 +2092,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
 
     saveSystemPresetAction(mockSession, 'sys-1');
     expect(mockSession.saveSystemPreset).toHaveBeenCalledWith('sys-1');
-    expect(showToastSpy).toHaveBeenCalledWith('System preset saved remotely & propagated to all users');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset saved');
 
     deleteSystemPresetAction(mockSession, 'sys-1');
     expect(mockSession.removeSystemPreset).toHaveBeenCalledWith('sys-1');
