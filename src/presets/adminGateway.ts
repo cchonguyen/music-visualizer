@@ -317,21 +317,11 @@ export class AdminGateway implements IAdminGateway {
         }
       }
 
-      // If no target email configured, validate valid email structure
-      if (email.includes('@') && email.includes('.')) {
-        const nextState: AdminSessionState = {
-          isAdmin: true,
-          adminEmail: email,
-          adminToken: 'cf-access-verified',
-          role: 'admin',
-        };
-        this.state = nextState;
-        this.saveSession(nextState);
-        this.notifyListeners();
-        return { success: true };
+      // If no target email configured, email-only login is strictly disallowed for security
+      if (!email.includes('@') || !email.includes('.')) {
+        return { success: false, error: 'Invalid email format' };
       }
-
-      return { success: false, error: 'Invalid email format' };
+      return { success: false, error: 'Admin email not configured. Secret passkey required.' };
     }
 
     return { success: false, error: 'Invalid admin credentials' };
