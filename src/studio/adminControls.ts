@@ -63,32 +63,61 @@ export function renderAdminBadge(container: HTMLElement, isAdmin: boolean): HTML
 }
 
 /**
- * Prompt user for administrator credentials (passkey secret or Cloudflare Access email).
+ * Log in to administrator mode via Cloudflare Access gate (/admin) or local passkey fallback.
  */
 export async function promptAdminLogin(
   adminGateway: IAdminGateway,
-  promptFn: (msg: string, defaultVal?: string) => string | null = (msg, d) => {
-    if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-      return window.prompt(msg, d);
+  promptFn?: (msg: string, defaultVal?: string) => string | null,
+  navigateFn: (url: string) => void = (url) => {
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.href = url;
     }
-    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).prompt === 'function') {
-      return (globalThis as any).prompt(msg, d);
-    }
-    return null;
   },
 ): Promise<{ success: boolean; error?: string }> {
-  const input = promptFn('Enter Admin Secret Passkey:');
-  if (!input || !input.trim()) {
-    return { success: false, error: 'Cancelled' };
+  // 1. Check if already authenticated with Cloudflare Access edge identity
+  if (typeof adminGateway.checkCloudflareAccess === 'function') {
+    const verified = await adminGateway.checkCloudflareAccess();
+    if (verified) {
+      showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+      return { success: true };
+    }
   }
-  const clean = input.trim();
-  const res = await adminGateway.login({ secret: clean });
-  if (res.success) {
-    showToast('👑 Admin Mode Activated');
-  } else {
-    showToast(res.error || 'Admin login failed');
+
+  // 2. Local dev check (localhost, test environment, or when prompt function is explicitly provided)
+  const isLocalOrTest =
+    typeof window === 'undefined' ||
+    !window.location?.hostname ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === '' ||
+    typeof promptFn === 'function';
+
+  if (isLocalOrTest) {
+    const prompt =
+      promptFn ??
+      ((msg, d) => {
+        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+          return window.prompt(msg, d);
+        }
+        return null;
+      });
+    const input = prompt('Local Dev: Enter Admin Passkey:');
+    if (!input || !input.trim()) {
+      return { success: false, error: 'Cancelled' };
+    }
+    const res = await adminGateway.login({ secret: input.trim() });
+    if (res.success) {
+      showToast('👑 Admin Mode Activated');
+    } else {
+      showToast(res.error || 'Admin login failed');
+    }
+    return res;
   }
-  return res;
+
+  // 3. In production: Redirect directly to Cloudflare Access login gate at /admin
+  showToast('Redirecting to Cloudflare Access login...');
+  navigateFn('/admin');
+  return { success: true };
 }
 
 /**
