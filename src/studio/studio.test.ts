@@ -16,6 +16,8 @@ import {
   STUDIO_HELPER_IDLE_TEXT,
   renderHelperContent,
   attachSpecHelper,
+  SYSTEM_OPTGROUP_LABELS,
+  renderPresetSelectHierarchy,
   Studio,
 } from './studio';
 import { getGlobalDirector, resetGlobalDirector } from '../render/globalDirector';
@@ -91,6 +93,7 @@ interface MockElement {
   getAttribute(k: string): string | null;
   append(...nodes: (MockElement | string)[]): void;
   appendChild(node: MockElement): MockElement;
+  removeChild?(node: MockElement): MockElement;
   replaceChildren(...nodes: (MockElement | string)[]): void;
   addEventListener(evt: string, fn: (ev: any) => void): void;
   dispatchEvent(evt: { type: string; [key: string]: any }): boolean;
@@ -105,10 +108,17 @@ interface MockElement {
   title?: string;
   hidden?: boolean;
   ownerDocument?: any;
+  value?: string;
+  label?: string;
+  selected?: boolean;
+  firstChild?: MockElement | null;
 }
 
 function createMockElement(tagName: string): MockElement {
   let _text = '';
+  let _value = '';
+  let _label = '';
+  let _selected = false;
   const el: MockElement = {
     tagName: tagName.toUpperCase(),
     className: '',
@@ -121,6 +131,31 @@ function createMockElement(tagName: string): MockElement {
     set textContent(v: string) {
       _text = v;
       el.children = [];
+    },
+    get value(): string {
+      return el.attributes['value'] ?? _value;
+    },
+    set value(v: string) {
+      _value = v;
+      el.attributes['value'] = v;
+    },
+    get label(): string {
+      return el.attributes['label'] ?? _label;
+    },
+    set label(v: string) {
+      _label = v;
+      el.attributes['label'] = v;
+    },
+    get selected(): boolean {
+      return el.attributes['selected'] !== undefined ? true : _selected;
+    },
+    set selected(v: boolean) {
+      _selected = v;
+      if (v) el.attributes['selected'] = 'selected';
+      else delete el.attributes['selected'];
+    },
+    get firstChild(): MockElement | null {
+      return el.children[0] ?? null;
     },
     attributes: {},
     children: [],
@@ -144,6 +179,9 @@ function createMockElement(tagName: string): MockElement {
     setAttribute(k: string, v: string) {
       el.attributes[k] = v;
       if (k === 'class') el.className = v;
+      if (k === 'value') _value = v;
+      if (k === 'label') _label = v;
+      if (k === 'selected') _selected = true;
     },
     getAttribute(k: string) {
       return el.attributes[k] ?? null;
@@ -161,6 +199,11 @@ function createMockElement(tagName: string): MockElement {
     },
     appendChild(node: MockElement) {
       el.children.push(node);
+      return node;
+    },
+    removeChild(node: MockElement) {
+      const idx = el.children.indexOf(node);
+      if (idx !== -1) el.children.splice(idx, 1);
       return node;
     },
     replaceChildren(...nodes: (MockElement | string)[]) {
@@ -251,6 +294,7 @@ function createMockPane() {
     options: any;
     listeners: Record<string, ((ev: { value: any }) => void)[]>;
     fire: (event: string, value: any) => void;
+    refresh: () => void;
     hidden: boolean;
     element: MockElement;
   }> = [];
@@ -261,6 +305,7 @@ function createMockPane() {
   }> = [];
 
   const blades: any[] = [];
+  const buttons: any[] = [];
 
   const addBinding = (target: any, prop: any, options: any) => {
     const listeners: Record<string, ((ev: { value: any }) => void)[]> = {};
@@ -271,6 +316,13 @@ function createMockPane() {
     labelEl.textContent = options?.label ?? prop;
     element.appendChild(labelEl);
 
+    let selectEl: MockElement | null = null;
+    if (options?.options) {
+      selectEl = createMockElement('select');
+      selectEl.className = 'tp-lstv_s';
+      element.appendChild(selectEl);
+    }
+
     const item = {
       target,
       prop,
@@ -278,6 +330,7 @@ function createMockPane() {
       listeners,
       hidden: false,
       element,
+      refresh: () => {},
       on: (event: string, fn: (ev: { value: any }) => void) => {
         listeners[event] = listeners[event] || [];
         listeners[event].push(fn);
@@ -285,6 +338,9 @@ function createMockPane() {
       },
       fire: (event: string, value: any) => {
         target[prop] = value;
+        if (selectEl) {
+          selectEl.value = String(value);
+        }
         listeners[event]?.forEach((fn) => fn({ value }));
       },
     };
@@ -299,12 +355,33 @@ function createMockPane() {
   };
 
   const addBlade = (options: any) => {
-    const blade = { options, hidden: false };
+    const blade = { options, hidden: false, element: createMockElement('div') };
     blades.push(blade);
     return blade;
   };
 
-  return { addBinding, bindings, addFolder, folders, addBlade, blades };
+  const addButton = (options: any) => {
+    const element = createMockElement('button');
+    element.className = 'tp-btnv';
+    const listeners: Record<string, ((ev: any) => void)[]> = {};
+    const btn = {
+      title: options?.title ?? '',
+      disabled: false,
+      element,
+      on: (event: string, fn: (ev: any) => void) => {
+        listeners[event] = listeners[event] || [];
+        listeners[event].push(fn);
+        return btn;
+      },
+      fire: (event: string) => {
+        listeners[event]?.forEach((fn) => fn({}));
+      },
+    };
+    buttons.push(btn);
+    return btn;
+  };
+
+  return { addBinding, bindings, addFolder, folders, addBlade, blades, addButton, buttons, dispose: () => {}, refresh: () => {} };
 }
 
 describe('buildLayerControls (live Opacity, Blend, Trails)', () => {
@@ -996,5 +1073,284 @@ describe('Helper Bar & Warning Badge System (Slice 9.8)', () => {
     // Call again on same blade
     attachSpecHelper(blade, intenseSpec);
     expect(el.querySelectorAll('.intense-badge').length).toBe(1);
+  });
+});
+
+describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
+  const createMockPreset = (id: string, name: string): any => ({
+    id,
+    builtin: true,
+    preset: {
+      version: 1,
+      name,
+      tags: [],
+      transition: { style: 'crossfade', seconds: 1 },
+      feedback: {},
+      layers: [],
+      post: {},
+    },
+  });
+
+  const createSampleCategorized = () => ({
+    system: {
+      showcase: [
+        createMockPreset('13-solar-crown-eclipse', '13 · Solar Crown Eclipse'),
+        createMockPreset('14-sacred-orbit-mandala', '14 · Sacred Orbit Mandala'),
+      ],
+      flagship: [
+        createMockPreset('01-curl-fluid-warp', '01 · Curl Fluid Warp'),
+        createMockPreset('02-kaleidoscopic-mandala', '02 · Kaleidoscopic Mandala'),
+      ],
+      classics: [
+        createMockPreset('crown', 'Crown'),
+        createMockPreset('flight', 'Flight'),
+      ],
+    },
+    user: {
+      folders: [
+        {
+          folder: { id: 'folder-1', name: 'Chill Ambient', createdAt: 1000 },
+          entries: [createMockPreset('user-1', 'Midnight Flight')],
+        },
+      ],
+      unfiled: [createMockPreset('user-2', 'Quick Test')],
+    },
+  });
+
+  it('renders all hierarchical optgroups with expected labels and matching options', () => {
+    const selectEl = createMockElement('select');
+    const categorized = createSampleCategorized();
+    const session = {
+      listCategorized: () => categorized,
+    } as any;
+
+    renderPresetSelectHierarchy(selectEl as any, session, '01-curl-fluid-warp');
+
+    const optgroups = selectEl.querySelectorAll('optgroup');
+    expect(optgroups).toHaveLength(5);
+
+    // Verify optgroup labels
+    expect(optgroups[0]?.label).toBe('System: Stage 9 Showcase (13–20)');
+    expect(optgroups[1]?.label).toBe('System: Flagship Generative (01–12)');
+    expect(optgroups[2]?.label).toBe('System: Classics & Textures');
+    expect(optgroups[3]?.label).toBe('User: Chill Ambient');
+    expect(optgroups[4]?.label).toBe('User: Unfiled');
+
+    // Verify constants match
+    expect(optgroups[0]?.label).toBe(SYSTEM_OPTGROUP_LABELS.showcase);
+    expect(optgroups[1]?.label).toBe(SYSTEM_OPTGROUP_LABELS.flagship);
+    expect(optgroups[2]?.label).toBe(SYSTEM_OPTGROUP_LABELS.classics);
+
+    // Verify options in Showcase
+    const showcaseOpts = optgroups[0]!.querySelectorAll('option');
+    expect(showcaseOpts).toHaveLength(2);
+    expect(showcaseOpts[0]?.value).toBe('13-solar-crown-eclipse');
+    expect(showcaseOpts[0]?.textContent).toBe('13 · Solar Crown Eclipse');
+    expect(showcaseOpts[1]?.value).toBe('14-sacred-orbit-mandala');
+    expect(showcaseOpts[1]?.textContent).toBe('14 · Sacred Orbit Mandala');
+
+    // Verify options in Flagship
+    const flagshipOpts = optgroups[1]!.querySelectorAll('option');
+    expect(flagshipOpts).toHaveLength(2);
+    expect(flagshipOpts[0]?.value).toBe('01-curl-fluid-warp');
+    expect(flagshipOpts[0]?.textContent).toBe('01 · Curl Fluid Warp');
+
+    // Verify options in Classics
+    const classicsOpts = optgroups[2]!.querySelectorAll('option');
+    expect(classicsOpts).toHaveLength(2);
+    expect(classicsOpts[0]?.value).toBe('crown');
+    expect(classicsOpts[0]?.textContent).toBe('Crown');
+
+    // Verify options in User Folder
+    const userFolderOpts = optgroups[3]!.querySelectorAll('option');
+    expect(userFolderOpts).toHaveLength(1);
+    expect(userFolderOpts[0]?.value).toBe('user-1');
+    expect(userFolderOpts[0]?.textContent).toBe('Midnight Flight');
+
+    // Verify options in User Unfiled
+    const unfiledOpts = optgroups[4]!.querySelectorAll('option');
+    expect(unfiledOpts).toHaveLength(1);
+    expect(unfiledOpts[0]?.value).toBe('user-2');
+    expect(unfiledOpts[0]?.textContent).toBe('Quick Test');
+
+    // Verify current selection is set
+    expect(selectEl.value).toBe('01-curl-fluid-warp');
+    expect(flagshipOpts[0]?.selected).toBe(true);
+    expect(flagshipOpts[1]?.selected).toBe(false);
+  });
+
+  it('clears previous children before re-rendering', () => {
+    const selectEl = createMockElement('select');
+    const oldOption = createMockElement('option');
+    oldOption.value = 'stale';
+    oldOption.textContent = 'Stale Option';
+    selectEl.appendChild(oldOption);
+    expect(selectEl.querySelectorAll('option')).toHaveLength(1);
+
+    const categorized = createSampleCategorized();
+    const session = {
+      listCategorized: () => categorized,
+    } as any;
+
+    renderPresetSelectHierarchy(selectEl as any, session, 'crown');
+
+    // Stale option must be gone
+    const allOptions = selectEl.querySelectorAll('option');
+    expect(allOptions.some((o) => o.value === 'stale')).toBe(false);
+    expect(selectEl.value).toBe('crown');
+  });
+
+  it('omits empty categories when groups have 0 presets', () => {
+    const selectEl = createMockElement('select');
+    const emptyCategorized = {
+      system: {
+        showcase: [],
+        flagship: [createMockPreset('01-curl-fluid-warp', '01 · Curl Fluid Warp')],
+        classics: [],
+      },
+      user: {
+        folders: [
+          {
+            folder: { id: 'empty-folder', name: 'Empty Folder', createdAt: 1000 },
+            entries: [],
+          },
+        ],
+        unfiled: [],
+      },
+    };
+
+    const session = {
+      listCategorized: () => emptyCategorized,
+    } as any;
+
+    renderPresetSelectHierarchy(selectEl as any, session, '01-curl-fluid-warp');
+
+    const optgroups = selectEl.querySelectorAll('optgroup');
+    // Only Flagship has presets; showcase, classics, empty folder and unfiled should be omitted
+    expect(optgroups).toHaveLength(1);
+    expect(optgroups[0]?.label).toBe('System: Flagship Generative (01–12)');
+  });
+
+  it('integrates with Studio.bind() and renders hierarchy on dropdown element', () => {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    const categorized = createSampleCategorized();
+    const allPresets = [
+      ...categorized.system.showcase,
+      ...categorized.system.flagship,
+      ...categorized.system.classics,
+      ...categorized.user.folders.flatMap((f) => f.entries),
+      ...categorized.user.unfiled,
+    ];
+
+    const presetMap = new Map(allPresets.map((e) => [e.id, e]));
+
+    const session = {
+      list: () => allPresets,
+      listCategorized: () => categorized,
+      get: (id: string) => presetMap.get(id),
+      isDirty: () => false,
+      commit: vi.fn(),
+      save: vi.fn(),
+      saveAs: vi.fn(),
+      remove: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+      canUndo: () => false,
+      canRedo: () => false,
+      exportJson: () => '{}',
+      importAsset: () => ({ kind: 'preset', warnings: [] }),
+      sceneOf: () => ({ layers: [], setFeedback: vi.fn() }),
+      refreshPost: vi.fn(),
+      rebuild: vi.fn(),
+    } as any;
+
+    let mockPaneInstance: any = null;
+    const mockPaneFactory = () => {
+      mockPaneInstance = createMockPane();
+      return mockPaneInstance;
+    };
+
+    const switchTo = vi.fn();
+    const studio = new Studio(container as any, {
+      session,
+      switchTo,
+      paneFactory: mockPaneFactory,
+    });
+
+    studio.bind('crown');
+
+    expect(mockPaneInstance).not.toBeNull();
+    const presetBinding = mockPaneInstance.bindings.find((b: any) => b.prop === 'id');
+    expect(presetBinding).toBeDefined();
+
+    // Verify select element exists in preset binding
+    const selectEl = presetBinding.element.querySelector('select');
+    expect(selectEl).not.toBeNull();
+
+    // Verify hierarchy was rendered into selectEl
+    const optgroups = selectEl!.querySelectorAll('optgroup');
+    expect(optgroups).toHaveLength(5);
+    expect(selectEl!.value).toBe('crown');
+
+    // Simulate user selecting another preset from select element
+    selectEl!.value = '13-solar-crown-eclipse';
+    selectEl!.dispatchEvent({ type: 'change' });
+    expect(switchTo).toHaveBeenCalledWith('13-solar-crown-eclipse');
+
+    // Verify refreshPresetDropdown re-renders dropdown
+    studio.refreshPresetDropdown();
+    expect(selectEl!.querySelectorAll('optgroup')).toHaveLength(5);
+  });
+
+  it('safely handles environments where select element is missing without throwing', () => {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    const session = {
+      list: () => [],
+      listCategorized: () => ({
+        system: { showcase: [], flagship: [], classics: [] },
+        user: { folders: [], unfiled: [] },
+      }),
+      get: () => ({
+        id: 'mock',
+        preset: { name: 'Mock', tags: [], transition: { style: 'crossfade', seconds: 1 }, feedback: {}, layers: [], post: {} },
+      }),
+      isDirty: () => false,
+      commit: vi.fn(),
+      canUndo: () => false,
+      canRedo: () => false,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      save: vi.fn(),
+      saveAs: vi.fn(),
+      sceneOf: () => ({ layers: [], setFeedback: vi.fn() }),
+      refreshPost: vi.fn(),
+    } as any;
+
+    const mockPaneFactory = () => {
+      const pane = createMockPane();
+      const originalAddBinding = pane.addBinding;
+      pane.addBinding = (target: any, prop: any, options: any) => {
+        const item = originalAddBinding(target, prop, { ...options, options: undefined });
+        return item;
+      };
+      return pane;
+    };
+
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory: mockPaneFactory,
+    });
+
+    // Should not throw even if no select element is in the binding or body
+    expect(() => studio.bind('mock')).not.toThrow();
   });
 });

@@ -11,7 +11,7 @@ import { SCHEMAS } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
-import type { PresetSession } from '../presets/session';
+import type { PresetSession, SessionEntry } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
 import { isSpecVisible, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
@@ -37,6 +37,8 @@ export interface StudioOptions {
   frameMs?: () => number;
   /** Live link value (0..1) for a key `${presetId}L${layerIndexAmongEnabled}.${name}` or `${presetId}F.${name}`. */
   linkMeter?: (key: string) => number | undefined;
+  /** Optional custom Pane factory for testing in node / mock environments. */
+  paneFactory?: (options: { container: HTMLElement; title: string }) => any;
 }
 
 /** Frame budget at 60 fps. The readout turns into a warning above this. */
@@ -168,6 +170,86 @@ export function attachSpecHelper(
   }
 }
 
+export const SYSTEM_OPTGROUP_LABELS = {
+  showcase: 'System: Stage 9 Showcase (13–20)',
+  flagship: 'System: Flagship Generative (01–12)',
+  classics: 'System: Classics & Textures',
+} as const;
+
+/** Populate selectEl with an optgroup hierarchy matching session categorization (Slice 10.3). */
+export function renderPresetSelectHierarchy(
+  selectEl: HTMLSelectElement,
+  session: PresetSession,
+  currentId: string,
+): void {
+  if (!selectEl) return;
+
+  if (typeof selectEl.replaceChildren === 'function') {
+    selectEl.replaceChildren();
+  } else {
+    while (selectEl.firstChild) {
+      selectEl.removeChild(selectEl.firstChild);
+    }
+  }
+
+  const doc = selectEl.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
+
+  const categorized = typeof session.listCategorized === 'function' ? session.listCategorized() : null;
+  if (!categorized) return;
+
+  const addGroup = (label: string, entries: SessionEntry[]) => {
+    if (!entries || entries.length === 0) return;
+    const optgroup = doc.createElement('optgroup');
+    optgroup.setAttribute('label', label);
+    if ('label' in optgroup) {
+      (optgroup as any).label = label;
+    }
+    for (const entry of entries) {
+      const opt = doc.createElement('option');
+      opt.setAttribute('value', entry.id);
+      if ('value' in opt) {
+        (opt as any).value = entry.id;
+      }
+      opt.textContent = entry.preset.name;
+      if (entry.id === currentId) {
+        opt.setAttribute('selected', 'selected');
+        if ('selected' in opt) {
+          (opt as any).selected = true;
+        }
+      }
+      optgroup.appendChild(opt);
+    }
+    selectEl.appendChild(optgroup);
+  };
+
+  // System groups
+  if (categorized.system.showcase.length > 0) {
+    addGroup(SYSTEM_OPTGROUP_LABELS.showcase, categorized.system.showcase);
+  }
+  if (categorized.system.flagship.length > 0) {
+    addGroup(SYSTEM_OPTGROUP_LABELS.flagship, categorized.system.flagship);
+  }
+  if (categorized.system.classics.length > 0) {
+    addGroup(SYSTEM_OPTGROUP_LABELS.classics, categorized.system.classics);
+  }
+
+  // User groups
+  for (const group of categorized.user.folders) {
+    if (group.entries.length > 0) {
+      addGroup(`User: ${group.folder.name}`, group.entries);
+    }
+  }
+  if (categorized.user.unfiled.length > 0) {
+    addGroup('User: Unfiled', categorized.user.unfiled);
+  }
+
+  selectEl.value = currentId;
+  if (typeof selectEl.setAttribute === 'function') {
+    selectEl.setAttribute('value', currentId);
+  }
+}
+
 export class Studio {
   private pane: Pane | null = null;
   private id = '';
@@ -188,6 +270,8 @@ export class Studio {
   private saveAsField: HTMLElement | null = null;
   /** Fixed bottom helper bar element for parameter descriptions & warnings (Slice 9.8). */
   readonly helperBar: HTMLElement;
+  /** Preset select element in the DOM (Slice 10.3). */
+  private presetSelectEl: HTMLSelectElement | null = null;
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -275,6 +359,14 @@ export class Studio {
     return !this.container.hidden;
   }
 
+  /** Re-render the preset hierarchy dropdown without a full pane rebuild (Slice 10.3). */
+  refreshPresetDropdown(): void {
+    const el = this.presetSelectEl ?? this.body.querySelector<HTMLSelectElement>('select');
+    if (el) {
+      renderPresetSelectHierarchy(el, this.opts.session, this.id);
+    }
+  }
+
   /** (Re)build the panel for preset `id`. Call after every switch or structure change. */
   bind(id: string): void {
     this.id = id;
@@ -287,7 +379,10 @@ export class Studio {
     }
     renderHelperContent(this.helperBar, null);
     this.saveAsField = null;
-    const pane = new Pane({ container: this.body, title: 'Preset Studio' });
+    this.presetSelectEl = null;
+    const pane: Pane = this.opts.paneFactory
+      ? (this.opts.paneFactory({ container: this.body, title: 'Preset Studio' }) as unknown as Pane)
+      : new Pane({ container: this.body, title: 'Preset Studio' });
     this.pane = pane;
     const session = this.opts.session;
     const entry = session.get(id);
@@ -295,9 +390,39 @@ export class Studio {
     const preset = entry.preset;
 
     // --- Preset bar -----------------------------------------------------------------
-    const ids = Object.fromEntries(session.list().map((e) => [e.preset.name + (e.builtin ? '' : ' (yours)'), e.id]));
+    const categorized = typeof session.listCategorized === 'function' ? session.listCategorized() : null;
+    const hierarchicalEntries: SessionEntry[] = categorized
+      ? [
+          ...categorized.system.showcase,
+          ...categorized.system.flagship,
+          ...categorized.system.classics,
+          ...categorized.user.folders.flatMap((f) => f.entries),
+          ...categorized.user.unfiled,
+        ]
+      : session.list();
+
+    const allEntries = hierarchicalEntries.length > 0 ? hierarchicalEntries : session.list();
+    const ids = Object.fromEntries(
+      allEntries.map((e) => [e.preset.name + (e.builtin ? '' : ' (yours)'), e.id]),
+    );
     const pick = { id };
-    pane.addBinding(pick, 'id', { label: 'Preset', options: ids }).on('change', (ev) => this.opts.switchTo(String(ev.value)));
+    const presetBinding = pane.addBinding(pick, 'id', { label: 'Preset', options: ids });
+    let lastSwitchedId = id;
+    const onSelectPreset = (newId: string) => {
+      if (newId && newId !== this.id && newId !== lastSwitchedId) {
+        lastSwitchedId = newId;
+        pick.id = newId;
+        this.opts.switchTo(newId);
+      }
+    };
+    presetBinding.on('change', (ev: { value: unknown }) => onSelectPreset(String(ev.value)));
+
+    const selectEl = (presetBinding?.element?.querySelector?.('select') ?? this.body.querySelector?.('select')) as HTMLSelectElement | null;
+    if (selectEl) {
+      this.presetSelectEl = selectEl;
+      renderPresetSelectHierarchy(selectEl, session, id);
+      selectEl.addEventListener?.('change', () => onSelectPreset(selectEl.value));
+    }
     pane.addBinding(preset as unknown as Record<string, unknown>, 'name', { label: 'Name' });
     const dirty = session.isDirty(id) ? ' · unsaved changes' : '';
     // Tags for the auto-cycle (T2): "favourite" and "skip".
@@ -343,10 +468,17 @@ export class Studio {
     redo.on('click', () => this.run(() => {
       session.redo(id);
     }, 'Redone'));
-    const tileGrid = document.createElement('div');
-    tileGrid.className = 'studio-tiles';
-    tiles[0]?.before(tileGrid);
-    tileGrid.append(...tiles);
+    const doc = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+    const tileGrid = doc ? doc.createElement('div') : null;
+    if (tileGrid) {
+      tileGrid.className = 'studio-tiles';
+      if (tiles[0] && typeof (tiles[0] as any).before === 'function') {
+        (tiles[0] as any).before(tileGrid);
+      }
+      if (typeof tileGrid.append === 'function') {
+        tileGrid.append(...tiles);
+      }
+    }
 
     // --- Vary -----------------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
