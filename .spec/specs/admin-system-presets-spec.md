@@ -1,5 +1,7 @@
 # Stage 11 — Administrator System Preset Management Spec (Sector 487)
 
+> **Stage 11 fix (2026-11-08):** slices 11.8–11.10 are specified in the "Stage 11 fix" section at the end of this file.
+
 **Status:** Approved Architecture Specification  
 **Authors:** Tier 1 EL-ARCHITECT  
 **Context Atlas Sector:** `487` (under Sector 400 Architecture & Contracts)  
@@ -346,3 +348,85 @@ When an administrator modifies a system preset in Studio:
     3. `src/main.ts`: Capture `const launchedOnAdminPath = window.location.pathname.startsWith('/admin')` at module top-level before `start()`. Run `void adminGateway.checkCloudflareAccess().then((isAdmin) => { ... })` at top-level load: if `launchedOnAdminPath`, rewrite URL via `window.history.replaceState({}, '', '/')`, and if `window.opener && !window.opener.closed`, post `{ type: 'mv-admin-authenticated', isAdmin }` to `window.opener` (`window.location.origin`) and call `window.close()`. Inside `start()`, if `launchedOnAdminPath || sessionStorage.getItem('mv.returnToStudio') === 'true'`, remove `mv.returnToStudio`, call `studio.setVisible(true)`, and `studio.bind(currentId)`.
     4. `src/studio/studio.test.ts`: Add unit tests verifying popup `postMessage` handshake, popup-blocked fallback (`mv.returnToStudio`), and background session detection on `studio.setVisible(true)`.
   - Verify: `npm run typecheck && npx vitest run src/studio/studio.test.ts && npm run build`
+
+## Stage 11 fix — Admin login and system preset saving (decided 2026-11-08)
+
+Source: Charlie's fix spec (uploaded 2026-11-08), replacing earlier attempts in PRs #162, #166, #168.
+Two deliberate departures from that spec's reference code, for security:
+1. The Worker verifies the Cloudflare Access JWT **signature** (RS256) against the team JWKS at
+   `<team-domain>/cdn-cgi/access/certs`, and requires `iss`, `aud` and `exp`. Decoding the payload
+   alone lets anyone forge a `CF_Authorization` cookie and get service-role writes.
+2. The presets proxy uses **only** `env.SUPABASE_URL`. It never reads a Supabase URL from the
+   request (no `x-supabase-url` header), so the service role key can never be sent to another host.
+Worker secrets `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_URL` are already set by Charlie (2026-11-08).
+
+- **Slice 11.8: Worker verified identity, `/admin` handshake page and preset write proxy** `[CORE / DATA]`
+  - Target files: `wrangler.jsonc`, `src/worker.ts`, `src/worker.test.ts` [NEW], `src/presets/__tests__/adminGateway.test.ts`
+  - Contract:
+    1. `wrangler.jsonc`: `run_worker_first: ["/admin", "/admin/*"]` and update the comment. Nothing else changes.
+    2. Token source: `cf-access-jwt-assertion` header, else the `CF_Authorization` cookie. Export `getCfAuthCookie(cookieHeader)`.
+    3. Export `async verifyCfAccessJwt(token, { teamDomain, aud, fetchFn, nowMs? }) => { valid, reason?, email? }`:
+       JWT header `alg` must be `RS256` and `kid` present; key from JWKS (`${teamDomain}/cdn-cgi/access/certs`, `keys[]` JWKs),
+       imported with `crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])`;
+       signature checked over the ASCII bytes of `header.payload`. JWKS cached in module scope for 10 minutes, refetched once when `kid` is unknown.
+       Required claims: `iss` equals team domain (trailing slash and case ignored), `aud` (string or array) contains AUD, numeric `exp` in the future,
+       `nbf` (if present) not in the future, non-empty string `email`. Email comes only from the signed payload. The
+       `cf-access-authenticated-user-email` header is never trusted on its own; if present and different from the payload email, reject `email_mismatch`.
+       Reasons: `missing_jwt`, `malformed_jwt`, `bad_alg`, `jwks_unavailable`, `unknown_kid`, `bad_signature`, `iss_mismatch`,
+       `aud_mismatch`, `jwt_expired`, `jwt_not_yet_valid`, `missing_email`, `email_mismatch`, `email_not_allowed`.
+       Export `__resetJwksCacheForTests()`.
+    4. Export `handleRequest(request, env, fetchFn = fetch)`; default export `{ fetch: (req, env) => handleRequest(req, env) }`.
+       All JSON/HTML responses carry `Cache-Control: no-store`; 401/403 JSON bodies include `reason`.
+    5. `GET /admin/api/identity`: 200 `{ authenticated: true, email }`, else 401 (bad token) / 403 (`email_not_allowed`).
+    6. `GET /admin` and `/admin/`: minimal self-contained HTML page. Email HTML-escaped; the signal JSON embedded in the script with `<` escaped as `<`.
+       When verified, send `{ type: 'mv-admin-authenticated', verified: true, ts }` via `BroadcastChannel('mv-admin-auth')`,
+       `localStorage['mv.adminAuthSignal']`, and `window.opener.postMessage(..., location.origin)`; then `window.close()`; if
+       `?popup=1` is absent, redirect to `/` after 400 ms. When not verified, show the reason and a link to `/`, send no signal, status 401/403.
+    7. `/admin/api/presets`: `POST` (upsert) and `PATCH ?id=<id>` (soft delete) only, else 405. Order: auth (401/403), then if an
+       `Origin` header is present it must equal the request URL origin (403 `bad_origin`), then `Content-Type` must start with
+       `application/json` (415), then body must parse to a JSON object (400; POST also needs a string `id`), then `env.SUPABASE_URL` and
+       `env.SUPABASE_SERVICE_ROLE_KEY` must both be set (500 `missing_supabase_config`). Forward to `${env.SUPABASE_URL}/rest/v1/system_presets`
+       (PATCH: `?id=eq.<encoded id>`) with `apikey` and `Authorization: Bearer <service key>`, POST `Prefer: resolution=merge-duplicates,return=representation`,
+       PATCH `Prefer: return=minimal`, and `updated_by` set to the verified email in the forwarded body. Nothing in the request
+       influences the upstream host. Return the upstream status and body; never echo the service key.
+    8. Other `/admin/*` paths fall through to `env.ASSETS.fetch(request)`.
+    9. Tests (`src/worker.test.ts`): generate an RS256 key pair with WebCrypto, sign real tokens, serve the JWKS via `fetchFn`. Cover cookie-only auth,
+       header auth, forged token signed by another key (`bad_signature`), unsigned/`alg: none` token, wrong iss, wrong aud, expired, missing exp, non-admin 403,
+       handshake HTML 200 plus escaping, POST/PATCH proxy calling only `env.SUPABASE_URL` with the service key (an `x-supabase-url` header is ignored),
+       `updated_by` injected, bad origin, missing config 500, 405. Update the existing Worker tests in `adminGateway.test.ts` to use signed tokens or move them.
+  - Verify: `npm run typecheck && npm test && npm run build`
+
+- **Slice 11.9: System preset saves and deletes reach Supabase** `[CORE / DATA]`
+  - Target files: `src/presets/remotePresets.ts`, `src/presets/__tests__/remotePresets.test.ts`, `src/presets/session.ts`, `src/presets/session.test.ts`, `src/studio/studio.ts`, `src/studio/adminControls.ts`, `src/main.ts`
+  - Contract:
+    1. `upsertRemotePreset` / `softDeleteRemotePreset`: when `adminToken === 'cf-access-verified'`, call same-origin `/admin/api/presets`
+       (POST) or `/admin/api/presets?id=<encoded>` (PATCH) with `credentials: 'same-origin'` and only `Content-Type: application/json`
+       (no `apikey`, no `Authorization`, no `x-supabase-url`). This path does not require Supabase client config. Other tokens keep today's direct PostgREST call.
+    2. `PresetSession` accepts an optional `remoteWriter` in `PresetSessionOptions`:
+       `{ upsert(record: RemotePresetRecord, token?: string): Promise<{success: boolean; error?: string}>; softDelete(id: string, token?: string): Promise<...>; onResult?(r: { op: 'save' | 'delete'; id: string; success: boolean; error?: string }): void }`.
+       After `saveSystemPreset` (also reached by `save`/`rename` of a builtin), `promoteToSystemPreset` and `setSystemPresetSubfolder`, it fires
+       `upsert` with `{ id, name: preset.name, subfolder, preset_data: preset, sort_order: sortOrder ?? 0, tags, updated_at }` and the gateway's
+       `adminToken`. After `removeSystemPreset` it fires `softDelete(id, token)`. Fire-and-forget; rejections are caught and reported through `onResult`. No writer means no network.
+    3. `src/main.ts`: pass a `remoteWriter` backed by `upsertRemotePreset`/`softDeleteRemotePreset`; `onResult` toasts
+       "Saved for everyone" / "Deleted for everyone" on success and "Not saved to the server: <error>" on failure.
+    4. Studio and `adminControls` toasts say "System preset saved" / "System preset deleted" (no claim it already propagated).
+    5. Tests: proxy routing and headers for both functions; session fires `upsert`/`softDelete` with the right record and token; nothing fires without a writer.
+  - Verify: `npm run typecheck && npm test && npm run build`
+
+- **Slice 11.10: Admin login popup survives the Cloudflare login redirect** `[CORE / DATA]`
+  - Target files: `src/studio/adminControls.ts`, `src/studio/studio.test.ts`, `src/main.ts`
+  - Contract:
+    1. Production path without `navigateFn`: first `await checkCloudflareAccess()` raced against a 1500 ms timeout; if verified, succeed with no popup
+       (Chromium keeps the click's user activation for about 5 s, so the popup still opens after this short wait).
+       Otherwise `window.open('/admin?popup=1', 'mv-cf-access', 'popup,width=520,height=680,...')`. Popup blocked: existing top-level `/admin` fallback.
+    2. While waiting, listen on `BroadcastChannel('mv-admin-auth')`, `storage` events for key `mv.adminAuthSignal`, and same-origin `message`
+       events, for `{ type: 'mv-admin-authenticated', verified: true }`. A signal only triggers `checkCloudflareAccess()`; it never grants admin by itself.
+       Also check every 2000 ms and on window `focus`.
+    3. `popup.closed === true` alone never cancels (COOP makes it true while the popup is still open). Cancel only when a `focus`-triggered check
+       fails while `popup.closed` is true, or after a 120 s timeout ("Login timed out"). Clean up all listeners, the channel and timers on settle.
+    4. `src/main.ts`: on `/admin` served by the SPA (local dev), treat `?popup=1` or a live `window.opener` as popup; when verified, post the same signal on
+       all three channels before `window.close()`. Install a page-wide `BroadcastChannel('mv-admin-auth')` + `storage` listener that calls
+       `adminGateway.checkCloudflareAccess()` on a verified signal, so a login finished after the studio gave up still unlocks admin.
+    5. Tests: cookie-already-valid path opens no popup; BroadcastChannel signal and storage signal each complete login; `popup.closed` true right after
+       open does not cancel; focus with closed popup and failed check cancels; timeout; existing popup-blocked fallback still passes.
+  - Verify: `npm run typecheck && npm test && npm run build`
