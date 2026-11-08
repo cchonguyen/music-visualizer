@@ -238,7 +238,7 @@ function start(): void {
           if (!r.success) {
             showToast(`Not saved to the server: ${r.error}`);
           } else {
-            showToast(r.op === 'delete' ? 'Deleted for everyone' : 'Saved for everyone');
+            showToast(r.op === 'delete' ? 'Deleted from the server' : 'Saved to the server. Reload to confirm everyone sees it');
           }
         },
       },
