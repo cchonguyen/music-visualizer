@@ -38,6 +38,7 @@ export interface AdminGatewayOptions {
 }
 
 export const ADMIN_SESSION_STORAGE_KEY = 'mv.adminSessionToken';
+export const DEFAULT_ADMIN_EMAIL = 'charliechonguyen@gmail.com';
 
 /**
  * Safely access sessionStorage, falling back gracefully if unavailable.
@@ -295,34 +296,31 @@ export class AdminGateway implements IAdminGateway {
     // 3. Email verification (Cloudflare Access email / configured admin email)
     if (credentials.email?.trim()) {
       const email = credentials.email.trim();
+      if (!email.includes('@') || !email.includes('.')) {
+        return { success: false, error: 'Invalid email format' };
+      }
+
       const targetEmail =
         this.adminEmail ||
         ((typeof import.meta !== 'undefined' && (import.meta.env as Record<string, string | undefined>)?.VITE_ADMIN_EMAIL)
           ? (import.meta.env as Record<string, string | undefined>).VITE_ADMIN_EMAIL
-          : undefined);
+          : undefined) ||
+        DEFAULT_ADMIN_EMAIL;
 
-      if (targetEmail) {
-        if (email.toLowerCase() === targetEmail.toLowerCase()) {
-          const nextState: AdminSessionState = {
-            isAdmin: true,
-            adminEmail: email,
-            adminToken: 'cf-access-verified',
-            role: 'admin',
-          };
-          this.state = nextState;
-          this.saveSession(nextState);
-          this.notifyListeners();
-          return { success: true };
-        } else {
-          return { success: false, error: 'Unauthorized admin email' };
-        }
+      if (email.toLowerCase() === targetEmail.toLowerCase()) {
+        const nextState: AdminSessionState = {
+          isAdmin: true,
+          adminEmail: email,
+          adminToken: 'cf-access-verified',
+          role: 'admin',
+        };
+        this.state = nextState;
+        this.saveSession(nextState);
+        this.notifyListeners();
+        return { success: true };
+      } else {
+        return { success: false, error: 'Unauthorized admin email' };
       }
-
-      // If no target email configured, email-only login is strictly disallowed for security
-      if (!email.includes('@') || !email.includes('.')) {
-        return { success: false, error: 'Invalid email format' };
-      }
-      return { success: false, error: 'Admin email not configured. Secret passkey required.' };
     }
 
     return { success: false, error: 'Invalid admin credentials' };
@@ -335,26 +333,39 @@ export class AdminGateway implements IAdminGateway {
   }
 
   /**
-   * Automatically verifies Cloudflare Access edge identity via `/cdn-cgi/access/get-identity`.
-   * Unlocks admin mode if Cloudflare reports a valid session matching the admin email.
+   * Automatically verifies Cloudflare Access edge identity via `/admin/api/identity`.
+   * Unlocks admin mode if the Worker reports a valid Cloudflare Access session matching the admin email.
    */
   public async checkCloudflareAccess(): Promise<boolean> {
     if (this.mock) return this.isAdmin();
     if (!this.fetchFn) return this.isAdmin();
 
     try {
-      const res = await this.fetchFn('/cdn-cgi/access/get-identity');
-      if (res.ok) {
+      const res = await this.fetchFn('/admin/api/identity', {
+        credentials: 'include',
+        redirect: 'manual',
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+      if (res && res.ok) {
         const data = await res.json();
-        if (data && typeof data.email === 'string') {
+        if (
+          data &&
+          data.authenticated !== false &&
+          typeof data.email === 'string' &&
+          data.email.trim().length > 0
+        ) {
           const email = data.email.trim();
           const targetEmail =
             this.adminEmail ||
             ((typeof import.meta !== 'undefined' && (import.meta.env as Record<string, string | undefined>)?.VITE_ADMIN_EMAIL)
               ? (import.meta.env as Record<string, string | undefined>).VITE_ADMIN_EMAIL
-              : undefined);
+              : undefined) ||
+            DEFAULT_ADMIN_EMAIL;
 
-          if (!targetEmail || email.toLowerCase() === targetEmail.toLowerCase()) {
+          if (email.toLowerCase() === targetEmail.toLowerCase()) {
             const nextState: AdminSessionState = {
               isAdmin: true,
               adminEmail: email,
