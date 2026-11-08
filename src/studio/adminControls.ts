@@ -212,10 +212,7 @@ export async function promptAdminLogin(
         const onMessage = (event: MessageEvent) => {
           if (event.origin !== window.location.origin) return;
           const data = event.data;
-          if (
-            data === 'cf-login-success' ||
-            (data && typeof data === 'object' && data.type === 'mv-admin-authenticated')
-          ) {
+          if (data === 'cf-login-success' || (data && typeof data === 'object' && data.type === 'mv-admin-authenticated' && data.verified)) {
             void verifyNow();
           }
         };
