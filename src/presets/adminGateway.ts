@@ -25,6 +25,7 @@ export interface IAdminGateway {
   logout(): void;
   getHeaders(): Record<string, string>;
   subscribe(listener: (state: AdminSessionState) => void): () => void;
+  checkCloudflareAccess(): Promise<boolean>;
 }
 
 export interface AdminGatewayOptions {
@@ -317,21 +318,11 @@ export class AdminGateway implements IAdminGateway {
         }
       }
 
-      // If no target email configured, validate valid email structure
-      if (email.includes('@') && email.includes('.')) {
-        const nextState: AdminSessionState = {
-          isAdmin: true,
-          adminEmail: email,
-          adminToken: 'cf-access-verified',
-          role: 'admin',
-        };
-        this.state = nextState;
-        this.saveSession(nextState);
-        this.notifyListeners();
-        return { success: true };
+      // If no target email configured, email-only login is strictly disallowed for security
+      if (!email.includes('@') || !email.includes('.')) {
+        return { success: false, error: 'Invalid email format' };
       }
-
-      return { success: false, error: 'Invalid email format' };
+      return { success: false, error: 'Admin email not configured. Secret passkey required.' };
     }
 
     return { success: false, error: 'Invalid admin credentials' };
@@ -341,6 +332,47 @@ export class AdminGateway implements IAdminGateway {
     this.state = { isAdmin: false };
     this.clearSession();
     this.notifyListeners();
+  }
+
+  /**
+   * Automatically verifies Cloudflare Access edge identity via `/cdn-cgi/access/get-identity`.
+   * Unlocks admin mode if Cloudflare reports a valid session matching the admin email.
+   */
+  public async checkCloudflareAccess(): Promise<boolean> {
+    if (this.mock) return this.isAdmin();
+    if (!this.fetchFn) return this.isAdmin();
+
+    try {
+      const res = await this.fetchFn('/cdn-cgi/access/get-identity');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.email === 'string') {
+          const email = data.email.trim();
+          const targetEmail =
+            this.adminEmail ||
+            ((typeof import.meta !== 'undefined' && (import.meta.env as Record<string, string | undefined>)?.VITE_ADMIN_EMAIL)
+              ? (import.meta.env as Record<string, string | undefined>).VITE_ADMIN_EMAIL
+              : undefined);
+
+          if (!targetEmail || email.toLowerCase() === targetEmail.toLowerCase()) {
+            const nextState: AdminSessionState = {
+              isAdmin: true,
+              adminEmail: email,
+              adminToken: 'cf-access-verified',
+              role: 'admin',
+            };
+            this.state = nextState;
+            this.saveSession(nextState);
+            this.notifyListeners();
+            return true;
+          }
+        }
+      }
+    } catch {
+      // Endpoint unavailable or offline
+    }
+
+    return this.isAdmin();
   }
 
   public getHeaders(): Record<string, string> {

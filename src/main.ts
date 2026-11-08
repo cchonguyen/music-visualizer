@@ -246,6 +246,19 @@ function start(): void {
     switchTo(currentId);
     switchShown = (id) => switchTo(id, true);
 
+    // Check Cloudflare Access identity on startup (e.g. returning from /admin gate)
+    if (typeof adminGateway.checkCloudflareAccess === 'function') {
+      adminGateway.checkCloudflareAccess().then((verified) => {
+        if (verified) {
+          const email = adminGateway.getState().adminEmail;
+          showToast(`👑 Admin Mode Active${email ? ` (${email})` : ''}`);
+        }
+        if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
+          window.history.replaceState({}, '', '/');
+        }
+      });
+    }
+
     // Background asynchronous sync of system presets with local cache persistence
     syncSystemPresets(liveSession, getRemoteConfig(), { storage: safeStorage(), studio })
       .then((records) => {

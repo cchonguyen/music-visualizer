@@ -323,6 +323,60 @@ describe('AdminGateway & Session Security Verification', () => {
       expect(res.success).toBe(false);
       expect(res.error).toBe('Invalid email format');
     });
+
+    it('verifies Cloudflare Access identity via /cdn-cgi/access/get-identity', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ email: 'verified-owner@music-visualizer.com', user_uuid: 'uuid-123' }),
+      } as unknown as Response);
+
+      const gateway = new AdminGateway({
+        storage: memStorage,
+        adminEmail: 'verified-owner@music-visualizer.com',
+        fetchFn: mockFetch as unknown as typeof fetch,
+      });
+
+      expect(gateway.isAdmin()).toBe(false);
+      const isVerified = await gateway.checkCloudflareAccess();
+      expect(isVerified).toBe(true);
+      expect(gateway.isAdmin()).toBe(true);
+      expect(gateway.getState().adminEmail).toBe('verified-owner@music-visualizer.com');
+      expect(mockFetch).toHaveBeenCalledWith('/cdn-cgi/access/get-identity');
+    });
+
+    it('rejects Cloudflare Access identity if email does not match adminEmail', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ email: 'other-user@external.com' }),
+      } as unknown as Response);
+
+      const gateway = new AdminGateway({
+        storage: memStorage,
+        adminEmail: 'verified-owner@music-visualizer.com',
+        fetchFn: mockFetch as unknown as typeof fetch,
+      });
+
+      const isVerified = await gateway.checkCloudflareAccess();
+      expect(isVerified).toBe(false);
+      expect(gateway.isAdmin()).toBe(false);
+    });
+
+    it('returns false when Cloudflare Access get-identity returns 401/403 or fails', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      } as unknown as Response);
+
+      const gateway = new AdminGateway({
+        storage: memStorage,
+        adminEmail: 'verified-owner@music-visualizer.com',
+        fetchFn: mockFetch as unknown as typeof fetch,
+      });
+
+      const isVerified = await gateway.checkCloudflareAccess();
+      expect(isVerified).toBe(false);
+      expect(gateway.isAdmin()).toBe(false);
+    });
   });
 
   describe('Logout & Session Teardown', () => {
