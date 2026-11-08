@@ -1189,9 +1189,10 @@ export function bindSection(
   onHelperUpdate?: (spec: ParamSpec | null) => void,
 ): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void } {
   if (specs.length === 0) return { specBindings: [], updateVisibility: () => {} };
-  if (typeof pane.addBlade === 'function') {
-    pane.addBlade({ view: 'separator' });
-  }
+  const sectionTitle = title.charAt(0).toUpperCase() + title.slice(1);
+  const sectionFolder = typeof pane.addFolder === 'function'
+    ? pane.addFolder({ title: sectionTitle, expanded: false })
+    : pane;
 
   const holder: Record<string, ParamValue> = {};
   for (const spec of specs) {
@@ -1218,22 +1219,36 @@ export function bindSection(
     }
   };
 
+  const groups = new Map<string, ParamSpec[]>();
   for (const spec of specs) {
-    const label = `${title} · ${spec.group} · ${spec.label}`;
-    const push = () => {
-      onCommit?.();
-      const s = settings[spec.name];
-      if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
-        s.value = holder[spec.name]!;
-      } else {
-        (settings as any)[spec.name] = holder[spec.name]!;
-      }
-      updateVisibility();
-      apply?.();
-    };
-    const binding = bindSpec(pane, label, spec, holder, push, onHelperUpdate);
-    const blades = Array.isArray(binding) ? binding : [binding];
-    specBindings.push({ spec, blades });
+    const list = groups.get(spec.group);
+    if (list) {
+      list.push(spec);
+    } else {
+      groups.set(spec.group, [spec]);
+    }
+  }
+
+  for (const [groupName, groupSpecs] of groups) {
+    const target = groupName && typeof sectionFolder.addFolder === 'function'
+      ? sectionFolder.addFolder({ title: groupName, expanded: false })
+      : sectionFolder;
+    for (const spec of groupSpecs) {
+      const push = () => {
+        onCommit?.();
+        const s = settings[spec.name];
+        if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
+          s.value = holder[spec.name]!;
+        } else {
+          (settings as any)[spec.name] = holder[spec.name]!;
+        }
+        updateVisibility();
+        apply?.();
+      };
+      const binding = bindSpec(target, spec.label, spec, holder, push, onHelperUpdate);
+      const blades = Array.isArray(binding) ? binding : [binding];
+      specBindings.push({ spec, blades });
+    }
   }
 
   updateVisibility();

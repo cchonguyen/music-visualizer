@@ -1,9 +1,9 @@
 {
   "schemaVersion": "2.2",
-  "updatedAt": "2026-11-05T09:58:31.779Z",
+  "updatedAt": "2026-11-08T01:57:45.745Z",
   "projectId": "music-visualizer",
-  "worktreeId": "music-visualizer",
-  "branch": "claude/project-thread-i8o9qj",
+  "worktreeId": "studio_panel_collapsible_headers",
+  "branch": "studio_panel_collapsible_headers",
   "currentIntent": "Accessibility audit findings 1 and 2",
   "stage": "Claimed",
   "pendingDecisions": [],
