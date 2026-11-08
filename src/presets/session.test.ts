@@ -9,6 +9,8 @@ import {
 import { parsePreset, PresetFormatError, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
 import { BUILTIN_PRESETS, SCHEMAS } from './builtin';
+import { AdminGateway } from './adminGateway';
+import type { RemotePresetRecord } from './remotePresets';
 import type { Scene } from '../render/scene';
 
 function memoryStorage(): Storage {
@@ -428,6 +430,309 @@ describe('user preset folders and organization', () => {
     // saveAs with nonexistent folder resolves to undefined (unfiled)
     const p5 = session.saveAs(p1, 'Ghost Folder Copy', 'ghost-folder');
     expect(session.getPresetFolder(p5)).toBeUndefined();
+  });
+});
+
+describe('admin system preset mutation & authorization (Slice 11.3)', () => {
+  it('rejects admin operations when admin session is not active', () => {
+    expect(session.isAdmin()).toBe(false);
+
+    // saveSystemPreset throws if not admin
+    expect(() => session.saveSystemPreset('crown')).toThrow(/Admin authorization required/);
+
+    // removeSystemPreset throws if not admin
+    expect(() => session.removeSystemPreset('crown')).toThrow(/Admin authorization required/);
+
+    // promoteToSystemPreset throws if not admin
+    const userPresetId = session.saveAs('crown', 'Candidate');
+    expect(() => session.promoteToSystemPreset(userPresetId, 'showcase')).toThrow(/Admin authorization required/);
+
+    // setSystemPresetSubfolder throws if not admin
+    expect(() => session.setSystemPresetSubfolder('crown', 'flagship')).toThrow(/Admin authorization required/);
+
+    // Standard Stage 10 mutations still throw on built-ins when non-admin
+    expect(() => session.save('crown')).toThrow(/read-only/);
+    expect(() => session.rename('crown', 'Crown Renamed')).toThrow(/cannot be renamed/);
+    expect(() => session.remove('crown')).toThrow(/cannot be deleted/);
+    expect(() => session.setPresetFolder('crown', 'some-folder')).toThrow(/Cannot move built-in/);
+  });
+
+  it('supports admin gateway passing via constructor or setAdminGateway', () => {
+    const adminGw = new AdminGateway({ mock: true, defaultAdmin: true });
+    const nonAdminGw = new AdminGateway({ mock: true, defaultAdmin: false });
+
+    // Constructor with options object
+    const sessionOpt = new PresetSession(fakeHost().host, SCHEMAS, storage, { adminGateway: adminGw });
+    expect(sessionOpt.isAdmin()).toBe(true);
+
+    // Constructor with gateway directly
+    const sessionDirect = new PresetSession(fakeHost().host, SCHEMAS, storage, adminGw);
+    expect(sessionDirect.isAdmin()).toBe(true);
+
+    // setAdminGateway toggle
+    sessionOpt.setAdminGateway(nonAdminGw);
+    expect(sessionOpt.isAdmin()).toBe(false);
+    sessionOpt.setAdminGateway(adminGw);
+    expect(sessionOpt.isAdmin()).toBe(true);
+    expect(sessionOpt.getAdminGateway()).toBe(adminGw);
+  });
+
+  it('admin saveSystemPreset updates savedJson and clears dirty status', () => {
+    const adminGw = new AdminGateway({ mock: true, defaultAdmin: true });
+    session.setAdminGateway(adminGw);
+    expect(session.isAdmin()).toBe(true);
+
+    const entry = session.get('crown')!;
+    const layer = entry.preset.layers.find((l) => l.type === 'tunnel')!;
+    layer.params.ringDensity = { value: 2.5 };
+    expect(session.isDirty('crown')).toBe(true);
+
+    // saveSystemPreset updates savedJson
+    session.saveSystemPreset('crown');
+    expect(session.isDirty('crown')).toBe(false);
+
+    // Regular save() also delegates and succeeds when admin
+    layer.params.ringDensity = { value: 3.0 };
+    expect(session.isDirty('crown')).toBe(true);
+    session.save('crown');
+    expect(session.isDirty('crown')).toBe(false);
+
+    // Renaming built-in as admin updates name and savedJson
+    session.rename('crown', 'Crown Deluxe');
+    expect(session.get('crown')!.preset.name).toBe('Crown Deluxe');
+    expect(session.isDirty('crown')).toBe(false);
+
+    // Calling saveSystemPreset on a user preset throws
+    const userPresetId = session.saveAs('flight', 'User Custom');
+    expect(() => session.saveSystemPreset(userPresetId)).toThrow(/not a system preset/);
+  });
+
+  it('admin removeSystemPreset removes preset and switches active scene if active', () => {
+    const adminGw = new AdminGateway({ mock: true, defaultAdmin: true });
+    session.setAdminGateway(adminGw);
+
+    // 1. Removing an inactive built-in preset
+    expect(session.get('flight')).toBeDefined();
+    session.removeSystemPreset('flight');
+    expect(session.get('flight')).toBeUndefined();
+
+    // 2. Removing an active built-in preset switches active scene
+    session.show('crown');
+    expect(session.shownId).toBe('crown');
+
+    session.removeSystemPreset('crown');
+    expect(session.get('crown')).toBeUndefined();
+    // Switched to another existing preset
+    expect(session.shownId).not.toBeNull();
+    expect(session.shownId).not.toBe('crown');
+    expect(calls).toContain('remove:crown');
+
+    // 3. Regular remove() on built-in also succeeds when admin
+    expect(session.get('bars')).toBeDefined();
+    session.remove('bars');
+    expect(session.get('bars')).toBeUndefined();
+
+    // 4. Calling removeSystemPreset on user preset throws
+    const userPresetId = session.saveAs('starter-vortex', 'User Vortex');
+    expect(() => session.removeSystemPreset(userPresetId)).toThrow(/not a system preset/);
+  });
+
+  it('admin promoteToSystemPreset converts user preset to system preset and removes from user storage', () => {
+    const adminGw = new AdminGateway({ mock: true, defaultAdmin: true });
+    session.setAdminGateway(adminGw);
+
+    const folder = session.createFolder('Promote Candidates');
+    const userPresetId = session.saveAs('crown', 'Solar Flare', folder.id);
+
+    // Verify it started as a user preset
+    const userEntry = session.get(userPresetId)!;
+    expect(userEntry.builtin).toBe(false);
+    expect(session.getPresetFolder(userPresetId)).toBe(folder.id);
+
+    // User presets storage contains the entry
+    const initialStored = JSON.parse(storage.getItem(USER_PRESETS_KEY)!);
+    expect(initialStored.some((p: { id: string }) => p.id === userPresetId)).toBe(true);
+
+    // Show it so we verify active display persists through promotion
+    session.show(userPresetId);
+    expect(session.shownId).toBe(userPresetId);
+
+    // Promote to 'showcase' subfolder
+    const newId = session.promoteToSystemPreset(userPresetId, 'showcase');
+    expect(newId).toBe('solar-flare');
+
+    // System entry verified
+    const promoted = session.get(newId)!;
+    expect(promoted).toBeDefined();
+    expect(promoted.builtin).toBe(true);
+    expect(promoted.subfolder).toBe('showcase');
+    expect(session.getPresetFolder(newId)).toBeUndefined();
+    expect(session.shownId).toBe(newId);
+
+    // Verified removed from user storage
+    const updatedStored = JSON.parse(storage.getItem(USER_PRESETS_KEY)!);
+    expect(updatedStored.some((p: { id: string }) => p.id === userPresetId)).toBe(false);
+    expect(updatedStored.some((p: { id: string }) => p.id === newId)).toBe(false);
+
+    // Verified in listCategorized under system showcase
+    const categorized = session.listCategorized();
+    expect(categorized.system.showcase.some((e) => e.id === newId)).toBe(true);
+    expect(categorized.user.folders[0]!.entries.some((e) => e.id === newId)).toBe(false);
+    expect(categorized.user.unfiled.some((e) => e.id === newId)).toBe(false);
+
+    // Promoting an already system preset throws
+    expect(() => session.promoteToSystemPreset(newId, 'classics')).toThrow(/already a system preset/);
+  });
+
+  it('admin setSystemPresetSubfolder moves system preset across subfolders', () => {
+    const adminGw = new AdminGateway({ mock: true, defaultAdmin: true });
+    session.setAdminGateway(adminGw);
+
+    expect(session.getSystemPresetSubfolder('crown')).toBe('classics');
+    expect(session.listCategorized().system.classics.some((e) => e.id === 'crown')).toBe(true);
+
+    // Move to flagship
+    session.setSystemPresetSubfolder('crown', 'flagship');
+    expect(session.getSystemPresetSubfolder('crown')).toBe('flagship');
+    expect(session.listCategorized().system.flagship.some((e) => e.id === 'crown')).toBe(true);
+    expect(session.listCategorized().system.classics.some((e) => e.id === 'crown')).toBe(false);
+
+    // Move to showcase
+    session.setSystemPresetSubfolder('crown', 'showcase');
+    expect(session.getSystemPresetSubfolder('crown')).toBe('showcase');
+    expect(session.listCategorized().system.showcase.some((e) => e.id === 'crown')).toBe(true);
+
+    // Throws on user presets
+    const userPresetId = session.saveAs('flight', 'User Custom');
+    expect(() => session.setSystemPresetSubfolder(userPresetId, 'flagship')).toThrow(/not a system preset/);
+  });
+});
+
+describe('remote system preset sync engine applyRemoteSystemPresets (Slice 11.3)', () => {
+  it('applies newly discovered remote system presets and adds them to categories', () => {
+    const samplePreset = structuredClone(session.get('crown')!.preset);
+    samplePreset.name = 'Remote Cosmic Portal';
+
+    const records: RemotePresetRecord[] = [
+      {
+        id: 'remote-cosmic-portal',
+        name: 'Remote Cosmic Portal',
+        subfolder: 'showcase',
+        preset_data: samplePreset,
+        sort_order: 10,
+        tags: ['showcase', 'cosmic'],
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    // Non-admin can apply remote system presets (e.g. app startup sync)
+    expect(session.isAdmin()).toBe(false);
+    session.applyRemoteSystemPresets(records);
+
+    const entry = session.get('remote-cosmic-portal');
+    expect(entry).toBeDefined();
+    expect(entry!.builtin).toBe(true);
+    expect(entry!.preset.name).toBe('Remote Cosmic Portal');
+    expect(entry!.subfolder).toBe('showcase');
+    expect(entry!.preset.tags).toEqual(['showcase', 'cosmic']);
+
+    const categorized = session.listCategorized();
+    expect(categorized.system.showcase.some((e) => e.id === 'remote-cosmic-portal')).toBe(true);
+
+    // Can be displayed on screen cleanly
+    session.show('remote-cosmic-portal');
+    expect(session.shownId).toBe('remote-cosmic-portal');
+    expect(calls).toContain('set:remote-cosmic-portal');
+  });
+
+  it('updates existing system presets and rebuilds active scenes in place', () => {
+    session.show('crown');
+    expect(session.shownId).toBe('crown');
+
+    const updatedPreset = structuredClone(session.get('crown')!.preset);
+    updatedPreset.name = 'Crown Supernova';
+    const tunnelLayer = updatedPreset.layers.find((l) => l.type === 'tunnel')!;
+    tunnelLayer.params.ringDensity = { value: 4.2 };
+
+    const records: RemotePresetRecord[] = [
+      {
+        id: 'crown',
+        name: 'Crown Supernova',
+        subfolder: 'flagship',
+        preset_data: updatedPreset,
+        sort_order: 1,
+        tags: ['updated'],
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    session.applyRemoteSystemPresets(records);
+
+    const updatedEntry = session.get('crown')!;
+    expect(updatedEntry.preset.name).toBe('Crown Supernova');
+    expect(updatedEntry.subfolder).toBe('flagship');
+    expect(session.getSystemPresetSubfolder('crown')).toBe('flagship');
+    expect(session.isDirty('crown')).toBe(false);
+
+    // Scene rebuilt and active
+    expect(calls).toContain('set:crown');
+  });
+
+  it('respects soft deletions (is_deleted: true) and switches active scene', () => {
+    session.show('flight');
+    expect(session.shownId).toBe('flight');
+
+    const records: RemotePresetRecord[] = [
+      {
+        id: 'flight',
+        name: 'Flight',
+        subfolder: 'classics',
+        preset_data: session.get('flight')!.preset,
+        sort_order: 2,
+        tags: [],
+        updated_at: new Date().toISOString(),
+        is_deleted: true,
+      },
+    ];
+
+    session.applyRemoteSystemPresets(records);
+
+    expect(session.get('flight')).toBeUndefined();
+    expect(session.shownId).not.toBe('flight');
+    expect(session.shownId).not.toBeNull();
+    expect(calls).toContain('remove:flight');
+  });
+
+  it('preserves local user tag overrides when remote records are applied', () => {
+    session.setPresetTags('crown', ['local-favourite']);
+
+    const remoteCrown = structuredClone(session.get('crown')!.preset);
+    const records: RemotePresetRecord[] = [
+      {
+        id: 'crown',
+        name: 'Crown',
+        subfolder: 'classics',
+        preset_data: remoteCrown,
+        sort_order: 1,
+        tags: ['remote-tag'],
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    session.applyRemoteSystemPresets(records);
+    expect(session.get('crown')!.preset.tags).toEqual(['local-favourite']);
+  });
+
+  it('ignores invalid records gracefully without crashing', () => {
+    const records: any[] = [
+      null,
+      undefined,
+      { id: 123 }, // invalid id type
+      { id: 'corrupt', preset_data: { version: 99999 } }, // invalid preset schema
+    ];
+
+    expect(() => session.applyRemoteSystemPresets(records)).not.toThrow();
+    expect(session.get('corrupt')).toBeUndefined();
   });
 });
 

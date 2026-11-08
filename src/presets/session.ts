@@ -20,7 +20,9 @@ import {
   type PaletteDef,
   type GlobalDirectorSettings,
 } from '../render/globalDirector';
-import { getSystemSubfolder } from './builtin';
+import { getSystemSubfolder, type SystemSubfolder } from './builtin';
+import type { IAdminGateway } from './adminGateway';
+import type { RemotePresetRecord } from './remotePresets';
 
 if (!(GlobalDirector.prototype as any).registerPalette) {
   (GlobalDirector.prototype as any).registerPalette = function (this: GlobalDirector, palette: DirectorPaletteAsset) {
@@ -105,6 +107,12 @@ export interface SessionEntry {
   preset: Preset; // working copy (what the Studio edits)
   savedJson: string; // last saved state, to detect unsaved changes
   folderId?: string;
+  subfolder?: SystemSubfolder;
+  sortOrder?: number;
+}
+
+export interface PresetSessionOptions {
+  adminGateway?: IAdminGateway;
 }
 
 const HISTORY_LIMIT = 100;
@@ -122,27 +130,50 @@ export class PresetSession {
   private redoStack = new Map<string, string[]>();
   private folders: UserPresetFolder[] = [];
   private systemTagOverrides: Record<string, string[]> = {};
+  private adminGateway?: IAdminGateway;
 
   constructor(
     private readonly host: SceneHost,
     private readonly registry: SchemaRegistry,
     private readonly storage: Storage | undefined,
+    optionsOrGateway?: IAdminGateway | PresetSessionOptions,
   ) {
+    if (optionsOrGateway) {
+      if ('isAdmin' in optionsOrGateway && typeof (optionsOrGateway as IAdminGateway).isAdmin === 'function') {
+        this.adminGateway = optionsOrGateway as IAdminGateway;
+      } else if ('adminGateway' in optionsOrGateway) {
+        this.adminGateway = (optionsOrGateway as PresetSessionOptions).adminGateway;
+      }
+    }
     this.loadCustomPalettes();
     this.loadUserPresetFolders();
     this.loadSystemTagOverrides();
   }
 
-  addBuiltin(id: string, preset: Preset): void {
+  setAdminGateway(gateway: IAdminGateway | undefined): void {
+    this.adminGateway = gateway;
+  }
+
+  getAdminGateway(): IAdminGateway | undefined {
+    return this.adminGateway;
+  }
+
+  isAdmin(): boolean {
+    return Boolean(this.adminGateway?.isAdmin());
+  }
+
+  addBuiltin(id: string, preset: Preset, subfolder?: SystemSubfolder): void {
     const clone = structuredClone(preset);
     if (this.systemTagOverrides[id]) {
       clone.tags = [...this.systemTagOverrides[id]];
     }
+    const resolvedSubfolder = subfolder ?? getSystemSubfolder(id) ?? 'classics';
     this.entries.set(id, {
       id,
       builtin: true,
       preset: clone,
       savedJson: JSON.stringify(clone),
+      subfolder: resolvedSubfolder,
     });
   }
 
@@ -293,7 +324,13 @@ export class PresetSession {
   /** Save the working copy. Built-ins are read-only: use saveAs. */
   save(id: string): void {
     const entry = this.require(id);
-    if (entry.builtin) throw new Error('Built-in presets are read-only. Use "Save as" to keep a copy.');
+    if (entry.builtin) {
+      if (!this.isAdmin()) {
+        throw new Error('Built-in presets are read-only. Use "Save as" to keep a copy.');
+      }
+      this.saveSystemPreset(id);
+      return;
+    }
     entry.savedJson = JSON.stringify(entry.preset);
     this.persist();
   }
@@ -322,14 +359,27 @@ export class PresetSession {
 
   rename(id: string, name: string): void {
     const entry = this.require(id);
-    if (entry.builtin) throw new Error('Built-in presets cannot be renamed.');
+    if (entry.builtin) {
+      if (!this.isAdmin()) {
+        throw new Error('Built-in presets cannot be renamed.');
+      }
+      entry.preset.name = name.trim() || entry.preset.name;
+      this.saveSystemPreset(id);
+      return;
+    }
     entry.preset.name = name.trim() || entry.preset.name;
     this.save(id);
   }
 
   remove(id: string): void {
     const entry = this.require(id);
-    if (entry.builtin) throw new Error('Built-in presets cannot be deleted.');
+    if (entry.builtin) {
+      if (!this.isAdmin()) {
+        throw new Error('Built-in presets cannot be deleted.');
+      }
+      this.removeSystemPreset(id);
+      return;
+    }
     if (this.scenes.has(id)) {
       if (this.current === id) throw new Error('Switch to another preset before deleting this one.');
       this.undoStack.delete(id);
@@ -490,6 +540,256 @@ export class PresetSession {
     return entry.folderId;
   }
 
+  // --- Administrator Mutation & Remote Sync Engine (Slice 11.3) ---
+
+  /**
+   * Save working copy of a system preset.
+   * Throws if admin authorization is not active.
+   */
+  saveSystemPreset(id: string): void {
+    if (!this.isAdmin()) {
+      throw new Error('Admin authorization required to save system preset.');
+    }
+    const entry = this.require(id);
+    if (!entry.builtin) {
+      throw new Error(`Preset "${id}" is not a system preset.`);
+    }
+    entry.savedJson = JSON.stringify(entry.preset);
+  }
+
+  /**
+   * Removes a system preset.
+   * If the preset is currently on screen, automatically switches to another preset before removal.
+   * Throws if admin authorization is not active.
+   */
+  removeSystemPreset(id: string): void {
+    if (!this.isAdmin()) {
+      throw new Error('Admin authorization required to remove system preset.');
+    }
+    const entry = this.require(id);
+    if (!entry.builtin) {
+      throw new Error(`Preset "${id}" is not a system preset.`);
+    }
+
+    if (this.current === id) {
+      const nextEntry = [...this.entries.values()].find((e) => e.id !== id);
+      if (nextEntry) {
+        this.show(nextEntry.id);
+      } else {
+        this.current = null;
+      }
+    }
+
+    if (this.scenes.has(id)) {
+      this.host.removeScene(id);
+      this.scenes.delete(id);
+    }
+    this.undoStack.delete(id);
+    this.redoStack.delete(id);
+    this.committed.delete(id);
+    this.entries.delete(id);
+
+    if (this.systemTagOverrides[id]) {
+      delete this.systemTagOverrides[id];
+      try {
+        this.storage?.setItem(SYSTEM_TAG_OVERRIDES_KEY, JSON.stringify(this.systemTagOverrides));
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  /**
+   * Promotes a user preset to a system preset.
+   * Assigns builtin: true, moves to target SystemSubfolder, unfiles from user folders,
+   * persists removal from local user presets, and returns the new/updated preset id.
+   * Throws if admin authorization is not active.
+   */
+  promoteToSystemPreset(userId: string, subfolder: SystemSubfolder): string {
+    if (!this.isAdmin()) {
+      throw new Error('Admin authorization required to promote user preset to system preset.');
+    }
+    const entry = this.require(userId);
+    if (entry.builtin) {
+      throw new Error(`Preset "${userId}" is already a system preset.`);
+    }
+
+    const normalizedSubfolder: SystemSubfolder =
+      subfolder === 'showcase' || subfolder === 'flagship' || subfolder === 'classics'
+        ? subfolder
+        : 'classics';
+
+    let newId = entry.preset.name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    if (!newId || newId === 'user') {
+      newId = userId.replace(/^user-/, 'sys-');
+    }
+
+    if (newId !== userId && this.entries.has(newId)) {
+      let count = 2;
+      while (this.entries.has(`${newId}-${count}`)) {
+        count++;
+      }
+      newId = `${newId}-${count}`;
+    }
+
+    if (newId !== userId) {
+      this.entries.delete(userId);
+      if (this.scenes.has(userId)) {
+        this.scenes.delete(userId);
+        this.host.removeScene(userId);
+      }
+      const undo = this.undoStack.get(userId);
+      if (undo) {
+        this.undoStack.set(newId, undo);
+        this.undoStack.delete(userId);
+      }
+      const redo = this.redoStack.get(userId);
+      if (redo) {
+        this.redoStack.set(newId, redo);
+        this.redoStack.delete(userId);
+      }
+      const committed = this.committed.get(userId);
+      if (committed) {
+        this.committed.set(newId, committed);
+        this.committed.delete(userId);
+      }
+      if (this.current === userId) {
+        this.current = newId;
+      }
+    }
+
+    entry.id = newId;
+    entry.builtin = true;
+    entry.folderId = undefined;
+    entry.subfolder = normalizedSubfolder;
+    entry.savedJson = JSON.stringify(entry.preset);
+
+    this.entries.set(newId, entry);
+
+    if (this.current === newId) {
+      this.buildAndRegister(newId);
+      applyPresetToScene(entry.preset, this.scenes.get(newId)!);
+    }
+
+    this.persist();
+    return newId;
+  }
+
+  /**
+   * Updates the system subfolder category for a system preset.
+   * Throws if admin authorization is not active.
+   */
+  setSystemPresetSubfolder(id: string, subfolder: SystemSubfolder): void {
+    if (!this.isAdmin()) {
+      throw new Error('Admin authorization required to change system preset subfolder.');
+    }
+    const entry = this.require(id);
+    if (!entry.builtin) {
+      throw new Error(`Preset "${id}" is not a system preset.`);
+    }
+    const normalized: SystemSubfolder =
+      subfolder === 'showcase' || subfolder === 'flagship' || subfolder === 'classics'
+        ? subfolder
+        : 'classics';
+    entry.subfolder = normalized;
+  }
+
+  getSystemPresetSubfolder(id: string): SystemSubfolder | undefined {
+    const entry = this.entries.get(id);
+    if (!entry || !entry.builtin) return undefined;
+    return entry.subfolder ?? getSystemSubfolder(id) ?? 'classics';
+  }
+
+  /**
+   * Applies remote system preset records fetched from remote storage / sync engine.
+   * Updates existing system presets, adds newly discovered remote presets,
+   * and respects soft deletions (is_deleted: true).
+   */
+  applyRemoteSystemPresets(records: RemotePresetRecord[]): void {
+    for (const record of records) {
+      if (!record || typeof record.id !== 'string') continue;
+
+      if (record.is_deleted) {
+        if (this.entries.has(record.id)) {
+          if (this.current === record.id) {
+            const nextEntry = [...this.entries.values()].find((e) => e.id !== record.id);
+            if (nextEntry) {
+              this.show(nextEntry.id);
+            } else {
+              this.current = null;
+            }
+          }
+          if (this.scenes.has(record.id)) {
+            this.host.removeScene(record.id);
+            this.scenes.delete(record.id);
+          }
+          this.undoStack.delete(record.id);
+          this.redoStack.delete(record.id);
+          this.committed.delete(record.id);
+          this.entries.delete(record.id);
+        }
+        continue;
+      }
+
+      let parsedPreset: Preset;
+      try {
+        const parsed = parsePreset(record.preset_data, this.registry);
+        parsedPreset = parsed.preset;
+      } catch {
+        continue;
+      }
+
+      if (record.name && parsedPreset.name !== record.name) {
+        parsedPreset.name = record.name;
+      }
+      const tagOverride = this.systemTagOverrides[record.id];
+      if (tagOverride) {
+        parsedPreset.tags = [...tagOverride];
+      } else if (Array.isArray(record.tags)) {
+        parsedPreset.tags = [...record.tags];
+      }
+
+      const subfolder: SystemSubfolder =
+        record.subfolder === 'showcase' || record.subfolder === 'flagship' || record.subfolder === 'classics'
+          ? record.subfolder
+          : 'classics';
+
+      const existing = this.entries.get(record.id);
+      if (existing) {
+        existing.builtin = true;
+        existing.preset = parsedPreset;
+        existing.savedJson = JSON.stringify(parsedPreset);
+        existing.subfolder = subfolder;
+        if (typeof record.sort_order === 'number') {
+          existing.sortOrder = record.sort_order;
+        }
+
+        if (this.scenes.has(record.id)) {
+          this.rebuild(record.id);
+          if (this.current === record.id) {
+            this.host.setFadeSeconds(parsedPreset.transition.seconds);
+            this.host.setPost(valuesOf(parsedPreset.post));
+            this.host.setTransition(parsedPreset.transition.style);
+          }
+        }
+      } else {
+        this.entries.set(record.id, {
+          id: record.id,
+          builtin: true,
+          preset: parsedPreset,
+          savedJson: JSON.stringify(parsedPreset),
+          subfolder,
+          sortOrder: typeof record.sort_order === 'number' ? record.sort_order : 0,
+        });
+      }
+    }
+  }
+
   // --- Categorized Querying ---
   listCategorized(): CategorizedPresets {
     const result: CategorizedPresets = {
@@ -514,8 +814,12 @@ export class PresetSession {
 
     for (const entry of this.entries.values()) {
       if (entry.builtin) {
-        const subfolder = getSystemSubfolder(entry.id) ?? 'classics';
-        result.system[subfolder].push(entry);
+        const subfolder = entry.subfolder ?? getSystemSubfolder(entry.id) ?? 'classics';
+        if (result.system[subfolder]) {
+          result.system[subfolder].push(entry);
+        } else {
+          result.system.classics.push(entry);
+        }
       } else {
         if (entry.folderId && folderMap.has(entry.folderId)) {
           folderMap.get(entry.folderId)!.push(entry);
