@@ -9,6 +9,9 @@ Status 2026-11-05: all slices built in code. Full details archived in `.spec/HIS
 ## projectM-inspired features (plan: /mnt/project-files/plans/projectm-ideas-implementation.md, approved 2026-11-05; contracts: .spec/PROJECTM_SPEC.md)
 Slices 5.4 to 5.10 were removed on 2026-11-08 because the work was superseded (owner decision, Charlie).
 
+## Stage 11 fix follow-up — live presets config (2026-11-08)
+- [ ] **Slice 11.12: Pass Supabase config into the production build and make save toasts accurate** [IN_PROGRESS] `[CORE / DATA]` worker: gf-coder (Haiku) Target files: `.github/workflows/deploy.yml`, `src/main.ts` | Coords: `[400, 410, 487]` | Verify: npm run typecheck && npm test && npm run build
+
 ## Stage 10 — Preset Folders & Organization System (.spec/specs/preset-folders-spec.md; decided 2026-11-07)
 - [x] **Slice 10.1: Preset Taxonomy & System Subfolder Categorization Contracts in `builtin/index.ts` and `session.ts`** `[CORE / DATA]` worker: gf-coder (Haiku) | Coords: `[400, 410, 486]` | Target files: `src/presets/builtin/index.ts`, `src/presets/session.ts`, `src/presets/__tests__/presetTaxonomy.test.ts` [NEW], `src/presets/session.test.ts` | Verify: npm run typecheck && npx vitest run src/presets/session.test.ts && npm run build
 - [x] **Slice 10.2: User Preset Folders Data Engine & Storage Contracts in `session.ts`** `[CORE / DATA]` worker: gf-coder (Haiku) | Coords: `[400, 410, 486]` | Target files: `src/presets/session.ts`, `src/presets/session.test.ts` | Verify: npm run typecheck && npx vitest run src/presets/session.test.ts && npm run build
