@@ -34,5 +34,7 @@
 - `484` `.spec/specs/global-director-roadmap.md` — Global Director consolidation, Experience Hub & pre-spec roadmap
 - `485` `.spec/specs/shape-layer-spec.md` — Stage 9 Composable `shape` Layer Architecture spec
 - `486` `.spec/specs/preset-folders-spec.md` — Stage 10 Preset Folders & Organization System spec
+- `487` `.spec/specs/admin-system-presets-spec.md` — Stage 11 Administrator System Preset Management spec
+
 
 

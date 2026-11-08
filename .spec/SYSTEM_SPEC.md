@@ -190,6 +190,12 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
   - **System Preset Immutability & Persistent Tag Overrides**: Geometry and parameter mutations, saving, renaming, deleting, and moving folders are blocked for system presets. User playback tags (`favourite` and `skip`) are supported and persisted across browser sessions in `localStorage` under `mv.systemPresetTagOverrides`.
   - **User Folders & Storage Schema**: User folders stored in `localStorage` under `mv.userPresetFolders` as `UserPresetFolder { id: string, name: string, createdAt: number }`. User presets associate with folders via `folderId?: string` stored in `mv.userPresets`. Deleting a folder unfiles presets (`folderId = undefined`) without deleting them.
   - **Studio UI Hierarchy**: Replaces flat `<select>` list in `src/studio/studio.ts` with an organized `<optgroup>` hierarchy. Contextual preset bar affordances: read-only badges and disabled save/delete for System presets; dynamic folder assignment, "New Folder" creation, and folder management actions for User presets.
+- **Stage 11 — Administrator System Preset Management Contracts (decided 2026-11-08; Sector 487):**
+  - **Remote Cloud Persistence**: System presets persist remotely in a PostgreSQL table (`system_presets`) via Supabase PostgREST with JSONB preset structures, subfolder grouping (`showcase`, `flagship`, `classics`), sort order, and RLS policies (public read, admin write). Cloudflare Workers remain 100% static assets.
+  - **Admin Security Gateway (`adminGateway.ts`)**: Session-based admin state verification (`IAdminGateway`) supporting direct owner passkey/token entry and Supabase JWT admin role validation. Stored in `sessionStorage` (cleared on browser close).
+  - **Local Cache First & Background Sync**: Startup immediately loads local bundled (`ALL_PRESETS`) and cached (`mv.cachedSystemPresets`) presets, then triggers an asynchronous background sync. Full offline fallback if remote is unreachable.
+  - **Studio Admin Mode**: Unlocks system preset name editing, subfolder reassignment, `"Save System Preset 👑"` remote persistence, 2-tap deletion, and `"Promote to System Preset 👑"` for custom user presets.
+
 
 
 ## 8. Deferred (phone and iPhone notes, for later)
