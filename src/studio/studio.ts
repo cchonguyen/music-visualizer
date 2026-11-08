@@ -7,7 +7,7 @@ import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
-import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder } from '../presets/builtin';
+import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
@@ -26,8 +26,16 @@ import {
   type ColorMood,
   type TriggerCadence,
 } from '../render/globalDirector';
+import { type IAdminGateway, adminGateway as defaultAdminGateway } from '../presets/adminGateway';
+import {
+  ADMIN_BADGE_LABEL,
+  renderAdminBadge,
+  promptAdminLogin,
+  adminLogout,
+  promoteUserPresetAction,
+} from './adminControls';
 
-export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES };
+export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES, ADMIN_BADGE_LABEL };
 
 export interface StudioOptions {
   session: PresetSession;
@@ -39,6 +47,8 @@ export interface StudioOptions {
   linkMeter?: (key: string) => number | undefined;
   /** Optional custom Pane factory for testing in node / mock environments. */
   paneFactory?: (options: { container: HTMLElement; title: string }) => any;
+  /** Optional Admin Gateway instance for verifying administrative capabilities. */
+  adminGateway?: IAdminGateway;
 }
 
 /** Frame budget at 60 fps. The readout turns into a warning above this. */
@@ -272,6 +282,11 @@ export class Studio {
   readonly helperBar: HTMLElement;
   /** Preset select element in the DOM (Slice 10.3). */
   private presetSelectEl: HTMLSelectElement | null = null;
+  /** Admin Gateway instance for verifying administrative capabilities (Slice 11.4). */
+  private adminGateway: IAdminGateway;
+  private adminUnsubscribe?: () => void;
+  private adminBadgeEl: HTMLElement | null = null;
+  private footerEl: HTMLElement | null = null;
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -282,11 +297,29 @@ export class Studio {
     private readonly container: HTMLElement,
     private readonly opts: StudioOptions,
   ) {
+    this.adminGateway =
+      this.opts.adminGateway ??
+      this.opts.session.getAdminGateway?.() ??
+      defaultAdminGateway;
+
+    if (typeof this.opts.session.setAdminGateway === 'function' && !this.opts.session.getAdminGateway?.()) {
+      this.opts.session.setAdminGateway(this.adminGateway);
+    }
+
+    if (this.adminGateway && typeof this.adminGateway.subscribe === 'function') {
+      this.adminUnsubscribe = this.adminGateway.subscribe(() => {
+        this.refreshPresetDropdown();
+        this.refresh();
+      });
+    }
+
     const doc = container.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
     this.body = container.querySelector<HTMLElement>('.studio-body') ?? container;
     container.setAttribute('role', 'dialog');
     container.setAttribute('aria-modal', 'false');
     container.setAttribute('aria-label', 'Studio');
+
+    this.adminBadgeEl = renderAdminBadge(container, this.isAdmin());
 
     this.deleteLive = doc ? doc.createElement('div') : ({} as HTMLElement);
     if (typeof this.deleteLive.setAttribute === 'function') {
@@ -359,6 +392,22 @@ export class Studio {
     return !this.container.hidden;
   }
 
+  isAdmin(): boolean {
+    return Boolean(this.adminGateway?.isAdmin());
+  }
+
+  getAdminGateway(): IAdminGateway {
+    return this.adminGateway;
+  }
+
+  get adminBadge(): HTMLElement | null {
+    return this.adminBadgeEl;
+  }
+
+  get footer(): HTMLElement | null {
+    return this.footerEl;
+  }
+
   /** Re-render the preset hierarchy dropdown without a full pane rebuild (Slice 10.3). */
   refreshPresetDropdown(): void {
     const el = this.presetSelectEl ?? this.body.querySelector<HTMLSelectElement>('select');
@@ -367,11 +416,54 @@ export class Studio {
     }
   }
 
+  /** Synchronize active preset state and optgroup hierarchy in the Studio UI (Slice 11.4). */
+  syncActivePresetInUI(id?: string): void {
+    const targetId = id ?? this.id;
+    this.refreshPresetDropdown();
+    if (targetId) {
+      this.bind(targetId);
+    }
+  }
+
   /** Refresh studio panel for the current preset (Slice 10.4). */
   refresh(): void {
     if (this.id) {
-      this.bind(this.id);
+      this.syncActivePresetInUI(this.id);
     }
+  }
+
+  /** Prompt user for administrator input (passkey secret or email). */
+  promptForAdminInput(message: string, defaultValue = ''): string | null {
+    return this.promptForFolderName(message, defaultValue);
+  }
+
+  /** Initiate administrator login flow. */
+  async handleAdminLogin(): Promise<{ success: boolean; error?: string }> {
+    const promptFn = (msg: string, d?: string) => this.promptForAdminInput(msg, d);
+    return await promptAdminLogin(this.adminGateway, promptFn);
+  }
+
+  /** Promote a user preset to a system preset. */
+  handlePromoteUserPreset(id: string): void {
+    const promptFn = (msg: string, d?: string) => this.promptForAdminInput(msg, d);
+    try {
+      const newId = promoteUserPresetAction(this.opts.session, id, promptFn);
+      if (newId) {
+        this.refreshPresetDropdown();
+        this.opts.switchTo(newId);
+      }
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  }
+
+  dispose(): void {
+    if (this.adminUnsubscribe) {
+      this.adminUnsubscribe();
+      this.adminUnsubscribe = undefined;
+    }
+    this.pane?.dispose();
+    this.pane = null;
   }
 
   /** Prompt user for folder name via prompt or prompt fallback. */
@@ -504,27 +596,68 @@ export class Studio {
       renderPresetSelectHierarchy(selectEl, session, id);
       selectEl.addEventListener?.('change', () => onSelectPreset(selectEl.value));
     }
-    // Category indicator for built-ins (Slice 10.4)
+    // Admin mode status (Slice 11.4)
+    const isAdmin = this.isAdmin();
+    this.adminBadgeEl = renderAdminBadge(this.container, isAdmin);
+
+    // Category / Subfolder controls for built-ins (Slice 10.4 & Slice 11.4)
     if (entry.builtin) {
-      const subfolder = getSystemSubfolder(id) ?? 'classics';
-      const subfolderLabel = SYSTEM_SUBFOLDER_LABELS[subfolder] ?? 'Built-in';
-      const categoryText = `System Preset (Read-Only) · ${subfolderLabel}`;
-      const categoryHolder = { category: categoryText };
-      const categoryBinding = pane.addBinding(categoryHolder, 'category', {
-        label: 'Category',
-        readonly: true,
-      });
-      if (categoryBinding?.element) {
-        categoryBinding.element.classList?.add('studio-category-indicator');
-        categoryBinding.element.setAttribute?.('data-category', categoryText);
+      if (!isAdmin) {
+        const subfolder = (typeof session.getSystemPresetSubfolder === 'function'
+          ? session.getSystemPresetSubfolder(id)
+          : entry.subfolder) ?? getSystemSubfolder(id) ?? 'classics';
+        const subfolderLabel = SYSTEM_SUBFOLDER_LABELS[subfolder] ?? 'Built-in';
+        const categoryText = `System Preset (Read-Only) · ${subfolderLabel}`;
+        const categoryHolder = { category: categoryText };
+        const categoryBinding = pane.addBinding(categoryHolder, 'category', {
+          label: 'Category',
+          readonly: true,
+        });
+        if (categoryBinding?.element) {
+          categoryBinding.element.classList?.add('studio-category-indicator');
+          categoryBinding.element.setAttribute?.('data-category', categoryText);
+        }
+      } else {
+        const currentSubfolder = (typeof session.getSystemPresetSubfolder === 'function'
+          ? session.getSystemPresetSubfolder(id)
+          : entry.subfolder) ?? getSystemSubfolder(id) ?? 'classics';
+        const subfolderOptions: Record<string, string> = {
+          [SYSTEM_SUBFOLDER_LABELS.showcase]: 'showcase',
+          [SYSTEM_SUBFOLDER_LABELS.flagship]: 'flagship',
+          [SYSTEM_SUBFOLDER_LABELS.classics]: 'classics',
+        };
+        const subfolderHolder = { subfolder: currentSubfolder };
+        const subfolderBinding = pane.addBinding(subfolderHolder, 'subfolder', {
+          label: 'Subfolder',
+          options: subfolderOptions,
+        });
+        const onSelectSubfolder = (chosenSubfolder: string) => {
+          const normalized: SystemSubfolder =
+            chosenSubfolder === 'showcase' || chosenSubfolder === 'flagship' || chosenSubfolder === 'classics'
+              ? chosenSubfolder
+              : 'classics';
+          if (typeof session.setSystemPresetSubfolder === 'function') {
+            session.setSystemPresetSubfolder(id, normalized);
+          } else {
+            entry.subfolder = normalized;
+          }
+          showToast(`Moved to ${SYSTEM_SUBFOLDER_LABELS[normalized] ?? normalized}`);
+          this.refreshPresetDropdown();
+          this.bind(id);
+        };
+        subfolderBinding.on('change', (ev: { value: unknown }) => onSelectSubfolder(String(ev.value)));
+        const subfolderSelectEl = subfolderBinding?.element?.querySelector?.('select') as HTMLSelectElement | null;
+        if (subfolderSelectEl) {
+          subfolderSelectEl.addEventListener?.('change', () => onSelectSubfolder(subfolderSelectEl.value));
+        }
       }
     }
 
     const nameBinding = pane.addBinding(preset as unknown as Record<string, unknown>, 'name', {
       label: 'Name',
-      readonly: entry.builtin,
+      readonly: entry.builtin && !isAdmin,
     });
-    if (entry.builtin) {
+    if (entry.builtin && !isAdmin) {
       if (nameBinding?.element) {
         const input = nameBinding.element.querySelector?.('input') as HTMLInputElement | null;
         if (input) {
@@ -533,7 +666,12 @@ export class Studio {
         }
       }
     } else {
-      nameBinding.on('change', () => session.commit(id));
+      nameBinding.on('change', () => {
+        session.commit(id);
+        if (entry.builtin && isAdmin) {
+          this.refreshPresetDropdown();
+        }
+      });
     }
 
     // Folder controls for user presets (Slice 10.4)
@@ -638,9 +776,19 @@ export class Studio {
       return btn;
     };
     if (entry.builtin) {
-      tile(pane.addButton({ title: 'Save (Read-only)' })).on('click', () => {
-        showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
-      });
+      if (!isAdmin) {
+        tile(pane.addButton({ title: 'Save (Read-only)' })).on('click', () => {
+          showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
+        });
+      } else {
+        tile(pane.addButton({ title: `Save System Preset 👑${dirty}` })).on('click', () => {
+          if (typeof session.saveSystemPreset === 'function') {
+            this.run(() => session.saveSystemPreset(id), 'System preset saved remotely & propagated to all users');
+          } else {
+            this.run(() => session.save(id), 'System preset saved remotely & propagated to all users');
+          }
+        });
+      }
     } else {
       tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
     }
@@ -648,10 +796,15 @@ export class Studio {
     tile(pane.addButton({ title: 'Duplicate' })).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),
     );
-    if (!entry.builtin) {
+    if (!entry.builtin || isAdmin) {
       const del = tile(pane.addButton({ title: DELETE_LABEL }));
       this.deleteBtn = del;
       del.on('click', () => this.onDeleteTap(del, id));
+    }
+    if (!entry.builtin && isAdmin) {
+      tile(pane.addButton({ title: 'Promote to System Preset 👑' })).on('click', () =>
+        this.handlePromoteUserPreset(id),
+      );
     }
     tile(pane.addButton({ title: 'Export .json' })).on('click', () => this.exportFile(id));
     tile(pane.addButton({ title: 'Import .json…' })).on('click', () => this.importFile());
@@ -761,6 +914,51 @@ export class Studio {
       readonly: true,
       format: (v: number) => v.toFixed(1),
     });
+
+    // --- Administrator Mode Access (Slice 11.4) -------------------------------------
+    pane.addBlade({ view: 'separator' });
+    const adminActionTitle = isAdmin ? 'Exit Admin Mode 👑' : 'Admin Access';
+    pane.addButton({ title: adminActionTitle }).on('click', () => {
+      if (this.isAdmin()) {
+        adminLogout(this.adminGateway);
+      } else {
+        this.handleAdminLogin();
+      }
+    });
+
+    this.renderFooter(isAdmin);
+  }
+
+  private renderFooter(isAdmin: boolean): void {
+    const doc = this.container.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+    if (!doc) return;
+
+    let footer = this.container.querySelector<HTMLElement>('.studio-footer');
+    if (!footer) {
+      footer = doc.createElement('div');
+      footer.className = 'studio-footer';
+      this.container.append(footer);
+    }
+    this.footerEl = footer;
+
+    if (typeof footer.replaceChildren === 'function') {
+      footer.replaceChildren();
+    } else {
+      footer.textContent = '';
+    }
+
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'studio-admin-action-btn' + (isAdmin ? ' admin-active' : '');
+    btn.textContent = isAdmin ? 'Exit Admin Mode 👑' : 'Admin Access';
+    btn.addEventListener('click', () => {
+      if (this.isAdmin()) {
+        adminLogout(this.adminGateway);
+      } else {
+        this.handleAdminLogin();
+      }
+    });
+    footer.append(btn);
   }
 
   /** Pick one numeric setting, then add, edit or remove its audio link. */
@@ -960,10 +1158,22 @@ export class Studio {
     const step = nextDeleteTap(this.deleteArmedAt, Date.now());
     this.disarmDelete();
     if (step.confirm) {
+      const isBuiltin = Boolean(this.opts.session.get(id)?.builtin);
       this.run(() => {
-        this.opts.session.remove(id);
-        this.opts.switchTo('crown');
-      }, 'Deleted');
+        if (isBuiltin) {
+          if (typeof this.opts.session.removeSystemPreset === 'function') {
+            this.opts.session.removeSystemPreset(id);
+          } else {
+            this.opts.session.remove(id);
+          }
+          const remaining = this.opts.session.list();
+          const nextId = this.opts.session.shownId ?? remaining.find((e) => e.id !== id)?.id ?? 'crown';
+          this.opts.switchTo(nextId);
+        } else {
+          this.opts.session.remove(id);
+          this.opts.switchTo('crown');
+        }
+      }, isBuiltin ? 'System preset deleted' : 'Deleted');
       return;
     }
     this.deleteArmedAt = step.armedAt;

@@ -26,6 +26,16 @@ import { Scene } from '../render/scene';
 import type { Preset, LayerEntry } from '../presets/format';
 import type { Vec3Spec } from '../presets/schema';
 import { LAYER_SPECS, POST_SPECS } from '../presets/layerSchemas';
+import { AdminGateway } from '../presets/adminGateway';
+import {
+  ADMIN_BADGE_LABEL,
+  renderAdminBadge,
+  promptAdminLogin,
+  adminLogout,
+  saveSystemPresetAction,
+  deleteSystemPresetAction,
+  promoteUserPresetAction,
+} from './adminControls';
 
 describe('deleteAnnouncement (slice 11.4)', () => {
   it('announces "Tap again" while Delete is armed', () => {
@@ -1405,8 +1415,7 @@ describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
   });
 });
 
-describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', () => {
-  function setupTest() {
+  function setupTest(testOptions: { admin?: boolean } = {}) {
     const container = createMockElement('div');
     const body = createMockElement('div');
     body.className = 'studio-body';
@@ -1479,16 +1488,16 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
       list: vi.fn(() => Object.values(presets)),
       listCategorized: vi.fn(() => ({
         system: {
-          showcase: [presets['13-solar-crown-eclipse']],
+          showcase: [presets['13-solar-crown-eclipse']].filter(Boolean),
           flagship: [],
-          classics: [presets['crown']],
+          classics: [presets['crown']].filter(Boolean),
         },
         user: {
           folders: [
-            { folder: folders[0]!, entries: [presets['user-in-folder']] },
+            { folder: folders[0]!, entries: [presets['user-in-folder']].filter(Boolean) },
             { folder: folders[1]!, entries: [] },
           ],
-          unfiled: [presets['user-1']],
+          unfiled: [presets['user-1']].filter(Boolean),
         },
       })),
       getFolders: vi.fn(() => [...folders]),
@@ -1517,7 +1526,34 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
       setPresetTags: vi.fn((presetId: string, tags: string[]) => {
         if (presets[presetId]) presets[presetId].preset.tags = [...tags];
       }),
-      isDirty: () => false,
+      getSystemPresetSubfolder: vi.fn((id: string) => presets[id]?.subfolder ?? (id.startsWith('13') ? 'showcase' : 'classics')),
+      setSystemPresetSubfolder: vi.fn((id: string, subfolder: string) => {
+        if (presets[id]) presets[id].subfolder = subfolder as any;
+      }),
+      saveSystemPreset: vi.fn((id: string) => {
+        if (!presets[id]?.builtin) throw new Error('Built-in presets are read-only. Use "Save as" to keep a copy.');
+        presets[id].savedJson = JSON.stringify(presets[id].preset);
+      }),
+      removeSystemPreset: vi.fn((id: string) => {
+        if (!presets[id]?.builtin) throw new Error('Not a system preset');
+        delete presets[id];
+      }),
+      promoteToSystemPreset: vi.fn((userId: string, subfolder: string) => {
+        const p = presets[userId];
+        if (!p) throw new Error('Not found');
+        const newId = `sys-${userId}`;
+        presets[newId] = {
+          ...p,
+          id: newId,
+          builtin: true,
+          subfolder: subfolder as any,
+          folderId: undefined,
+          savedJson: JSON.stringify(p.preset),
+        };
+        delete presets[userId];
+        return newId;
+      }),
+      isDirty: vi.fn(() => false),
       commit: vi.fn(),
       save: vi.fn((id: string) => {
         if (presets[id]?.builtin) throw new Error('Built-in presets are read-only. Use "Save as" to keep a copy.');
@@ -1545,14 +1581,19 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
       studio.bind(id);
     });
 
+    const adminGateway = new AdminGateway({ mock: true, defaultAdmin: Boolean(testOptions?.admin) });
+
     const studio = new Studio(container as any, {
       session,
       switchTo,
       paneFactory: mockPaneFactory,
+      adminGateway,
     });
 
-    return { container, session, studio, getPane: () => mockPaneInstance, switchTo, folders, presets };
+    return { container, session, studio, getPane: () => mockPaneInstance, switchTo, folders, presets, adminGateway };
   }
+
+describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', () => {
 
   it('renders read-only system preset affordances (category indicator, read-only name, disabled folder dropdown, hidden delete)', () => {
     const { studio, getPane, session } = setupTest();
@@ -1816,3 +1857,259 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
     expect(paneAfter).not.toBe(paneBefore);
   });
 });
+
+describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () => {
+  it('renders read-only system preset affordances when not in admin mode', () => {
+    const { studio, getPane } = setupTest({ admin: false });
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    studio.bind('crown');
+    const pane = getPane();
+
+    expect(studio.isAdmin()).toBe(false);
+
+    // 1. Category indicator should be read-only
+    const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
+    expect(categoryBinding).toBeDefined();
+    expect(categoryBinding.options.readonly).toBe(true);
+    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Classics & Textures');
+
+    // 2. Name is read-only
+    const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
+    expect(nameBinding.options.readonly).toBe(true);
+
+    // 3. Save button is read-only with warning toast
+    const saveBtn = pane.buttons.find((b: any) => b.title === 'Save (Read-only)');
+    expect(saveBtn).toBeDefined();
+    saveBtn.fire('click');
+    expect(showToastSpy).toHaveBeenCalledWith('Built-in presets are read-only. Use "Save as…" to keep a copy.');
+
+    // 4. Delete button is hidden
+    const deleteBtn = pane.buttons.find((b: any) => b.title === 'Delete');
+    expect(deleteBtn).toBeUndefined();
+
+    // 5. Admin mode is inactive: no badge, and Admin Access button shown
+    expect(studio.adminBadge).toBeNull();
+    const adminBtn = pane.buttons.find((b: any) => b.title === 'Admin Access');
+    expect(adminBtn).toBeDefined();
+
+    showToastSpy.mockRestore();
+  });
+
+  it('unlocks system preset controls in admin mode (editable name, subfolder selector, Save System Preset, 2-tap delete)', () => {
+    const { studio, getPane, session } = setupTest({ admin: true });
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    studio.bind('crown');
+    const pane = getPane();
+
+    expect(studio.isAdmin()).toBe(true);
+
+    // 1. Admin badge should be displayed
+    expect(studio.adminBadge).not.toBeNull();
+    expect(studio.adminBadge?.textContent).toBe(ADMIN_BADGE_LABEL);
+
+    // 2. Read-only category indicator replaced with editable subfolder dropdown
+    const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
+    expect(categoryBinding).toBeUndefined();
+
+    const subfolderBinding = pane.bindings.find((b: any) => b.prop === 'subfolder');
+    expect(subfolderBinding).toBeDefined();
+    expect(subfolderBinding.options.label).toBe('Subfolder');
+    expect(subfolderBinding.target.subfolder).toBe('classics');
+    expect(subfolderBinding.options.options).toEqual(
+      expect.objectContaining({
+        'Stage 9 Showcase (13–20)': 'showcase',
+        'Flagship Generative (01–12)': 'flagship',
+        'Classics & Textures': 'classics',
+      }),
+    );
+
+    // Move to flagship subfolder
+    subfolderBinding.fire('change', 'flagship');
+    expect(session.setSystemPresetSubfolder).toHaveBeenCalledWith('crown', 'flagship');
+    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative (01–12)');
+
+    // 3. Name is editable
+    const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
+    expect(nameBinding.options.readonly).toBe(false);
+    nameBinding.fire('change', 'Crown Remastered');
+    expect(session.commit).toHaveBeenCalledWith('crown');
+
+    // 4. Save System Preset button is active
+    const saveBtn = pane.buttons.find((b: any) => b.title.includes('Save System Preset 👑'));
+    expect(saveBtn).toBeDefined();
+    saveBtn.fire('click');
+    expect(session.saveSystemPreset).toHaveBeenCalledWith('crown');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset saved remotely & propagated to all users');
+
+    // 5. Delete button is present with 2-tap confirmation protocol
+    const deleteBtn = pane.buttons.find((b: any) => b.title === 'Delete');
+    expect(deleteBtn).toBeDefined();
+
+    // First tap arms delete
+    deleteBtn.fire('click');
+    expect(deleteBtn.title).toBe('Tap again to delete');
+    expect(session.removeSystemPreset).not.toHaveBeenCalled();
+
+    // Second tap confirms delete
+    deleteBtn.fire('click');
+    expect(session.removeSystemPreset).toHaveBeenCalledWith('crown');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset deleted');
+
+    showToastSpy.mockRestore();
+  });
+
+  it('renders "Promote to System Preset 👑" button for user presets in admin mode', () => {
+    const { studio, getPane, session, switchTo } = setupTest({ admin: true });
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const promptSpy = vi.spyOn(studio, 'promptForAdminInput').mockReturnValue('flagship');
+
+    studio.bind('user-1');
+    const pane = getPane();
+
+    // Promote button should be available
+    const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
+    expect(promoteBtn).toBeDefined();
+
+    promoteBtn.fire('click');
+    expect(promptSpy).toHaveBeenCalled();
+    expect(session.promoteToSystemPreset).toHaveBeenCalledWith('user-1', 'flagship');
+    expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset 👑');
+    expect(switchTo).toHaveBeenCalledWith('sys-user-1');
+
+    promptSpy.mockRestore();
+    showToastSpy.mockRestore();
+  });
+
+  it('cancelling promote prompt aborts promotion', () => {
+    const { studio, getPane, session } = setupTest({ admin: true });
+    const promptSpy = vi.spyOn(studio, 'promptForAdminInput').mockReturnValue(null);
+
+    studio.bind('user-1');
+    const pane = getPane();
+    const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
+    promoteBtn.fire('click');
+
+    expect(promptSpy).toHaveBeenCalled();
+    expect(session.promoteToSystemPreset).not.toHaveBeenCalled();
+
+    promptSpy.mockRestore();
+  });
+
+  it('supports admin login and logout lifecycle with dynamic UI refresh', async () => {
+    const { studio, getPane, adminGateway } = setupTest({ admin: false });
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    studio.bind('crown');
+    expect(studio.isAdmin()).toBe(false);
+    expect(studio.adminBadge).toBeNull();
+    let pane = getPane();
+    expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeUndefined();
+
+    // Simulate login via passkey
+    const promptSpy = vi.spyOn(studio, 'promptForAdminInput').mockReturnValue('admin-passkey-123');
+    const res = await studio.handleAdminLogin();
+    expect(res.success).toBe(true);
+    expect(studio.isAdmin()).toBe(true);
+    expect(showToastSpy).toHaveBeenCalledWith('👑 Admin Mode Activated');
+
+    // UI should have refreshed into admin mode
+    pane = getPane();
+    expect(studio.adminBadge).not.toBeNull();
+    expect(studio.adminBadge?.textContent).toBe(ADMIN_BADGE_LABEL);
+    expect(pane.buttons.find((b: any) => b.title.includes('Save System Preset 👑'))).toBeDefined();
+    expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeDefined();
+
+    // Logout
+    adminLogout(adminGateway);
+    expect(studio.isAdmin()).toBe(false);
+    expect(showToastSpy).toHaveBeenCalledWith('Exited Admin Mode');
+
+    // UI should have refreshed back to user mode
+    pane = getPane();
+    expect(studio.adminBadge).toBeNull();
+    expect(pane.buttons.find((b: any) => b.title === 'Save (Read-only)')).toBeDefined();
+    expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeUndefined();
+
+    promptSpy.mockRestore();
+    showToastSpy.mockRestore();
+  });
+
+  it('syncActivePresetInUI updates both preset dropdown and panel binding', () => {
+    const { studio, getPane } = setupTest();
+    studio.bind('crown');
+    const paneBefore = getPane();
+
+    studio.syncActivePresetInUI('user-1');
+    const paneAfter = getPane();
+
+    expect(paneAfter).not.toBe(paneBefore);
+    const nameBinding = paneAfter.bindings.find((b: any) => b.prop === 'name');
+    expect(nameBinding.target.name).toBe('Custom Ambient');
+  });
+
+  it('adminControls helper functions work as expected', async () => {
+    const container = createMockElement('div');
+    const head = createMockElement('div');
+    head.className = 'studio-head';
+    container.appendChild(head);
+
+    // 1. renderAdminBadge
+    const badge = renderAdminBadge(container as any, true);
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe(ADMIN_BADGE_LABEL);
+
+    // Call again returns existing badge
+    const badge2 = renderAdminBadge(container as any, true);
+    expect(badge2).toBe(badge);
+
+    // Remove badge
+    const removed = renderAdminBadge(container as any, false);
+    expect(removed).toBeNull();
+
+    // 2. promptAdminLogin
+    const mockGateway = new AdminGateway({ mock: true });
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    // Cancelled
+    const cancelRes = await promptAdminLogin(mockGateway, () => null);
+    expect(cancelRes.success).toBe(false);
+
+    // Login with passkey
+    const passkeyRes = await promptAdminLogin(mockGateway, () => 'secret-key');
+    expect(passkeyRes.success).toBe(true);
+    expect(mockGateway.isAdmin()).toBe(true);
+
+    // 3. saveSystemPresetAction & deleteSystemPresetAction
+    const mockSession = {
+      saveSystemPreset: vi.fn(),
+      removeSystemPreset: vi.fn(),
+      promoteToSystemPreset: vi.fn(() => 'sys-promoted'),
+    } as any;
+
+    saveSystemPresetAction(mockSession, 'sys-1');
+    expect(mockSession.saveSystemPreset).toHaveBeenCalledWith('sys-1');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset saved remotely & propagated to all users');
+
+    deleteSystemPresetAction(mockSession, 'sys-1');
+    expect(mockSession.removeSystemPreset).toHaveBeenCalledWith('sys-1');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset deleted');
+
+    // 4. promoteUserPresetAction
+    const promotedId = promoteUserPresetAction(mockSession, 'u-1', () => 'SHOWCASE');
+    expect(mockSession.promoteToSystemPreset).toHaveBeenCalledWith('u-1', 'showcase');
+    expect(promotedId).toBe('sys-promoted');
+
+    // Default to classics when unknown
+    promoteUserPresetAction(mockSession, 'u-2', () => 'unknown-folder');
+    expect(mockSession.promoteToSystemPreset).toHaveBeenCalledWith('u-2', 'classics');
+
+    // Null cancels
+    const cancelledId = promoteUserPresetAction(mockSession, 'u-3', () => null);
+    expect(cancelledId).toBeNull();
+
+    showToastSpy.mockRestore();
+  });
+});
+
