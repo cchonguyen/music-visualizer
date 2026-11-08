@@ -83,6 +83,23 @@ const SOURCE_NAMES: Record<string, string> = {
   mic: 'Microphone',
 };
 
+export function getSourceIcon(kind: SourceKind): string {
+  if (kind === 'mic') return '🎙️';
+  if (kind === 'display') return '🖥️';
+  if (kind === 'file') return '🎵';
+  if (kind.startsWith('test:')) return '⚡';
+  return '🔊';
+}
+
+export function formatSourceLabel(kind: SourceKind, fileName = ''): string {
+  if (kind === 'none') return 'Source: None';
+  if (kind === 'mic') return 'Source: Mic';
+  if (kind === 'display') return 'Source: Tab / system audio';
+  if (kind === 'file') return fileName ? `Source: ${fileName}` : 'Source: File';
+  if (kind.startsWith('test:')) return `Source: Test (${kind.slice(5)})`;
+  return `Source: ${kind}`;
+}
+
 export function sourceName(kind: SourceKind, fileName = ''): string {
   if (kind.startsWith('test:')) return `Test signal: ${kind.slice(5)}`;
   if (kind === 'file' && fileName) return `File: ${fileName}`;
@@ -175,6 +192,78 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const playback = $<HTMLElement>('playback');
   const sourceButtons = [...controls.querySelectorAll<HTMLButtonElement>('button[data-source]')];
 
+  // Segmented Pill & Hub Popups Elements (Slice 12.3)
+  const sourceBtn = document.getElementById('source-btn') as HTMLButtonElement | null;
+  const sourcePanel = document.getElementById('source-panel') as HTMLElement | null;
+  const sourceIcon = document.getElementById('source-icon') as HTMLElement | null;
+  const playbackActionBtn = document.getElementById('playback-action-btn') as HTMLButtonElement | null;
+  const actionIcon = document.getElementById('action-icon') as HTMLElement | null;
+  const actionLabel = document.getElementById('action-label') as HTMLElement | null;
+  const timelineSeparator = document.getElementById('timeline-separator') as HTMLElement | null;
+  const scrubberSegment = document.getElementById('playback-scrubber-segment') as HTMLElement | null;
+  const timeCurrent = document.getElementById('time-current') as HTMLSpanElement | null;
+  const timeTotal = document.getElementById('time-total') as HTMLSpanElement | null;
+  const experienceBtn = document.getElementById('experience-btn') as HTMLButtonElement | null;
+  const experiencePanel = document.getElementById('experience-panel') as HTMLElement | null;
+
+  // Startup Onboarding Toast
+  const onboardingToast = document.getElementById('onboarding-toast') as HTMLElement | null;
+  const dismissToastBtn = document.getElementById('dismiss-toast-btn') as HTMLButtonElement | null;
+  const reopenToastBtn = document.getElementById('reopen-toast-btn') as HTMLButtonElement | null;
+
+  const dismissToast = () => {
+    if (!onboardingToast) return;
+    onboardingToast.classList.add('dismissed');
+    onboardingToast.hidden = true;
+  };
+
+  const showToastGuide = () => {
+    if (!onboardingToast) return;
+    onboardingToast.hidden = false;
+    onboardingToast.classList.remove('dismissed');
+  };
+
+  dismissToastBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dismissToast();
+  });
+
+  // Auto-dismiss toast on any HUD controls interaction
+  controls.addEventListener('click', () => {
+    dismissToast();
+  });
+
+  const setSourceOpen = (open: boolean) => {
+    if (!sourcePanel) return;
+    sourcePanel.hidden = !open;
+    sourceBtn?.setAttribute('aria-expanded', String(open));
+    if (open && experiencePanel) {
+      setExperienceOpen(false);
+    }
+  };
+
+  const setExperienceOpen = (open: boolean) => {
+    if (!experiencePanel) return;
+    experiencePanel.hidden = !open;
+    experienceBtn?.setAttribute('aria-expanded', String(open));
+    if (open && sourcePanel) {
+      setSourceOpen(false);
+    }
+  };
+
+  sourceBtn?.addEventListener('click', () => {
+    const isCurrentlyOpen = sourceBtn.getAttribute('aria-expanded') === 'true';
+    setSourceOpen(!isCurrentlyOpen);
+  });
+
+  experienceBtn?.addEventListener('click', () => {
+    const isCurrentlyOpen = experienceBtn.getAttribute('aria-expanded') === 'true';
+    setExperienceOpen(!isCurrentlyOpen);
+  });
+
+  if (sourcePanel) attachSwipeDismiss(sourcePanel, () => setSourceOpen(false));
+  if (experiencePanel) attachSwipeDismiss(experiencePanel, () => setExperienceOpen(false));
+
   controls.hidden = false;
   engine.setVolume(Number(volume.value));
   if (calm) calm.checked = state.calm;
@@ -183,6 +272,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     if (!file) return;
     state.fileName = file.name;
     void engine.useFile(file);
+    setSourceOpen(false);
+    dismissToast();
   };
 
   fileInput.addEventListener('change', () => {
@@ -211,15 +302,24 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   for (const btn of sourceButtons) {
     btn.addEventListener('click', () => {
       const s = btn.dataset.source;
-      if (s === 'display') void engine.useDisplayCapture();
-      else if (s === 'mic') void engine.useMic();
-      else if (s === 'stop') engine.stop();
+      if (s === 'display') {
+        void engine.useDisplayCapture();
+        setSourceOpen(false);
+      } else if (s === 'mic') {
+        void engine.useMic();
+        setSourceOpen(false);
+      } else if (s === 'stop') {
+        engine.stop();
+      }
     });
   }
 
   testSelect.addEventListener('change', () => {
     const v = testSelect.value as TestSignal | '';
-    if (v) engine.useTestSignal(v);
+    if (v) {
+      engine.useTestSignal(v);
+      setSourceOpen(false);
+    }
     testSelect.value = '';
   });
 
@@ -231,10 +331,19 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   };
   playBtn.addEventListener('click', togglePlay);
 
+  playbackActionBtn?.addEventListener('click', () => {
+    if (engine.kind === 'file') {
+      togglePlay();
+    } else if (engine.kind !== 'none') {
+      engine.stop();
+    }
+  });
+
   seek.addEventListener('input', () => {
     const media = engine.media;
     if (media && Number.isFinite(media.duration)) {
       media.currentTime = (Number(seek.value) / 1000) * media.duration;
+      if (timeCurrent) timeCurrent.textContent = formatTime(media.currentTime);
     }
   });
 
@@ -267,7 +376,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     state.calm = director.isCalm();
     if (calm) calm.checked = state.calm;
     if (experienceLabel) {
-      experienceLabel.textContent = `Experience: ${EXPERIENCE_LABELS[currentMode] ?? currentMode}`;
+      const prefix = experienceLabel.textContent?.startsWith('Visuals') ? 'Visuals' : 'Experience';
+      experienceLabel.textContent = `${prefix}: ${EXPERIENCE_LABELS[currentMode] ?? currentMode}`;
     }
     for (const btn of modeButtons) {
       const isActive = btn.dataset.mode === currentMode;
@@ -425,11 +535,27 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     valueBtnOf(item)?.addEventListener('click', () => setOpenValue(openItem() === item ? null : item));
   }
   document.addEventListener('pointerdown', (e) => {
+    const target = e.target as Node | null;
+    if (!target) return;
+    if (sourcePanel && !sourcePanel.hidden) {
+      if (!sourcePanel.contains(target) && !sourceBtn?.contains(target)) {
+        setSourceOpen(false);
+      }
+    }
+    if (experiencePanel && !experiencePanel.hidden) {
+      if (!experiencePanel.contains(target) && !experienceBtn?.contains(target)) {
+        setExperienceOpen(false);
+      }
+    }
     const open = openItem();
-    if (open && !open.contains(e.target as Node)) setOpenValue(null);
+    if (open && !open.contains(target)) setOpenValue(null);
   });
   controls.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') setOpenValue(null);
+    if (e.key === 'Escape') {
+      setSourceOpen(false);
+      setExperienceOpen(false);
+      setOpenValue(null);
+    }
   });
   setOpenValue(null);
 
@@ -457,13 +583,23 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   $<HTMLButtonElement>('shortcuts-btn').addEventListener('click', openShortcuts);
   $<HTMLButtonElement>('shortcuts-close').addEventListener('click', () => shortcutsDialog.close());
 
+  reopenToastBtn?.addEventListener('click', () => {
+    showToastGuide();
+    shortcutsDialog.close();
+  });
+
   // Controls bar close (slice 11.2): collapses to a "Show controls" button. State is in memory only.
   const controlsShow = $<HTMLButtonElement>('controls-show');
   const setControlsCollapsed = (collapsed: boolean) => {
     controls.classList.toggle('collapsed', collapsed);
     controlsShow.hidden = !collapsed;
-    if (collapsed) controlsShow.focus();
-    else fileBtn.focus();
+    if (collapsed) {
+      setSourceOpen(false);
+      setExperienceOpen(false);
+      controlsShow.focus();
+    } else {
+      (sourceBtn ?? fileBtn).focus();
+    }
   };
   $<HTMLButtonElement>('controls-close').addEventListener('click', () => setControlsCollapsed(true));
   controlsShow.addEventListener('click', () => setControlsCollapsed(false));
@@ -564,7 +700,14 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       case ' ':
         if (tag === 'BUTTON') return; // Space already clicks the focused button
         e.preventDefault();
-        togglePlay();
+        if (engine.kind === 'file') {
+          togglePlay();
+        }
+        break;
+      case 'Escape':
+        setSourceOpen(false);
+        setExperienceOpen(false);
+        setOpenValue(null);
         break;
       case 'ArrowLeft':
       case 'ArrowRight':
@@ -600,12 +743,60 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     }
   });
 
+  const syncSourceUI = (kind: SourceKind) => {
+    if (sourceLabel) {
+      sourceLabel.textContent = formatSourceLabel(kind, state.fileName);
+    }
+    if (sourceIcon) {
+      sourceIcon.textContent = getSourceIcon(kind);
+    }
+    for (const btn of sourceButtons) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.source === kind));
+    }
+
+    if (kind === 'file') {
+      if (playbackActionBtn) {
+        playbackActionBtn.hidden = false;
+        playbackActionBtn.classList.remove('is-stop');
+        playbackActionBtn.dataset.action = 'play';
+        const isPaused = !engine.media || engine.media.paused;
+        if (actionIcon) actionIcon.textContent = isPaused ? '▶' : '⏸';
+        if (actionLabel) actionLabel.textContent = isPaused ? 'Play' : 'Pause';
+        playbackActionBtn.setAttribute('aria-label', isPaused ? 'Play (Space)' : 'Pause (Space)');
+      }
+      if (scrubberSegment) scrubberSegment.hidden = false;
+      if (timelineSeparator) timelineSeparator.hidden = false;
+      if (playback) playback.hidden = false;
+    } else if (kind === 'display' || kind === 'mic' || kind.startsWith('test:')) {
+      if (playbackActionBtn) {
+        playbackActionBtn.hidden = false;
+        playbackActionBtn.classList.add('is-stop');
+        playbackActionBtn.dataset.action = 'stop';
+        if (actionIcon) actionIcon.textContent = '⏹';
+        if (actionLabel) actionLabel.textContent = 'Stop';
+        playbackActionBtn.setAttribute('aria-label', 'Stop stream');
+      }
+      if (scrubberSegment) scrubberSegment.hidden = true;
+      if (timelineSeparator) timelineSeparator.hidden = true;
+      if (playback) playback.hidden = true;
+    } else {
+      // none / idle
+      if (playbackActionBtn) {
+        playbackActionBtn.hidden = true;
+        playbackActionBtn.classList.remove('is-stop');
+      }
+      if (scrubberSegment) scrubberSegment.hidden = true;
+      if (timelineSeparator) timelineSeparator.hidden = true;
+      if (playback) playback.hidden = true;
+    }
+  };
+
+  syncSourceUI(engine.kind ?? 'none');
+
   engine.on('source-changed', (kind) => {
     const k = kind as SourceKind;
-    sourceLabel.textContent = sourceName(k, state.fileName);
-    for (const btn of sourceButtons) {
-      btn.setAttribute('aria-pressed', String(btn.dataset.source === k));
-    }
+    if (k !== 'none') dismissToast();
+    syncSourceUI(k);
   });
   engine.on('source-ended', (kind) => {
     if (kind === 'display') showNotice('Sharing ended. Choose Tab / system audio to start again.', 'info');
@@ -634,15 +825,34 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     // Called once per frame to keep the playback row in sync.
     tick() {
       const media = engine.media;
-      playback.hidden = !media;
+      if (playback) playback.hidden = !media;
       if (!media) return;
-      const action = media.paused ? 'Play' : 'Pause';
+      const isPaused = media.paused;
+      const action = isPaused ? 'Play' : 'Pause';
       if (playBtn.textContent !== action) playBtn.textContent = action;
       const label = `${action} (Space)`;
       if (playBtn.getAttribute('aria-label') !== label) playBtn.setAttribute('aria-label', label);
+
+      if (playbackActionBtn && engine.kind === 'file') {
+        const icon = isPaused ? '▶' : '⏸';
+        if (actionIcon && actionIcon.textContent !== icon) {
+          actionIcon.textContent = icon;
+        }
+        if (actionLabel && actionLabel.textContent !== action) {
+          actionLabel.textContent = action;
+        }
+        if (playbackActionBtn.getAttribute('aria-label') !== label) {
+          playbackActionBtn.setAttribute('aria-label', label);
+        }
+      }
+
       if (Number.isFinite(media.duration) && media.duration > 0) {
         if (document.activeElement !== seek) seek.value = String(Math.round((media.currentTime / media.duration) * 1000));
-        time.textContent = `${formatTime(media.currentTime)} / ${formatTime(media.duration)}`;
+        const cur = formatTime(media.currentTime);
+        const tot = formatTime(media.duration);
+        if (timeCurrent) timeCurrent.textContent = cur;
+        if (timeTotal) timeTotal.textContent = tot;
+        if (time) time.textContent = `${cur} / ${tot}`;
       }
     },
   };

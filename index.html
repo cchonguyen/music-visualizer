@@ -26,115 +26,202 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <!-- Startup Onboarding Toast (Slice 12.1) -->
+    <div id="onboarding-toast" class="onboarding-toast" role="status" aria-live="polite">
+      <div class="onboarding-toast-content">
+        <span class="onboarding-toast-icon" aria-hidden="true">💡</span>
+        <span class="onboarding-toast-text">Ready to visualize audio — Click <strong>Source ▾</strong> to choose Tab Audio, Microphone, Local File, or Test Signal.</span>
+      </div>
+      <button type="button" id="dismiss-toast-btn" class="onboarding-toast-dismiss" aria-label="Dismiss guide">✕</button>
+    </div>
+
     <nav id="controls" class="controls" aria-label="Player controls" hidden>
       <div class="sheet-handle" aria-hidden="true"></div>
       <div class="sheet-head controls-head">
         <button type="button" id="controls-close" class="close-btn">Close</button>
       </div>
-      <div class="group" role="group" aria-label="Audio source">
-        <span class="group-label" aria-hidden="true">Source</span>
-        <button type="button" id="file-btn" class="btn">File…</button>
-        <input id="file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.webm,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/ogg" hidden />
-        <button type="button" data-source="display">Tab / system audio</button>
-        <button type="button" data-source="mic">Microphone</button>
-        <select id="test-select" aria-label="Test signal">
-          <option value="">Test signal…</option>
-          <option value="kick">Kick (60 Hz, every 0.5 s)</option>
-          <option value="tone">Tone (2 kHz)</option>
-          <option value="sweep">Sweep (40 Hz – 8 kHz)</option>
-          <option value="silence">Silence</option>
-        </select>
-        <button type="button" data-source="stop">Stop</button>
-      </div>
-      <div class="group" role="group" aria-label="Playback" id="playback" hidden>
-        <span class="group-label" aria-hidden="true">Playback</span>
-        <button type="button" id="play-btn" aria-label="Pause (Space)">Pause</button>
-        <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
-        <span id="time" class="time">0:00</span>
-      </div>
-      <div class="group value-group" role="group" aria-label="Sound and response">
-        <span class="group-label" aria-hidden="true">Sound and response</span>
-        <div class="value-item">
-          <button type="button" class="value-btn" id="volume-btn" aria-expanded="false" aria-controls="volume-panel"><span class="value-name">Volume</span> <span class="value-val" id="volume-value">80%</span></button>
-          <div class="value-panel" id="volume-panel" hidden>
-            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume" />
+
+      <!-- Consolidated Source Popup (#source-panel) -->
+      <div id="source-panel" class="hud-panel source-panel" role="region" aria-label="Audio source selection" hidden>
+        <div class="panel-header">
+          <span class="panel-title">Audio Source</span>
+        </div>
+        <div class="source-cards-grid">
+          <button type="button" class="source-card" data-source="display">
+            <span class="source-card-icon" aria-hidden="true">🖥️</span>
+            <div class="source-card-info">
+              <span class="source-card-title">Tab / System Audio</span>
+              <span class="source-card-desc">Capture audio stream playing in your browser or desktop.</span>
+            </div>
+          </button>
+          <button type="button" class="source-card" data-source="mic">
+            <span class="source-card-icon" aria-hidden="true">🎙️</span>
+            <div class="source-card-info">
+              <span class="source-card-title">Microphone</span>
+              <span class="source-card-desc">Live microphone input with low latency.</span>
+            </div>
+          </button>
+          <div class="source-card source-card-file">
+            <span class="source-card-icon" aria-hidden="true">🎵</span>
+            <div class="source-card-info">
+              <span class="source-card-title">Local Audio File</span>
+              <span class="source-card-desc">Play MP3, WAV, FLAC, AAC with full timeline scrubbing.</span>
+              <div class="source-file-actions">
+                <button type="button" id="file-btn" class="btn">Browse / Change File</button>
+                <input id="file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.webm,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/ogg" hidden />
+              </div>
+            </div>
+          </div>
+          <div class="source-card source-card-test">
+            <span class="source-card-icon" aria-hidden="true">⚡</span>
+            <div class="source-card-info">
+              <span class="source-card-title">Hardware Test Signal</span>
+              <span class="source-card-desc">Synthesized reference signals for audio &amp; visual calibration.</span>
+              <select id="test-select" aria-label="Test signal">
+                <option value="">Choose test signal…</option>
+                <option value="kick">Kick (60 Hz, 120 BPM)</option>
+                <option value="tone">Tone (2 kHz)</option>
+                <option value="sweep">Sweep (40 Hz – 8 kHz)</option>
+                <option value="silence">Silence</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div class="value-item">
-          <button type="button" class="value-btn" id="gain-btn" aria-expanded="false" aria-controls="gain-panel"><span class="value-name">Visual gain</span> <span class="value-val" id="gain-value">1.00×</span></button>
-          <div class="value-panel" id="gain-panel" hidden>
+        <div class="panel-footer source-volume-footer">
+          <div class="source-volume-row">
+            <span class="source-volume-label">
+              <span class="volume-icon" aria-hidden="true">🔊</span> Master Volume
+              <span id="volume-value" class="value-val">80%</span>
+            </span>
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Master volume" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Consolidated Visuals Popup (#experience-panel) -->
+      <div id="experience-panel" class="hud-panel experience-panel" role="region" aria-label="Visuals and display settings" hidden>
+        <div class="exp-header">
+          <span class="exp-title">Experience Mode</span>
+          <span class="exp-hint">Key: M</span>
+        </div>
+        <div class="exp-modes-grid">
+          <button type="button" class="exp-mode-btn" data-mode="cinematic">Cinematic</button>
+          <button type="button" class="exp-mode-btn" data-mode="calm">Calm</button>
+          <button type="button" class="exp-mode-btn" data-mode="minimal">Minimal</button>
+          <button type="button" class="exp-mode-btn" data-mode="colorWalk">Color Walk</button>
+        </div>
+        <div class="exp-controls-row">
+          <label class="exp-field">
+            <span>Camera</span>
+            <select id="exp-camera-select">
+              <option value="auto">Auto</option>
+              <option value="craneSway">Crane sway</option>
+              <option value="dutchRoll">Dutch roll</option>
+              <option value="breathingPush">Push swell</option>
+              <option value="horizonTilt">Horizon 2.5D</option>
+              <option value="stillAnchor">Still anchor</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label class="exp-field">
+            <span>Color</span>
+            <select id="exp-color-select">
+              <option value="auto">Auto-cycle</option>
+              <option value="native">Native (preset)</option>
+              <option value="cyberpunk">Cyberpunk</option>
+              <option value="ember">Ember</option>
+              <option value="biolum">Biolum</option>
+              <option value="vapor">Vapor</option>
+              <option value="prismatic">Prismatic</option>
+            </select>
+          </label>
+        </div>
+        <div class="exp-sliders-row">
+          <div class="exp-slider-item">
+            <div class="exp-slider-header">
+              <span>Visual gain</span>
+              <span id="gain-value" class="value-val">1.00×</span>
+            </div>
             <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="Visual gain" />
           </div>
-        </div>
-        <div class="value-item">
-          <button type="button" class="value-btn" id="beat-btn" aria-expanded="false" aria-controls="beat-panel"><span class="value-name">Beat sensitivity</span> <span class="value-val" id="beat-value">50%</span></button>
-          <div class="value-panel" id="beat-panel" hidden>
+          <div class="exp-slider-item">
+            <div class="exp-slider-header">
+              <span>Beat sensitivity</span>
+              <span id="beat-value" class="value-val">50%</span>
+            </div>
             <input id="beat-sensitivity" type="range" min="0" max="100" step="1" value="50" aria-label="Beat sensitivity" />
           </div>
         </div>
-      </div>
-      <div class="group display-row" role="group" aria-label="Display">
-        <span class="group-label" aria-hidden="true">Display</span>
-        <div class="value-item experience-item">
-          <button id="experience-btn" class="value-btn" aria-expanded="false" aria-controls="experience-panel" aria-label="Experience & Director modes">
-            <span id="experience-label">Experience: Cinematic</span>
-          </button>
-          <div id="experience-panel" class="value-panel experience-panel" hidden>
-            <div class="exp-header">
-              <span class="exp-title">Experience Mode</span>
-              <span class="exp-hint">Key: M</span>
-            </div>
-            <div class="exp-modes-grid">
-              <button type="button" class="exp-mode-btn" data-mode="cinematic">Cinematic</button>
-              <button type="button" class="exp-mode-btn" data-mode="calm">Calm</button>
-              <button type="button" class="exp-mode-btn" data-mode="minimal">Minimal</button>
-              <button type="button" class="exp-mode-btn" data-mode="colorWalk">Color Walk</button>
-            </div>
-            <div class="exp-controls-row">
-              <label class="exp-field">
-                <span>Camera</span>
-                <select id="exp-camera-select">
-                  <option value="auto">Auto</option>
-                  <option value="craneSway">Crane sway</option>
-                  <option value="dutchRoll">Dutch roll</option>
-                  <option value="breathingPush">Push swell</option>
-                  <option value="horizonTilt">Horizon 2.5D</option>
-                  <option value="stillAnchor">Still anchor</option>
-                  <option value="off">Off</option>
-                </select>
-              </label>
-              <label class="exp-field">
-                <span>Color</span>
-                <select id="exp-color-select">
-                  <option value="auto">Auto-cycle</option>
-                  <option value="native">Native (preset)</option>
-                  <option value="cyberpunk">Cyberpunk</option>
-                  <option value="ember">Ember</option>
-                  <option value="biolum">Biolum</option>
-                  <option value="vapor">Vapor</option>
-                  <option value="prismatic">Prismatic</option>
-                </select>
-              </label>
-            </div>
-            <div class="exp-actions-row">
-              <button type="button" id="exp-export-btn" class="exp-action-btn">Export Look</button>
-              <label class="exp-action-btn exp-import-label">
-                Import JSON
-                <input type="file" id="exp-import-input" accept="application/json,.json" hidden />
-              </label>
-            </div>
-          </div>
+        <div class="exp-render-row">
+          <label class="exp-field">
+            <span>Render quality</span>
+            <select id="render-quality" aria-label="Render quality"></select>
+          </label>
+          <label class="exp-checkbox-field">
+            <input id="aspect-correct" type="checkbox" aria-label="Aspect correction" />
+            <span>Aspect correction</span>
+          </label>
         </div>
-        <label>Render quality <select id="render-quality" aria-label="Render quality"></select></label>
-        <label>Aspect correction <input id="aspect-correct" type="checkbox" aria-label="Aspect correction" /></label>
+        <div class="exp-actions-row">
+          <button type="button" id="exp-export-btn" class="exp-action-btn">Export Look</button>
+          <label class="exp-action-btn exp-import-label">
+            Import JSON
+            <input type="file" id="exp-import-input" accept="application/json,.json" hidden />
+          </label>
+        </div>
       </div>
-      <div class="group" role="group" aria-label="View">
-        <span class="group-label" aria-hidden="true">View</span>
-        <button type="button" id="fs-btn" aria-label="Fullscreen (F)">Fullscreen</button>
-        <button type="button" id="studio-open" aria-haspopup="dialog" aria-controls="studio">Studio</button>
-        <button type="button" id="shortcuts-btn" aria-haspopup="dialog" aria-label="Keyboard shortcuts (?)">Shortcuts</button>
+
+      <!-- Segmented Pills Row -->
+      <div class="hud-pills-row">
+        <!-- Pill 1: Audio Segmented Pill -->
+        <div id="audio-pill" class="pill-container">
+          <button type="button" id="source-btn" class="pill-segment" aria-expanded="false" aria-controls="source-panel" aria-haspopup="dialog" aria-label="Select audio source">
+            <span id="source-icon" class="pill-icon" aria-hidden="true">🔊</span>
+            <span id="source-label" class="source-label">Source: None</span>
+            <span class="pill-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="pill-separator" aria-hidden="true"></div>
+          <button type="button" id="playback-action-btn" class="pill-segment action-btn" aria-label="Playback action" hidden>
+            <span id="action-icon" class="pill-icon" aria-hidden="true">▶</span>
+            <span id="action-label" class="action-label">Play</span>
+          </button>
+          <button type="button" id="play-btn" aria-label="Pause (Space)" hidden></button>
+          <button type="button" data-source="stop" hidden aria-hidden="true"></button>
+          <div id="timeline-separator" class="pill-separator" aria-hidden="true" hidden></div>
+          <div id="playback-scrubber-segment" class="pill-segment scrubber-segment" hidden>
+            <span id="time-current" class="time-readout">0:00</span>
+            <span id="time" class="time" hidden>0:00</span>
+            <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" />
+            <span id="time-total" class="time-readout">0:00</span>
+          </div>
+          <div id="playback" hidden></div>
+        </div>
+
+        <!-- Pill 2: Visuals & Studio Segmented Pill -->
+        <div id="visuals-pill" class="pill-container">
+          <button type="button" id="experience-btn" class="pill-segment" aria-expanded="false" aria-controls="experience-panel" aria-haspopup="dialog" aria-label="Visuals and display settings">
+            <span class="pill-icon" aria-hidden="true">✨</span>
+            <span id="experience-label" class="experience-label">Visuals: Cinematic</span>
+            <span class="pill-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="pill-separator" aria-hidden="true"></div>
+          <button type="button" id="studio-open" class="pill-segment" aria-haspopup="dialog" aria-controls="studio" aria-label="Open Studio (E)">
+            <span class="pill-icon" aria-hidden="true">🎛️</span>
+            <span class="studio-label">Studio</span>
+          </button>
+        </div>
+
+        <!-- Pill 3: Utilities Pill -->
+        <div id="utilities-pill" class="pill-container">
+          <button type="button" id="shortcuts-btn" class="pill-segment icon-only" aria-haspopup="dialog" aria-controls="shortcuts" aria-label="Keyboard shortcuts (?)">
+            <span aria-hidden="true">?</span>
+          </button>
+          <div class="pill-separator" aria-hidden="true"></div>
+          <button type="button" id="fs-btn" class="pill-segment icon-only" aria-label="Fullscreen (F)">
+            <span aria-hidden="true">⛶</span>
+          </button>
+        </div>
       </div>
-      <span id="source-label" class="source" aria-live="polite">No source</span>
     </nav>
     <button type="button" id="controls-show" hidden>Show controls</button>
 
@@ -143,6 +230,9 @@
       <div class="dialog-head sheet-head">
         <h2 id="shortcuts-title">Keyboard shortcuts</h2>
         <button type="button" id="shortcuts-close" class="close-btn">Close</button>
+      </div>
+      <div class="shortcuts-actions">
+        <button type="button" id="reopen-toast-btn" class="shortcuts-guide-btn">Show Getting Started Guide</button>
       </div>
       <table>
         <tbody>
