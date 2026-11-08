@@ -5,8 +5,38 @@
   "transition": { "style": "crossfade", "seconds": 0.32 },
   "feedback": {},
   "layers": [
-    { "type": "bars", "params": {} },
-    { "type": "rings", "params": { "maxRings": 6, "maxRingsCalm": 3, "strokeBase": 0.004, "strokeNormGain": 0.01 } }
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "edgeLine",
+        "edgeMode": "bottom",
+        "effectType": "bars",
+        "sampleCount": 64,
+        "effectLength": 0.35,
+        "thickness": 3.0,
+        "barGap": 0.2,
+        "extrudeDirection": "outward",
+        "symmetry": "wrap",
+        "propMode": "single",
+        "audioSource": "spectrum",
+        "colorMode": "palette"
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "pulsingLine",
+        "propMode": "concentric",
+        "propCount": 6,
+        "propSpacing": 0.2,
+        "propSpeed": 0.5,
+        "propDirection": "outward",
+        "thickness": 2.0,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    }
   ],
   "post": {}
 }

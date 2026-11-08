@@ -9,7 +9,7 @@ describe('shared sway', () => {
     expect(getSway()).toEqual({ x: 0, y: 0 });
   });
 
-  it('moves when not in Calm, and stays within the figure-eight bounds', () => {
+  it('remains rock-solid at (0, 0) even when not in Calm', () => {
     let maxX = 0;
     let maxY = 0;
     for (let i = 0; i < 600; i++) {
@@ -17,9 +17,8 @@ describe('shared sway', () => {
       maxX = Math.max(maxX, Math.abs(s.x));
       maxY = Math.max(maxY, Math.abs(s.y));
     }
-    expect(maxX).toBeGreaterThan(0.05);
-    expect(maxX).toBeLessThanOrEqual(0.1 + 1e-9);
-    expect(maxY).toBeLessThanOrEqual(0.06 + 1e-9);
+    expect(maxX).toBe(0);
+    expect(maxY).toBe(0);
   });
 
   it('is zero when the midrange is silent, even outside Calm', () => {

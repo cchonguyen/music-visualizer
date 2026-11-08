@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "Ferrofluid Magnetic Crown",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.82,
+    "zoom": 1.02
+  },
+  "layers": [
+    {
+      "type": "rings",
+      "opacity": 0.25,
+      "blend": "screen",
+      "params": {
+        "maxRings": 4,
+        "strokeBase": 0.003
+      }
+    },
+    {
+      "type": "ferrofluid",
+      "opacity": 1.0,
+      "blend": "alpha",
+      "params": {
+        "radius": 0.48,
+        "spikeAmp": 0.35,
+        "spikeFreq": 1.0,
+        "spikeSharp": 3.5,
+        "rotSpeed": 0.3,
+        "brightness": 1.2,
+        "fresnelGain": 1.5
+      }
+    }
+  ],
+  "post": {}
+}

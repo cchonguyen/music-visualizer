@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "name": "Phyllotaxis Spiral Bloom",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.86
+  },
+  "layers": [
+    {
+      "type": "particles",
+      "blend": "max",
+      "params": {
+        "mode": "phyllotaxis",
+        "seedShape": "petal",
+        "phylloPattern": "auto",
+        "petalStretch": 1.75,
+        "flowSpeed": 1.1,
+        "shape": "dot",
+        "size": 2.2,
+        "brightness": 1.4
+      }
+    },
+    {
+      "type": "shape",
+      "opacity": 0.35,
+      "blend": "screen",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "pulsingLine",
+        "propMode": "concentric",
+        "propCount": 4,
+        "propSpacing": 0.22,
+        "propSpeed": 0.6,
+        "propDirection": "outward",
+        "thickness": 2.0,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    },
+    {
+      "type": "shape",
+      "opacity": 0.45,
+      "blend": "screen",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "bars",
+        "sampleCount": 48,
+        "effectLength": 0.35,
+        "thickness": 3.0,
+        "barGap": 0.25,
+        "extrudeDirection": "outward",
+        "symmetry": "mirror",
+        "normalMode": "radial",
+        "propMode": "single",
+        "size": 0.45,
+        "colorMode": "palette",
+        "glow": 0.6
+      }
+    }
+  ],
+  "post": {}
+}

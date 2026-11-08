@@ -3,16 +3,31 @@
 // vary (randomise, mutate, lock per layer), layer stack (select, enable, add, remove, reorder),
 // settings for every enabled layer (built from the schema), and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
-import { Pane, type ButtonApi, type FolderApi } from 'tweakpane';
-import { LAYER_FACTORIES, applyValues, valuesOf } from '../presets/loader';
+import { Pane, type ButtonApi } from 'tweakpane';
+import '../ui/style.css';
+import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
-import { SCHEMAS } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder } from '../presets/builtin';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
-import type { PresetSession } from '../presets/session';
+import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
-import type { ParamSpec, ParamValue } from '../presets/schema';
+import { isSpecVisible, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
+import {
+  EXPERIENCE_MODES,
+  CAMERA_MODES,
+  COLOR_MOODS,
+  TRIGGER_CADENCES,
+  getGlobalDirector,
+  type ExperienceMode,
+  type CameraMode,
+  type ColorMood,
+  type TriggerCadence,
+} from '../render/globalDirector';
+
+export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES };
 
 export interface StudioOptions {
   session: PresetSession;
@@ -22,6 +37,8 @@ export interface StudioOptions {
   frameMs?: () => number;
   /** Live link value (0..1) for a key `${presetId}L${layerIndexAmongEnabled}.${name}` or `${presetId}F.${name}`. */
   linkMeter?: (key: string) => number | undefined;
+  /** Optional custom Pane factory for testing in node / mock environments. */
+  paneFactory?: (options: { container: HTMLElement; title: string }) => any;
 }
 
 /** Frame budget at 60 fps. The readout turns into a warning above this. */
@@ -44,8 +61,7 @@ export function validatePresetName(raw: string): { ok: true; name: string } | { 
   return { ok: true, name };
 }
 
-/**
- * Two-tap Delete state. With no arm (`armedAt` null) a tap arms and returns the time it armed.
+/** Two-tap Delete state. With no arm (`armedAt` null) a tap arms and returns the time it armed.
  * A tap inside `windowMs` of the arm confirms and returns to unarmed.
  */
 export function nextDeleteTap(armedAt: number | null, now: number, windowMs: number = DELETE_CONFIRM_MS): { confirm: boolean; armedAt: number | null } {
@@ -53,11 +69,192 @@ export function nextDeleteTap(armedAt: number | null, now: number, windowMs: num
   return { confirm: false, armedAt: now };
 }
 
+/** Default layer type added in the Studio ("Add layer"). */
+export const DEFAULT_ADD_LAYER_TYPE = 'shape';
+
+/** Default prompt shown in the Studio helper bar when no parameter is hovered/focused (Slice 9.8). */
+export const STUDIO_HELPER_IDLE_TEXT = 'Tap or hover over any effect name to see a description of what it does.';
+
+/** Render parameter description and warning in the fixed helper bar element. */
+export function renderHelperContent(helperBar: HTMLElement, spec: ParamSpec | null): void {
+  if (!helperBar) return;
+  if (!spec || (!spec.description && !spec.warning && !spec.intense)) {
+    helperBar.textContent = STUDIO_HELPER_IDLE_TEXT;
+    return;
+  }
+
+  if (typeof helperBar.replaceChildren === 'function') {
+    helperBar.replaceChildren();
+  } else {
+    helperBar.textContent = '';
+  }
+
+  const doc = helperBar.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
+
+  const descRow = doc.createElement('div');
+  const nameSpan = doc.createElement('span');
+  nameSpan.className = 'helper-param-name';
+  nameSpan.textContent = spec.label;
+
+  if (spec.description) {
+    const descSpan = doc.createElement('span');
+    descSpan.className = 'helper-param-desc';
+    descSpan.textContent = spec.description;
+    descRow.append(nameSpan, ': ', descSpan);
+  } else {
+    descRow.append(nameSpan);
+  }
+  helperBar.append(descRow);
+
+  if (spec.warning || spec.intense) {
+    const warnRow = doc.createElement('div');
+    warnRow.className = 'helper-warning';
+    const warnText = spec.warning || 'High-intensity effect';
+    warnRow.textContent = `⚠️ ${warnText}`;
+    helperBar.append(warnRow);
+  }
+}
+
+/** Attach amber badge and hover/focus listeners to a blade row (Slice 9.8). */
+export function attachSpecHelper(
+  blade: any,
+  spec: ParamSpec,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
+): void {
+  if (!blade || typeof blade !== 'object') return;
+  const el: HTMLElement | undefined = blade.element;
+  if (!el) return;
+
+  const doc = el.ownerDocument || (typeof document !== 'undefined' ? document : null);
+
+  // 1. Intense / warning badge: (!) appended to label element or blade root
+  if (spec.intense || spec.warning) {
+    const hasBadge = typeof el.querySelector === 'function' && el.querySelector('.intense-badge');
+    if (!hasBadge && doc) {
+      const badge = doc.createElement('span');
+      badge.className = 'intense-badge';
+      badge.title = spec.warning || 'High-intensity effect';
+      badge.textContent = '(!)';
+      const labelEl = typeof el.querySelector === 'function' ? el.querySelector('.tp-lblv_l, label') : null;
+      if (labelEl && typeof labelEl.append === 'function') {
+        labelEl.append(badge);
+      } else if (typeof el.append === 'function') {
+        el.append(badge);
+      }
+    }
+  }
+
+  // 2. Reactive hover & focus tracking
+  if (typeof el.addEventListener === 'function' && onHelperUpdate) {
+    const activate = () => {
+      el.classList?.add('studio-control-highlight');
+      if (spec.intense || spec.warning) el.classList?.add('studio-control-highlight-intense');
+      onHelperUpdate(spec);
+    };
+    const deactivate = () => {
+      el.classList?.remove('studio-control-highlight');
+      el.classList?.remove('studio-control-highlight-intense');
+      onHelperUpdate(null);
+    };
+
+    el.addEventListener('mouseenter', activate);
+    el.addEventListener('focusin', activate);
+    el.addEventListener('mouseleave', deactivate);
+    el.addEventListener('focusout', (ev: FocusEvent) => {
+      if (ev?.relatedTarget && typeof el.contains === 'function' && el.contains(ev.relatedTarget as Node)) {
+        return;
+      }
+      deactivate();
+    });
+  }
+}
+
+export const SYSTEM_OPTGROUP_LABELS = {
+  showcase: 'System: Stage 9 Showcase (13–20)',
+  flagship: 'System: Flagship Generative (01–12)',
+  classics: 'System: Classics & Textures',
+} as const;
+
+/** Populate selectEl with an optgroup hierarchy matching session categorization (Slice 10.3). */
+export function renderPresetSelectHierarchy(
+  selectEl: HTMLSelectElement,
+  session: PresetSession,
+  currentId: string,
+): void {
+  if (!selectEl) return;
+
+  if (typeof selectEl.replaceChildren === 'function') {
+    selectEl.replaceChildren();
+  } else {
+    while (selectEl.firstChild) {
+      selectEl.removeChild(selectEl.firstChild);
+    }
+  }
+
+  const doc = selectEl.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
+
+  const categorized = typeof session.listCategorized === 'function' ? session.listCategorized() : null;
+  if (!categorized) return;
+
+  const addGroup = (label: string, entries: SessionEntry[]) => {
+    if (!entries || entries.length === 0) return;
+    const optgroup = doc.createElement('optgroup');
+    optgroup.setAttribute('label', label);
+    if ('label' in optgroup) {
+      (optgroup as any).label = label;
+    }
+    for (const entry of entries) {
+      const opt = doc.createElement('option');
+      opt.setAttribute('value', entry.id);
+      if ('value' in opt) {
+        (opt as any).value = entry.id;
+      }
+      opt.textContent = entry.preset.name;
+      if (entry.id === currentId) {
+        opt.setAttribute('selected', 'selected');
+        if ('selected' in opt) {
+          (opt as any).selected = true;
+        }
+      }
+      optgroup.appendChild(opt);
+    }
+    selectEl.appendChild(optgroup);
+  };
+
+  // System groups
+  if (categorized.system.showcase.length > 0) {
+    addGroup(SYSTEM_OPTGROUP_LABELS.showcase, categorized.system.showcase);
+  }
+  if (categorized.system.flagship.length > 0) {
+    addGroup(SYSTEM_OPTGROUP_LABELS.flagship, categorized.system.flagship);
+  }
+  if (categorized.system.classics.length > 0) {
+    addGroup(SYSTEM_OPTGROUP_LABELS.classics, categorized.system.classics);
+  }
+
+  // User groups
+  for (const group of categorized.user.folders) {
+    if (group.entries.length > 0) {
+      addGroup(`User: ${group.folder.name}`, group.entries);
+    }
+  }
+  if (categorized.user.unfiled.length > 0) {
+    addGroup('User: Unfiled', categorized.user.unfiled);
+  }
+
+  selectEl.value = currentId;
+  if (typeof selectEl.setAttribute === 'function') {
+    selectEl.setAttribute('value', currentId);
+  }
+}
+
 export class Studio {
   private pane: Pane | null = null;
   private id = '';
   private selected = 0;
-  private addType = 'tunnel';
+  private addType = DEFAULT_ADD_LAYER_TYPE;
   /** Layers (by index in the preset) that randomise and mutate skip. Reset when the layer list changes. */
   private locked = new Set<number>();
   private monitor = { ms: 0 };
@@ -68,9 +265,13 @@ export class Studio {
   private deleteTimer: number | undefined;
   private deleteBtn: ButtonApi | null = null;
   /** Polite live region that announces the "Tap again" state of Delete. */
-  private readonly deleteLive: HTMLElement = document.createElement('div');
+  private readonly deleteLive: HTMLElement;
   /** The in-panel "Save as" name field, when open. */
   private saveAsField: HTMLElement | null = null;
+  /** Fixed bottom helper bar element for parameter descriptions & warnings (Slice 9.8). */
+  readonly helperBar: HTMLElement;
+  /** Preset select element in the DOM (Slice 10.3). */
+  private presetSelectEl: HTMLSelectElement | null = null;
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -81,14 +282,36 @@ export class Studio {
     private readonly container: HTMLElement,
     private readonly opts: StudioOptions,
   ) {
+    const doc = container.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
     this.body = container.querySelector<HTMLElement>('.studio-body') ?? container;
     container.setAttribute('role', 'dialog');
     container.setAttribute('aria-modal', 'false');
     container.setAttribute('aria-label', 'Studio');
-    this.deleteLive.setAttribute('role', 'status');
-    this.deleteLive.setAttribute('aria-live', 'polite');
-    this.deleteLive.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
-    container.append(this.deleteLive);
+
+    this.deleteLive = doc ? doc.createElement('div') : ({} as HTMLElement);
+    if (typeof this.deleteLive.setAttribute === 'function') {
+      this.deleteLive.setAttribute('role', 'status');
+      this.deleteLive.setAttribute('aria-live', 'polite');
+    }
+    if (this.deleteLive.style) {
+      this.deleteLive.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
+    }
+    if (typeof container.append === 'function') {
+      container.append(this.deleteLive);
+    }
+
+    const existingHelper = container.querySelector<HTMLElement>('.studio-helper-bar');
+    if (existingHelper) {
+      this.helperBar = existingHelper;
+    } else {
+      this.helperBar = doc ? doc.createElement('div') : ({} as HTMLElement);
+      this.helperBar.className = 'studio-helper-bar';
+      this.helperBar.setAttribute('role', 'status');
+      this.helperBar.setAttribute('aria-live', 'polite');
+      container.append(this.helperBar);
+    }
+    renderHelperContent(this.helperBar, null);
+
     container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
     // Swipe down on a phone sheet closes Studio (slice 11.6). Same path as the Close button, so focus returns.
     attachSwipeDismiss(container, () => this.setVisible(false));
@@ -100,11 +323,15 @@ export class Studio {
     };
     this.body.addEventListener('pointerdown', disarmOnOther, true);
     this.body.addEventListener('keydown', disarmOnOther, true);
-    window.setInterval(() => {
+    setInterval(() => {
       if (!this.visible || !this.pane) return;
       this.monitor.ms = this.opts.frameMs?.() ?? 0;
       this.pane.refresh();
     }, 500);
+  }
+
+  get defaultAddType(): string {
+    return this.addType;
   }
 
   /** Show or hide the panel. Opening moves focus into it (after bind); closing returns focus to the opener. */
@@ -132,6 +359,95 @@ export class Studio {
     return !this.container.hidden;
   }
 
+  /** Re-render the preset hierarchy dropdown without a full pane rebuild (Slice 10.3). */
+  refreshPresetDropdown(): void {
+    const el = this.presetSelectEl ?? this.body.querySelector<HTMLSelectElement>('select');
+    if (el) {
+      renderPresetSelectHierarchy(el, this.opts.session, this.id);
+    }
+  }
+
+  /** Refresh studio panel for the current preset (Slice 10.4). */
+  refresh(): void {
+    if (this.id) {
+      this.bind(this.id);
+    }
+  }
+
+  /** Prompt user for folder name via prompt or prompt fallback. */
+  promptForFolderName(message: string, defaultValue = ''): string | null {
+    if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+      const res = window.prompt(message, defaultValue);
+      return res !== null ? res.trim() : null;
+    }
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).prompt === 'function') {
+      const res = (globalThis as any).prompt(message, defaultValue);
+      return res !== null ? res.trim() : null;
+    }
+    return null;
+  }
+
+  /** Confirm action via window.confirm or confirm fallback. */
+  confirmAction(message: string): boolean {
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      return window.confirm(message);
+    }
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).confirm === 'function') {
+      return (globalThis as any).confirm(message);
+    }
+    return true;
+  }
+
+  handleNewFolder(presetId: string): void {
+    const name = this.promptForFolderName('Enter new folder name:');
+    if (!name) {
+      this.bind(presetId);
+      return;
+    }
+    const session = this.opts.session;
+    try {
+      const folder = session.createFolder(name);
+      session.setPresetFolder(presetId, folder.id);
+      showToast(`Created folder "${folder.name}"`);
+      this.bind(presetId);
+    } catch (err) {
+      showToast((err as Error).message);
+      this.bind(presetId);
+    }
+  }
+
+  handleRenameFolder(presetId: string, folderId: string): void {
+    const session = this.opts.session;
+    const folders = typeof session.getFolders === 'function' ? session.getFolders() : [];
+    const current = folders.find((f) => f.id === folderId);
+    const currentName = current ? current.name : '';
+    const newName = this.promptForFolderName(`Rename folder "${currentName}":`, currentName);
+    if (!newName || newName === currentName) return;
+    try {
+      session.renameFolder(folderId, newName);
+      showToast(`Folder renamed to "${newName}"`);
+      this.bind(presetId);
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  }
+
+  handleDeleteFolder(presetId: string, folderId: string): void {
+    const session = this.opts.session;
+    const folders = typeof session.getFolders === 'function' ? session.getFolders() : [];
+    const current = folders.find((f) => f.id === folderId);
+    const folderName = current ? current.name : 'this folder';
+    const confirmed = this.confirmAction(`Delete folder "${folderName}"? Presets inside will be moved to Unfiled.`);
+    if (!confirmed) return;
+    try {
+      session.deleteFolder(folderId);
+      showToast(`Folder "${folderName}" deleted`);
+      this.bind(presetId);
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  }
+
   /** (Re)build the panel for preset `id`. Call after every switch or structure change. */
   bind(id: string): void {
     this.id = id;
@@ -139,8 +455,15 @@ export class Studio {
     this.deleteBtn = null;
     this.pane?.dispose();
     this.body.replaceChildren();
+    if (this.container && !this.container.contains(this.helperBar)) {
+      this.container.append(this.helperBar);
+    }
+    renderHelperContent(this.helperBar, null);
     this.saveAsField = null;
-    const pane = new Pane({ container: this.body, title: 'Preset Studio' });
+    this.presetSelectEl = null;
+    const pane: Pane = this.opts.paneFactory
+      ? (this.opts.paneFactory({ container: this.body, title: 'Preset Studio' }) as unknown as Pane)
+      : new Pane({ container: this.body, title: 'Preset Studio' });
     this.pane = pane;
     const session = this.opts.session;
     const entry = session.get(id);
@@ -148,17 +471,157 @@ export class Studio {
     const preset = entry.preset;
 
     // --- Preset bar -----------------------------------------------------------------
-    const ids = Object.fromEntries(session.list().map((e) => [e.preset.name + (e.builtin ? '' : ' (yours)'), e.id]));
+    const categorized = typeof session.listCategorized === 'function' ? session.listCategorized() : null;
+    const hierarchicalEntries: SessionEntry[] = categorized
+      ? [
+          ...categorized.system.showcase,
+          ...categorized.system.flagship,
+          ...categorized.system.classics,
+          ...categorized.user.folders.flatMap((f) => f.entries),
+          ...categorized.user.unfiled,
+        ]
+      : session.list();
+
+    const allEntries = hierarchicalEntries.length > 0 ? hierarchicalEntries : session.list();
+    const ids = Object.fromEntries(
+      allEntries.map((e) => [e.preset.name + (e.builtin ? '' : ' (yours)'), e.id]),
+    );
     const pick = { id };
-    pane.addBinding(pick, 'id', { label: 'Preset', options: ids }).on('change', (ev) => this.opts.switchTo(String(ev.value)));
-    pane.addBinding(preset as unknown as Record<string, unknown>, 'name', { label: 'Name' });
+    const presetBinding = pane.addBinding(pick, 'id', { label: 'Preset', options: ids });
+    let lastSwitchedId = id;
+    const onSelectPreset = (newId: string) => {
+      if (newId && newId !== this.id && newId !== lastSwitchedId) {
+        lastSwitchedId = newId;
+        pick.id = newId;
+        this.opts.switchTo(newId);
+      }
+    };
+    presetBinding.on('change', (ev: { value: unknown }) => onSelectPreset(String(ev.value)));
+
+    const selectEl = (presetBinding?.element?.querySelector?.('select') ?? this.body.querySelector?.('select')) as HTMLSelectElement | null;
+    if (selectEl) {
+      this.presetSelectEl = selectEl;
+      renderPresetSelectHierarchy(selectEl, session, id);
+      selectEl.addEventListener?.('change', () => onSelectPreset(selectEl.value));
+    }
+    // Category indicator for built-ins (Slice 10.4)
+    if (entry.builtin) {
+      const subfolder = getSystemSubfolder(id) ?? 'classics';
+      const subfolderLabel = SYSTEM_SUBFOLDER_LABELS[subfolder] ?? 'Built-in';
+      const categoryText = `System Preset (Read-Only) · ${subfolderLabel}`;
+      const categoryHolder = { category: categoryText };
+      const categoryBinding = pane.addBinding(categoryHolder, 'category', {
+        label: 'Category',
+        readonly: true,
+      });
+      if (categoryBinding?.element) {
+        categoryBinding.element.classList?.add('studio-category-indicator');
+        categoryBinding.element.setAttribute?.('data-category', categoryText);
+      }
+    }
+
+    const nameBinding = pane.addBinding(preset as unknown as Record<string, unknown>, 'name', {
+      label: 'Name',
+      readonly: entry.builtin,
+    });
+    if (entry.builtin) {
+      if (nameBinding?.element) {
+        const input = nameBinding.element.querySelector?.('input') as HTMLInputElement | null;
+        if (input) {
+          input.disabled = true;
+          input.readOnly = true;
+        }
+      }
+    } else {
+      nameBinding.on('change', () => session.commit(id));
+    }
+
+    // Folder controls for user presets (Slice 10.4)
+    if (!entry.builtin) {
+      const currentFolderId = (typeof session.getPresetFolder === 'function' ? session.getPresetFolder(id) : entry.folderId) ?? '';
+      const folderOptions: Record<string, string> = {
+        '(Unfiled)': '',
+      };
+      const userFolders: readonly UserPresetFolder[] = typeof session.getFolders === 'function' ? session.getFolders() : [];
+      for (const f of userFolders) {
+        folderOptions[f.name] = f.id;
+      }
+      folderOptions['+ New Folder…'] = '__new_folder__';
+
+      const folderHolder = { folder: currentFolderId };
+      const folderBinding = pane.addBinding(folderHolder, 'folder', {
+        label: 'Folder',
+        options: folderOptions,
+      });
+
+      const onSelectFolder = (chosenFolder: string) => {
+        if (chosenFolder === '__new_folder__') {
+          this.handleNewFolder(id);
+        } else if (!chosenFolder) {
+          if (typeof session.setPresetFolder === 'function') {
+            session.setPresetFolder(id, undefined);
+          } else {
+            entry.folderId = undefined;
+          }
+          showToast('Preset unfiled');
+          this.bind(id);
+        } else {
+          if (typeof session.setPresetFolder === 'function') {
+            session.setPresetFolder(id, chosenFolder);
+          } else {
+            entry.folderId = chosenFolder;
+          }
+          const f = userFolders.find((x) => x.id === chosenFolder);
+          showToast(`Moved to ${f ? f.name : 'folder'}`);
+          this.bind(id);
+        }
+      };
+      folderBinding.on('change', (ev: { value: unknown }) => onSelectFolder(String(ev.value)));
+      const folderSelectEl = folderBinding?.element?.querySelector?.('select') as HTMLSelectElement | null;
+      if (folderSelectEl) {
+        folderSelectEl.addEventListener?.('change', () => onSelectFolder(folderSelectEl.value));
+      }
+
+      // Folder management buttons
+      const folderBtnElements: HTMLElement[] = [];
+      const addFolderBtn = (title: string, onClick: () => void) => {
+        const btn = pane.addButton({ title });
+        btn.on('click', onClick);
+        folderBtnElements.push(btn.element);
+        return btn;
+      };
+
+      if (currentFolderId) {
+        addFolderBtn('Rename folder', () => this.handleRenameFolder(id, currentFolderId));
+        addFolderBtn('Delete folder', () => this.handleDeleteFolder(id, currentFolderId));
+      }
+      addFolderBtn('Add folder', () => this.handleNewFolder(id));
+
+      const docForFolder = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+      if (folderBtnElements.length > 0 && docForFolder) {
+        const folderRow = docForFolder.createElement('div');
+        folderRow.className = 'studio-folder-actions';
+        if (folderBtnElements[0] && typeof (folderBtnElements[0] as any).before === 'function') {
+          (folderBtnElements[0] as any).before(folderRow);
+        }
+        if (typeof folderRow.append === 'function') {
+          folderRow.append(...folderBtnElements);
+        }
+      }
+    }
+
     const dirty = session.isDirty(id) ? ' · unsaved changes' : '';
     // Tags for the auto-cycle (T2): "favourite" and "skip".
     const tagHolder = { favourite: preset.tags.includes('favourite'), skip: preset.tags.includes('skip') };
     const setTag = (tag: string, on: boolean) => {
-      preset.tags = preset.tags.filter((t) => t !== tag);
-      if (on) preset.tags.push(tag);
-      session.commit(id);
+      const currentTags = preset.tags.filter((t) => t !== tag);
+      if (on) currentTags.push(tag);
+      if (typeof session.setPresetTags === 'function') {
+        session.setPresetTags(id, currentTags);
+      } else {
+        preset.tags = currentTags;
+        session.commit(id);
+      }
     };
     pane.addBinding(tagHolder, 'favourite', { label: 'Favourite (auto-cycle)' }).on('change', (ev) => setTag('favourite', Boolean(ev.value)));
     pane.addBinding(tagHolder, 'skip', { label: 'Skip in auto-cycle' }).on('change', (ev) => setTag('skip', Boolean(ev.value)));
@@ -174,7 +637,13 @@ export class Studio {
       tiles.push(btn.element);
       return btn;
     };
-    tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
+    if (entry.builtin) {
+      tile(pane.addButton({ title: 'Save (Read-only)' })).on('click', () => {
+        showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
+      });
+    } else {
+      tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
+    }
     tile(pane.addButton({ title: 'Save as…' })).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
     tile(pane.addButton({ title: 'Duplicate' })).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),
@@ -196,21 +665,32 @@ export class Studio {
     redo.on('click', () => this.run(() => {
       session.redo(id);
     }, 'Redone'));
-    const tileGrid = document.createElement('div');
-    tileGrid.className = 'studio-tiles';
-    tiles[0]?.before(tileGrid);
-    tileGrid.append(...tiles);
+    const doc = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+    const tileGrid = doc ? doc.createElement('div') : null;
+    if (tileGrid) {
+      tileGrid.className = 'studio-tiles';
+      if (tiles[0] && typeof (tiles[0] as any).before === 'function') {
+        (tiles[0] as any).before(tileGrid);
+      }
+      if (typeof tileGrid.append === 'function') {
+        tileGrid.append(...tiles);
+      }
+    }
 
     // --- Vary -----------------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
     pane.addButton({ title: 'Randomise (within safe ranges)' }).on('click', () => this.vary('random'));
     pane.addButton({ title: 'Mutate (±10%)' }).on('click', () => this.vary('mutate'));
 
+    // --- Global Director (Sector 483, Slice 7.32) -----------------------------------
+    const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
+    buildGlobalDirectorControls(dirFolder);
+
     // --- Layer stack ----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
     this.selected = preset.layers.length === 0 ? 0 : Math.min(this.selected, preset.layers.length - 1);
     if (preset.layers.length > 0) {
-      const layerOptions = Object.fromEntries(preset.layers.map((l, i) => [`${i + 1}. ${l.type}${l.enabled ? '' : ' (off)'}`, i]));
+      const layerOptions = Object.fromEntries(preset.layers.map((l, i) => [formatLayerLabel(l, i), i]));
       const sel = { selected: this.selected };
       pane.addBinding(sel, 'selected', { label: 'Layer', options: layerOptions }).on('change', (ev) => {
         this.selected = Number(ev.value);
@@ -223,11 +703,16 @@ export class Studio {
         if (ev.value) this.locked.add(this.selected);
         else this.locked.delete(this.selected);
       });
-      pane.addBinding(layer as unknown as Record<string, unknown>, 'opacity', { label: 'Opacity (not drawn yet)', min: 0, max: 1, step: 0.01 });
-      pane.addBinding(layer as unknown as Record<string, unknown>, 'blend', {
-        label: 'Blend (not drawn yet)',
-        options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
-      });
+      buildLayerControls(
+        pane,
+        layer,
+        preset,
+        session.sceneOf(id),
+        session,
+        undefined,
+        id,
+        (spec) => renderHelperContent(this.helperBar, spec),
+      );
       pane.addButton({ title: 'Move layer up' }).on('click', () => this.move(-1));
       pane.addButton({ title: 'Move layer down' }).on('click', () => this.move(1));
       pane.addButton({ title: 'Remove layer' }).on('click', () => {
@@ -249,10 +734,14 @@ export class Studio {
     // --- Settings -------------------------------------------------------------------
     // Settings for every enabled layer. Live layers are matched by their order among the enabled ones.
     let live = 0;
-    for (const layerEntry of preset.layers) {
+    for (let i = 0; i < preset.layers.length; i++) {
+      const layerEntry = preset.layers[i]!;
       if (!layerEntry.enabled) continue;
       const k = live++;
-      this.bindSection(pane, layerEntry.type, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
+      const title = layerEntry.type === 'shape'
+        ? formatLayerTitle(layerEntry, i)
+        : layerEntry.type;
+      this.bindSection(pane, title, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
         const current = session.sceneOf(id).layers[k];
         if (current) applyValues(current, valuesOf(layerEntry.params));
       });
@@ -359,31 +848,15 @@ export class Studio {
   }
 
   private bindSection(pane: Pane, title: string, specs: readonly ParamSpec[], settings: Settings, apply: () => void): void {
-    if (specs.length === 0) return;
-    const sectionTitle = title.charAt(0).toUpperCase() + title.slice(1);
-    const sectionFolder = pane.addFolder({ title: sectionTitle, expanded: false });
-    const holder: Record<string, ParamValue> = valuesOf(settings);
-    const groups = new Map<string, ParamSpec[]>();
-    for (const spec of specs) {
-      const list = groups.get(spec.group);
-      if (list) {
-        list.push(spec);
-      } else {
-        groups.set(spec.group, [spec]);
-      }
-    }
-    for (const [groupName, groupSpecs] of groups) {
-      const target = groupName ? sectionFolder.addFolder({ title: groupName, expanded: false }) : sectionFolder;
-      for (const spec of groupSpecs) {
-        const push = () => {
-          this.opts.session.commit(this.id);
-          const setting = settings[spec.name];
-          if (setting) setting.value = holder[spec.name]!;
-          apply();
-        };
-        bindSpec(target, spec.label, spec, holder, push);
-      }
-    }
+    bindSection(
+      pane,
+      title,
+      specs,
+      settings,
+      apply,
+      () => this.opts.session.commit(this.id),
+      (spec) => renderHelperContent(this.helperBar, spec),
+    );
   }
 
   /** Randomise or mutate every unlocked layer (and feedback/post), as one undo step. */
@@ -497,12 +970,12 @@ export class Studio {
     this.deleteBtn = btn;
     btn.title = DELETE_ARMED_LABEL;
     this.deleteLive.textContent = deleteAnnouncement(true);
-    this.deleteTimer = window.setTimeout(() => this.disarmDelete(), DELETE_CONFIRM_MS);
+    this.deleteTimer = setTimeout(() => this.disarmDelete(), DELETE_CONFIRM_MS) as unknown as number;
   }
 
   /** Return Delete to its idle state and clear the timer. */
   private disarmDelete(): void {
-    if (this.deleteTimer !== undefined) window.clearTimeout(this.deleteTimer);
+    if (this.deleteTimer !== undefined) clearTimeout(this.deleteTimer);
     this.deleteTimer = undefined;
     this.deleteArmedAt = null;
     if (this.deleteBtn) this.deleteBtn.title = DELETE_LABEL;
@@ -521,7 +994,7 @@ export class Studio {
   }
 
   private exportFile(id: string): void {
-    const text = this.opts.session.exportJson(id);
+    const text = this.opts.session.exportJson(id, true);
     const name = (this.opts.session.get(id)?.preset.name ?? 'preset').toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
     const a = document.createElement('a');
@@ -539,9 +1012,15 @@ export class Studio {
       const file = input.files?.[0];
       if (!file) return;
       try {
-        const { id, warnings } = this.opts.session.importJson(await file.text());
-        showToast(warnings.length ? `Imported with ${warnings.length} fix(es)` : 'Imported');
-        this.opts.switchTo(id);
+        const res = this.opts.session.importAsset(await file.text());
+        if (res.kind === 'preset') {
+          showToast(res.warnings.length ? `Imported with ${res.warnings.length} fix(es)` : `Imported Preset · ${res.name}`);
+          if (res.id) this.opts.switchTo(res.id);
+        } else if (res.kind === 'palette') {
+          showToast(`Imported Palette · ${res.name}`);
+        } else if (res.kind === 'bundle') {
+          showToast(`Imported Bundle · ${res.name}`);
+        }
       } catch (err) {
         showToast((err as Error).message);
       }
@@ -550,19 +1029,54 @@ export class Studio {
   }
 }
 
+/** Descriptive title for layer settings sections (e.g. "1. Shape (circle · bars)"). */
+export function formatLayerTitle(layer: LayerEntry, index: number): string {
+  if (layer.type === 'shape') {
+    const p = layer.params ?? {};
+    const base = (p.baseShape !== null && typeof p.baseShape === 'object' && 'value' in p.baseShape)
+      ? p.baseShape.value
+      : (p.baseShape ?? 'circle');
+    const effect = (p.effectType !== null && typeof p.effectType === 'object' && 'value' in p.effectType)
+      ? p.effectType.value
+      : (p.effectType ?? 'bars');
+    return `${index + 1}. Shape (${base} · ${effect})`;
+  }
+  return `${index + 1}. ${layer.type}`;
+}
+
+/** Layer dropdown label in Studio (e.g. "1. Shape (circle · bars)" or "... (off)"). */
+export function formatLayerLabel(layer: LayerEntry, index: number): string {
+  const off = layer.enabled ? '' : ' (off)';
+  if (layer.type === 'shape') {
+    const p = layer.params ?? {};
+    const base = (p.baseShape !== null && typeof p.baseShape === 'object' && 'value' in p.baseShape)
+      ? p.baseShape.value
+      : (p.baseShape ?? 'circle');
+    const effect = (p.effectType !== null && typeof p.effectType === 'object' && 'value' in p.effectType)
+      ? p.effectType.value
+      : (p.effectType ?? 'bars');
+    return `${index + 1}. Shape (${base} · ${effect})${off}`;
+  }
+  return `${index + 1}. ${layer.type}${off}`;
+}
+
 /** Every numeric setting that can take a link, with the key used in the Studio and the link meter key. */
-function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] {
+export function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] {
   const out: { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] = [];
   let live = 0;
   preset.layers.forEach((layer, i) => {
     const k = layer.enabled ? live++ : -1;
+    const layerTitle = layer.type === 'shape'
+      ? formatLayerTitle(layer, i)
+      : `${i + 1}. ${layer.type}`;
     for (const spec of LAYER_SPECS[layer.type] ?? []) {
       if (spec.type !== 'float' && spec.type !== 'int') continue;
+      if (!isSpecVisible(spec, layer.params)) continue;
       const setting = layer.params[spec.name];
       if (!setting) continue;
       out.push({
         key: `L${i}.${spec.name}`,
-        label: `${i + 1}. ${layer.type} · ${spec.label}`,
+        label: `${layerTitle} · ${spec.label}`,
         setting,
         meterKey: k >= 0 ? `L${k}.${spec.name}` : '',
         spec,
@@ -570,12 +1084,19 @@ function linkTargets(preset: Preset): { key: string; label: string; setting: Set
     }
   });
   for (const spec of FEEDBACK_NUMBERS) {
+    if (!isSpecVisible(spec, preset.feedback)) continue;
     const setting = preset.feedback[spec.name];
     if (setting) out.push({ key: `F.${spec.name}`, label: `Feedback · ${spec.label}`, setting, meterKey: `F.${spec.name}`, spec });
+  }
+  for (const spec of POST_NUMBERS) {
+    if (!isSpecVisible(spec, preset.post)) continue;
+    const setting = preset.post[spec.name];
+    if (setting) out.push({ key: `P.${spec.name}`, label: `Post · ${spec.label}`, setting, meterKey: `P.${spec.name}`, spec });
   }
   return out;
 }
 const FEEDBACK_NUMBERS = SCHEMAS.feedback.filter((s) => s.type === 'float' || s.type === 'int');
+const POST_NUMBERS = SCHEMAS.post.filter((s) => s.type === 'float' || s.type === 'int');
 
 /** Default morph end: a quarter of the range away from the value, on whichever side has room, kept in range. */
 function morphTargetFor(spec: Extract<ParamSpec, { type: 'float' | 'int' }>, value: ParamValue): number {
@@ -588,7 +1109,7 @@ function morphTargetFor(spec: Extract<ParamSpec, { type: 'float' | 'int' }>, val
 }
 
 /** A new layer with the schema defaults, enabled, full opacity. */
-function defaultLayer(type: string): LayerEntry {
+export function defaultLayer(type: string): LayerEntry {
   const params: Settings = {};
   for (const spec of LAYER_SPECS[type] ?? []) params[spec.name] = { value: spec.default };
   // New particle layers follow the scene by default (2026-11-06). Existing presets keep their stored value.
@@ -596,21 +1117,307 @@ function defaultLayer(type: string): LayerEntry {
   return { type, enabled: true, opacity: 1, blend: 'add', params };
 }
 
-function bindSpec(pane: Pane | FolderApi, label: string, spec: ParamSpec, holder: Record<string, ParamValue>, onChange: () => void): void {
+if (!(OPACITY_SPEC as any).key) (OPACITY_SPEC as any).key = OPACITY_SPEC.name;
+if (!(BLEND_SPEC as any).key) (BLEND_SPEC as any).key = BLEND_SPEC.name;
+if (!(TRAILS_SPEC as any).key) (TRAILS_SPEC as any).key = TRAILS_SPEC.name;
+
+export function buildLayerControls(
+  pane: { addBinding: (target: any, prop: any, options?: any) => any },
+  entry: LayerEntry,
+  p: Preset,
+  currentScene: Scene,
+  session: { commit: (arg?: any, ...rest: any[]) => void },
+  gl?: WebGL2RenderingContext,
+  id?: string,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
+): { opacityBinding: any; blendBinding: any; trailsBinding: any } {
+  const onLayerConfigChange = () => {
+    applyPresetToScene(p, currentScene, gl);
+    try {
+      (session as any).commit(true);
+    } catch {
+      // ignore
+    }
+    if (id && typeof id === 'string') {
+      try {
+        session.commit(id, Date.now(), true);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const opacityKey = (OPACITY_SPEC as any).key ?? OPACITY_SPEC.name;
+  const opacityBinding = pane.addBinding(entry as unknown as Record<string, unknown>, opacityKey, {
+    label: OPACITY_SPEC.label,
+    min: OPACITY_SPEC.min,
+    max: OPACITY_SPEC.max,
+    step: OPACITY_SPEC.step,
+  }).on('change', onLayerConfigChange);
+  attachSpecHelper(opacityBinding, OPACITY_SPEC, onHelperUpdate);
+
+  const blendKey = (BLEND_SPEC as any).key ?? BLEND_SPEC.name;
+  const blendBinding = pane.addBinding(entry as unknown as Record<string, unknown>, blendKey, {
+    label: BLEND_SPEC.label,
+    options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
+  }).on('change', onLayerConfigChange);
+  attachSpecHelper(blendBinding, BLEND_SPEC, onHelperUpdate);
+
+  if (entry.trails === undefined) {
+    entry.trails = TRAILS_SPEC.default;
+  }
+  const trailsKey = (TRAILS_SPEC as any).key ?? TRAILS_SPEC.name;
+  const trailsBinding = pane.addBinding(entry as unknown as Record<string, unknown>, trailsKey, {
+    label: TRAILS_SPEC.label,
+  }).on('change', onLayerConfigChange);
+  attachSpecHelper(trailsBinding, TRAILS_SPEC, onHelperUpdate);
+
+  return { opacityBinding, blendBinding, trailsBinding };
+}
+
+/**
+ * Bind a list of parameter specs in a section, dynamically updating blade visibility
+ * whenever any parameter changes via `isSpecVisible`.
+ */
+export function bindSection(
+  pane: any,
+  title: string,
+  specs: readonly ParamSpec[],
+  settings: Settings | Record<string, any>,
+  apply?: () => void,
+  onCommit?: () => void,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
+): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void } {
+  if (specs.length === 0) return { specBindings: [], updateVisibility: () => {} };
+  const sectionTitle = title.charAt(0).toUpperCase() + title.slice(1);
+  const sectionFolder = typeof pane.addFolder === 'function'
+    ? pane.addFolder({ title: sectionTitle, expanded: false })
+    : pane;
+
+  const holder: Record<string, ParamValue> = {};
+  for (const spec of specs) {
+    const s = settings[spec.name];
+    if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
+      holder[spec.name] = s.value;
+    } else if (spec.name in settings) {
+      holder[spec.name] = (settings as any)[spec.name];
+    } else {
+      holder[spec.name] = spec.default;
+    }
+  }
+
+  const specBindings: Array<{ spec: ParamSpec; blades: any[] }> = [];
+
+  const updateVisibility = () => {
+    for (const { spec, blades } of specBindings) {
+      const visible = isSpecVisible(spec, holder);
+      for (const b of blades) {
+        if (b && typeof b === 'object') {
+          b.hidden = !visible;
+        }
+      }
+    }
+  };
+
+  const groups = new Map<string, ParamSpec[]>();
+  for (const spec of specs) {
+    const list = groups.get(spec.group);
+    if (list) {
+      list.push(spec);
+    } else {
+      groups.set(spec.group, [spec]);
+    }
+  }
+
+  for (const [groupName, groupSpecs] of groups) {
+    const target = groupName && typeof sectionFolder.addFolder === 'function'
+      ? sectionFolder.addFolder({ title: groupName, expanded: false })
+      : sectionFolder;
+    for (const spec of groupSpecs) {
+      const push = () => {
+        onCommit?.();
+        const s = settings[spec.name];
+        if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
+          s.value = holder[spec.name]!;
+        } else {
+          (settings as any)[spec.name] = holder[spec.name]!;
+        }
+        updateVisibility();
+        apply?.();
+      };
+      const binding = bindSpec(target, spec.label, spec, holder, push, onHelperUpdate);
+      const blades = Array.isArray(binding) ? binding : [binding];
+      specBindings.push({ spec, blades });
+    }
+  }
+
+  updateVisibility();
+
+  return { specBindings, updateVisibility };
+}
+
+export function bindSpec(
+  pane: any,
+  labelOrSpec: string | ParamSpec,
+  specOrHolder: ParamSpec | Record<string, ParamValue>,
+  holderOrOnChange?: Record<string, ParamValue> | (() => void),
+  maybeOnChange?: (() => void) | ((spec: ParamSpec | null) => void),
+  maybeOnHelperUpdate?: (spec: ParamSpec | null) => void,
+): any {
+  let label: string;
+  let spec: ParamSpec;
+  let holder: Record<string, ParamValue>;
+  let onChange: () => void;
+  let onHelperUpdate: ((spec: ParamSpec | null) => void) | undefined;
+
+  if (typeof labelOrSpec === 'string') {
+    label = labelOrSpec;
+    spec = specOrHolder as ParamSpec;
+    holder = holderOrOnChange as Record<string, ParamValue>;
+    onChange = maybeOnChange as () => void;
+    onHelperUpdate = maybeOnHelperUpdate;
+  } else {
+    spec = labelOrSpec as ParamSpec;
+    holder = specOrHolder as Record<string, ParamValue>;
+    onChange = holderOrOnChange as () => void;
+    label = spec.label;
+    onHelperUpdate = maybeOnChange as ((spec: ParamSpec | null) => void) | undefined;
+  }
+
+  const key = ((spec as any).key ?? spec.name) as string;
   const target = holder as Record<string, unknown>;
+
+  let result: any;
   switch (spec.type) {
     case 'float':
     case 'int':
-      pane.addBinding(target, spec.name, { label, min: spec.min, max: spec.max, step: spec.step }).on('change', onChange);
-      return;
+      result = pane.addBinding(target, key, { label, min: spec.min, max: spec.max, step: spec.step }).on('change', onChange);
+      break;
     case 'bool':
-      pane.addBinding(target, spec.name, { label }).on('change', onChange);
-      return;
+      result = pane.addBinding(target, key, { label }).on('change', onChange);
+      break;
     case 'enum':
-      pane.addBinding(target, spec.name, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
-      return;
+      result = pane.addBinding(target, key, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
+      break;
     case 'colour':
-      pane.addBinding(target, spec.name, { label, view: 'color' }).on('change', onChange);
-      return;
+      result = pane.addBinding(target, key, { label, view: 'color' }).on('change', onChange);
+      break;
+    case 'vec3': {
+      if (!Array.isArray(holder[key])) {
+        holder[key] = ((spec as any).default ? [...(spec as any).default] : [1.0, 1.0, 1.0]) as [number, number, number];
+      }
+      const vec = holder[key] as [number, number, number];
+      const min = (spec as any).min ?? 0.0;
+      const max = (spec as any).max ?? 1.0;
+      const step = (spec as any).step ?? 0.01;
+      const labelPrefix = spec.label ?? label;
+
+      const b0 = pane.addBinding(vec, 0, { label: `${labelPrefix} R`, min, max, step }).on('change', onChange);
+      const b1 = pane.addBinding(vec, 1, { label: `${labelPrefix} G`, min, max, step }).on('change', onChange);
+      const b2 = pane.addBinding(vec, 2, { label: `${labelPrefix} B`, min, max, step }).on('change', onChange);
+      result = [b0, b1, b2];
+      break;
+    }
   }
+
+  const visible = isSpecVisible(spec, holder);
+  const blades = Array.isArray(result) ? result : [result];
+  for (const b of blades) {
+    if (b && typeof b === 'object') {
+      b.hidden = !visible;
+      attachSpecHelper(b, spec, onHelperUpdate);
+    }
+  }
+
+  return result;
+}
+
+export function buildGlobalDirectorControls(
+  folder: { addBinding: (target: any, prop: any, options?: any) => any },
+  director = getGlobalDirector(),
+) {
+  const settings = { ...director.getSettings() };
+
+  const experienceModeBinding = folder.addBinding(settings, 'experienceMode', {
+    label: 'Experience mode',
+    options: {
+      'Cinematic': 'cinematic',
+      'Calm': 'calm',
+      'Minimal': 'minimal',
+      'Color Walk': 'colorWalk',
+      'Custom': 'custom',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.setExperienceMode(ev.value as ExperienceMode);
+  });
+
+  const cameraModeBinding = folder.addBinding(settings, 'cameraMode', {
+    label: 'Camera motion',
+    options: {
+      'Auto (Complementary)': 'auto',
+      'Crane sway': 'craneSway',
+      'Dutch roll': 'dutchRoll',
+      'Breathing push': 'breathingPush',
+      'Horizon 2.5D tilt': 'horizonTilt',
+      'Still anchor': 'stillAnchor',
+      'Off': 'off',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ cameraMode: ev.value as CameraMode });
+  });
+
+  const cameraIntensityBinding = folder.addBinding(settings, 'cameraIntensity', {
+    label: 'Camera intensity',
+    min: 0,
+    max: 1,
+    step: 0.05,
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ cameraIntensity: Number(ev.value) });
+  });
+
+  const colorMoodBinding = folder.addBinding(settings, 'colorMood', {
+    label: 'Color mood',
+    options: {
+      'Auto-cycle palettes': 'auto',
+      'Native (preset original)': 'native',
+      'Cyberpunk (Cyan/Magenta)': 'cyberpunk',
+      'Ember (Indigo/Gold)': 'ember',
+      'Bioluminescent (Teal/Aqua)': 'biolum',
+      'Vapor (Violet/Rose)': 'vapor',
+      'Prismatic (Cobalt/Coral)': 'prismatic',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ colorMood: ev.value as ColorMood });
+  });
+
+  const colorIntensityBinding = folder.addBinding(settings, 'colorIntensity', {
+    label: 'Color intensity',
+    min: 0,
+    max: 1,
+    step: 0.05,
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ colorIntensity: Number(ev.value) });
+  });
+
+  const triggerCadenceBinding = folder.addBinding(settings, 'triggerCadence', {
+    label: 'Transition trigger',
+    options: {
+      'Song section (35s+)': 'section',
+      'Every 32 beats': 'beats32',
+      'Every 64 beats': 'beats64',
+      'Every 128 beats': 'beats128',
+      'Timer (45s)': 'timer45',
+    },
+  }).on('change', (ev: { value: any }) => {
+    director.updateSettings({ triggerCadence: ev.value as TriggerCadence });
+  });
+
+  return {
+    experienceModeBinding,
+    cameraModeBinding,
+    cameraIntensityBinding,
+    colorMoodBinding,
+    colorIntensityBinding,
+    triggerCadenceBinding,
+  };
 }

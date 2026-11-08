@@ -6,6 +6,9 @@ import {
   getBeatSensitivity,
   triggerRatioForSensitivity,
   DEFAULT_BEAT_SENSITIVITY,
+  DEFAULT_COOLDOWN_MS,
+  DEFAULT_RELEASE_RATIO,
+  DEFAULT_FLUX_FLOOR,
 } from './onset';
 
 const STEP_SEC = 0.01;
@@ -77,13 +80,13 @@ describe('OnsetDetector', () => {
     expect(beats).toHaveLength(0);
   });
 
-  it('fires only once for spikes 100 ms apart (cooldown)', () => {
+  it('fires only once for spikes 200 ms apart (220 ms cooldown)', () => {
     const detector = new OnsetDetector();
-    // A dip after the first spike re-arms the detector, so only the 150 ms
-    // cooldown can reject the second spike.
+    // Spikes 200 ms apart (i = 50 and i = 70 at 10 ms steps):
+    // 220 ms refractory cooldown rejects the second spike.
     const beats = collectBeats(
       detector,
-      (i) => (i === 50 || i === 60 ? 1 : 0.1),
+      (i) => (i === 50 || i === 70 ? 1 : 0.1),
       150,
     );
 
@@ -91,11 +94,11 @@ describe('OnsetDetector', () => {
     expect(beats[0]).toBeCloseTo(0.5);
   });
 
-  it('fires again once the cooldown has elapsed', () => {
+  it('fires again once the 220 ms cooldown has elapsed (250 ms apart)', () => {
     const detector = new OnsetDetector();
     const beats = collectBeats(
       detector,
-      (i) => (i === 50 || i === 70 ? 1 : 0.1), // 200 ms apart
+      (i) => (i === 50 || i === 75 ? 1 : 0.1), // 250 ms apart (> 220 ms)
       150,
     );
 
@@ -213,5 +216,37 @@ describe("spectralFlux is a per-bin mean", () => {
     const curr = new Float32Array(8).fill(0.5);
     expect(spectralFlux(prev, curr, 0, 0)).toBeCloseTo(0.5);
     expect(spectralFlux(prev, curr, 0, 7)).toBeCloseTo(0.5);
+  });
+});
+
+describe("Slice 7.44 OnsetDetector contracts", () => {
+  it("exports rock-solid default constants", () => {
+    expect(DEFAULT_COOLDOWN_MS).toBe(220);
+    expect(DEFAULT_RELEASE_RATIO).toBe(0.95);
+    expect(DEFAULT_FLUX_FLOOR).toBe(0.035);
+  });
+
+  it("requires flux to fall below 0.95 * baseline to re-arm", () => {
+    const d = new OnsetDetector({ triggerRatio: 1.2, releaseRatio: 0.95, fluxFloor: 0.035, cooldownMs: 0 });
+    // Baseline sample
+    d.step(0.1, 0.0);
+    // Trigger spike at t=0.01: flux 0.2 > 0.1 * 1.2
+    const first = d.step(0.2, 0.01);
+    expect(first.beat).toBe(true);
+
+    // Flux drops back to 0.105 (above 0.95 * mean ~ 0.098): not re-armed yet
+    const intermediate = d.step(0.105, 0.02);
+    expect(intermediate.beat).toBe(false);
+
+    // Another spike before dipping below 0.95 * mean: should NOT fire
+    const premature = d.step(0.25, 0.03);
+    expect(premature.beat).toBe(false);
+
+    // Flux drops below baseline * 0.95 (e.g. 0.05) -> re-arms
+    d.step(0.05, 0.04);
+
+    // Now a new spike can fire
+    const second = d.step(0.2, 0.05);
+    expect(second.beat).toBe(true);
   });
 });

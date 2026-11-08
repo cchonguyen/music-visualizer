@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "Star Burst Stream",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "zoom": 1.025,
+    "decay": 0.94,
+    "decayRgb": [0.96, 0.92, 0.95]
+  },
+  "layers": [
+    {
+      "type": "particles",
+      "opacity": 0.38,
+      "blend": "add",
+      "params": {
+        "shape": "star",
+        "brightness": 0.9,
+        "calmSparkleScale": 0.2,
+        "flashSparkleScale": 0.3,
+        "swirlGain": 0.6,
+        "size": 2.2
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "star",
+        "sides": 5,
+        "starInner": 0.42,
+        "cornerRadius": 0.12,
+        "effectType": "waveform",
+        "sampleCount": 96,
+        "effectLength": 0.35,
+        "thickness": 2.8,
+        "propMode": "stream",
+        "propCount": 6,
+        "propSpeed": 0.8,
+        "propDirection": "outward",
+        "audioSource": "waveform",
+        "colorMode": "amplitudeHot",
+        "glow": 0.85
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.8
+  }
+}

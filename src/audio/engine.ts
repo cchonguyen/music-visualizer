@@ -94,7 +94,7 @@ export class AudioEngine {
     });
     this.active = source;
     this._kind = kind;
-    // The analyser still holds ~93 ms (fftSize / sampleRate) of the previous
+    // The analyser still holds ~170–186 ms (fftSize / sampleRate with fftSize = 8192) of the previous
     // source. Until it drains, analysis sees silence, so a switch can't make a
     // fake beat (found in browser testing, 2026-11-04).
     this.settleUntil = this.ctx.currentTime + FFT_SIZE / this.ctx.sampleRate + 0.02;

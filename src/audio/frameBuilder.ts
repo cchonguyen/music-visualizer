@@ -113,6 +113,7 @@ export class FrameBuilder {
   private hasPrevSpectrum = false;
   private frameIndex = 0;
   private prevTime: number | null = null;
+  private kickEnv = 0;
 
   constructor(sampleRate: number, fftSize: number) {
     this.sampleRate = sampleRate;
@@ -169,6 +170,8 @@ export class FrameBuilder {
       beat: false,
       beatByBand: makeFlags(),
       beatStrength: 0,
+      kickEnv: 0,
+      kickPulse: false,
       waveform: this.waveform,
       bandWaveforms: this.bandWaveforms,
       spectrum: this.spectrum,
@@ -264,16 +267,32 @@ export class FrameBuilder {
     const midOnset = this.midDetector.step(midFlux, timeSec);
     const highOnset = this.highDetector.step(highFlux, timeSec);
 
+    const hasSubEnergy =
+      frame.raw.sub > 0.08 &&
+      frame.norm.sub > 0.30 &&
+      ((frame.loudness as unknown as { isSignal?: boolean })?.isSignal ?? true);
+    const isKick = subOnset.beat && hasSubEnergy;
+
     frame.fluxByBand.sub = subFlux;
     frame.fluxByBand.mid = midFlux;
     frame.fluxByBand.high = highFlux;
     frame.flux = subFlux;
 
-    frame.beatByBand.sub = subOnset.beat;
+    frame.beatByBand.sub = isKick;
     frame.beatByBand.mid = midOnset.beat;
     frame.beatByBand.high = highOnset.beat;
-    frame.beat = subOnset.beat;
-    frame.beatStrength = subOnset.strength;
+    frame.beat = isKick;
+    frame.beatStrength = isKick ? subOnset.strength : 0;
+
+    if (isKick) {
+      this.kickEnv = 1.0;
+      frame.kickPulse = true;
+    } else {
+      frame.kickPulse = false;
+      this.kickEnv *= Math.pow(0.88, dtSec * 60);
+      if (this.kickEnv < 0.01) this.kickEnv = 0.0;
+    }
+    frame.kickEnv = this.kickEnv;
 
     this.smoothSpectrum(dtSec);
 
@@ -300,6 +319,10 @@ export class FrameBuilder {
     this.subDetector.reset();
     this.midDetector.reset();
     this.highDetector.reset();
+
+    this.kickEnv = 0;
+    this.frame.kickEnv = 0;
+    this.frame.kickPulse = false;
 
     this.spectrum.fill(0);
     this.prevSpectrum.fill(0);

@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "name": "RGB Aberration Vortex",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "warpMode": "rgbSplit",
+    "rgbSplit": 0.03,
+    "decay": 0.94
+  },
+  "layers": [
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "star",
+        "sides": 7,
+        "starInner": 0.5,
+        "size": 0.45,
+        "effectType": "waveform",
+        "thickness": 2.2,
+        "effectLength": 0.35,
+        "reactivity": 1.0,
+        "audioSource": "waveform",
+        "colorMode": "palette",
+        "symmetry": "wrap",
+        "propMode": "single"
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "solidLine",
+        "propMode": "shockwave",
+        "propSpeed": 0.875,
+        "thickness": 3.0,
+        "glow": 0.8,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    }
+  ],
+  "post": {}
+}

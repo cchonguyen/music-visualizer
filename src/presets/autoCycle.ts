@@ -8,6 +8,7 @@ export interface CycleOptions {
   minGapSec: number; // beat mode: shortest time between switches
   shuffle: boolean;
   favouritesOnly: boolean;
+  calmOnly?: boolean;
 }
 
 export interface CycleCandidate {
@@ -15,14 +16,25 @@ export interface CycleCandidate {
   tags: readonly string[];
 }
 
-export const DEFAULT_CYCLE: CycleOptions = { mode: 'off', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false };
+export const DEFAULT_CYCLE: CycleOptions = { mode: 'off', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false, calmOnly: false };
 
 /** Presets that the cycle may show, in their list order. */
 export function eligible(candidates: readonly CycleCandidate[], opts: CycleOptions): string[] {
-  return candidates
-    .filter((c) => !c.tags.includes('skip'))
-    .filter((c) => !opts.favouritesOnly || c.tags.includes('favourite'))
-    .map((c) => c.id);
+  const nonSkipped = candidates.filter((c) => !c.tags.includes('skip'));
+  const base = opts.favouritesOnly
+    ? nonSkipped.filter((c) => c.tags.includes('favourite'))
+    : nonSkipped;
+
+  if (opts.calmOnly === true) {
+    const calm = base.filter((c) => c.tags.includes('calm'));
+    if (calm.length >= 2) {
+      return calm.map((c) => c.id);
+    }
+    // Gracefully fall back so auto-cycle never deadlocks
+    return (base.length >= 2 ? base : nonSkipped).map((c) => c.id);
+  }
+
+  return base.map((c) => c.id);
 }
 
 /**

@@ -93,3 +93,63 @@ describe('mutate', () => {
     expect(out.zoom!.value).toBe(1);
   });
 });
+
+describe('high-intensity effect weighted dampening', () => {
+  const highIntensitySpecs: ParamSpec[] = [
+    { type: 'float', name: 'sobel', label: 'Sobel', group: 'Trail', default: 0, min: 0, max: 1, step: 0.01 },
+    { type: 'float', name: 'solarize', label: 'Solarize', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01 },
+    { type: 'float', name: 'chroma', label: 'Chroma', group: 'Shape', default: 0, min: 0, max: 0.02, step: 0.0005 },
+    { type: 'float', name: 'rgbSplit', label: 'RGB split', group: 'Warp', default: 0, min: 0, max: 0.08, step: 0.001 },
+    { type: 'int', name: 'mirror', label: 'Mirror', group: 'Shape', default: 0, min: 0, max: 8, step: 1 },
+  ];
+
+  it('gates effects with ~85% off and caps active draws to subtle ranges over 200+ draws', () => {
+    const rng = seeded(12345);
+    const N = 500;
+
+    for (const spec of highIntensitySpecs) {
+      const draws = Array.from({ length: N }, () => randomValue(spec, rng) as number);
+      const zeroCount = draws.filter((v) => v === 0).length;
+      const zeroFraction = zeroCount / N;
+
+      // Around ~85% of draws evaluate to 0 (default off)
+      expect(zeroFraction).toBeGreaterThan(0.75);
+      expect(zeroFraction).toBeLessThan(0.95);
+
+      const activeDraws = draws.filter((v) => v !== 0);
+      expect(activeDraws.length).toBeGreaterThan(0);
+
+      switch (spec.name) {
+        case 'sobel':
+          for (const v of activeDraws) {
+            expect(v).toBeGreaterThanOrEqual(0.05);
+            expect(v).toBeLessThanOrEqual(0.20);
+          }
+          break;
+        case 'solarize':
+          for (const v of activeDraws) {
+            expect(v).toBeGreaterThanOrEqual(0.10);
+            expect(v).toBeLessThanOrEqual(0.35);
+          }
+          break;
+        case 'chroma':
+          for (const v of activeDraws) {
+            expect(v).toBeGreaterThanOrEqual(0.001);
+            expect(v).toBeLessThanOrEqual(0.004);
+          }
+          break;
+        case 'rgbSplit':
+          for (const v of activeDraws) {
+            expect(v).toBeGreaterThanOrEqual(0.002);
+            expect(v).toBeLessThanOrEqual(0.012);
+          }
+          break;
+        case 'mirror':
+          for (const v of activeDraws) {
+            expect([2, 4, 6]).toContain(v);
+          }
+          break;
+      }
+    }
+  });
+});

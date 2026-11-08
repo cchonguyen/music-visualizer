@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "name": "Reaction-Diffusion Coral",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.4 },
+  "feedback": {
+    "decay": 0.20,
+    "zoom": 1.01
+  },
+  "layers": [
+    {
+      "type": "reactionDiffusion",
+      "opacity": 1.0,
+      "blend": "max",
+      "params": {
+        "speed": 1.0,
+        "feed": 0.037,
+        "kill": 0.060,
+        "du": 0.16,
+        "dv": 0.08,
+        "brightness": 1.25,
+        "colorPink": "#ff2a8d",
+        "colorCobalt": "#0044ff",
+        "specular": 1.0
+      }
+    }
+  ],
+  "post": {}
+}

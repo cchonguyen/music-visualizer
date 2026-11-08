@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "name": "Lissajous Vector CRT",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "decay": 0.86,
+    "decayRgb": [0.2, 1.0, 0.3]
+  },
+  "layers": [
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "figure8",
+        "size": 0.55,
+        "effectType": "waveform",
+        "thickness": 2.2,
+        "effectLength": 0.35,
+        "reactivity": 1.0,
+        "audioSource": "waveform",
+        "colorMode": "solid",
+        "solidColor": "#33ff55",
+        "symmetry": "wrap",
+        "propMode": "single"
+      }
+    }
+  ],
+  "post": {
+    "crtScanlines": 0.25,
+    "crtBarrel": 0.08,
+    "bloom": 0.7
+  }
+}

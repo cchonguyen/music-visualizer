@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "name": "Solarized Contour Rings",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "warpMode": "curl",
+    "warp": 0.28,
+    "warpScale": 2.2,
+    "curlOctaves": 2,
+    "sobel": 0.22,
+    "solarize": 0.78,
+    "contourFreq": 6.5,
+    "contourWidth": 0.42,
+    "colorSpread": 0.85,
+    "zoom": 1.022,
+    "decay": 0.86,
+    "decayRgb": [0.90, 0.92, 0.95]
+  },
+  "layers": [
+    {
+      "type": "shape",
+      "blend": "max",
+      "trails": true,
+      "params": {
+        "baseShape": "circle",
+        "effectType": "pulsingLine",
+        "propMode": "concentric",
+        "propCount": 5,
+        "propSpacing": 0.22,
+        "propSpeed": 0.6,
+        "propDirection": "outward",
+        "thickness": 4.0,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    }
+  ],
+  "post": {}
+}

@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PresetSession, USER_PRESETS_KEY, type SceneHost } from './session';
+import {
+  PresetSession,
+  USER_PRESETS_KEY,
+  USER_PRESET_FOLDERS_KEY,
+  SYSTEM_TAG_OVERRIDES_KEY,
+  type SceneHost,
+} from './session';
 import { parsePreset, PresetFormatError, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
 import { BUILTIN_PRESETS, SCHEMAS } from './builtin';
@@ -10,6 +16,10 @@ function memoryStorage(): Storage {
   return {
     getItem: (k: string) => data.get(k) ?? null,
     setItem: (k: string, v: string) => void data.set(k, v),
+    removeItem: (k: string) => void data.delete(k),
+    clear: () => void data.clear(),
+    get length() { return data.size; },
+    key: (index: number) => Array.from(data.keys())[index] ?? null,
   } as unknown as Storage;
 }
 
@@ -49,6 +59,7 @@ describe('built-in presets', () => {
     expect(() => session.save('crown')).toThrow(/read-only/);
     expect(() => session.rename('crown', 'x')).toThrow(/cannot be renamed/);
     expect(() => session.remove('crown')).toThrow(/cannot be deleted/);
+    expect(() => session.setPresetFolder('crown', 'some-folder')).toThrow(/Cannot move built-in/);
   });
 });
 
@@ -206,4 +217,218 @@ describe('undo and redo', () => {
     expect(session.isDirty('crown')).toBe(true); // compare changes no data
   });
 });
+
+describe('system preset tag overrides and categorization', () => {
+  it('persists and hydrates system preset tag overrides', () => {
+    session.setPresetTags('crown', ['favourite']);
+    expect(session.get('crown')!.preset.tags).toEqual(['favourite']);
+    expect(session.isDirty('crown')).toBe(false);
+
+    // Verify stored in localStorage under SYSTEM_TAG_OVERRIDES_KEY
+    const rawStored = storage.getItem(SYSTEM_TAG_OVERRIDES_KEY);
+    expect(rawStored).toBeTruthy();
+    expect(JSON.parse(rawStored!)).toEqual({ crown: ['favourite'] });
+
+    // In a fresh session, addBuiltin rehydrates the tag override
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    for (const b of BUILTIN_PRESETS) fresh.addBuiltin(b.id, b.preset);
+    expect(fresh.get('crown')!.preset.tags).toEqual(['favourite']);
+  });
+
+  it('sets and persists tags for user presets', () => {
+    const id = session.saveAs('flight', 'Custom Flight');
+    session.setPresetTags(id, ['favourite', 'night']);
+    expect(session.get(id)!.preset.tags).toEqual(['favourite', 'night']);
+
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    fresh.loadUserPresets();
+    expect(fresh.get(id)!.preset.tags).toEqual(['favourite', 'night']);
+  });
+
+  it('listCategorized() partitions presets into system and user categories', () => {
+    const folder = session.createFolder('Favorites');
+    const userPreset1 = session.saveAs('flight', 'Flight 1');
+    const userPreset2 = session.saveAs('bars', 'Bars 2');
+    session.setPresetFolder(userPreset1, folder.id);
+
+    const categorized = session.listCategorized();
+    expect(categorized.system.classics.map((e) => e.id)).toContain('crown');
+    expect(categorized.system.classics.map((e) => e.id)).toContain('flight');
+
+    expect(categorized.user.folders).toHaveLength(1);
+    expect(categorized.user.folders[0]!.folder.name).toBe('Favorites');
+    expect(categorized.user.folders[0]!.entries.map((e) => e.id)).toEqual([userPreset1]);
+
+    expect(categorized.user.unfiled.map((e) => e.id)).toEqual([userPreset2]);
+  });
+});
+
+describe('user preset folders and organization', () => {
+  it('creates folders, persists and reloads them across sessions', () => {
+    const folder = session.createFolder('Ambient Vibes');
+    expect(folder.id).toMatch(/^folder-/);
+    expect(folder.name).toBe('Ambient Vibes');
+    expect(typeof folder.createdAt).toBe('number');
+    expect(session.getFolders()).toEqual([folder]);
+
+    // Check localStorage
+    const rawStored = storage.getItem(USER_PRESET_FOLDERS_KEY);
+    expect(rawStored).toBeTruthy();
+    expect(JSON.parse(rawStored!)).toEqual([folder]);
+
+    // Reload in a fresh session
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    expect(fresh.getFolders()).toEqual([folder]);
+
+    // Validation: empty or whitespace folder names throw
+    expect(() => session.createFolder('')).toThrow(/cannot be empty/);
+    expect(() => session.createFolder('   ')).toThrow(/cannot be empty/);
+  });
+
+  it('renames folders and persists the new name', () => {
+    const folder = session.createFolder('Old Name');
+    session.renameFolder(folder.id, 'New Name');
+    expect(session.getFolders()[0]!.name).toBe('New Name');
+
+    const rawStored = JSON.parse(storage.getItem(USER_PRESET_FOLDERS_KEY)!);
+    expect(rawStored[0].name).toBe('New Name');
+
+    // Throws on empty name or nonexistent folder
+    expect(() => session.renameFolder(folder.id, '')).toThrow(/cannot be empty/);
+    expect(() => session.renameFolder(folder.id, '   ')).toThrow(/cannot be empty/);
+    expect(() => session.renameFolder('nonexistent-id', 'Name')).toThrow(/not found/);
+  });
+
+  it('deleting a folder unfiles presets without deleting them', () => {
+    const folder = session.createFolder('Chill');
+    const p1 = session.saveAs('flight', 'Preset 1', folder.id);
+    const p2 = session.saveAs('bars', 'Preset 2', folder.id);
+    expect(session.getPresetFolder(p1)).toBe(folder.id);
+    expect(session.getPresetFolder(p2)).toBe(folder.id);
+
+    session.deleteFolder(folder.id);
+    expect(session.getFolders()).toHaveLength(0);
+
+    // Presets are still present, but unfiled
+    expect(session.get(p1)).toBeDefined();
+    expect(session.get(p2)).toBeDefined();
+    expect(session.getPresetFolder(p1)).toBeUndefined();
+    expect(session.getPresetFolder(p2)).toBeUndefined();
+
+    const categorized = session.listCategorized();
+    expect(categorized.user.unfiled.map((e) => e.id)).toContain(p1);
+    expect(categorized.user.unfiled.map((e) => e.id)).toContain(p2);
+
+    // Fresh session also sees them unfiled
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    fresh.loadUserPresets();
+    expect(fresh.getFolders()).toHaveLength(0);
+    expect(fresh.getPresetFolder(p1)).toBeUndefined();
+    expect(fresh.getPresetFolder(p2)).toBeUndefined();
+  });
+
+  it('moves user presets into folders and unfiles them', () => {
+    const f1 = session.createFolder('Folder 1');
+    const f2 = session.createFolder('Folder 2');
+    const id = session.saveAs('flight', 'Moving Preset');
+
+    expect(session.getPresetFolder(id)).toBeUndefined();
+
+    // Move to Folder 1
+    session.setPresetFolder(id, f1.id);
+    expect(session.getPresetFolder(id)).toBe(f1.id);
+
+    // Move to Folder 2
+    session.setPresetFolder(id, f2.id);
+    expect(session.getPresetFolder(id)).toBe(f2.id);
+
+    // Unfile with undefined or empty string
+    session.setPresetFolder(id, undefined);
+    expect(session.getPresetFolder(id)).toBeUndefined();
+
+    session.setPresetFolder(id, f1.id);
+    session.setPresetFolder(id, '');
+    expect(session.getPresetFolder(id)).toBeUndefined();
+
+    // Throws on nonexistent folder or nonexistent preset
+    expect(() => session.setPresetFolder(id, 'ghost-folder')).toThrow(/not found/);
+    expect(() => session.setPresetFolder('nonexistent-preset', f1.id)).toThrow(/unknown preset/);
+  });
+
+  it('throws when attempting setPresetFolder on built-in presets', () => {
+    const folder = session.createFolder('Folder');
+    expect(() => session.setPresetFolder('crown', folder.id)).toThrow(/Cannot move built-in/);
+    expect(() => session.setPresetFolder('flight', undefined)).toThrow(/Cannot move built-in/);
+  });
+
+  it('presets referencing deleted or nonexistent folders resolve to unfiled in listCategorized() and getPresetFolder()', () => {
+    const folder = session.createFolder('To Disappear');
+    const id = session.saveAs('crown', 'Ghost Child', folder.id);
+    expect(session.getPresetFolder(id)).toBe(folder.id);
+
+    // Corrupt storage or simulate external folder deletion without unlinking
+    storage.setItem(USER_PRESET_FOLDERS_KEY, JSON.stringify([]));
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    fresh.loadUserPresets();
+
+    // In the new session, the folder is gone, so the preset must resolve to unfiled
+    expect(fresh.getPresetFolder(id)).toBeUndefined();
+    const cat = fresh.listCategorized();
+    expect(cat.user.folders).toHaveLength(0);
+    expect(cat.user.unfiled.map((e) => e.id)).toContain(id);
+  });
+
+  it('backward compatibility: legacy user presets without folderId load cleanly as unfiled', () => {
+    // Manually write legacy user presets into localStorage without folderId
+    const legacyPresets = [
+      {
+        id: 'legacy-1',
+        preset: session.get('crown')!.preset,
+      },
+      {
+        id: 'legacy-2',
+        preset: session.get('flight')!.preset,
+      },
+    ];
+    storage.setItem(USER_PRESETS_KEY, JSON.stringify(legacyPresets));
+    storage.removeItem(USER_PRESET_FOLDERS_KEY);
+
+    const fresh = new PresetSession(fakeHost().host, SCHEMAS, storage);
+    const errors = fresh.loadUserPresets();
+    expect(errors).toEqual([]);
+
+    expect(fresh.get('legacy-1')).toBeDefined();
+    expect(fresh.get('legacy-2')).toBeDefined();
+    expect(fresh.getPresetFolder('legacy-1')).toBeUndefined();
+    expect(fresh.getPresetFolder('legacy-2')).toBeUndefined();
+
+    const cat = fresh.listCategorized();
+    expect(cat.user.unfiled.map((e) => e.id)).toEqual(['legacy-1', 'legacy-2']);
+  });
+
+  it('duplicate and saveAs preserve folder assignment for user presets', () => {
+    const folder = session.createFolder('Set 1');
+    const p1 = session.saveAs('crown', 'Base Preset', folder.id);
+    expect(session.getPresetFolder(p1)).toBe(folder.id);
+
+    // duplicate copies preset into the same folder
+    const p2 = session.duplicate(p1);
+    expect(session.getPresetFolder(p2)).toBe(folder.id);
+    expect(session.get(p2)!.preset.name).toBe('Base Preset copy');
+
+    // saveAs without specifying folderId preserves from's folderId
+    const p3 = session.saveAs(p1, 'Manual Copy');
+    expect(session.getPresetFolder(p3)).toBe(folder.id);
+
+    // saveAs with explicit folderId overrides it
+    const otherFolder = session.createFolder('Set 2');
+    const p4 = session.saveAs(p1, 'Explicit Move', otherFolder.id);
+    expect(session.getPresetFolder(p4)).toBe(otherFolder.id);
+
+    // saveAs with nonexistent folder resolves to undefined (unfiled)
+    const p5 = session.saveAs(p1, 'Ghost Folder Copy', 'ghost-folder');
+    expect(session.getPresetFolder(p5)).toBeUndefined();
+  });
+});
+
 

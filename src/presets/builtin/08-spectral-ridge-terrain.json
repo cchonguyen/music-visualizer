@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "name": "Spectral Ridge Terrain",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.15
+  },
+  "layers": [
+    {
+      "type": "bassPulse",
+      "opacity": 0.2,
+      "blend": "screen",
+      "trails": true,
+      "params": {
+        "texture": true,
+        "textureGain": 0.8
+      }
+    },
+    {
+      "type": "spectralTerrain",
+      "opacity": 1.0,
+      "blend": "max",
+      "trails": true,
+      "params": {
+        "elevation": 0.75,
+        "width": 1.35,
+        "horizonY": 0.32,
+        "foregroundY": -0.58,
+        "brightness": 1.3,
+        "lineThickness": 2.2,
+        "ridgeShape": "smooth",
+        "layoutMode": "fullHorizon",
+        "gridCols": 16,
+        "skirtOpacity": 0.20,
+        "colorSpread": 0.88,
+        "terrainFlow": 0.40
+      }
+    },
+    {
+      "type": "particles",
+      "opacity": 0.35,
+      "blend": "screen",
+      "trails": false,
+      "params": {
+        "shape": "dot",
+        "swirlGain": 0.8,
+        "brightness": 0.9
+      }
+    }
+  ],
+  "post": {}
+}

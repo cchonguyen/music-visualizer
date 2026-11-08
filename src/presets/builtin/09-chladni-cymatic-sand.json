@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "name": "Chladni Cymatic Sand",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "decay": 0.90
+  },
+  "layers": [
+    {
+      "type": "chladniSand",
+      "params": {
+        "plateMode": "fullscreen",
+        "harmonyMode": "auto",
+        "nodalSharpness": 1.35,
+        "grainWarmth": 0.78,
+        "scale": 1.0,
+        "pointSize": 2.0,
+        "brightness": 1.2
+      }
+    }
+  ],
+  "post": {}
+}

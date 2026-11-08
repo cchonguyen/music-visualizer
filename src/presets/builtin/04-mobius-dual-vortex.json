@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "name": "Möbius Dual Vortex",
+  "tags": ["built-in", "flagship"],
+  "transition": { "style": "crossfade", "seconds": 0.32 },
+  "feedback": {
+    "warpMode": "mobius",
+    "warp": 0.55,
+    "mobiusFlow": 0.9,
+    "mobiusSwirl": 0.75,
+    "mobiusPoleOffset": 0.46,
+    "mobiusWander": 0.60,
+    "mobiusMode": "auto",
+    "decay": 0.90,
+    "decayRgb": [0.92, 0.91, 0.96]
+  },
+  "layers": [
+    {
+      "type": "particles",
+      "blend": "max",
+      "opacity": 0.7,
+      "params": {
+        "shape": "dot",
+        "swirlGain": 2.5,
+        "zoom": 1.2,
+        "brightness": 1.2
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "solidLine",
+        "propMode": "shockwave",
+        "propSpeed": 1.0,
+        "thickness": 3.0,
+        "glow": 0.8,
+        "audioSource": "sub",
+        "colorMode": "palette"
+      }
+    },
+    {
+      "type": "shape",
+      "opacity": 0.6,
+      "blend": "max",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "bars",
+        "sampleCount": 48,
+        "effectLength": 0.35,
+        "thickness": 3.0,
+        "barGap": 0.25,
+        "extrudeDirection": "outward",
+        "symmetry": "mirror",
+        "normalMode": "radial",
+        "propMode": "single",
+        "size": 0.45,
+        "colorMode": "palette",
+        "glow": 0.6
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "centerLine",
+        "size": 0.8,
+        "effectType": "waveform",
+        "thickness": 2.0,
+        "effectLength": 0.35,
+        "reactivity": 1.0,
+        "audioSource": "waveform",
+        "colorMode": "solid",
+        "solidColor": "#ffffff",
+        "symmetry": "wrap",
+        "propMode": "single"
+      }
+    }
+  ],
+  "post": {}
+}
