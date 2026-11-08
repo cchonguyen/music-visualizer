@@ -1,58 +1,361 @@
 {
   "version": 1,
   "name": "Hexagon Inward Portal",
-  "tags": ["built-in", "flagship", "shape"],
-  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "tags": [
+    "built-in",
+    "flagship",
+    "shape"
+  ],
+  "transition": {
+    "style": "crossfade",
+    "seconds": 0.35
+  },
   "feedback": {
-    "zoom": 0.988,
-    "rotate": -0.006,
-    "decay": 0.93,
-    "decayRgb": [0.93, 0.94, 0.98]
+    "zoom": {
+      "value": 0.988
+    },
+    "rotate": {
+      "value": -0.006
+    },
+    "centreX": {
+      "value": 0
+    },
+    "centreY": {
+      "value": 0
+    },
+    "driftX": {
+      "value": 0
+    },
+    "driftY": {
+      "value": 0
+    },
+    "stretchX": {
+      "value": 1
+    },
+    "stretchY": {
+      "value": 1
+    },
+    "warp": {
+      "value": 0
+    },
+    "warpScale": {
+      "value": 1
+    },
+    "warpSpeed": {
+      "value": 1
+    },
+    "decay": {
+      "value": 0.93
+    },
+    "fade": {
+      "value": 0.004
+    },
+    "wrap": {
+      "value": "clamp"
+    },
+    "hueDrift": {
+      "value": 0
+    },
+    "blur": {
+      "value": 0
+    },
+    "warpMode": {
+      "value": "classic"
+    },
+    "portalRadius": {
+      "value": 0
+    },
+    "mobiusPoleOffset": {
+      "value": 0.48
+    },
+    "curlOctaves": {
+      "value": 2
+    },
+    "curlTurbulence": {
+      "value": 0.45
+    },
+    "curlFlowPattern": {
+      "value": "plumes"
+    },
+    "radialFold": {
+      "value": 0
+    },
+    "mandalaTile": {
+      "value": 0
+    },
+    "mandalaCounterSpin": {
+      "value": 0.25
+    },
+    "mandalaKickFlare": {
+      "value": 0.35
+    },
+    "mandalaPattern": {
+      "value": "auto"
+    },
+    "mobiusFlow": {
+      "value": 0.85
+    },
+    "mobiusSwirl": {
+      "value": 0.6500000000000001
+    },
+    "mobiusWander": {
+      "value": 0.55
+    },
+    "mobiusMode": {
+      "value": "auto"
+    },
+    "kaleidoN": {
+      "value": 6
+    },
+    "rgbSplit": {
+      "value": 0
+    },
+    "decayRgb": {
+      "value": [
+        0.93,
+        0.94,
+        0.98
+      ]
+    },
+    "sobel": {
+      "value": 0
+    },
+    "contourFreq": {
+      "value": 7.85
+    },
+    "contourWidth": {
+      "value": 0.45
+    },
+    "colorSpread": {
+      "value": 0.6500000000000001
+    },
+    "solarize": {
+      "value": 0
+    }
   },
   "layers": [
     {
       "type": "tunnel",
+      "enabled": true,
       "opacity": 0.32,
       "blend": "screen",
+      "trails": true,
       "params": {
-        "sides": 6,
-        "pattern": "rings",
-        "ringDensity": 0.42,
-        "ringContrast": 0.4,
-        "ringContrastCalm": 0.2,
-        "flightMode": "forward",
-        "swirlPulse": 0.25,
-        "hueSpread": 0.5
+        "ringDensity": {
+          "value": 0.42
+        },
+        "beatAttackSec": {
+          "value": 0.08
+        },
+        "ringContrast": {
+          "value": 0.4
+        },
+        "ringContrastCalm": {
+          "value": 0.2
+        },
+        "pattern": {
+          "value": "rings"
+        },
+        "sides": {
+          "value": 6
+        },
+        "twist": {
+          "value": 0
+        },
+        "texture": {
+          "value": false
+        },
+        "textureGain": {
+          "value": 1
+        },
+        "flightMode": {
+          "value": "forward"
+        },
+        "reverseOnBreakdown": {
+          "value": true
+        },
+        "hueSpread": {
+          "value": 0.5
+        },
+        "wallTexture": {
+          "value": 0.55
+        },
+        "zoomPunch": {
+          "value": 0
+        },
+        "swirlPulse": {
+          "value": 0.25
+        },
+        "horizonDrift": {
+          "value": 0.4
+        },
+        "beatReactivity": {
+          "value": 0.5
+        }
       }
     },
     {
       "type": "shape",
+      "enabled": true,
+      "opacity": 1,
+      "blend": "max",
+      "trails": true,
       "params": {
-        "baseShape": "polygon",
-        "sides": 6,
-        "cornerRadius": 0.1,
-        "effectType": "bars",
-        "sampleCount": 72,
-        "effectLength": 0.45,
-        "thickness": 3.0,
-        "barGap": 0.2,
-        "extrudeDirection": "inward",
-        "symmetry": "mirror",
-        "normalMode": "radial",
-        "propMode": "concentric",
-        "propCount": 4,
-        "propSpacing": 0.2,
-        "propDirection": "alternating",
-        "propDelay": 0.35,
-        "basePulse": 0.3,
-        "size": 0.55,
-        "audioSource": "spectrum",
-        "colorMode": "palette",
-        "glow": 0.8
+        "baseShape": {
+          "value": "polygon"
+        },
+        "edgeMode": {
+          "value": "bottom"
+        },
+        "sides": {
+          "value": 6
+        },
+        "starInner": {
+          "value": 0.5
+        },
+        "cornerRadius": {
+          "value": 0.1
+        },
+        "arcSweep": {
+          "value": 0.75
+        },
+        "spiralTurns": {
+          "value": 2.5
+        },
+        "size": {
+          "value": 0.55
+        },
+        "posX": {
+          "value": 0
+        },
+        "posY": {
+          "value": 0
+        },
+        "rotation": {
+          "value": 0
+        },
+        "spinSpeed": {
+          "value": 0
+        },
+        "basePulse": {
+          "value": 0.3
+        },
+        "effectType": {
+          "value": "bars"
+        },
+        "sampleCount": {
+          "value": 72
+        },
+        "effectLength": {
+          "value": 0.45
+        },
+        "thickness": {
+          "value": 3
+        },
+        "barGap": {
+          "value": 0.2
+        },
+        "ledSegments": {
+          "value": 8
+        },
+        "peakCaps": {
+          "value": false
+        },
+        "extrudeDirection": {
+          "value": "inward"
+        },
+        "symmetry": {
+          "value": "repeat2"
+        },
+        "normalMode": {
+          "value": "radial"
+        },
+        "propMode": {
+          "value": "concentric"
+        },
+        "propCount": {
+          "value": 4
+        },
+        "propSpacing": {
+          "value": 0.2
+        },
+        "propSpeed": {
+          "value": 0.6500000000000001
+        },
+        "propDirection": {
+          "value": "alternating"
+        },
+        "propSelfSpin": {
+          "value": 0
+        },
+        "propDelay": {
+          "value": 0.35
+        },
+        "audioSource": {
+          "value": "spectrum"
+        },
+        "reactivity": {
+          "value": 1
+        },
+        "attackMs": {
+          "value": 12
+        },
+        "releaseMs": {
+          "value": 180
+        },
+        "colorMode": {
+          "value": "palette"
+        },
+        "solidColor": {
+          "value": "#00f0ff"
+        },
+        "glow": {
+          "value": 0.8
+        }
       }
     }
   ],
   "post": {
-    "bloom": 0.65
+    "hueShift": {
+      "value": 0
+    },
+    "saturation": {
+      "value": 1
+    },
+    "contrast": {
+      "value": 1
+    },
+    "gamma": {
+      "value": 1
+    },
+    "brightness": {
+      "value": 0
+    },
+    "vignette": {
+      "value": 0
+    },
+    "mirror": {
+      "value": 0
+    },
+    "chroma": {
+      "value": 0
+    },
+    "bloom": {
+      "value": 0.65
+    },
+    "bloomThreshold": {
+      "value": 0.6
+    },
+    "crtScanlines": {
+      "value": 0
+    },
+    "crtBarrel": {
+      "value": 0
+    }
+  },
+  "directorProfile": {
+    "cameraMode": "auto",
+    "colorMood": "auto",
+    "colorIntensity": 0.45
   }
 }
