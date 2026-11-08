@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "name": "Sacred Orbit Mandala",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "zoom": 1.018,
+    "rotate": 0.006,
+    "decay": 0.94,
+    "decayRgb": [0.95, 0.93, 0.98]
+  },
+  "layers": [
+    {
+      "type": "moire",
+      "opacity": 0.28,
+      "blend": "screen",
+      "params": {
+        "scale": 28.0,
+        "speed": 0.35,
+        "lineWidth": 0.45,
+        "brightness": 0.8,
+        "contrast": 0.55,
+        "waveShape": 0.4,
+        "colorSpread": 0.7,
+        "patternMode": "starburstLoom",
+        "audioWarp": 0.4
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "polygon",
+        "sides": 3,
+        "cornerRadius": 0.1,
+        "effectType": "pulsingLine",
+        "propMode": "orbit",
+        "propCount": 6,
+        "propSpacing": 0.45,
+        "propSpeed": 0.4,
+        "propSelfSpin": -0.8,
+        "spinSpeed": 0.3,
+        "thickness": 2.5,
+        "size": 0.22,
+        "audioSource": "spectrum",
+        "colorMode": "frequencyGradient",
+        "glow": 0.8
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "polygon",
+        "sides": 3,
+        "cornerRadius": 0.1,
+        "effectType": "pulsingLine",
+        "propMode": "single",
+        "spinSpeed": -0.3,
+        "thickness": 3.0,
+        "size": 0.25,
+        "audioSource": "sub",
+        "colorMode": "frequencyGradient",
+        "glow": 0.9
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.65
+  }
+}

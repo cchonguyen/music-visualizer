@@ -33,5 +33,6 @@
 - `483` `.spec/specs/global-director-spec.md` — Global Director (Camera & Color Evolution) spec
 - `484` `.spec/specs/global-director-roadmap.md` — Global Director consolidation, Experience Hub & pre-spec roadmap
 - `485` `.spec/specs/shape-layer-spec.md` — Stage 9 Composable `shape` Layer Architecture spec
+- `486` `.spec/specs/preset-folders-spec.md` — Stage 10 Preset Folders & Organization System spec
 
 

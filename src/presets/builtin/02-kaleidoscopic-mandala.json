@@ -19,14 +19,18 @@
   },
   "layers": [
     {
-      "type": "waveform",
+      "type": "shape",
       "blend": "add",
       "trails": false,
       "params": {
-        "mode": "circle",
-        "radius": 0.5,
+        "baseShape": "circle",
+        "size": 0.5,
+        "effectType": "waveform",
         "thickness": 2.2,
-        "colorMode": "palette"
+        "colorMode": "palette",
+        "audioSource": "waveform",
+        "symmetry": "wrap",
+        "propMode": "single"
       }
     },
     {
@@ -38,10 +42,16 @@
       }
     },
     {
-      "type": "shockwave",
+      "type": "shape",
       "params": {
-        "style": "ring",
-        "ringSec": 0.4
+        "baseShape": "circle",
+        "effectType": "solidLine",
+        "propMode": "shockwave",
+        "propSpeed": 0.875,
+        "thickness": 3.0,
+        "glow": 0.8,
+        "audioSource": "sub",
+        "colorMode": "palette"
       }
     }
   ],

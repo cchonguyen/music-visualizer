@@ -95,23 +95,23 @@ export const TUNNEL_DEFAULTS: TunnelParams = new Proxy(RAW_TUNNEL_DEFAULTS, {
   },
 });
 export const TUNNEL_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'ringDensity', label: 'Ring density', group: 'Walls', default: TUNNEL_DEFAULTS.ringDensity, min: 0.1, max: 2, step: 0.01 },
-  { type: 'float', name: 'beatAttackSec', label: 'Beat swell attack (s)', group: 'Beat', default: TUNNEL_DEFAULTS.beatAttackSec, min: 0.01, max: 0.5, step: 0.01 },
-  { type: 'float', name: 'ringContrast', label: 'Ring contrast', group: 'Walls', default: TUNNEL_DEFAULTS.ringContrast, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'ringContrastCalm', label: 'Ring contrast (calm)', group: 'Walls', default: TUNNEL_DEFAULTS.ringContrastCalm, min: 0, max: 1, step: 0.01 },
-  { type: 'enum', name: 'pattern', label: 'Wall pattern', group: 'Walls', default: TUNNEL_DEFAULTS.pattern, options: ['rings', 'grid', 'spokes', 'checker', 'stripes'] },
-  { type: 'int', name: 'sides', label: 'Cross-section sides (0 = classic)', group: 'Shape', default: TUNNEL_DEFAULTS.sides, min: 0, max: 12, step: 1 },
-  { type: 'float', name: 'twist', label: 'Spiral twist', group: 'Shape', default: TUNNEL_DEFAULTS.twist, min: -1, max: 1, step: 0.01 },
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: TUNNEL_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: TUNNEL_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
-  { type: 'enum', name: 'flightMode', label: 'Flight mode', group: 'Motion', default: TUNNEL_DEFAULTS.flightMode, options: ['dropReverse', 'forward', 'reverse', 'pendulum'] },
-  { type: 'bool', name: 'reverseOnBreakdown', label: 'Breakdown reverse flight', group: 'Motion', default: TUNNEL_DEFAULTS.reverseOnBreakdown },
-  { type: 'float', name: 'hueSpread', label: 'Multi-color depth rainbow', group: 'Colour', default: TUNNEL_DEFAULTS.hueSpread, min: 0, max: 1, step: 0.05 },
-  { type: 'float', name: 'wallTexture', label: 'Cosmic star-streaks & wall glow', group: 'Texture', default: TUNNEL_DEFAULTS.wallTexture, min: 0, max: 1, step: 0.05 },
-  { type: 'float', name: 'zoomPunch', label: 'Kick FOV warp & depth ripple', group: 'Motion', default: TUNNEL_DEFAULTS.zoomPunch, min: 0, max: 1, step: 0.05 },
-  { type: 'float', name: 'swirlPulse', label: 'Mid corkscrew swirl', group: 'Motion', default: TUNNEL_DEFAULTS.swirlPulse, min: 0, max: 1, step: 0.05 },
-  { type: 'float', name: 'horizonDrift', label: 'Bass horizon curve sway', group: 'Motion', default: TUNNEL_DEFAULTS.horizonDrift, min: 0, max: 1, step: 0.05 },
-  { type: 'float', name: 'beatReactivity', label: 'Beat glow & pulse', group: 'Beat', default: TUNNEL_DEFAULTS.beatReactivity ?? 0.5, min: 0, max: 2, step: 0.05 },
+  { type: 'float', name: 'ringDensity', label: 'Ring density', group: 'Walls', default: TUNNEL_DEFAULTS.ringDensity, min: 0.1, max: 2, step: 0.01, description: 'Controls the spatial frequency of concentric tunnel depth segments.' },
+  { type: 'float', name: 'beatAttackSec', label: 'Beat swell attack (s)', group: 'Beat', default: TUNNEL_DEFAULTS.beatAttackSec, min: 0.01, max: 0.5, step: 0.01, description: 'Sets the attack response duration for beat-driven tunnel dilation.' },
+  { type: 'float', name: 'ringContrast', label: 'Ring contrast', group: 'Walls', default: TUNNEL_DEFAULTS.ringContrast, min: 0, max: 1, step: 0.01, description: 'Adjusts depth ring brightness contrast during active musical passages.' },
+  { type: 'float', name: 'ringContrastCalm', label: 'Ring contrast (calm)', group: 'Walls', default: TUNNEL_DEFAULTS.ringContrastCalm, min: 0, max: 1, step: 0.01, description: 'Adjusts depth ring brightness contrast during quiet breakdown sections.' },
+  { type: 'enum', name: 'pattern', label: 'Wall pattern', group: 'Walls', default: TUNNEL_DEFAULTS.pattern, options: ['rings', 'grid', 'spokes', 'checker', 'stripes'], description: 'Selects geometric wall texture patterns drawn along the tunnel cylinder.' },
+  { type: 'int', name: 'sides', label: 'Cross-section sides (0 = classic)', group: 'Shape', default: TUNNEL_DEFAULTS.sides, min: 0, max: 12, step: 1, description: 'Sets the polygonal cross-section side count, where 0 produces a smooth cylinder.' },
+  { type: 'float', name: 'twist', label: 'Spiral twist', group: 'Shape', default: TUNNEL_DEFAULTS.twist, min: -1, max: 1, step: 0.01, description: 'Applies continuous angular torsion and spiral twisting along tunnel depth.' },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: TUNNEL_DEFAULTS.texture, description: 'Enables audio-reactive texture modulation across tunnel surfaces.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: TUNNEL_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Scales the modulation intensity of audio-reactive wall textures.' },
+  { type: 'enum', name: 'flightMode', label: 'Flight mode', group: 'Motion', default: TUNNEL_DEFAULTS.flightMode, options: ['dropReverse', 'forward', 'reverse', 'pendulum'], description: 'Chooses camera navigation trajectory and flight reversal behavior.' },
+  { type: 'bool', name: 'reverseOnBreakdown', label: 'Breakdown reverse flight', group: 'Motion', default: TUNNEL_DEFAULTS.reverseOnBreakdown, description: 'Automatically reverses camera flight direction during musical breakdowns.' },
+  { type: 'float', name: 'hueSpread', label: 'Multi-color depth rainbow', group: 'Colour', default: TUNNEL_DEFAULTS.hueSpread, min: 0, max: 1, step: 0.05, description: 'Controls multi-color chromatic dispersion across tunnel depth.' },
+  { type: 'float', name: 'wallTexture', label: 'Cosmic star-streaks & wall glow', group: 'Texture', default: TUNNEL_DEFAULTS.wallTexture, min: 0, max: 1, step: 0.05, description: 'Adjusts cosmic star-streak density and ambient wall glow luminescence.' },
+  { type: 'float', name: 'zoomPunch', label: 'Kick FOV warp & depth ripple', group: 'Motion', default: TUNNEL_DEFAULTS.zoomPunch, min: 0, max: 1, step: 0.05, description: 'Modulates kick drum field-of-view shock compression.' },
+  { type: 'float', name: 'swirlPulse', label: 'Mid corkscrew swirl', group: 'Motion', default: TUNNEL_DEFAULTS.swirlPulse, min: 0, max: 1, step: 0.05, description: 'Couples mid-frequency energy into rotational corkscrew swirling.' },
+  { type: 'float', name: 'horizonDrift', label: 'Bass horizon curve sway', group: 'Motion', default: TUNNEL_DEFAULTS.horizonDrift, min: 0, max: 1, step: 0.05, description: 'Sways tunnel horizon alignment based on sub-bass oscillations.' },
+  { type: 'float', name: 'beatReactivity', label: 'Beat glow & pulse', group: 'Beat', default: TUNNEL_DEFAULTS.beatReactivity ?? 0.5, min: 0, max: 2, step: 0.05, description: 'Scales visual pulsation and glow sensitivity to musical beats.' },
 ];
 export const TUNNEL_SCHEMA = TUNNEL_SPECS;
 
@@ -195,20 +195,20 @@ export const PARTICLE_DEFAULTS: ParticleParams = new Proxy(RAW_PARTICLE_DEFAULTS
   },
 });
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01 },
-  { type: 'float', name: 'calmSparkleScale', label: 'Sparkle in calm', group: 'Sparkle', default: PARTICLE_DEFAULTS.calmSparkleScale, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'flashSparkleScale', label: 'Sparkle on hi-hat flash', group: 'Sparkle', default: PARTICLE_DEFAULTS.flashSparkleScale, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'swirlGain', label: 'Swirl (vortex when high)', group: 'Motion', default: PARTICLE_DEFAULTS.swirlGain, min: 0, max: 4, step: 0.01 },
-  { type: 'enum', name: 'shape', label: 'Particle shape', group: 'Shape', default: PARTICLE_DEFAULTS.shape, options: ['streak', 'dot', 'star', 'ring'] },
-  { type: 'float', name: 'size', label: 'Size', group: 'Shape', default: PARTICLE_DEFAULTS.size, min: 0.5, max: 4, step: 0.01 },
-  { type: 'bool', name: 'followScene', label: 'Follow scene transform', group: 'Transform', default: PARTICLE_DEFAULTS.followScene },
-  { type: 'float', name: 'rotation', label: 'Rotation (rad)', group: 'Transform', default: PARTICLE_DEFAULTS.rotation, min: -3.14, max: 3.14, step: 0.01 },
-  { type: 'float', name: 'zoom', label: 'Zoom', group: 'Transform', default: PARTICLE_DEFAULTS.zoom, min: 0.5, max: 2, step: 0.01 },
-  { type: 'float', name: 'hueShift', label: 'Hue shift (turns)', group: 'Colour', default: PARTICLE_DEFAULTS.hueShift, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'hueDrift', label: 'Hue drift (turns/s)', group: 'Colour', default: PARTICLE_DEFAULTS.hueDrift, min: -0.2, max: 0.2, step: 0.005 },
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: PARTICLE_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: PARTICLE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
-  { type: 'float', name: 'beatReactivity', label: 'Beat glow & push', group: 'Motion', default: PARTICLE_DEFAULTS.beatReactivity ?? 1.0, min: 0, max: 2, step: 0.05 },
+  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01, description: 'Sets overall particle field brightness.' },
+  { type: 'float', name: 'calmSparkleScale', label: 'Sparkle in calm', group: 'Sparkle', default: PARTICLE_DEFAULTS.calmSparkleScale, min: 0, max: 1, step: 0.01, description: 'Controls particle sparkle intensity during calm passages.' },
+  { type: 'float', name: 'flashSparkleScale', label: 'Sparkle on hi-hat flash', group: 'Sparkle', default: PARTICLE_DEFAULTS.flashSparkleScale, min: 0, max: 1, step: 0.01, description: 'Amplifies sparkle burst intensity on treble and hi-hat onsets.' },
+  { type: 'float', name: 'swirlGain', label: 'Swirl (vortex when high)', group: 'Motion', default: PARTICLE_DEFAULTS.swirlGain, min: 0, max: 4, step: 0.01, description: 'Scales rotational vortex velocity swirling particles around screen center.' },
+  { type: 'enum', name: 'shape', label: 'Particle shape', group: 'Shape', default: PARTICLE_DEFAULTS.shape, options: ['streak', 'dot', 'star', 'ring'], description: 'Selects the rendering morphology for individual particles.' },
+  { type: 'float', name: 'size', label: 'Size', group: 'Shape', default: PARTICLE_DEFAULTS.size, min: 0.5, max: 4, step: 0.01, description: 'Scales particle dimensions, affecting streak length and point width.' },
+  { type: 'bool', name: 'followScene', label: 'Follow scene transform', group: 'Transform', default: PARTICLE_DEFAULTS.followScene, description: 'Locks particle coordinate space to global scene rotation and zoom.' },
+  { type: 'float', name: 'rotation', label: 'Rotation (rad)', group: 'Transform', default: PARTICLE_DEFAULTS.rotation, min: -3.14, max: 3.14, step: 0.01, description: 'Rotates the entire particle field about the viewport center.' },
+  { type: 'float', name: 'zoom', label: 'Zoom', group: 'Transform', default: PARTICLE_DEFAULTS.zoom, min: 0.5, max: 2, step: 0.01, description: 'Magnifies or diminishes the particle coordinate space.' },
+  { type: 'float', name: 'hueShift', label: 'Hue shift (turns)', group: 'Colour', default: PARTICLE_DEFAULTS.hueShift, min: 0, max: 1, step: 0.01, description: 'Applies a static base hue angle offset to particle colors.' },
+  { type: 'float', name: 'hueDrift', label: 'Hue drift (turns/s)', group: 'Colour', default: PARTICLE_DEFAULTS.hueDrift, min: -0.2, max: 0.2, step: 0.005, description: 'Continuously cycles particle hue spectrum over time.' },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: PARTICLE_DEFAULTS.texture, description: 'Enables high-frequency audio modulation of sparkle brightness.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: PARTICLE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Scales high-frequency texture modulation intensity.' },
+  { type: 'float', name: 'beatReactivity', label: 'Beat glow & push', group: 'Motion', default: PARTICLE_DEFAULTS.beatReactivity ?? 1.0, min: 0, max: 2, step: 0.05, description: 'Scales particle outward explosive propulsion driven by musical beats.' },
 ];
 export const PARTICLES_SCHEMA = PARTICLE_SPECS;
 
@@ -218,8 +218,8 @@ export interface BassPulseParams {
 }
 export const BASS_PULSE_DEFAULTS: BassPulseParams = { texture: true, textureGain: 1 };
 export const BASS_PULSE_SPECS: readonly ParamSpec[] = [
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BASS_PULSE_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BASS_PULSE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BASS_PULSE_DEFAULTS.texture, description: 'Enables sub-bass angular modulation across pulse rings.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BASS_PULSE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Controls modulation sensitivity of sub-bass pulse textures.' },
 ];
 
 export interface CrownParams {
@@ -247,13 +247,14 @@ export const CROWN_SIZE_SPEC = {
   min: 0.5,
   max: 3.0,
   step: 0.05,
+  description: 'Scales the overall dimensions of the crown layer.',
 };
 
 export const CROWN_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'rimFactor', label: 'Sway amount on rim', group: 'Position', default: CROWN_DEFAULTS.rimFactor, min: 0, max: 1, step: 0.01 },
+  { type: 'float', name: 'rimFactor', label: 'Sway amount on rim', group: 'Position', default: CROWN_DEFAULTS.rimFactor, min: 0, max: 1, step: 0.01, description: 'Controls how far radial sway displaces the crown rim relative to its radius.' },
   CROWN_SIZE_SPEC,
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: CROWN_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: CROWN_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: CROWN_DEFAULTS.texture, description: 'Enables mid-band angular texture modulation on crown bars.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: CROWN_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Scales the strength of mid-frequency texture modulation.' },
 ];
 
 export const CROWN_SCHEMA: readonly ParamSpec[] & { size: typeof CROWN_SIZE_SPEC } = Object.assign(
@@ -302,14 +303,14 @@ export const RINGS_DEFAULTS: RingsParams = new Proxy(RAW_RINGS_DEFAULTS, {
 });
 export const RINGS_SPECS: readonly ParamSpec[] = [
   // max 6: the rings shader loops MAX_RINGS = 6 times; raising this needs a shader change.
-  { type: 'int', name: 'maxRings', label: 'Max rings', group: 'Count', default: RINGS_DEFAULTS.maxRings, min: 1, max: 6, step: 1 },
-  { type: 'int', name: 'maxRingsCalm', label: 'Max rings (calm)', group: 'Count', default: RINGS_DEFAULTS.maxRingsCalm, min: 1, max: 6, step: 1 },
-  { type: 'float', name: 'strokeBase', label: 'Stroke width', group: 'Stroke', default: RINGS_DEFAULTS.strokeBase, min: 0, max: 0.02, step: 0.0005 },
-  { type: 'float', name: 'strokeNormGain', label: 'Stroke follows spectrum', group: 'Stroke', default: RINGS_DEFAULTS.strokeNormGain, min: 0, max: 0.05, step: 0.0005 },
-  { type: 'int', name: 'sides', label: 'Shape sides (0 = circle)', group: 'Shape', default: RINGS_DEFAULTS.sides, min: 0, max: 12, step: 1 },
-  { type: 'enum', name: 'style', label: 'Style', group: 'Shape', default: RINGS_DEFAULTS.style, options: ['outline', 'filled'] },
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: RINGS_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: RINGS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'int', name: 'maxRings', label: 'Max rings', group: 'Count', default: RINGS_DEFAULTS.maxRings, min: 1, max: 6, step: 1, description: 'Sets the maximum number of active concentric ring outlines.' },
+  { type: 'int', name: 'maxRingsCalm', label: 'Max rings (calm)', group: 'Count', default: RINGS_DEFAULTS.maxRingsCalm, min: 1, max: 6, step: 1, description: 'Sets the reduced active ring count during calm musical passages.' },
+  { type: 'float', name: 'strokeBase', label: 'Stroke width', group: 'Stroke', default: RINGS_DEFAULTS.strokeBase, min: 0, max: 0.02, step: 0.0005, description: 'Sets the resting baseline stroke width of ring outlines.' },
+  { type: 'float', name: 'strokeNormGain', label: 'Stroke follows spectrum', group: 'Stroke', default: RINGS_DEFAULTS.strokeNormGain, min: 0, max: 0.05, step: 0.0005, description: 'Scales stroke width expansion driven by spectral energy.' },
+  { type: 'int', name: 'sides', label: 'Shape sides (0 = circle)', group: 'Shape', default: RINGS_DEFAULTS.sides, min: 0, max: 12, step: 1, description: 'Sets the polygonal vertex count, where 0 produces smooth circles.' },
+  { type: 'enum', name: 'style', label: 'Style', group: 'Shape', default: RINGS_DEFAULTS.style, options: ['outline', 'filled'], description: 'Toggles between hollow stroke outlines and solid filled polygons.' },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: RINGS_DEFAULTS.texture, description: 'Enables sub-bass and mid-band texture modulation on strokes.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: RINGS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Controls the depth of audio texture modulation on ring strokes.' },
 ];
 
 export interface ShockwaveParams {
@@ -329,12 +330,12 @@ export const SHOCKWAVE_DEFAULTS: ShockwaveParams = {
   textureGain: 1,
 };
 export const SHOCKWAVE_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'ringStart', label: 'Start radius', group: 'Size', default: SHOCKWAVE_DEFAULTS.ringStart, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'ringEnd', label: 'End radius', group: 'Size', default: SHOCKWAVE_DEFAULTS.ringEnd, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'ringSec', label: 'Travel time (s)', group: 'Timing', default: SHOCKWAVE_DEFAULTS.ringSec, min: 0.05, max: 2, step: 0.01 },
-  { type: 'enum', name: 'style', label: 'Kick style', group: 'Shape', default: SHOCKWAVE_DEFAULTS.style, options: ['ring', 'glow'] },
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: SHOCKWAVE_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: SHOCKWAVE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'float', name: 'ringStart', label: 'Start radius', group: 'Size', default: SHOCKWAVE_DEFAULTS.ringStart, min: 0, max: 1, step: 0.01, description: 'Sets the initial inner radius where shockwave rings spawn.' },
+  { type: 'float', name: 'ringEnd', label: 'End radius', group: 'Size', default: SHOCKWAVE_DEFAULTS.ringEnd, min: 0, max: 1, step: 0.01, description: 'Sets the outer terminal expansion radius for dissipated shockwaves.' },
+  { type: 'float', name: 'ringSec', label: 'Travel time (s)', group: 'Timing', default: SHOCKWAVE_DEFAULTS.ringSec, min: 0.05, max: 2, step: 0.01, description: 'Controls shockwave propagation duration from spawn to dissipation.' },
+  { type: 'enum', name: 'style', label: 'Kick style', group: 'Shape', default: SHOCKWAVE_DEFAULTS.style, options: ['ring', 'glow'], description: 'Selects between a crisp expanding ring outline and a diffused radial glow.' },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: SHOCKWAVE_DEFAULTS.texture, description: 'Enables angular edge texture modulation on shockwaves.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: SHOCKWAVE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Controls modulation intensity on shockwave edges.' },
 ];
 
 export interface BarsParams {
@@ -343,8 +344,8 @@ export interface BarsParams {
 }
 export const BARS_DEFAULTS: BarsParams = { texture: true, textureGain: 1 };
 export const BARS_SPECS: readonly ParamSpec[] = [
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BARS_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BARS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: BARS_DEFAULTS.texture, description: 'Enables frequency-band texture modulation on visualizer bars.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: BARS_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Scales the strength of frequency-band modulation on visualizer bars.' },
 ];
 
 export interface WaveformParams {
@@ -377,6 +378,7 @@ const WAVEFORM_RADIUS_SPEC = {
   min: 0.15,
   max: 0.95,
   step: 0.01,
+  description: 'Sets the radius for circular, star, and lissajous waveform modes.',
 };
 
 const WAVEFORM_THICKNESS_SPEC = {
@@ -390,16 +392,17 @@ const WAVEFORM_THICKNESS_SPEC = {
   min: 0.5,
   max: 5.0,
   step: 0.1,
+  description: 'Sets oscilloscope beam trace line thickness.',
 };
 
 export const WAVEFORM_SPECS: readonly ParamSpec[] = [
-  { type: 'enum', name: 'mode', label: 'Wave shape', group: 'Waveform', default: WAVEFORM_DEFAULTS.mode, options: ['line', 'circle', 'star7', 'lissajous'] },
-  { type: 'float', name: 'amplitude', label: 'Amplitude', group: 'Waveform', default: WAVEFORM_DEFAULTS.amplitude, min: 0, max: 1.5, step: 0.01 },
+  { type: 'enum', name: 'mode', label: 'Wave shape', group: 'Waveform', default: WAVEFORM_DEFAULTS.mode, options: ['line', 'circle', 'star7', 'lissajous'], description: 'Selects waveform drawing topology between linear, circular, and geometric modes.' },
+  { type: 'float', name: 'amplitude', label: 'Amplitude', group: 'Waveform', default: WAVEFORM_DEFAULTS.amplitude, min: 0, max: 1.5, step: 0.01, description: 'Scales vertical displacement amplitude of audio oscilloscope waves.' },
   WAVEFORM_RADIUS_SPEC,
   WAVEFORM_THICKNESS_SPEC,
-  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: WAVEFORM_DEFAULTS.texture },
-  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: WAVEFORM_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01 },
-  { type: 'enum', name: 'colorMode', label: 'Ink color mode', group: 'Colour', default: WAVEFORM_DEFAULTS.colorMode, options: ['white', 'palette', 'gradient'] },
+  { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: WAVEFORM_DEFAULTS.texture, description: 'Enables high-frequency texture modulation on waveform brightness.' },
+  { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: WAVEFORM_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Controls audio texture modulation strength on waveform lines.' },
+  { type: 'enum', name: 'colorMode', label: 'Ink color mode', group: 'Colour', default: WAVEFORM_DEFAULTS.colorMode, options: ['white', 'palette', 'gradient'], description: 'Chooses color styling between monochrome white, active palette, and gradient.' },
 ];
 export const WAVEFORM_SCHEMA: readonly ParamSpec[] & { radius: typeof WAVEFORM_RADIUS_SPEC; thickness: typeof WAVEFORM_THICKNESS_SPEC } = Object.assign(
   [...WAVEFORM_SPECS],
@@ -578,51 +581,51 @@ export const SHAPE_DEFAULTS: ShapeParams = {
 
 export const SHAPE_SPECS: readonly ParamSpec[] = [
   // Category 1 — Base Geometry ("Base")
-  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8'] },
-  { type: 'enum', name: 'edgeMode', label: 'Edge mode', group: 'Base', default: SHAPE_DEFAULTS.edgeMode, options: ['bottom', 'top', 'dualHorizontal', 'dualVertical', 'frame'], showWhen: { baseShape: 'edgeLine' } },
-  { type: 'int', name: 'sides', label: 'Sides', group: 'Base', default: SHAPE_DEFAULTS.sides, min: 3, max: 12, step: 1, showWhen: { baseShape: ['polygon', 'star'] } },
-  { type: 'float', name: 'starInner', label: 'Star inner ratio', group: 'Base', default: SHAPE_DEFAULTS.starInner, min: 0.2, max: 0.9, step: 0.05, showWhen: { baseShape: 'star' } },
-  { type: 'float', name: 'cornerRadius', label: 'Corner radius', group: 'Base', default: SHAPE_DEFAULTS.cornerRadius, min: 0, max: 0.5, step: 0.02, showWhen: { baseShape: ['polygon', 'star', 'edgeLine'] } },
-  { type: 'float', name: 'arcSweep', label: 'Arc sweep', group: 'Base', default: SHAPE_DEFAULTS.arcSweep, min: 0.1, max: 1.0, step: 0.05, showWhen: { baseShape: 'arc' } },
-  { type: 'float', name: 'spiralTurns', label: 'Spiral turns', group: 'Base', default: SHAPE_DEFAULTS.spiralTurns, min: 1, max: 5, step: 0.25, showWhen: { baseShape: 'spiral' } },
-  { type: 'float', name: 'size', label: 'Size', group: 'Base', default: SHAPE_DEFAULTS.size, min: 0.1, max: 2.0, step: 0.02 },
-  { type: 'float', name: 'posX', label: 'Position X', group: 'Base', default: SHAPE_DEFAULTS.posX, min: -0.8, max: 0.8, step: 0.02 },
-  { type: 'float', name: 'posY', label: 'Position Y', group: 'Base', default: SHAPE_DEFAULTS.posY, min: -0.8, max: 0.8, step: 0.02 },
-  { type: 'float', name: 'rotation', label: 'Rotation', group: 'Base', default: SHAPE_DEFAULTS.rotation, min: -180, max: 180, step: 1 },
-  { type: 'float', name: 'spinSpeed', label: 'Spin speed', group: 'Base', default: SHAPE_DEFAULTS.spinSpeed, min: -2.0, max: 2.0, step: 0.05 },
-  { type: 'float', name: 'basePulse', label: 'Base pulse', group: 'Base', default: SHAPE_DEFAULTS.basePulse, min: 0, max: 1.0, step: 0.05 },
+  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8'], description: 'Selects the underlying geometric blueprint curve.' },
+  { type: 'enum', name: 'edgeMode', label: 'Edge mode', group: 'Base', default: SHAPE_DEFAULTS.edgeMode, options: ['bottom', 'top', 'dualHorizontal', 'dualVertical', 'frame'], showWhen: { baseShape: 'edgeLine' }, description: 'Configures viewport edge alignment anchoring for line geometries.' },
+  { type: 'int', name: 'sides', label: 'Sides', group: 'Base', default: SHAPE_DEFAULTS.sides, min: 3, max: 12, step: 1, showWhen: { baseShape: ['polygon', 'star'] }, description: 'Sets the number of polygonal vertices or star points.' },
+  { type: 'float', name: 'starInner', label: 'Star inner ratio', group: 'Base', default: SHAPE_DEFAULTS.starInner, min: 0.2, max: 0.9, step: 0.05, showWhen: { baseShape: 'star' }, description: 'Adjusts the inner radius indentation ratio for star shapes.' },
+  { type: 'float', name: 'cornerRadius', label: 'Corner radius', group: 'Base', default: SHAPE_DEFAULTS.cornerRadius, min: 0, max: 0.5, step: 0.02, showWhen: { baseShape: ['polygon', 'star', 'edgeLine'] }, description: 'Rounds sharp geometric vertices into smooth filleted corners.' },
+  { type: 'float', name: 'arcSweep', label: 'Arc sweep', group: 'Base', default: SHAPE_DEFAULTS.arcSweep, min: 0.1, max: 1.0, step: 0.05, showWhen: { baseShape: 'arc' }, description: 'Sets the angular coverage fraction of arc curve segments.' },
+  { type: 'float', name: 'spiralTurns', label: 'Spiral turns', group: 'Base', default: SHAPE_DEFAULTS.spiralTurns, min: 1, max: 5, step: 0.25, showWhen: { baseShape: 'spiral' }, description: 'Sets the number of concentric revolutions for spiral curves.' },
+  { type: 'float', name: 'size', label: 'Size', group: 'Base', default: SHAPE_DEFAULTS.size, min: 0.1, max: 2.0, step: 0.02, description: 'Scales overall geometric blueprint dimensions.' },
+  { type: 'float', name: 'posX', label: 'Position X', group: 'Base', default: SHAPE_DEFAULTS.posX, min: -0.8, max: 0.8, step: 0.02, description: 'Positions geometric center along the horizontal axis.' },
+  { type: 'float', name: 'posY', label: 'Position Y', group: 'Base', default: SHAPE_DEFAULTS.posY, min: -0.8, max: 0.8, step: 0.02, description: 'Positions geometric center along the vertical axis.' },
+  { type: 'float', name: 'rotation', label: 'Rotation', group: 'Base', default: SHAPE_DEFAULTS.rotation, min: -180, max: 180, step: 1, description: 'Rotates base geometry about its local origin in degrees.' },
+  { type: 'float', name: 'spinSpeed', label: 'Spin speed', group: 'Base', default: SHAPE_DEFAULTS.spinSpeed, min: -2.0, max: 2.0, step: 0.05, description: 'Applies continuous angular spin velocity to base geometry.' },
+  { type: 'float', name: 'basePulse', label: 'Base pulse', group: 'Base', default: SHAPE_DEFAULTS.basePulse, min: 0, max: 1.0, step: 0.05, description: 'Scales rhythmic geometric expansion driven by low-frequency pulses.' },
 
   // Category 2 — Reactive Effect ("Effect")
-  { type: 'enum', name: 'effectType', label: 'Effect type', group: 'Effect', default: SHAPE_DEFAULTS.effectType, options: ['solidLine', 'pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] },
-  { type: 'int', name: 'sampleCount', label: 'Sample count', group: 'Effect', default: SHAPE_DEFAULTS.sampleCount, min: 16, max: 256, step: 4, showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] } },
-  { type: 'float', name: 'effectLength', label: 'Effect length', group: 'Effect', default: SHAPE_DEFAULTS.effectLength, min: 0.05, max: 1.5, step: 0.02, showWhen: { effectType: ['pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] } },
-  { type: 'float', name: 'thickness', label: 'Thickness', group: 'Effect', default: SHAPE_DEFAULTS.thickness, min: 0.5, max: 10.0, step: 0.25 },
-  { type: 'float', name: 'barGap', label: 'Bar gap', group: 'Effect', default: SHAPE_DEFAULTS.barGap, min: 0, max: 0.8, step: 0.02, showWhen: { effectType: ['bars', 'segmentedBars'] } },
-  { type: 'int', name: 'ledSegments', label: 'LED segments', group: 'Effect', default: SHAPE_DEFAULTS.ledSegments, min: 2, max: 24, step: 1, showWhen: { effectType: 'segmentedBars' } },
-  { type: 'bool', name: 'peakCaps', label: 'Peak caps', group: 'Effect', default: SHAPE_DEFAULTS.peakCaps, showWhen: { effectType: ['bars', 'segmentedBars'] } },
+  { type: 'enum', name: 'effectType', label: 'Effect type', group: 'Effect', default: SHAPE_DEFAULTS.effectType, options: ['solidLine', 'pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'], description: 'Selects reactive visual rendering mode drawn along the blueprint curve.' },
+  { type: 'int', name: 'sampleCount', label: 'Sample count', group: 'Effect', default: SHAPE_DEFAULTS.sampleCount, min: 16, max: 256, step: 4, showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Sets the number of audio analysis bins sampled along the curve.' },
+  { type: 'float', name: 'effectLength', label: 'Effect length', group: 'Effect', default: SHAPE_DEFAULTS.effectLength, min: 0.05, max: 1.5, step: 0.02, showWhen: { effectType: ['pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Controls maximum outward projection length of reactive visual elements.' },
+  { type: 'float', name: 'thickness', label: 'Thickness', group: 'Effect', default: SHAPE_DEFAULTS.thickness, min: 0.5, max: 10.0, step: 0.25, description: 'Sets the stroke thickness of rendered reactive vectors.' },
+  { type: 'float', name: 'barGap', label: 'Bar gap', group: 'Effect', default: SHAPE_DEFAULTS.barGap, min: 0, max: 0.8, step: 0.02, showWhen: { effectType: ['bars', 'segmentedBars'] }, description: 'Adjusts spacing gap width between adjacent frequency bars.' },
+  { type: 'int', name: 'ledSegments', label: 'LED segments', group: 'Effect', default: SHAPE_DEFAULTS.ledSegments, min: 2, max: 24, step: 1, showWhen: { effectType: 'segmentedBars' }, description: 'Sets the number of discrete stepped LED blocks per bar.' },
+  { type: 'bool', name: 'peakCaps', label: 'Peak caps', group: 'Effect', default: SHAPE_DEFAULTS.peakCaps, showWhen: { effectType: ['bars', 'segmentedBars'] }, description: 'Renders floating peak meter caps above audio-driven bars.' },
 
   // Category 3 — Direction & Symmetry ("Direction")
-  { type: 'enum', name: 'extrudeDirection', label: 'Extrude direction', group: 'Direction', default: SHAPE_DEFAULTS.extrudeDirection, options: ['outward', 'inward', 'bilateral', 'alternating'], showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] } },
-  { type: 'enum', name: 'symmetry', label: 'Symmetry', group: 'Direction', default: SHAPE_DEFAULTS.symmetry, options: ['wrap', 'mirror', 'repeat2', 'repeat4'] },
-  { type: 'enum', name: 'normalMode', label: 'Normal mode', group: 'Direction', default: SHAPE_DEFAULTS.normalMode, options: ['radial', 'perpendicular'], showWhen: { baseShape: ['polygon', 'star', 'spiral', 'figure8', 'arc'] } },
+  { type: 'enum', name: 'extrudeDirection', label: 'Extrude direction', group: 'Direction', default: SHAPE_DEFAULTS.extrudeDirection, options: ['outward', 'inward', 'bilateral', 'alternating'], showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Controls whether reactive visual elements extend outward, inward, or bilaterally.' },
+  { type: 'enum', name: 'symmetry', label: 'Symmetry', group: 'Direction', default: SHAPE_DEFAULTS.symmetry, options: ['wrap', 'mirror', 'repeat2', 'repeat4'], description: 'Applies geometric reflection and rotational cloning across axes.' },
+  { type: 'enum', name: 'normalMode', label: 'Normal mode', group: 'Direction', default: SHAPE_DEFAULTS.normalMode, options: ['radial', 'perpendicular'], showWhen: { baseShape: ['polygon', 'star', 'spiral', 'figure8', 'arc'] }, description: 'Determines vector orientation along surface normals or radial vectors.' },
 
   // Category 4 — Propagation ("Propagation")
-  { type: 'enum', name: 'propMode', label: 'Propagation mode', group: 'Propagation', default: SHAPE_DEFAULTS.propMode, options: ['single', 'concentric', 'shockwave', 'stream', 'orbit', 'polar'] },
-  { type: 'int', name: 'propCount', label: 'Instance count', group: 'Propagation', default: SHAPE_DEFAULTS.propCount, min: 1, max: 16, step: 1, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] } },
-  { type: 'float', name: 'propSpacing', label: 'Instance spacing', group: 'Propagation', default: SHAPE_DEFAULTS.propSpacing, min: 0.05, max: 1.0, step: 0.02, showWhen: { propMode: ['concentric', 'orbit', 'polar'] } },
-  { type: 'float', name: 'propSpeed', label: 'Propagation speed', group: 'Propagation', default: SHAPE_DEFAULTS.propSpeed, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['shockwave', 'stream', 'orbit', 'polar'] } },
-  { type: 'enum', name: 'propDirection', label: 'Propagation direction', group: 'Propagation', default: SHAPE_DEFAULTS.propDirection, options: ['outward', 'inward', 'cw', 'ccw', 'alternating'], showWhen: { propMode: ['concentric', 'shockwave', 'stream', 'orbit', 'polar'] } },
-  { type: 'float', name: 'propSelfSpin', label: 'Instance self spin', group: 'Propagation', default: SHAPE_DEFAULTS.propSelfSpin, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['orbit', 'polar'] } },
-  { type: 'float', name: 'propDelay', label: 'Audio delay', group: 'Propagation', default: SHAPE_DEFAULTS.propDelay, min: 0, max: 1.0, step: 0.05, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] } },
+  { type: 'enum', name: 'propMode', label: 'Propagation mode', group: 'Propagation', default: SHAPE_DEFAULTS.propMode, options: ['single', 'concentric', 'shockwave', 'stream', 'orbit', 'polar'], description: 'Configures instance propagation behavior through space and time.' },
+  { type: 'int', name: 'propCount', label: 'Instance count', group: 'Propagation', default: SHAPE_DEFAULTS.propCount, min: 1, max: 16, step: 1, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] }, description: 'Sets the number of duplicated propagating instances.' },
+  { type: 'float', name: 'propSpacing', label: 'Instance spacing / Orbit distance', group: 'Propagation', default: SHAPE_DEFAULTS.propSpacing, min: 0.05, max: 1.5, step: 0.02, showWhen: { propMode: ['concentric', 'orbit', 'polar'] }, description: 'Adjusts spatial separation distance or orbit radius from center.' },
+  { type: 'float', name: 'propSpeed', label: 'Propagation speed', group: 'Propagation', default: SHAPE_DEFAULTS.propSpeed, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['shockwave', 'stream', 'orbit', 'polar'] }, description: 'Controls traveling velocity of propagating geometric waves.' },
+  { type: 'enum', name: 'propDirection', label: 'Propagation direction', group: 'Propagation', default: SHAPE_DEFAULTS.propDirection, options: ['outward', 'inward', 'cw', 'ccw', 'alternating'], showWhen: { propMode: ['concentric', 'shockwave', 'stream', 'orbit', 'polar'] }, description: 'Chooses directional travel vector for propagating instances.' },
+  { type: 'float', name: 'propSelfSpin', label: 'Instance self spin', group: 'Propagation', default: SHAPE_DEFAULTS.propSelfSpin, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['orbit', 'polar'] }, description: 'Applies rotational velocity to individual propagating instances.' },
+  { type: 'float', name: 'propDelay', label: 'Audio delay', group: 'Propagation', default: SHAPE_DEFAULTS.propDelay, min: 0, max: 1.0, step: 0.05, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] }, description: 'Staggers audio reaction timing across successive propagated instances.' },
 
   // Category 5 — Audio & Style Tuning ("Audio & Style")
-  { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy'] },
-  { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 3.0, step: 0.05 },
-  { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5 },
-  { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10 },
-  { type: 'enum', name: 'colorMode', label: 'Color mode', group: 'Audio & Style', default: SHAPE_DEFAULTS.colorMode, options: ['solid', 'palette', 'frequencyGradient', 'amplitudeHot'] },
-  { type: 'colour', name: 'solidColor', label: 'Solid color', group: 'Audio & Style', default: SHAPE_DEFAULTS.solidColor, showWhen: { colorMode: 'solid' } },
-  { type: 'float', name: 'glow', label: 'Glow bloom', group: 'Audio & Style', default: SHAPE_DEFAULTS.glow, min: 0, max: 2.0, step: 0.05 },
+  { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy'], description: 'Selects audio signal spectrum or waveform driving reactive modulation.' },
+  { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 3.0, step: 0.05, description: 'Scales overall dynamic sensitivity to audio input peaks.' },
+  { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5, description: 'Sets smoothing attack response time in milliseconds for transient swells.' },
+  { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10, description: 'Sets smoothing decay release time in milliseconds for sustained tails.' },
+  { type: 'enum', name: 'colorMode', label: 'Color mode', group: 'Audio & Style', default: SHAPE_DEFAULTS.colorMode, options: ['solid', 'palette', 'frequencyGradient', 'amplitudeHot'], description: 'Configures shader color mapping and palette gradient distribution.' },
+  { type: 'colour', name: 'solidColor', label: 'Solid color', group: 'Audio & Style', default: SHAPE_DEFAULTS.solidColor, showWhen: { colorMode: 'solid' }, description: 'Sets uniform tint color when solid color mode is active.' },
+  { type: 'float', name: 'glow', label: 'Glow bloom', group: 'Audio & Style', default: SHAPE_DEFAULTS.glow, min: 0, max: 2.0, step: 0.05, description: 'Controls bloom glow luminance around reactive vector outlines.' },
 ];
 
 export type LayerType =
@@ -704,35 +707,59 @@ export const FEEDBACK_DEFAULTS = {
 } as const;
 // Post chain (slice E4) and bloom (E5). Shown only, after the feedback trail. Defaults = no effect.
 export const POST_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'hueShift', label: 'Hue shift (rad)', group: 'Colour', default: 0, min: -3.14, max: 3.14, step: 0.01 },
-  { type: 'float', name: 'saturation', label: 'Saturation', group: 'Colour', default: 1, min: 0, max: 2, step: 0.01 },
-  { type: 'float', name: 'contrast', label: 'Contrast', group: 'Colour', default: 1, min: 0, max: 2, step: 0.01 },
-  { type: 'float', name: 'gamma', label: 'Gamma', group: 'Colour', default: 1, min: 0.5, max: 2, step: 0.01 },
-  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: 0, min: -0.5, max: 0.5, step: 0.01 },
-  { type: 'int', name: 'mirror', label: 'Kaleidoscope folds (0 = off)', group: 'Shape', default: 0, min: 0, max: 8, step: 1 },
-  { type: 'float', name: 'vignette', label: 'Vignette', group: 'Shape', default: 0, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'chroma', label: 'Red/blue split', group: 'Shape', default: 0, min: 0, max: 0.02, step: 0.0005 },
-  { type: 'float', name: 'bloom', label: 'Bloom amount', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01 },
-  { type: 'float', name: 'bloomThreshold', label: 'Bloom threshold', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01 },
+  { type: 'float', name: 'hueShift', label: 'Hue shift (rad)', group: 'Colour', default: 0, min: -3.14, max: 3.14, step: 0.01, description: 'Applies a global hue rotation offset to the rendered composition.' },
+  { type: 'float', name: 'saturation', label: 'Saturation', group: 'Colour', default: 1, min: 0, max: 2, step: 0.01, description: 'Scales color chroma saturation intensity.' },
+  { type: 'float', name: 'contrast', label: 'Contrast', group: 'Colour', default: 1, min: 0, max: 2, step: 0.01, description: 'Adjusts contrast distinction between dark and light tones.' },
+  { type: 'float', name: 'gamma', label: 'Gamma', group: 'Colour', default: 1, min: 0.5, max: 2, step: 0.01, description: 'Applies non-linear power curve luminance correction.' },
+  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: 0, min: -0.5, max: 0.5, step: 0.01, description: 'Adjusts global master image brightness offset.' },
+  { type: 'float', name: 'vignette', label: 'Vignette', group: 'Shape', default: 0, min: 0, max: 1, step: 0.01, description: 'Darkens viewport corners with a soft radial falloff mask.' },
+  {
+    type: 'int',
+    name: 'mirror',
+    label: 'Kaleidoscope folds (0 = off)',
+    group: 'Shape',
+    default: 0,
+    min: 0,
+    max: 8,
+    step: 1,
+    description: 'Folds the canvas into symmetric kaleidoscope reflection sectors.',
+    intense: true,
+    warning: 'Intense visual transform. Highly sensitive to small adjustments — use with care.',
+  },
+  {
+    type: 'float',
+    name: 'chroma',
+    label: 'Red/blue split',
+    group: 'Shape',
+    default: 0,
+    min: 0,
+    max: 0.02,
+    step: 0.0005,
+    description: 'Separates red and blue channels with lateral chromatic aberration.',
+    intense: true,
+    warning: 'Intense visual transform. Highly sensitive to small adjustments — use with care.',
+  },
+  { type: 'float', name: 'bloom', label: 'Bloom amount', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01, description: 'Controls diffuse luminous glow intensity over bright regions.' },
+  { type: 'float', name: 'bloomThreshold', label: 'Bloom threshold', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01, description: 'Sets minimum luminance cut-off required to trigger bloom glow.' },
 ];
 
 export const FEEDBACK_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'zoom', label: 'Zoom', group: 'Motion', default: 1, min: 0.85, max: 1.15, step: 0.001 },
-  { type: 'float', name: 'rotate', label: 'Rotate (rad/frame)', group: 'Motion', default: 0, min: -0.04, max: 0.04, step: 0.0005 },
-  { type: 'float', name: 'centreX', label: 'Centre X', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005 },
-  { type: 'float', name: 'centreY', label: 'Centre Y', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005 },
-  { type: 'float', name: 'driftX', label: 'Drift X', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001 },
-  { type: 'float', name: 'driftY', label: 'Drift Y', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001 },
-  { type: 'float', name: 'stretchX', label: 'Stretch X', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005 },
-  { type: 'float', name: 'stretchY', label: 'Stretch Y', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005 },
-  { type: 'float', name: 'warp', label: 'Wave warp', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01 },
-  { type: 'float', name: 'warpScale', label: 'Wave count', group: 'Warp', default: 1, min: 0.1, max: 4, step: 0.01 },
-  { type: 'float', name: 'warpSpeed', label: 'Wave speed', group: 'Warp', default: 1, min: 0, max: 5, step: 0.01 },
-  { type: 'float', name: 'decay', label: 'Persistence', group: 'Trail', default: 0.92, min: 0.5, max: 1, step: 0.001 },
-  { type: 'float', name: 'fade', label: 'Fade per frame', group: 'Trail', default: 0.004, min: 0, max: 0.02, step: 0.0005 },
-  { type: 'enum', name: 'wrap', label: 'Edges', group: 'Trail', default: 'clamp', options: ['clamp', 'wrap'] },
-  { type: 'float', name: 'hueDrift', label: 'Hue drift (rad/frame)', group: 'Colour', default: 0, min: -0.1, max: 0.1, step: 0.001 },
-  { type: 'float', name: 'blur', label: 'Trail blur', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01 },
+  { type: 'float', name: 'zoom', label: 'Zoom', group: 'Motion', default: 1, min: 0.85, max: 1.15, step: 0.001, description: 'Scales canvas coordinate magnification applied per feedback frame.' },
+  { type: 'float', name: 'rotate', label: 'Rotate (rad/frame)', group: 'Motion', default: 0, min: -0.04, max: 0.04, step: 0.0005, description: 'Applies rotational velocity to feedback coordinate space per frame.' },
+  { type: 'float', name: 'centreX', label: 'Centre X', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005, description: 'Shifts horizontal coordinate origin for feedback transforms.' },
+  { type: 'float', name: 'centreY', label: 'Centre Y', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005, description: 'Shifts vertical coordinate origin for feedback transforms.' },
+  { type: 'float', name: 'driftX', label: 'Drift X', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous horizontal directional translation drift per frame.' },
+  { type: 'float', name: 'driftY', label: 'Drift Y', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous vertical directional translation drift per frame.' },
+  { type: 'float', name: 'stretchX', label: 'Stretch X', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies horizontal aspect ratio coordinate elongation.' },
+  { type: 'float', name: 'stretchY', label: 'Stretch Y', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies vertical aspect ratio coordinate elongation.' },
+  { type: 'float', name: 'warp', label: 'Wave warp', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01, description: 'Controls wave distortion displacement depth across the feedback trail.' },
+  { type: 'float', name: 'warpScale', label: 'Wave count', group: 'Warp', default: 1, min: 0.1, max: 4, step: 0.01, description: 'Sets spatial wave oscillation frequency in feedback warp.' },
+  { type: 'float', name: 'warpSpeed', label: 'Wave speed', group: 'Warp', default: 1, min: 0, max: 5, step: 0.01, description: 'Sets temporal oscillation speed of feedback wave deformation.' },
+  { type: 'float', name: 'decay', label: 'Persistence', group: 'Trail', default: 0.92, min: 0.5, max: 1, step: 0.001, description: 'Controls persistence decay multiplier applied to historical trail frames.' },
+  { type: 'float', name: 'fade', label: 'Fade per frame', group: 'Trail', default: 0.004, min: 0, max: 0.02, step: 0.0005, description: 'Applies linear frame-to-frame luminance subtraction.' },
+  { type: 'enum', name: 'wrap', label: 'Edges', group: 'Trail', default: 'clamp', options: ['clamp', 'wrap'], description: 'Selects boundary behavior when feedback pixels exceed canvas edges.' },
+  { type: 'float', name: 'hueDrift', label: 'Hue drift (rad/frame)', group: 'Colour', default: 0, min: -0.1, max: 0.1, step: 0.001, description: 'Continuously rotates feedback trail hue over successive frames.' },
+  { type: 'float', name: 'blur', label: 'Trail blur', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, description: 'Applies spatial diffusion blur across historical feedback frames.' },
 ];
 export const FEEDBACK_SCHEMA = FEEDBACK_SPECS;
 
@@ -743,6 +770,7 @@ export const CHLADNI_PLATE_MODE_SPEC = {
   group: 'Sand',
   default: 'fullscreen',
   options: ['fullscreen', 'isometricPlate', 'radialMandala', 'hexagon', 'triangle', 'starMandala', 'morph'] as const,
+  description: 'Chooses the boundary geometry of the vibrating resonant plate.',
 };
 
 export const CHLADNI_SAND_SCHEMA = {

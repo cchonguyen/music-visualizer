@@ -3,7 +3,7 @@ import { assertValidSpec, defaultsFor } from "./schema";
 import {
   BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHAPE_DEFAULTS, SHAPE_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
-  WAVEFORM_DEFAULTS, WAVEFORM_SPECS, WAVEFORM_SCHEMA,
+  WAVEFORM_DEFAULTS, WAVEFORM_SPECS, WAVEFORM_SCHEMA, POST_SPECS, FEEDBACK_SPECS, CHLADNI_PLATE_MODE_SPEC,
 } from "./layerSchemas";
 
 describe("layer schemas", () => {
@@ -171,6 +171,65 @@ describe("layer schemas", () => {
     expect(specMap.get('releaseMs')?.showWhen).toBeUndefined();
     expect(specMap.get('colorMode')?.showWhen).toBeUndefined();
     expect(specMap.get('glow')?.showWhen).toBeUndefined();
+  });
+
+  describe("Parameter Descriptors & Warning Schema Contracts", () => {
+    it("description strings are present and non-empty across all layer schemas, POST_SPECS, and FEEDBACK_SPECS", () => {
+      for (const [layerName, specs] of Object.entries(LAYER_SPECS)) {
+        for (const spec of specs) {
+          expect(
+            spec.description,
+            `Layer "${layerName}" param "${spec.name}" missing description`
+          ).toBeDefined();
+          expect(typeof spec.description).toBe("string");
+          expect(spec.description!.trim().length).toBeGreaterThan(0);
+        }
+      }
+
+      for (const spec of POST_SPECS) {
+        expect(spec.description, `POST_SPECS param "${spec.name}" missing description`).toBeDefined();
+        expect(typeof spec.description).toBe("string");
+        expect(spec.description!.trim().length).toBeGreaterThan(0);
+      }
+
+      for (const spec of FEEDBACK_SPECS) {
+        expect(spec.description, `FEEDBACK_SPECS param "${spec.name}" missing description`).toBeDefined();
+        expect(typeof spec.description).toBe("string");
+        expect(spec.description!.trim().length).toBeGreaterThan(0);
+      }
+
+      expect(CHLADNI_PLATE_MODE_SPEC.description).toBeDefined();
+      expect(typeof CHLADNI_PLATE_MODE_SPEC.description).toBe("string");
+      expect(CHLADNI_PLATE_MODE_SPEC.description!.trim().length).toBeGreaterThan(0);
+    });
+
+    it("flags mirror and chroma in POST_SPECS with intense: true and exact warning string", () => {
+      const EXPECTED_WARNING =
+        "Intense visual transform. Highly sensitive to small adjustments — use with care.";
+
+      for (const name of ["mirror", "chroma"]) {
+        const spec = POST_SPECS.find((s) => s.name === name);
+        expect(spec, `Parameter "${name}" should exist in POST_SPECS`).toBeDefined();
+        expect(spec!.intense).toBe(true);
+        expect(spec!.warning).toBe(EXPECTED_WARNING);
+      }
+    });
+
+    it("positions intense parameters at the bottom of the Shape group in POST_SPECS", () => {
+      const shapeSpecs = POST_SPECS.filter((s) => s.group === "Shape");
+      const intenseIndices = shapeSpecs
+        .map((s, idx) => (s.intense ? idx : -1))
+        .filter((idx) => idx !== -1);
+      const nonIntenseIndices = shapeSpecs
+        .map((s, idx) => (!s.intense ? idx : -1))
+        .filter((idx) => idx !== -1);
+
+      expect(intenseIndices.length).toBeGreaterThan(0);
+      expect(nonIntenseIndices.length).toBeGreaterThan(0);
+      const minIntenseIndex = Math.min(...intenseIndices);
+      const maxNonIntenseIndex = Math.max(...nonIntenseIndices);
+      expect(minIntenseIndex).toBeGreaterThan(maxNonIntenseIndex);
+    });
   });
 });
 

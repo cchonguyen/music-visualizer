@@ -25,7 +25,41 @@ const FEEDBACK_MOTION_KEYS = new Set([
   'stretchY',
 ]);
 
+export const HIGH_INTENSITY_KEYS = new Set([
+  'sobel',
+  'solarize',
+  'chroma',
+  'rgbSplit',
+  'mirror',
+]);
+
+const HIGH_INTENSITY_RANGES: Record<string, [number, number]> = {
+  sobel: [0.05, 0.20],
+  solarize: [0.10, 0.35],
+  chroma: [0.001, 0.004],
+  rgbSplit: [0.002, 0.012],
+};
+
 export function randomValue(spec: ParamSpec, rng: Rng): ParamValue {
+  if (HIGH_INTENSITY_KEYS.has(spec.name)) {
+    if (rng() < 0.85) {
+      return spec.default;
+    }
+    if (spec.name === 'mirror') {
+      const folds = [2, 4, 6];
+      return folds[Math.floor(rng() * folds.length)] ?? 2;
+    }
+    const range = HIGH_INTENSITY_RANGES[spec.name];
+    if (range) {
+      const [min, max] = range;
+      const raw = min + rng() * (max - min);
+      const stepped = 'step' in spec && typeof (spec as any).step === 'number'
+        ? snap(spec as { min: number; step: number }, raw)
+        : raw;
+      return Number(clamp(stepped, min, max).toFixed(6));
+    }
+  }
+
   switch (spec.type) {
     case 'float': {
       const fullPick = spec.min + rng() * (spec.max - spec.min);

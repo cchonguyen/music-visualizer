@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "Hexagon Inward Portal",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "zoom": 0.988,
+    "rotate": -0.006,
+    "decay": 0.93,
+    "decayRgb": [0.93, 0.94, 0.98]
+  },
+  "layers": [
+    {
+      "type": "tunnel",
+      "opacity": 0.32,
+      "blend": "screen",
+      "params": {
+        "sides": 6,
+        "pattern": "rings",
+        "ringDensity": 0.42,
+        "ringContrast": 0.4,
+        "ringContrastCalm": 0.2,
+        "flightMode": "forward",
+        "swirlPulse": 0.25,
+        "hueSpread": 0.5
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "polygon",
+        "sides": 6,
+        "cornerRadius": 0.1,
+        "effectType": "bars",
+        "sampleCount": 72,
+        "effectLength": 0.45,
+        "thickness": 3.0,
+        "barGap": 0.2,
+        "extrudeDirection": "inward",
+        "symmetry": "mirror",
+        "normalMode": "radial",
+        "propMode": "concentric",
+        "propCount": 4,
+        "propSpacing": 0.2,
+        "propDirection": "alternating",
+        "propDelay": 0.35,
+        "basePulse": 0.3,
+        "size": 0.55,
+        "audioSource": "spectrum",
+        "colorMode": "palette",
+        "glow": 0.8
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.65
+  }
+}

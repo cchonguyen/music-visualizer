@@ -9,11 +9,19 @@
   },
   "layers": [
     {
-      "type": "waveform",
+      "type": "shape",
       "params": {
-        "mode": "lissajous",
-        "amplitude": 1.0,
-        "thickness": 2.2
+        "baseShape": "figure8",
+        "size": 0.55,
+        "effectType": "waveform",
+        "thickness": 2.2,
+        "effectLength": 0.35,
+        "reactivity": 1.0,
+        "audioSource": "waveform",
+        "colorMode": "solid",
+        "solidColor": "#33ff55",
+        "symmetry": "wrap",
+        "propMode": "single"
       }
     }
   ],

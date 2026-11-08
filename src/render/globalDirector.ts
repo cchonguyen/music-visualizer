@@ -248,6 +248,20 @@ export function analyzePresetMotion(preset?: Preset | null): Record<CameraMove, 
         hasSpin = true;
       }
     }
+
+    if (layer.type === 'shape') {
+      const spinSpeed = Number(extractSettingValue(layer.params?.spinSpeed) ?? 0);
+      const propMode = extractSettingValue(layer.params?.propMode);
+      const propSpeed = Number(extractSettingValue(layer.params?.propSpeed) ?? 0);
+      const baseShape = extractSettingValue(layer.params?.baseShape);
+
+      if (spinSpeed !== 0 || propMode === 'orbit' || propMode === 'polar' || baseShape === 'spiral' || baseShape === 'figure8') {
+        hasSpin = true;
+      }
+      if (propMode === 'stream' || (propMode === 'concentric' && Math.abs(propSpeed) > 0.5)) {
+        hasZFlight = true;
+      }
+    }
   }
 
   if (preset.feedback) {
@@ -294,6 +308,9 @@ export function analyzePresetMotion(preset?: Preset | null): Record<CameraMove, 
     };
   }
 }
+
+/** Alias for motion profile analysis of presets. */
+export const extractPresetMotionProfile = analyzePresetMotion;
 
 export function evaluateCameraMove(
   move: CameraMove,

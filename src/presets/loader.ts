@@ -2,6 +2,7 @@
 // layer type name ("tunnel") to the class that draws it. Adding a layer type = one line here.
 import type { RenderLayer } from '../render/layer';
 import { Scene, type BlendMode, type SceneLayerConfig, FEEDBACK_WARP_DEFAULTS } from '../render/scene';
+import { ShapeLayer } from '../render/layers/shape';
 import { BarsLayer } from '../render/layers/bars';
 import { BassPulseLayer } from '../render/layers/bassPulse';
 import { CrownLayer } from '../render/layers/crown';
@@ -19,7 +20,8 @@ import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
-import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams } from './layerSchemas';
+import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams } from './layerSchemas';
+import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
 
 // Register moire and spectralTerrain in LAYER_SPECS for loader consumers
 if (!LAYER_SPECS.moire) {
@@ -82,6 +84,7 @@ export function readFeedbackSettings(feedbackOrPreset: Preset | Settings | Recor
 // Values come from parsePreset, which has already checked every name and range against
 // layerSchemas.ts. The casts below rely on that check.
 export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
+  shape: (p) => new ShapeLayer(p as Partial<ShapeParams>),
   tunnel: (p) => new TunnelLayer(p as Partial<TunnelParams>),
   particles: (p) => new ParticleLayer(p as Partial<ParticleParams>),
   crown: (p) => new CrownLayer(p as Partial<CrownParams>),
@@ -103,9 +106,15 @@ export function buildScene(name: string, preset: Preset): Scene {
   const configs: SceneLayerConfig[] = [];
   for (const entry of preset.layers) {
     if (!entry.enabled) continue;
-    const factory = LAYER_FACTORIES[entry.type];
+    let factory = LAYER_FACTORIES[entry.type];
+    let params = entry.params;
+    if (!factory) {
+      const migrated = migrateLegacyLayerToShape(entry);
+      factory = LAYER_FACTORIES[migrated.type];
+      params = migrated.params;
+    }
     if (!factory) throw new Error(`buildScene: no factory for layer "${entry.type}"`);
-    layers.push(factory(valuesOf(entry.params)));
+    layers.push(factory(valuesOf(params)));
     configs.push({
       opacity: entry.opacity ?? 1.0,
       blend: (entry.blend as BlendMode) ?? 'max',
@@ -119,9 +128,31 @@ export function buildScene(name: string, preset: Preset): Scene {
 
 export const buildSceneFromPreset = buildScene;
 
+/**
+ * Creates RenderLayer instances from a preset, supporting transparent migration of legacy layers.
+ */
+export function createLayersFromPreset(preset: Preset, options: { migrateLegacy?: boolean } = {}): RenderLayer[] {
+  const entries = options.migrateLegacy ? migrateLegacyLayers(preset.layers) : preset.layers;
+  const layers: RenderLayer[] = [];
+  for (const entry of entries) {
+    if (!entry.enabled) continue;
+    let factory = LAYER_FACTORIES[entry.type];
+    let params = entry.params;
+    if (!factory) {
+      const migrated = migrateLegacyLayerToShape(entry);
+      factory = LAYER_FACTORIES[migrated.type];
+      params = migrated.params;
+    }
+    if (!factory) throw new Error(`createLayersFromPreset: no factory for layer "${entry.type}"`);
+    layers.push(factory(valuesOf(params)));
+  }
+  return layers;
+}
+
 /** Pushes plain values into a live layer. */
 export function applyValues(layer: RenderLayer, values: Record<string, ParamValue>): void {
-  if (layer instanceof TunnelLayer) layer.setParams(values as Partial<TunnelParams>);
+  if (layer instanceof ShapeLayer) layer.setParams(values as Partial<ShapeParams>);
+  else if (layer instanceof TunnelLayer) layer.setParams(values as Partial<TunnelParams>);
   else if (layer instanceof BarsLayer) layer.setParams(values as Partial<BarsParams>);
   else if (layer instanceof BassPulseLayer) layer.setParams(values as Partial<BassPulseParams>);
   else if (layer instanceof ParticleLayer) layer.setParams(values as Partial<ParticleParams>);
@@ -177,7 +208,23 @@ export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunn
   return runner.resolve(`${scope}P`, preset.post, POST_SPECS, inputs, dtSec);
 }
 
-/** True when preset contains an enabled layer with type === 'crown'. */
-export function hasCrownLayer(preset?: { layers: { type: string; enabled?: boolean }[] } | null): boolean {
-  return Boolean(preset?.layers?.some((l) => l.enabled !== false && l.type === 'crown'));
+/** True when preset contains an enabled layer with type === 'crown' or circular bars 'shape'. */
+export function hasCrownLayer(preset?: { layers: { type: string; enabled?: boolean; params?: unknown }[] } | null): boolean {
+  return Boolean(
+    preset?.layers?.some((l) => {
+      if (l.enabled === false) return false;
+      if (l.type === 'crown') return true;
+      if (l.type === 'shape') {
+        const raw = l.params as Record<string, unknown> | undefined;
+        const base = (raw?.baseShape && typeof raw.baseShape === 'object' && 'value' in raw.baseShape)
+          ? (raw.baseShape as { value: unknown }).value
+          : raw?.baseShape ?? 'circle';
+        const effect = (raw?.effectType && typeof raw.effectType === 'object' && 'value' in raw.effectType)
+          ? (raw.effectType as { value: unknown }).value
+          : raw?.effectType ?? 'bars';
+        return base === 'circle' && effect === 'bars';
+      }
+      return false;
+    })
+  );
 }

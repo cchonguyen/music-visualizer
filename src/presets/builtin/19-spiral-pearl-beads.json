@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "name": "Spiral Pearl Beads",
+  "tags": ["built-in", "flagship", "shape"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": {
+    "zoom": 1.015,
+    "rotate": 0.008,
+    "decay": 0.94,
+    "decayRgb": [0.93, 0.95, 0.94],
+    "hueDrift": 0.02
+  },
+  "layers": [
+    {
+      "type": "chladniSand",
+      "opacity": 0.28,
+      "blend": "screen",
+      "params": {
+        "plateMode": "fullscreen",
+        "harmonyMode": "auto",
+        "nodalSharpness": 1.2,
+        "grainWarmth": 0.7,
+        "scale": 1.0,
+        "pointSize": 1.8,
+        "brightness": 0.85
+      }
+    },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "spiral",
+        "spiralTurns": 3.0,
+        "effectType": "dots",
+        "sampleCount": 128,
+        "thickness": 4.5,
+        "effectLength": 0.3,
+        "size": 0.55,
+        "extrudeDirection": "bilateral",
+        "audioSource": "waveform",
+        "colorMode": "palette",
+        "glow": 0.9
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.75
+  }
+}

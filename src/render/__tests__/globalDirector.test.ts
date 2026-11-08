@@ -14,6 +14,7 @@ import {
   DIRECTOR_STORAGE_KEY,
   GlobalDirector,
   analyzePresetMotion,
+  extractPresetMotionProfile,
   evaluateCameraMove,
   smoothstep,
   readDirectorSettings,
@@ -331,6 +332,135 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
         horizonTilt: 1.0,
         stillAnchor: 0.5,
       });
+    });
+
+    it('detects rotational spin in shape layer via spinSpeed', () => {
+      const preset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              spinSpeed: { value: 0.8 },
+            },
+          },
+        ],
+      };
+      const weights = analyzePresetMotion(preset as Preset);
+      expect(weights.dutchRoll).toBe(0.1);
+      expect(weights.horizonTilt).toBe(1.5);
+      expect(weights.breathingPush).toBe(1.5);
+    });
+
+    it('detects rotational spin in shape layer via propMode orbit, polar, or spiral baseShape', () => {
+      const orbitPreset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              propMode: { value: 'orbit' },
+            },
+          },
+        ],
+      };
+      expect(analyzePresetMotion(orbitPreset as Preset).dutchRoll).toBe(0.1);
+
+      const polarPreset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              propMode: { value: 'polar' },
+            },
+          },
+        ],
+      };
+      expect(analyzePresetMotion(polarPreset as Preset).dutchRoll).toBe(0.1);
+
+      const spiralPreset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              baseShape: { value: 'spiral' },
+            },
+          },
+        ],
+      };
+      expect(analyzePresetMotion(spiralPreset as Preset).dutchRoll).toBe(0.1);
+    });
+
+    it('detects forward Z-flight in shape layer via propMode stream', () => {
+      const preset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              propMode: { value: 'stream' },
+            },
+          },
+        ],
+      };
+      const weights = analyzePresetMotion(preset as Preset);
+      expect(weights.breathingPush).toBe(0.2);
+      expect(weights.craneSway).toBe(1.5);
+      expect(weights.dutchRoll).toBe(1.5);
+    });
+
+    it('detects both Z-flight and spin in shape layer with stream and spinSpeed', () => {
+      const preset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              propMode: { value: 'stream' },
+              spinSpeed: { value: 0.5 },
+            },
+          },
+        ],
+      };
+      const weights = analyzePresetMotion(preset as Preset);
+      expect(weights).toEqual({
+        craneSway: 1.5,
+        dutchRoll: 0.1,
+        breathingPush: 0.2,
+        horizonTilt: 1.5,
+        stillAnchor: 0.6,
+      });
+    });
+
+    it('extractPresetMotionProfile returns identical weights to analyzePresetMotion', () => {
+      const preset: Partial<Preset> = {
+        layers: [
+          {
+            type: 'shape',
+            enabled: true,
+            opacity: 1,
+            blend: 'max',
+            params: {
+              propMode: { value: 'stream' },
+            },
+          },
+        ],
+      };
+      expect(extractPresetMotionProfile(preset as Preset)).toEqual(analyzePresetMotion(preset as Preset));
     });
   });
 

@@ -22,19 +22,41 @@
       }
     },
     {
-      "type": "rings",
+      "type": "shape",
       "opacity": 0.35,
       "blend": "screen",
       "params": {
-        "maxRings": 4,
-        "strokeBase": 0.003
+        "baseShape": "circle",
+        "effectType": "pulsingLine",
+        "propMode": "concentric",
+        "propCount": 4,
+        "propSpacing": 0.22,
+        "propSpeed": 0.6,
+        "propDirection": "outward",
+        "thickness": 2.0,
+        "audioSource": "sub",
+        "colorMode": "palette"
       }
     },
     {
-      "type": "crown",
+      "type": "shape",
       "opacity": 0.45,
       "blend": "screen",
-      "params": {}
+      "params": {
+        "baseShape": "circle",
+        "effectType": "bars",
+        "sampleCount": 48,
+        "effectLength": 0.35,
+        "thickness": 3.0,
+        "barGap": 0.25,
+        "extrudeDirection": "outward",
+        "symmetry": "mirror",
+        "normalMode": "radial",
+        "propMode": "single",
+        "size": 0.45,
+        "colorMode": "palette",
+        "glow": 0.6
+      }
     }
   ],
   "post": {}

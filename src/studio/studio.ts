@@ -4,6 +4,7 @@
 // settings for every enabled layer (built from the schema), and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
 import { Pane, type ButtonApi } from 'tweakpane';
+import '../ui/style.css';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import { SCHEMAS } from '../presets/builtin';
@@ -12,7 +13,7 @@ import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
-import type { ParamSpec, ParamValue } from '../presets/schema';
+import { isSpecVisible, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
 import {
   EXPERIENCE_MODES,
@@ -58,8 +59,7 @@ export function validatePresetName(raw: string): { ok: true; name: string } | { 
   return { ok: true, name };
 }
 
-/**
- * Two-tap Delete state. With no arm (`armedAt` null) a tap arms and returns the time it armed.
+/** Two-tap Delete state. With no arm (`armedAt` null) a tap arms and returns the time it armed.
  * A tap inside `windowMs` of the arm confirms and returns to unarmed.
  */
 export function nextDeleteTap(armedAt: number | null, now: number, windowMs: number = DELETE_CONFIRM_MS): { confirm: boolean; armedAt: number | null } {
@@ -67,11 +67,112 @@ export function nextDeleteTap(armedAt: number | null, now: number, windowMs: num
   return { confirm: false, armedAt: now };
 }
 
+/** Default layer type added in the Studio ("Add layer"). */
+export const DEFAULT_ADD_LAYER_TYPE = 'shape';
+
+/** Default prompt shown in the Studio helper bar when no parameter is hovered/focused (Slice 9.8). */
+export const STUDIO_HELPER_IDLE_TEXT = 'Tap or hover over any effect name to see a description of what it does.';
+
+/** Render parameter description and warning in the fixed helper bar element. */
+export function renderHelperContent(helperBar: HTMLElement, spec: ParamSpec | null): void {
+  if (!helperBar) return;
+  if (!spec || (!spec.description && !spec.warning && !spec.intense)) {
+    helperBar.textContent = STUDIO_HELPER_IDLE_TEXT;
+    return;
+  }
+
+  if (typeof helperBar.replaceChildren === 'function') {
+    helperBar.replaceChildren();
+  } else {
+    helperBar.textContent = '';
+  }
+
+  const doc = helperBar.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
+
+  const descRow = doc.createElement('div');
+  const nameSpan = doc.createElement('span');
+  nameSpan.className = 'helper-param-name';
+  nameSpan.textContent = spec.label;
+
+  if (spec.description) {
+    const descSpan = doc.createElement('span');
+    descSpan.className = 'helper-param-desc';
+    descSpan.textContent = spec.description;
+    descRow.append(nameSpan, ': ', descSpan);
+  } else {
+    descRow.append(nameSpan);
+  }
+  helperBar.append(descRow);
+
+  if (spec.warning || spec.intense) {
+    const warnRow = doc.createElement('div');
+    warnRow.className = 'helper-warning';
+    const warnText = spec.warning || 'High-intensity effect';
+    warnRow.textContent = `⚠️ ${warnText}`;
+    helperBar.append(warnRow);
+  }
+}
+
+/** Attach amber badge and hover/focus listeners to a blade row (Slice 9.8). */
+export function attachSpecHelper(
+  blade: any,
+  spec: ParamSpec,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
+): void {
+  if (!blade || typeof blade !== 'object') return;
+  const el: HTMLElement | undefined = blade.element;
+  if (!el) return;
+
+  const doc = el.ownerDocument || (typeof document !== 'undefined' ? document : null);
+
+  // 1. Intense / warning badge: (!) appended to label element or blade root
+  if (spec.intense || spec.warning) {
+    const hasBadge = typeof el.querySelector === 'function' && el.querySelector('.intense-badge');
+    if (!hasBadge && doc) {
+      const badge = doc.createElement('span');
+      badge.className = 'intense-badge';
+      badge.title = spec.warning || 'High-intensity effect';
+      badge.textContent = '(!)';
+      const labelEl = typeof el.querySelector === 'function' ? el.querySelector('.tp-lblv_l, label') : null;
+      if (labelEl && typeof labelEl.append === 'function') {
+        labelEl.append(badge);
+      } else if (typeof el.append === 'function') {
+        el.append(badge);
+      }
+    }
+  }
+
+  // 2. Reactive hover & focus tracking
+  if (typeof el.addEventListener === 'function' && onHelperUpdate) {
+    const activate = () => {
+      el.classList?.add('studio-control-highlight');
+      if (spec.intense || spec.warning) el.classList?.add('studio-control-highlight-intense');
+      onHelperUpdate(spec);
+    };
+    const deactivate = () => {
+      el.classList?.remove('studio-control-highlight');
+      el.classList?.remove('studio-control-highlight-intense');
+      onHelperUpdate(null);
+    };
+
+    el.addEventListener('mouseenter', activate);
+    el.addEventListener('focusin', activate);
+    el.addEventListener('mouseleave', deactivate);
+    el.addEventListener('focusout', (ev: FocusEvent) => {
+      if (ev?.relatedTarget && typeof el.contains === 'function' && el.contains(ev.relatedTarget as Node)) {
+        return;
+      }
+      deactivate();
+    });
+  }
+}
+
 export class Studio {
   private pane: Pane | null = null;
   private id = '';
   private selected = 0;
-  private addType = 'tunnel';
+  private addType = DEFAULT_ADD_LAYER_TYPE;
   /** Layers (by index in the preset) that randomise and mutate skip. Reset when the layer list changes. */
   private locked = new Set<number>();
   private monitor = { ms: 0 };
@@ -82,9 +183,11 @@ export class Studio {
   private deleteTimer: number | undefined;
   private deleteBtn: ButtonApi | null = null;
   /** Polite live region that announces the "Tap again" state of Delete. */
-  private readonly deleteLive: HTMLElement = document.createElement('div');
+  private readonly deleteLive: HTMLElement;
   /** The in-panel "Save as" name field, when open. */
   private saveAsField: HTMLElement | null = null;
+  /** Fixed bottom helper bar element for parameter descriptions & warnings (Slice 9.8). */
+  readonly helperBar: HTMLElement;
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -95,14 +198,36 @@ export class Studio {
     private readonly container: HTMLElement,
     private readonly opts: StudioOptions,
   ) {
+    const doc = container.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
     this.body = container.querySelector<HTMLElement>('.studio-body') ?? container;
     container.setAttribute('role', 'dialog');
     container.setAttribute('aria-modal', 'false');
     container.setAttribute('aria-label', 'Studio');
-    this.deleteLive.setAttribute('role', 'status');
-    this.deleteLive.setAttribute('aria-live', 'polite');
-    this.deleteLive.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
-    container.append(this.deleteLive);
+
+    this.deleteLive = doc ? doc.createElement('div') : ({} as HTMLElement);
+    if (typeof this.deleteLive.setAttribute === 'function') {
+      this.deleteLive.setAttribute('role', 'status');
+      this.deleteLive.setAttribute('aria-live', 'polite');
+    }
+    if (this.deleteLive.style) {
+      this.deleteLive.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;';
+    }
+    if (typeof container.append === 'function') {
+      container.append(this.deleteLive);
+    }
+
+    const existingHelper = container.querySelector<HTMLElement>('.studio-helper-bar');
+    if (existingHelper) {
+      this.helperBar = existingHelper;
+    } else {
+      this.helperBar = doc ? doc.createElement('div') : ({} as HTMLElement);
+      this.helperBar.className = 'studio-helper-bar';
+      this.helperBar.setAttribute('role', 'status');
+      this.helperBar.setAttribute('aria-live', 'polite');
+      container.append(this.helperBar);
+    }
+    renderHelperContent(this.helperBar, null);
+
     container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
     // Swipe down on a phone sheet closes Studio (slice 11.6). Same path as the Close button, so focus returns.
     attachSwipeDismiss(container, () => this.setVisible(false));
@@ -114,11 +239,15 @@ export class Studio {
     };
     this.body.addEventListener('pointerdown', disarmOnOther, true);
     this.body.addEventListener('keydown', disarmOnOther, true);
-    window.setInterval(() => {
+    setInterval(() => {
       if (!this.visible || !this.pane) return;
       this.monitor.ms = this.opts.frameMs?.() ?? 0;
       this.pane.refresh();
     }, 500);
+  }
+
+  get defaultAddType(): string {
+    return this.addType;
   }
 
   /** Show or hide the panel. Opening moves focus into it (after bind); closing returns focus to the opener. */
@@ -153,6 +282,10 @@ export class Studio {
     this.deleteBtn = null;
     this.pane?.dispose();
     this.body.replaceChildren();
+    if (this.container && !this.container.contains(this.helperBar)) {
+      this.container.append(this.helperBar);
+    }
+    renderHelperContent(this.helperBar, null);
     this.saveAsField = null;
     const pane = new Pane({ container: this.body, title: 'Preset Studio' });
     this.pane = pane;
@@ -228,7 +361,7 @@ export class Studio {
     pane.addBlade({ view: 'separator' });
     this.selected = preset.layers.length === 0 ? 0 : Math.min(this.selected, preset.layers.length - 1);
     if (preset.layers.length > 0) {
-      const layerOptions = Object.fromEntries(preset.layers.map((l, i) => [`${i + 1}. ${l.type}${l.enabled ? '' : ' (off)'}`, i]));
+      const layerOptions = Object.fromEntries(preset.layers.map((l, i) => [formatLayerLabel(l, i), i]));
       const sel = { selected: this.selected };
       pane.addBinding(sel, 'selected', { label: 'Layer', options: layerOptions }).on('change', (ev) => {
         this.selected = Number(ev.value);
@@ -241,7 +374,16 @@ export class Studio {
         if (ev.value) this.locked.add(this.selected);
         else this.locked.delete(this.selected);
       });
-      buildLayerControls(pane, layer, preset, session.sceneOf(id), session, undefined, id);
+      buildLayerControls(
+        pane,
+        layer,
+        preset,
+        session.sceneOf(id),
+        session,
+        undefined,
+        id,
+        (spec) => renderHelperContent(this.helperBar, spec),
+      );
       pane.addButton({ title: 'Move layer up' }).on('click', () => this.move(-1));
       pane.addButton({ title: 'Move layer down' }).on('click', () => this.move(1));
       pane.addButton({ title: 'Remove layer' }).on('click', () => {
@@ -263,10 +405,14 @@ export class Studio {
     // --- Settings -------------------------------------------------------------------
     // Settings for every enabled layer. Live layers are matched by their order among the enabled ones.
     let live = 0;
-    for (const layerEntry of preset.layers) {
+    for (let i = 0; i < preset.layers.length; i++) {
+      const layerEntry = preset.layers[i]!;
       if (!layerEntry.enabled) continue;
       const k = live++;
-      this.bindSection(pane, layerEntry.type, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
+      const title = layerEntry.type === 'shape'
+        ? formatLayerTitle(layerEntry, i)
+        : layerEntry.type;
+      this.bindSection(pane, title, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
         const current = session.sceneOf(id).layers[k];
         if (current) applyValues(current, valuesOf(layerEntry.params));
       });
@@ -373,19 +519,15 @@ export class Studio {
   }
 
   private bindSection(pane: Pane, title: string, specs: readonly ParamSpec[], settings: Settings, apply: () => void): void {
-    if (specs.length === 0) return;
-    pane.addBlade({ view: 'separator' });
-    const holder: Record<string, ParamValue> = valuesOf(settings);
-    for (const spec of specs) {
-      const label = `${title} · ${spec.group} · ${spec.label}`;
-      const push = () => {
-        this.opts.session.commit(this.id);
-        const setting = settings[spec.name];
-        if (setting) setting.value = holder[spec.name]!;
-        apply();
-      };
-      bindSpec(pane, label, spec, holder, push);
-    }
+    bindSection(
+      pane,
+      title,
+      specs,
+      settings,
+      apply,
+      () => this.opts.session.commit(this.id),
+      (spec) => renderHelperContent(this.helperBar, spec),
+    );
   }
 
   /** Randomise or mutate every unlocked layer (and feedback/post), as one undo step. */
@@ -499,12 +641,12 @@ export class Studio {
     this.deleteBtn = btn;
     btn.title = DELETE_ARMED_LABEL;
     this.deleteLive.textContent = deleteAnnouncement(true);
-    this.deleteTimer = window.setTimeout(() => this.disarmDelete(), DELETE_CONFIRM_MS);
+    this.deleteTimer = setTimeout(() => this.disarmDelete(), DELETE_CONFIRM_MS) as unknown as number;
   }
 
   /** Return Delete to its idle state and clear the timer. */
   private disarmDelete(): void {
-    if (this.deleteTimer !== undefined) window.clearTimeout(this.deleteTimer);
+    if (this.deleteTimer !== undefined) clearTimeout(this.deleteTimer);
     this.deleteTimer = undefined;
     this.deleteArmedAt = null;
     if (this.deleteBtn) this.deleteBtn.title = DELETE_LABEL;
@@ -558,19 +700,54 @@ export class Studio {
   }
 }
 
+/** Descriptive title for layer settings sections (e.g. "1. Shape (circle · bars)"). */
+export function formatLayerTitle(layer: LayerEntry, index: number): string {
+  if (layer.type === 'shape') {
+    const p = layer.params ?? {};
+    const base = (p.baseShape !== null && typeof p.baseShape === 'object' && 'value' in p.baseShape)
+      ? p.baseShape.value
+      : (p.baseShape ?? 'circle');
+    const effect = (p.effectType !== null && typeof p.effectType === 'object' && 'value' in p.effectType)
+      ? p.effectType.value
+      : (p.effectType ?? 'bars');
+    return `${index + 1}. Shape (${base} · ${effect})`;
+  }
+  return `${index + 1}. ${layer.type}`;
+}
+
+/** Layer dropdown label in Studio (e.g. "1. Shape (circle · bars)" or "... (off)"). */
+export function formatLayerLabel(layer: LayerEntry, index: number): string {
+  const off = layer.enabled ? '' : ' (off)';
+  if (layer.type === 'shape') {
+    const p = layer.params ?? {};
+    const base = (p.baseShape !== null && typeof p.baseShape === 'object' && 'value' in p.baseShape)
+      ? p.baseShape.value
+      : (p.baseShape ?? 'circle');
+    const effect = (p.effectType !== null && typeof p.effectType === 'object' && 'value' in p.effectType)
+      ? p.effectType.value
+      : (p.effectType ?? 'bars');
+    return `${index + 1}. Shape (${base} · ${effect})${off}`;
+  }
+  return `${index + 1}. ${layer.type}${off}`;
+}
+
 /** Every numeric setting that can take a link, with the key used in the Studio and the link meter key. */
-function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] {
+export function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] {
   const out: { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] = [];
   let live = 0;
   preset.layers.forEach((layer, i) => {
     const k = layer.enabled ? live++ : -1;
+    const layerTitle = layer.type === 'shape'
+      ? formatLayerTitle(layer, i)
+      : `${i + 1}. ${layer.type}`;
     for (const spec of LAYER_SPECS[layer.type] ?? []) {
       if (spec.type !== 'float' && spec.type !== 'int') continue;
+      if (!isSpecVisible(spec, layer.params)) continue;
       const setting = layer.params[spec.name];
       if (!setting) continue;
       out.push({
         key: `L${i}.${spec.name}`,
-        label: `${i + 1}. ${layer.type} · ${spec.label}`,
+        label: `${layerTitle} · ${spec.label}`,
         setting,
         meterKey: k >= 0 ? `L${k}.${spec.name}` : '',
         spec,
@@ -578,10 +755,12 @@ function linkTargets(preset: Preset): { key: string; label: string; setting: Set
     }
   });
   for (const spec of FEEDBACK_NUMBERS) {
+    if (!isSpecVisible(spec, preset.feedback)) continue;
     const setting = preset.feedback[spec.name];
     if (setting) out.push({ key: `F.${spec.name}`, label: `Feedback · ${spec.label}`, setting, meterKey: `F.${spec.name}`, spec });
   }
   for (const spec of POST_NUMBERS) {
+    if (!isSpecVisible(spec, preset.post)) continue;
     const setting = preset.post[spec.name];
     if (setting) out.push({ key: `P.${spec.name}`, label: `Post · ${spec.label}`, setting, meterKey: `P.${spec.name}`, spec });
   }
@@ -601,7 +780,7 @@ function morphTargetFor(spec: Extract<ParamSpec, { type: 'float' | 'int' }>, val
 }
 
 /** A new layer with the schema defaults, enabled, full opacity. */
-function defaultLayer(type: string): LayerEntry {
+export function defaultLayer(type: string): LayerEntry {
   const params: Settings = {};
   for (const spec of LAYER_SPECS[type] ?? []) params[spec.name] = { value: spec.default };
   // New particle layers follow the scene by default (2026-11-06). Existing presets keep their stored value.
@@ -621,6 +800,7 @@ export function buildLayerControls(
   session: { commit: (arg?: any, ...rest: any[]) => void },
   gl?: WebGL2RenderingContext,
   id?: string,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
 ): { opacityBinding: any; blendBinding: any; trailsBinding: any } {
   const onLayerConfigChange = () => {
     applyPresetToScene(p, currentScene, gl);
@@ -645,12 +825,14 @@ export function buildLayerControls(
     max: OPACITY_SPEC.max,
     step: OPACITY_SPEC.step,
   }).on('change', onLayerConfigChange);
+  attachSpecHelper(opacityBinding, OPACITY_SPEC, onHelperUpdate);
 
   const blendKey = (BLEND_SPEC as any).key ?? BLEND_SPEC.name;
   const blendBinding = pane.addBinding(entry as unknown as Record<string, unknown>, blendKey, {
     label: BLEND_SPEC.label,
     options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
   }).on('change', onLayerConfigChange);
+  attachSpecHelper(blendBinding, BLEND_SPEC, onHelperUpdate);
 
   if (entry.trails === undefined) {
     entry.trails = TRAILS_SPEC.default;
@@ -659,8 +841,75 @@ export function buildLayerControls(
   const trailsBinding = pane.addBinding(entry as unknown as Record<string, unknown>, trailsKey, {
     label: TRAILS_SPEC.label,
   }).on('change', onLayerConfigChange);
+  attachSpecHelper(trailsBinding, TRAILS_SPEC, onHelperUpdate);
 
   return { opacityBinding, blendBinding, trailsBinding };
+}
+
+/**
+ * Bind a list of parameter specs in a section, dynamically updating blade visibility
+ * whenever any parameter changes via `isSpecVisible`.
+ */
+export function bindSection(
+  pane: any,
+  title: string,
+  specs: readonly ParamSpec[],
+  settings: Settings | Record<string, any>,
+  apply?: () => void,
+  onCommit?: () => void,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
+): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void } {
+  if (specs.length === 0) return { specBindings: [], updateVisibility: () => {} };
+  if (typeof pane.addBlade === 'function') {
+    pane.addBlade({ view: 'separator' });
+  }
+
+  const holder: Record<string, ParamValue> = {};
+  for (const spec of specs) {
+    const s = settings[spec.name];
+    if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
+      holder[spec.name] = s.value;
+    } else if (spec.name in settings) {
+      holder[spec.name] = (settings as any)[spec.name];
+    } else {
+      holder[spec.name] = spec.default;
+    }
+  }
+
+  const specBindings: Array<{ spec: ParamSpec; blades: any[] }> = [];
+
+  const updateVisibility = () => {
+    for (const { spec, blades } of specBindings) {
+      const visible = isSpecVisible(spec, holder);
+      for (const b of blades) {
+        if (b && typeof b === 'object') {
+          b.hidden = !visible;
+        }
+      }
+    }
+  };
+
+  for (const spec of specs) {
+    const label = `${title} · ${spec.group} · ${spec.label}`;
+    const push = () => {
+      onCommit?.();
+      const s = settings[spec.name];
+      if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
+        s.value = holder[spec.name]!;
+      } else {
+        (settings as any)[spec.name] = holder[spec.name]!;
+      }
+      updateVisibility();
+      apply?.();
+    };
+    const binding = bindSpec(pane, label, spec, holder, push, onHelperUpdate);
+    const blades = Array.isArray(binding) ? binding : [binding];
+    specBindings.push({ spec, blades });
+  }
+
+  updateVisibility();
+
+  return { specBindings, updateVisibility };
 }
 
 export function bindSpec(
@@ -668,38 +917,47 @@ export function bindSpec(
   labelOrSpec: string | ParamSpec,
   specOrHolder: ParamSpec | Record<string, ParamValue>,
   holderOrOnChange?: Record<string, ParamValue> | (() => void),
-  maybeOnChange?: () => void,
+  maybeOnChange?: (() => void) | ((spec: ParamSpec | null) => void),
+  maybeOnHelperUpdate?: (spec: ParamSpec | null) => void,
 ): any {
   let label: string;
   let spec: ParamSpec;
   let holder: Record<string, ParamValue>;
   let onChange: () => void;
+  let onHelperUpdate: ((spec: ParamSpec | null) => void) | undefined;
 
   if (typeof labelOrSpec === 'string') {
     label = labelOrSpec;
     spec = specOrHolder as ParamSpec;
     holder = holderOrOnChange as Record<string, ParamValue>;
     onChange = maybeOnChange as () => void;
+    onHelperUpdate = maybeOnHelperUpdate;
   } else {
     spec = labelOrSpec as ParamSpec;
     holder = specOrHolder as Record<string, ParamValue>;
     onChange = holderOrOnChange as () => void;
     label = spec.label;
+    onHelperUpdate = maybeOnChange as ((spec: ParamSpec | null) => void) | undefined;
   }
 
   const key = ((spec as any).key ?? spec.name) as string;
   const target = holder as Record<string, unknown>;
 
+  let result: any;
   switch (spec.type) {
     case 'float':
     case 'int':
-      return pane.addBinding(target, key, { label, min: spec.min, max: spec.max, step: spec.step }).on('change', onChange);
+      result = pane.addBinding(target, key, { label, min: spec.min, max: spec.max, step: spec.step }).on('change', onChange);
+      break;
     case 'bool':
-      return pane.addBinding(target, key, { label }).on('change', onChange);
+      result = pane.addBinding(target, key, { label }).on('change', onChange);
+      break;
     case 'enum':
-      return pane.addBinding(target, key, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
+      result = pane.addBinding(target, key, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
+      break;
     case 'colour':
-      return pane.addBinding(target, key, { label, view: 'color' }).on('change', onChange);
+      result = pane.addBinding(target, key, { label, view: 'color' }).on('change', onChange);
+      break;
     case 'vec3': {
       if (!Array.isArray(holder[key])) {
         holder[key] = ((spec as any).default ? [...(spec as any).default] : [1.0, 1.0, 1.0]) as [number, number, number];
@@ -713,9 +971,21 @@ export function bindSpec(
       const b0 = pane.addBinding(vec, 0, { label: `${labelPrefix} R`, min, max, step }).on('change', onChange);
       const b1 = pane.addBinding(vec, 1, { label: `${labelPrefix} G`, min, max, step }).on('change', onChange);
       const b2 = pane.addBinding(vec, 2, { label: `${labelPrefix} B`, min, max, step }).on('change', onChange);
-      return [b0, b1, b2];
+      result = [b0, b1, b2];
+      break;
     }
   }
+
+  const visible = isSpecVisible(spec, holder);
+  const blades = Array.isArray(result) ? result : [result];
+  for (const b of blades) {
+    if (b && typeof b === 'object') {
+      b.hidden = !visible;
+      attachSpecHelper(b, spec, onHelperUpdate);
+    }
+  }
+
+  return result;
 }
 
 export function buildGlobalDirectorControls(

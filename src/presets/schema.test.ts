@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { assertValidSpec, coerceValue, defaultsFor, isSpecVisible, type ParamSpec } from "./schema";
+import {
+  assertValidSpec,
+  coerceValue,
+  defaultsFor,
+  isSpecVisible,
+  FEEDBACK_WARP_SPECS,
+  MOIRE_SPECS,
+  SPECTRAL_TERRAIN_SPECS,
+  PHYLLOTAXIS_SPECS,
+  CHLADNI_SPECS,
+  FERROFLUID_SPECS,
+  REACTION_DIFFUSION_SPECS,
+  POST_CRT_SPECS,
+  RINGS_MODE_SPEC,
+  PARTICLE_MODE_SPEC,
+  type ParamSpec,
+} from "./schema";
 
 const density: ParamSpec = { type: "float", name: "density", label: "Density", group: "Wall", default: 0.5, min: 0, max: 1, step: 0.01 };
 const sides: ParamSpec = { type: "int", name: "sides", label: "Sides", group: "Shape", default: 4, min: 3, max: 12, step: 1 };
@@ -158,4 +174,61 @@ describe("isSpecVisible", () => {
     expect(isSpecVisible(starOnlySpec, { baseShape: { value: "circle" } } as any)).toBe(false);
   });
 });
+
+describe("Parameter Descriptors & Warning Schema Contracts", () => {
+  it("description strings are present and non-empty across the schemas", () => {
+    const schemas: readonly (readonly ParamSpec[])[] = [
+      FEEDBACK_WARP_SPECS,
+      MOIRE_SPECS,
+      SPECTRAL_TERRAIN_SPECS,
+      PHYLLOTAXIS_SPECS,
+      CHLADNI_SPECS,
+      FERROFLUID_SPECS,
+      REACTION_DIFFUSION_SPECS,
+      POST_CRT_SPECS,
+      [RINGS_MODE_SPEC, PARTICLE_MODE_SPEC],
+    ];
+
+    for (const schema of schemas) {
+      for (const spec of schema) {
+        expect(spec.description, `Parameter "${spec.name}" in schema missing description`).toBeDefined();
+        expect(typeof spec.description).toBe("string");
+        expect(spec.description!.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("flags sobel, solarize, rgbSplit, and kaleidoN with intense: true and exact warning string", () => {
+    const INTENSE_NAMES = ["sobel", "solarize", "rgbSplit", "kaleidoN"];
+    const EXPECTED_WARNING =
+      "Intense visual transform. Highly sensitive to small adjustments — use with care.";
+
+    for (const name of INTENSE_NAMES) {
+      const spec = FEEDBACK_WARP_SPECS.find((s) => s.name === name);
+      expect(spec, `Parameter "${name}" should exist in FEEDBACK_WARP_SPECS`).toBeDefined();
+      expect(spec!.intense).toBe(true);
+      expect(spec!.warning).toBe(EXPECTED_WARNING);
+    }
+  });
+
+  it("positions intense parameters at the bottom of their respective groups", () => {
+    const groups = new Set(FEEDBACK_WARP_SPECS.map((s) => s.group));
+    for (const group of groups) {
+      const groupSpecs = FEEDBACK_WARP_SPECS.filter((s) => s.group === group);
+      const intenseIndices = groupSpecs
+        .map((s, idx) => (s.intense ? idx : -1))
+        .filter((idx) => idx !== -1);
+      const nonIntenseIndices = groupSpecs
+        .map((s, idx) => (!s.intense ? idx : -1))
+        .filter((idx) => idx !== -1);
+
+      if (intenseIndices.length > 0 && nonIntenseIndices.length > 0) {
+        const minIntenseIndex = Math.min(...intenseIndices);
+        const maxNonIntenseIndex = Math.max(...nonIntenseIndices);
+        expect(minIntenseIndex).toBeGreaterThan(maxNonIntenseIndex);
+      }
+    }
+  });
+});
+
 
