@@ -1,6 +1,6 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
 import { BLEND_MODES, parsePreset, type Preset, type SchemaRegistry } from '../format';
-import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
+import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS, SHAPE_SPECS } from '../layerSchemas';
 import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
@@ -25,6 +25,7 @@ import tex_grain_crown from './tex-grain-crown.json';
 import tex_ripple_field from './tex-ripple-field.json';
 import tex_neon_weave from './tex-neon-weave.json';
 import tex_dust_wave from './tex-dust-wave.json';
+import spiral_bead_pulse from './spiral-bead-pulse.json';
 import preset01 from './01-curl-fluid-warp.json';
 import preset02 from './02-kaleidoscopic-mandala.json';
 import preset03 from './03-solarized-contour-rings.json';
@@ -95,7 +96,7 @@ export const SCHEMAS: SchemaRegistry = {
   post: POST_SPECS,
   layers: {
     ...LAYER_SPECS,
-    ...(LAYER_SPECS.shape ? {} : { shape: (LAYER_SPECS as any).shape }),
+    shape: SHAPE_SPECS,
     moire: MOIRE_SPECS,
     spectralTerrain: SPECTRAL_TERRAIN_SPECS,
     chladniSand: CHLADNI_SPECS,
@@ -163,6 +164,7 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   'tex-ripple-field': 'classics',
   'tex-neon-weave': 'classics',
   'tex-dust-wave': 'classics',
+  'spiral-bead-pulse': 'classics',
 };
 
 export function getSystemSubfolder(id: string): SystemSubfolder | undefined {
@@ -243,6 +245,7 @@ const RAW_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
   { id: 'tex-ripple-field', group: 'textures', subfolder: 'classics', ...parsePreset(tex_ripple_field, SCHEMAS) },
   { id: 'tex-neon-weave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_neon_weave, SCHEMAS) },
   { id: 'tex-dust-wave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_dust_wave, SCHEMAS) },
+  { id: 'spiral-bead-pulse', group: 'flagship', subfolder: 'classics', ...parsePreset(spiral_bead_pulse, SCHEMAS) },
 ];
 
 const LOADER_TEST_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [

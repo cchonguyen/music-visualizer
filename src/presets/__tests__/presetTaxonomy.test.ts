@@ -84,6 +84,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     'tex-ripple-field',
     'tex-neon-weave',
     'tex-dust-wave',
+    'spiral-bead-pulse',
   ];
 
   it('contains display labels for all three system subfolders', () => {
@@ -97,7 +98,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   it('categorizes all 41+ built-in presets accurately into their subfolders', () => {
     expect(EXPECTED_SHOWCASE_IDS).toHaveLength(8);
     expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(12);
-    expect(EXPECTED_CLASSICS_IDS).toHaveLength(23);
+    expect(EXPECTED_CLASSICS_IDS).toHaveLength(24);
 
     // Verify showcase subfolder assignments
     for (const id of EXPECTED_SHOWCASE_IDS) {

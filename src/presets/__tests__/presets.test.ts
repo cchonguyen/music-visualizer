@@ -220,12 +220,12 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(p11.layers.some((l) => l.type === 'ferrofluid')).toBe(true);
 
     const pDust = BUILTIN_PRESETS.find((p) => p.id === 'tex-dust-wave')!.preset;
-    expect(pDust.feedback.stretchY?.value).toBe(1.36);
+    expect(pDust.feedback.stretchY?.value).toBe(1.185);
     const dustWave = pDust.layers.find((l) => l.type === 'waveform')!;
     expect(dustWave.params.mode?.value).toBe('line');
     const dustPart = pDust.layers.find((l) => l.type === 'particles')!;
     expect(dustPart.params.mode?.value).toBe('phyllotaxis');
-    expect(dustPart.params.seedShape?.value).toBe('orb');
+    expect(dustPart.params.seedShape?.value).toBe('star');
 
     const pRipple = BUILTIN_PRESETS.find((p) => p.id === 'tex-ripple-field')!.preset;
     const ripWave = pRipple.layers.find((l) => l.type === 'waveform')!;
@@ -235,8 +235,8 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(ripPart.opacity).toBe(0.75);
   });
 
-  it('all 23 existing presets continue to pass without error or warnings', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(23);
+  it('all 24 existing presets continue to pass without error or warnings', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(24);
     for (const b of BUILTIN_PRESETS) {
       expect(b.warnings).toEqual([]);
       const scene = buildScene(b.id, b.preset);
