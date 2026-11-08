@@ -3,7 +3,7 @@
 // vary (randomise, mutate, lock per layer), layer stack (select, enable, add, remove, reorder),
 // settings for every enabled layer (built from the schema), and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
-import { Pane, type ButtonApi } from 'tweakpane';
+import { Pane, type ButtonApi, type FolderApi } from 'tweakpane';
 import { LAYER_FACTORIES, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import { SCHEMAS } from '../presets/builtin';
@@ -360,17 +360,29 @@ export class Studio {
 
   private bindSection(pane: Pane, title: string, specs: readonly ParamSpec[], settings: Settings, apply: () => void): void {
     if (specs.length === 0) return;
-    pane.addBlade({ view: 'separator' });
+    const sectionTitle = title.charAt(0).toUpperCase() + title.slice(1);
+    const sectionFolder = pane.addFolder({ title: sectionTitle, expanded: false });
     const holder: Record<string, ParamValue> = valuesOf(settings);
+    const groups = new Map<string, ParamSpec[]>();
     for (const spec of specs) {
-      const label = `${title} · ${spec.group} · ${spec.label}`;
-      const push = () => {
-        this.opts.session.commit(this.id);
-        const setting = settings[spec.name];
-        if (setting) setting.value = holder[spec.name]!;
-        apply();
-      };
-      bindSpec(pane, label, spec, holder, push);
+      const list = groups.get(spec.group);
+      if (list) {
+        list.push(spec);
+      } else {
+        groups.set(spec.group, [spec]);
+      }
+    }
+    for (const [groupName, groupSpecs] of groups) {
+      const target = groupName ? sectionFolder.addFolder({ title: groupName, expanded: false }) : sectionFolder;
+      for (const spec of groupSpecs) {
+        const push = () => {
+          this.opts.session.commit(this.id);
+          const setting = settings[spec.name];
+          if (setting) setting.value = holder[spec.name]!;
+          apply();
+        };
+        bindSpec(target, spec.label, spec, holder, push);
+      }
     }
   }
 
@@ -584,7 +596,7 @@ function defaultLayer(type: string): LayerEntry {
   return { type, enabled: true, opacity: 1, blend: 'add', params };
 }
 
-function bindSpec(pane: Pane, label: string, spec: ParamSpec, holder: Record<string, ParamValue>, onChange: () => void): void {
+function bindSpec(pane: Pane | FolderApi, label: string, spec: ParamSpec, holder: Record<string, ParamValue>, onChange: () => void): void {
   const target = holder as Record<string, unknown>;
   switch (spec.type) {
     case 'float':
