@@ -37,6 +37,11 @@ import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector } from './render/globalDirector';
 import { adminGateway, AdminGateway } from './presets/adminGateway';
 import {
+  ADMIN_AUTH_CHANNEL,
+  ADMIN_AUTH_STORAGE_KEY,
+  isVerifiedAdminSignal,
+} from './studio/adminControls';
+import {
   loadCachedPresets,
   saveCachedPresets,
   normalizeSubfolder,
@@ -589,8 +594,72 @@ export {
   start,
 };
 
+/**
+ * Announce a verified admin login on all three channels the studio listens to:
+ * BroadcastChannel, localStorage (storage event) and the opener (postMessage).
+ */
+function publishAdminSignal(): void {
+  const signal = { type: 'mv-admin-authenticated', verified: true, ts: Date.now() };
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel(ADMIN_AUTH_CHANNEL);
+      channel.postMessage(signal);
+      channel.close();
+    } catch {
+      // ignore channel errors
+    }
+  }
+  try {
+    localStorage.setItem(ADMIN_AUTH_STORAGE_KEY, JSON.stringify(signal));
+  } catch {
+    // ignore storage errors
+  }
+  if (window.opener && !window.opener.closed) {
+    try {
+      window.opener.postMessage(signal, window.location.origin);
+    } catch {
+      // ignore postMessage errors
+    }
+  }
+}
+
+/**
+ * Page-wide listeners: a login that finishes after the studio stopped waiting still unlocks admin.
+ */
+function installAdminAuthListeners(): void {
+  const onSignal = (value: unknown) => {
+    if (!isVerifiedAdminSignal(value)) return;
+    if (adminGateway.isAdmin()) return;
+    if (typeof adminGateway.checkCloudflareAccess === 'function') {
+      void adminGateway.checkCloudflareAccess().catch(() => false);
+    }
+  };
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel(ADMIN_AUTH_CHANNEL);
+      channel.onmessage = (event: MessageEvent) => onSignal(event.data);
+    } catch {
+      // ignore channel errors
+    }
+  }
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('storage', (event: StorageEvent) => {
+      if (event.key !== ADMIN_AUTH_STORAGE_KEY || !event.newValue) return;
+      try {
+        onSignal(JSON.parse(event.newValue));
+      } catch {
+        // ignore malformed signal
+      }
+    });
+  }
+}
+
 if (typeof window !== 'undefined') {
-  const isAuthPopup = Boolean(launchedOnAdminPath && window.opener && !window.opener.closed);
+  const isAuthPopup = Boolean(
+    launchedOnAdminPath &&
+      (new URLSearchParams(window.location.search).get('popup') === '1' ||
+        (window.opener && !window.opener.closed)),
+  );
   if (launchedOnAdminPath) {
     if (!isAuthPopup) {
       try {
@@ -600,18 +669,13 @@ if (typeof window !== 'undefined') {
       }
     }
   }
+  installAdminAuthListeners();
   if (typeof adminGateway.checkCloudflareAccess === 'function') {
     void adminGateway.checkCloudflareAccess().then((verified) => {
-      if (isAuthPopup && window.opener && !window.opener.closed) {
+      if (isAuthPopup) {
+        // Never close the popup unless the login is verified.
         if (verified) {
-          try {
-            window.opener.postMessage(
-              { type: 'mv-admin-authenticated', verified: true, isAdmin: true },
-              window.location.origin,
-            );
-          } catch {
-            // ignore postMessage errors
-          }
+          publishAdminSignal();
           try {
             window.close();
           } catch {

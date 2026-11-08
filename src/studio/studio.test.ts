@@ -35,6 +35,8 @@ import {
   saveSystemPresetAction,
   deleteSystemPresetAction,
   promoteUserPresetAction,
+  ADMIN_POPUP_TIMEOUT_MS,
+  ADMIN_PRECHECK_TIMEOUT_MS,
 } from './adminControls';
 
 describe('deleteAnnouncement (slice 11.4)', () => {
@@ -2264,9 +2266,11 @@ describe('Slice 11.7: Non-Disruptive Studio Admin Login Popup & Background Sessi
       };
 
       const loginPromise = promptAdminLogin(mockGateway as any);
+      // The cookie pre-check runs before the popup opens.
+      await new Promise((r) => setTimeout(r, 0));
 
       expect(mockWindow.open).toHaveBeenCalledWith(
-        '/admin',
+        '/admin?popup=1',
         'mv-cf-access',
         expect.stringContaining('popup,width=520,height=680'),
       );
@@ -2343,6 +2347,350 @@ describe('Slice 11.7: Non-Disruptive Studio Admin Login Popup & Background Sessi
       (globalThis as any).window = prevWindow;
       (globalThis as any).sessionStorage = prevSessionStorage;
       showToastSpy.mockRestore();
+    }
+  });
+});
+
+describe('Slice 11.10: Admin login popup survives the Cloudflare login redirect', () => {
+  const ORIGIN = 'https://music-visualizer.charliechonguyen.com';
+  const flush = () => new Promise<void>((r) => setTimeout(r, 0));
+  const COOKIE_SIGNAL = { type: 'mv-admin-authenticated', verified: true, ts: 1 };
+
+  class FakeBroadcastChannel {
+    static instances: FakeBroadcastChannel[] = [];
+    name: string;
+    onmessage: ((ev: { data: unknown }) => void) | null = null;
+    close = vi.fn();
+    constructor(name: string) {
+      this.name = name;
+      FakeBroadcastChannel.instances.push(this);
+    }
+    postMessage() {}
+  }
+
+  function setupPopupEnv(options: { popupBlocked?: boolean } = {}) {
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    const prevWindow = (globalThis as any).window;
+    const prevBroadcastChannel = (globalThis as any).BroadcastChannel;
+    const listeners: Record<string, Array<(ev: any) => void>> = {};
+    const popup = {
+      closed: false,
+      close: vi.fn(() => {
+        popup.closed = true;
+      }),
+    };
+    const mockWindow: any = {
+      location: {
+        hostname: 'music-visualizer.charliechonguyen.com',
+        origin: ORIGIN,
+        href: `${ORIGIN}/`,
+      },
+      screenX: 0,
+      screenY: 0,
+      outerWidth: 1280,
+      outerHeight: 800,
+      open: vi.fn(() => (options.popupBlocked ? null : popup)),
+      addEventListener: vi.fn((type: string, cb: (ev: any) => void) => {
+        (listeners[type] ??= []).push(cb);
+      }),
+      removeEventListener: vi.fn((type: string, cb: (ev: any) => void) => {
+        const arr = listeners[type] ?? [];
+        const idx = arr.indexOf(cb);
+        if (idx >= 0) arr.splice(idx, 1);
+      }),
+    };
+    (globalThis as any).window = mockWindow;
+    (globalThis as any).BroadcastChannel = FakeBroadcastChannel;
+    FakeBroadcastChannel.instances = [];
+
+    // Models the real gateway: a valid Access session makes checkCloudflareAccess succeed and grant admin.
+    let sessionValid = false;
+    let adminState = false;
+    const gateway = {
+      isAdmin: () => adminState,
+      getState: () => ({ isAdmin: adminState, adminEmail: 'charliechonguyen@gmail.com' }),
+      login: vi.fn(),
+      logout: vi.fn(),
+      getHeaders: () => ({}),
+      subscribe: () => () => {},
+      checkCloudflareAccess: vi.fn(async () => {
+        if (sessionValid) adminState = true;
+        return sessionValid;
+      }),
+    };
+
+    const fire = (type: string, ev: any) => {
+      for (const cb of [...(listeners[type] ?? [])]) cb(ev);
+    };
+    const fireBroadcast = (data: unknown) => {
+      for (const ch of [...FakeBroadcastChannel.instances]) ch.onmessage?.({ data });
+    };
+
+    const restore = () => {
+      (globalThis as any).window = prevWindow;
+      if (prevBroadcastChannel === undefined) {
+        delete (globalThis as any).BroadcastChannel;
+      } else {
+        (globalThis as any).BroadcastChannel = prevBroadcastChannel;
+      }
+      showToastSpy.mockRestore();
+      vi.useRealTimers();
+    };
+
+    return {
+      gateway,
+      mockWindow,
+      popup,
+      listeners,
+      fire,
+      fireBroadcast,
+      restore,
+      setSessionValid: (v: boolean) => {
+        sessionValid = v;
+      },
+    };
+  }
+
+  it('cookie already valid: succeeds without opening a popup', async () => {
+    const env = setupPopupEnv();
+    try {
+      env.setSessionValid(true);
+      const res = await promptAdminLogin(env.gateway as any);
+      expect(res).toEqual({ success: true });
+      expect(env.mockWindow.open).not.toHaveBeenCalled();
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('opens the popup at /admin?popup=1 with the centred window features', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await flush();
+      expect(env.mockWindow.open).toHaveBeenCalledWith(
+        '/admin?popup=1',
+        'mv-cf-access',
+        expect.stringMatching(/^popup,width=520,height=680,left=\d+,top=\d+$/),
+      );
+      env.setSessionValid(true);
+      env.fireBroadcast(COOKIE_SIGNAL);
+      await expect(loginPromise).resolves.toEqual({ success: true });
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('a BroadcastChannel signal completes the login via a check (not via the signal alone)', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await flush();
+      const checksBefore = env.gateway.checkCloudflareAccess.mock.calls.length;
+
+      env.setSessionValid(true);
+      env.fireBroadcast(COOKIE_SIGNAL);
+
+      await expect(loginPromise).resolves.toEqual({ success: true });
+      expect(env.gateway.checkCloudflareAccess.mock.calls.length).toBeGreaterThan(checksBefore);
+      expect(env.popup.close).toHaveBeenCalled();
+      expect(FakeBroadcastChannel.instances[0]?.close).toHaveBeenCalled();
+      expect(env.listeners.storage ?? []).toHaveLength(0);
+      expect(env.listeners.focus ?? []).toHaveLength(0);
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('a storage signal (mv.adminAuthSignal) completes the login', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await flush();
+
+      env.setSessionValid(true);
+      env.fire('storage', {
+        key: 'mv.adminAuthSignal',
+        newValue: JSON.stringify(COOKIE_SIGNAL),
+      });
+
+      await expect(loginPromise).resolves.toEqual({ success: true });
+      expect(env.popup.close).toHaveBeenCalled();
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('a same-origin message with the verified signal completes the login; a foreign origin does not', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await flush();
+
+      env.setSessionValid(true);
+      env.fire('message', { origin: 'https://evil.example', data: COOKIE_SIGNAL });
+      await flush();
+      expect(env.popup.close).not.toHaveBeenCalled();
+
+      env.fire('message', { origin: ORIGIN, data: COOKIE_SIGNAL });
+      await expect(loginPromise).resolves.toEqual({ success: true });
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('popup.closed true right after open does not cancel; a later signal still succeeds', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      let settled = false;
+      void loginPromise.then(() => {
+        settled = true;
+      });
+      await flush();
+
+      // COOP makes popup.closed read true while the Cloudflare login page is still open.
+      env.popup.closed = true;
+      await flush();
+      expect(settled).toBe(false);
+
+      env.setSessionValid(true);
+      env.fireBroadcast(COOKIE_SIGNAL);
+      await expect(loginPromise).resolves.toEqual({ success: true });
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('focus with a closed popup and a failed check cancels the login', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await flush();
+
+      env.popup.closed = true;
+      env.fire('focus', {});
+
+      await expect(loginPromise).resolves.toEqual({
+        success: false,
+        error: 'Authentication cancelled or not completed.',
+      });
+      expect(env.listeners.message ?? []).toHaveLength(0);
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('focus with the popup still open and a failed check does not cancel', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      let settled = false;
+      void loginPromise.then(() => {
+        settled = true;
+      });
+      await flush();
+
+      env.fire('focus', {});
+      await flush();
+      expect(settled).toBe(false);
+
+      env.setSessionValid(true);
+      env.fireBroadcast(COOKIE_SIGNAL);
+      await expect(loginPromise).resolves.toEqual({ success: true });
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('a signal with verified:false does nothing', async () => {
+    const env = setupPopupEnv();
+    try {
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      let settled = false;
+      void loginPromise.then(() => {
+        settled = true;
+      });
+      await flush();
+      const checksBefore = env.gateway.checkCloudflareAccess.mock.calls.length;
+
+      env.fireBroadcast({ type: 'mv-admin-authenticated', verified: false, ts: 2 });
+      env.fire('storage', {
+        key: 'mv.adminAuthSignal',
+        newValue: JSON.stringify({ type: 'mv-admin-authenticated', verified: false }),
+      });
+      env.fire('message', {
+        origin: ORIGIN,
+        data: { type: 'mv-admin-authenticated', verified: false },
+      });
+      await flush();
+
+      expect(env.gateway.checkCloudflareAccess.mock.calls.length).toBe(checksBefore);
+      expect(settled).toBe(false);
+      expect(env.popup.close).not.toHaveBeenCalled();
+
+      env.setSessionValid(true);
+      env.fireBroadcast(COOKIE_SIGNAL);
+      await expect(loginPromise).resolves.toEqual({ success: true });
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('no verified login within 120 s resolves with "Login timed out"', async () => {
+    const env = setupPopupEnv();
+    try {
+      vi.useFakeTimers();
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(env.mockWindow.open).toHaveBeenCalled();
+
+      // Polls every 2 s run without cancelling; the overall timeout settles the flow.
+      await vi.advanceTimersByTimeAsync(ADMIN_POPUP_TIMEOUT_MS);
+      await expect(loginPromise).resolves.toEqual({
+        success: false,
+        error: 'Login timed out',
+      });
+      expect(env.listeners.message ?? []).toHaveLength(0);
+      expect(env.listeners.focus ?? []).toHaveLength(0);
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('the cookie pre-check is capped at its timeout when the check hangs', async () => {
+    const env = setupPopupEnv();
+    try {
+      vi.useFakeTimers();
+      (env.gateway.checkCloudflareAccess as any).mockImplementationOnce(() => new Promise(() => {}));
+      const loginPromise = promptAdminLogin(env.gateway as any);
+      await vi.advanceTimersByTimeAsync(ADMIN_PRECHECK_TIMEOUT_MS);
+      expect(env.mockWindow.open).toHaveBeenCalledWith(
+        '/admin?popup=1',
+        'mv-cf-access',
+        expect.any(String),
+      );
+      env.setSessionValid(true);
+      env.fireBroadcast(COOKIE_SIGNAL);
+      await expect(loginPromise).resolves.toEqual({ success: true });
+    } finally {
+      env.restore();
+    }
+  });
+
+  it('popup blocked: falls back to top-level /admin navigation', async () => {
+    const env = setupPopupEnv({ popupBlocked: true });
+    try {
+      const res = await promptAdminLogin(env.gateway as any);
+      expect(res.success).toBe(false);
+      expect(env.mockWindow.open).toHaveBeenCalledWith(
+        '/admin?popup=1',
+        'mv-cf-access',
+        expect.any(String),
+      );
+      expect(env.mockWindow.location.href).toBe('/admin');
+    } finally {
+      env.restore();
     }
   });
 });
