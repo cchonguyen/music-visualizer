@@ -83,14 +83,13 @@ export async function promptAdminLogin(
     }
   }
 
-  // 2. Local dev check (localhost, test environment, or when prompt function is explicitly provided)
+  // 2. Local dev check (strictly localhost or 127.0.0.1)
   const isLocalOrTest =
     typeof window === 'undefined' ||
     !window.location?.hostname ||
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
-    window.location.hostname === '' ||
-    typeof promptFn === 'function';
+    window.location.hostname === '';
 
   if (isLocalOrTest) {
     const prompt =
