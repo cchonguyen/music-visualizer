@@ -111,8 +111,24 @@ export interface SessionEntry {
   sortOrder?: number;
 }
 
+/** Outcome of a fire-and-forget remote write, reported through RemotePresetWriter.onResult. */
+export interface RemotePresetResult {
+  op: 'save' | 'delete';
+  id: string;
+  success: boolean;
+  error?: string;
+}
+
+/** Writes system preset changes to remote storage (Supabase via the Worker proxy). */
+export interface RemotePresetWriter {
+  upsert(record: RemotePresetRecord, token?: string): Promise<{ success: boolean; error?: string }>;
+  softDelete(id: string, token?: string): Promise<{ success: boolean; error?: string }>;
+  onResult?(result: RemotePresetResult): void;
+}
+
 export interface PresetSessionOptions {
   adminGateway?: IAdminGateway;
+  remoteWriter?: RemotePresetWriter;
 }
 
 const HISTORY_LIMIT = 100;
@@ -131,6 +147,7 @@ export class PresetSession {
   private folders: UserPresetFolder[] = [];
   private systemTagOverrides: Record<string, string[]> = {};
   private adminGateway?: IAdminGateway;
+  private remoteWriter?: RemotePresetWriter;
 
   constructor(
     private readonly host: SceneHost,
@@ -141,8 +158,9 @@ export class PresetSession {
     if (optionsOrGateway) {
       if ('isAdmin' in optionsOrGateway && typeof (optionsOrGateway as IAdminGateway).isAdmin === 'function') {
         this.adminGateway = optionsOrGateway as IAdminGateway;
-      } else if ('adminGateway' in optionsOrGateway) {
+      } else if ('adminGateway' in optionsOrGateway || 'remoteWriter' in optionsOrGateway) {
         this.adminGateway = (optionsOrGateway as PresetSessionOptions).adminGateway;
+        this.remoteWriter = (optionsOrGateway as PresetSessionOptions).remoteWriter;
       }
     }
     this.loadCustomPalettes();
@@ -152,6 +170,10 @@ export class PresetSession {
 
   setAdminGateway(gateway: IAdminGateway | undefined): void {
     this.adminGateway = gateway;
+  }
+
+  setRemoteWriter(writer: RemotePresetWriter | undefined): void {
+    this.remoteWriter = writer;
   }
 
   getAdminGateway(): IAdminGateway | undefined {
@@ -555,6 +577,7 @@ export class PresetSession {
       throw new Error(`Preset "${id}" is not a system preset.`);
     }
     entry.savedJson = JSON.stringify(entry.preset);
+    this.pushSystemPreset(id);
   }
 
   /**
@@ -597,6 +620,8 @@ export class PresetSession {
         // ignore
       }
     }
+
+    this.softDeleteSystemPreset(id);
   }
 
   /**
@@ -677,6 +702,7 @@ export class PresetSession {
     }
 
     this.persist();
+    this.pushSystemPreset(newId);
     return newId;
   }
 
@@ -697,6 +723,7 @@ export class PresetSession {
         ? subfolder
         : 'classics';
     entry.subfolder = normalized;
+    this.pushSystemPreset(id);
   }
 
   getSystemPresetSubfolder(id: string): SystemSubfolder | undefined {
@@ -1069,6 +1096,62 @@ export class PresetSession {
     const { id, warnings } = this.importJson(jsonString);
     const presetName = this.entries.get(id)?.preset.name ?? 'Preset';
     return { kind: 'preset', id, name: presetName, warnings };
+  }
+
+  /**
+   * Fire-and-forget remote upsert of a system preset. The record is snapshotted now; the network
+   * call is deferred. Never throws. No writer means nothing happens.
+   */
+  private pushSystemPreset(id: string): void {
+    const writer = this.remoteWriter;
+    const entry = this.entries.get(id);
+    if (!writer || !entry || !entry.builtin) return;
+    const record: RemotePresetRecord = {
+      id,
+      name: entry.preset.name,
+      subfolder: entry.subfolder ?? getSystemSubfolder(id) ?? 'classics',
+      preset_data: structuredClone(entry.preset),
+      sort_order: entry.sortOrder ?? 0,
+      tags: [...(this.systemTagOverrides[id] ?? entry.preset.tags ?? [])],
+      updated_at: new Date().toISOString(),
+    };
+    const token = this.adminGateway?.getState().adminToken;
+    this.runRemote(writer, 'save', id, () => writer.upsert(record, token));
+  }
+
+  /** Fire-and-forget remote soft delete of a system preset. Never throws. No writer means nothing happens. */
+  private softDeleteSystemPreset(id: string): void {
+    const writer = this.remoteWriter;
+    if (!writer) return;
+    const token = this.adminGateway?.getState().adminToken;
+    this.runRemote(writer, 'delete', id, () => writer.softDelete(id, token));
+  }
+
+  private runRemote(
+    writer: RemotePresetWriter,
+    op: 'save' | 'delete',
+    id: string,
+    call: () => Promise<{ success: boolean; error?: string }>,
+  ): void {
+    Promise.resolve()
+      .then(call)
+      .then(
+        (res) => ({ success: Boolean(res?.success), error: res?.error }),
+        (err: unknown) => ({ success: false, error: err instanceof Error ? err.message : String(err) }),
+      )
+      .then((outcome) => {
+        const result: RemotePresetResult = outcome.success
+          ? { op, id, success: true }
+          : { op, id, success: false, error: outcome.error || 'unknown error' };
+        try {
+          writer.onResult?.(result);
+        } catch (err) {
+          console.warn('Remote preset result handler failed:', err);
+        }
+      })
+      .catch(() => {
+        // Unreachable in practice: every step above is guarded. Kept so nothing escapes as unhandled.
+      });
   }
 
   private require(id: string): SessionEntry {

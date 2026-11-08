@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import {
   PresetSession,
   USER_PRESETS_KEY,
   USER_PRESET_FOLDERS_KEY,
   SYSTEM_TAG_OVERRIDES_KEY,
   type SceneHost,
+  type RemotePresetWriter,
 } from './session';
 import { parsePreset, PresetFormatError, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
@@ -737,3 +738,157 @@ describe('remote system preset sync engine applyRemoteSystemPresets (Slice 11.3)
 });
 
 
+
+describe('system preset remote writes (Slice 11.9)', () => {
+  const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+  function makeWriter(overrides: { upsert?: Mock; softDelete?: Mock } = {}) {
+    return {
+      upsert: overrides.upsert ?? vi.fn().mockResolvedValue({ success: true }),
+      softDelete: overrides.softDelete ?? vi.fn().mockResolvedValue({ success: true }),
+      onResult: vi.fn(),
+    };
+  }
+
+  function adminSession(writer?: RemotePresetWriter) {
+    const fake = fakeHost();
+    const gateway = new AdminGateway({ mock: true, defaultAdmin: true });
+    const s = new PresetSession(fake.host, SCHEMAS, memoryStorage(), { adminGateway: gateway, remoteWriter: writer });
+    for (const b of BUILTIN_PRESETS) s.addBuiltin(b.id, b.preset);
+    return s;
+  }
+
+  it('saveSystemPreset upserts the record with the admin token', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    const entry = s.get('crown')!;
+    entry.preset.tags = ['alpha', 'beta'];
+    s.saveSystemPreset('crown');
+    await flush();
+
+    expect(writer.upsert).toHaveBeenCalledTimes(1);
+    const [record, token] = writer.upsert.mock.calls[0] as [RemotePresetRecord, string];
+    expect(token).toBe('mock-admin-token');
+    expect(record.id).toBe('crown');
+    expect(record.name).toBe(entry.preset.name);
+    expect(record.preset_data).toEqual(entry.preset);
+    expect(record.sort_order).toBe(0);
+    expect(record.tags).toEqual(['alpha', 'beta']);
+    expect(typeof record.updated_at).toBe('string');
+    expect(Number.isNaN(Date.parse(record.updated_at))).toBe(false);
+  });
+
+  it('save() on a built-in reaches the writer through saveSystemPreset', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    s.save('flight');
+    await flush();
+    expect(writer.upsert).toHaveBeenCalledTimes(1);
+    expect((writer.upsert.mock.calls[0] as [RemotePresetRecord])[0].id).toBe('flight');
+  });
+
+  it('rename of a built-in upserts the new name', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    s.rename('crown', 'Crown Renamed');
+    await flush();
+    const [record] = writer.upsert.mock.calls[0] as [RemotePresetRecord];
+    expect(record.name).toBe('Crown Renamed');
+    expect(record.id).toBe('crown');
+  });
+
+  it('promoteToSystemPreset upserts the new system id in the chosen subfolder', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    const userId = s.saveAs('crown', 'Candidate');
+    const newId = s.promoteToSystemPreset(userId, 'showcase');
+    await flush();
+
+    expect(writer.upsert).toHaveBeenCalledTimes(1);
+    const [record, token] = writer.upsert.mock.calls[0] as [RemotePresetRecord, string];
+    expect(record.id).toBe(newId);
+    expect(record.subfolder).toBe('showcase');
+    expect(token).toBe('mock-admin-token');
+  });
+
+  it('setSystemPresetSubfolder upserts the new subfolder', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    s.setSystemPresetSubfolder('crown', 'flagship');
+    await flush();
+    const [record] = writer.upsert.mock.calls[0] as [RemotePresetRecord];
+    expect(record.subfolder).toBe('flagship');
+  });
+
+  it('removeSystemPreset soft-deletes the id with the admin token', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    s.removeSystemPreset('flight');
+    await flush();
+    expect(writer.softDelete).toHaveBeenCalledTimes(1);
+    expect(writer.softDelete).toHaveBeenCalledWith('flight', 'mock-admin-token');
+    expect(writer.upsert).not.toHaveBeenCalled();
+  });
+
+  it('reports success through onResult for save and delete', async () => {
+    const writer = makeWriter();
+    const s = adminSession(writer);
+    s.saveSystemPreset('crown');
+    await flush();
+    expect(writer.onResult).toHaveBeenLastCalledWith({ op: 'save', id: 'crown', success: true });
+
+    s.removeSystemPreset('flight');
+    await flush();
+    expect(writer.onResult).toHaveBeenLastCalledWith({ op: 'delete', id: 'flight', success: true });
+  });
+
+  it('reports a failed result through onResult with the error text', async () => {
+    const writer = makeWriter({
+      upsert: vi.fn().mockResolvedValue({ success: false, error: 'Forbidden' }),
+    });
+    const s = adminSession(writer);
+    expect(() => s.saveSystemPreset('crown')).not.toThrow();
+    await flush();
+    expect(writer.onResult).toHaveBeenCalledWith({ op: 'save', id: 'crown', success: false, error: 'Forbidden' });
+  });
+
+  it('reports a rejected promise through onResult and never throws from the save path', async () => {
+    const writer = makeWriter({
+      softDelete: vi.fn().mockRejectedValue(new Error('network down')),
+    });
+    const s = adminSession(writer);
+    expect(() => s.removeSystemPreset('flight')).not.toThrow();
+    await flush();
+    expect(writer.onResult).toHaveBeenCalledWith({ op: 'delete', id: 'flight', success: false, error: 'network down' });
+  });
+
+  it('reports a synchronous throw from the writer as a failure', async () => {
+    const writer = makeWriter({
+      upsert: vi.fn(() => {
+        throw new Error('sync boom');
+      }),
+    });
+    const s = adminSession(writer);
+    expect(() => s.saveSystemPreset('crown')).not.toThrow();
+    await flush();
+    expect(writer.onResult).toHaveBeenCalledWith({ op: 'save', id: 'crown', success: false, error: 'sync boom' });
+  });
+
+  it('setRemoteWriter attaches a writer after construction', async () => {
+    const s = adminSession();
+    const writer = makeWriter();
+    s.setRemoteWriter(writer);
+    s.saveSystemPreset('crown');
+    await flush();
+    expect(writer.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('with no writer, saves and deletes make no calls and throw nothing', async () => {
+    const s = adminSession();
+    expect(() => s.saveSystemPreset('crown')).not.toThrow();
+    expect(() => s.removeSystemPreset('flight')).not.toThrow();
+    await flush();
+    expect(s.get('crown')).toBeDefined();
+    expect(s.get('flight')).toBeUndefined();
+  });
+});

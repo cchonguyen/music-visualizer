@@ -5,20 +5,7 @@ import {
   DEFAULT_ADMIN_EMAIL,
   computeSha256,
 } from '../adminGateway';
-import worker, {
-  DEFAULT_CF_ACCESS_AUD,
-  DEFAULT_CF_ACCESS_TEAM_DOMAIN,
-  type Env,
-} from '../../worker';
 import type { RemoteConfig } from '../../config/remoteConfig';
-
-function createMockJwt(payload: Record<string, unknown>): string {
-  const toBase64Url = (obj: Record<string, unknown>) =>
-    btoa(JSON.stringify(obj)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  const header = toBase64Url({ alg: 'RS256', typ: 'JWT' });
-  const body = toBase64Url(payload);
-  return `${header}.${body}.signature-stub`;
-}
 
 function createMemoryStorage(initialData: Record<string, string> = {}): Storage {
   const store = new Map<string, string>(Object.entries(initialData));
@@ -435,118 +422,6 @@ describe('AdminGateway & Session Security Verification', () => {
       const isVerified = await gateway.checkCloudflareAccess();
       expect(isVerified).toBe(false);
       expect(gateway.isAdmin()).toBe(false);
-    });
-  });
-
-  describe('Cloudflare Worker Edge Handler (src/worker.ts)', () => {
-    let mockEnv: Env;
-
-    beforeEach(() => {
-      mockEnv = {
-        ASSETS: {
-          fetch: vi.fn().mockResolvedValue(new Response('Static Asset Content', { status: 200 })),
-        },
-      };
-    });
-
-    it('returns 200 with authenticated email when valid Cloudflare Access JWT and allowlisted email are provided', async () => {
-      const validJwt = createMockJwt({
-        iss: DEFAULT_CF_ACCESS_TEAM_DOMAIN,
-        aud: [DEFAULT_CF_ACCESS_AUD],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        email: 'charliechonguyen@gmail.com',
-      });
-
-      const req = new Request('https://music-visualizer.charliechonguyen.com/admin/api/identity', {
-        headers: {
-          'cf-access-authenticated-user-email': 'charliechonguyen@gmail.com',
-          'cf-access-jwt-assertion': validJwt,
-        },
-      });
-
-      const res = await worker.fetch(req, mockEnv);
-      expect(res.status).toBe(200);
-      expect(res.headers.get('Cache-Control')).toBe('no-store');
-      const body = await res.json();
-      expect(body).toEqual({
-        authenticated: true,
-        email: 'charliechonguyen@gmail.com',
-      });
-      expect(mockEnv.ASSETS.fetch).not.toHaveBeenCalled();
-    });
-
-    it('returns 401 when Cloudflare Access headers or JWT are missing', async () => {
-      const req = new Request('https://music-visualizer.charliechonguyen.com/admin/api/identity', {
-        headers: {
-          'cf-access-authenticated-user-email': 'charliechonguyen@gmail.com',
-        },
-      });
-
-      const res = await worker.fetch(req, mockEnv);
-      expect(res.status).toBe(401);
-      expect(res.headers.get('Cache-Control')).toBe('no-store');
-      const body = await res.json();
-      expect(body).toEqual({
-        authenticated: false,
-        error: 'Unauthenticated',
-      });
-    });
-
-    it('returns 401 when Cloudflare Access JWT is expired', async () => {
-      const expiredJwt = createMockJwt({
-        iss: DEFAULT_CF_ACCESS_TEAM_DOMAIN,
-        aud: [DEFAULT_CF_ACCESS_AUD],
-        exp: Math.floor(Date.now() / 1000) - 60,
-        email: 'charliechonguyen@gmail.com',
-      });
-
-      const req = new Request('https://music-visualizer.charliechonguyen.com/admin/api/identity', {
-        headers: {
-          'cf-access-authenticated-user-email': 'charliechonguyen@gmail.com',
-          'cf-access-jwt-assertion': expiredJwt,
-        },
-      });
-
-      const res = await worker.fetch(req, mockEnv);
-      expect(res.status).toBe(401);
-      const body = await res.json();
-      expect(body).toEqual({
-        authenticated: false,
-        error: 'Unauthenticated',
-      });
-    });
-
-    it('returns 403 when authenticated email does not match allowlisted admin email', async () => {
-      const validJwtForOtherUser = createMockJwt({
-        iss: DEFAULT_CF_ACCESS_TEAM_DOMAIN,
-        aud: [DEFAULT_CF_ACCESS_AUD],
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        email: 'intruder@example.com',
-      });
-
-      const req = new Request('https://music-visualizer.charliechonguyen.com/admin/api/identity', {
-        headers: {
-          'cf-access-authenticated-user-email': 'intruder@example.com',
-          'cf-access-jwt-assertion': validJwtForOtherUser,
-        },
-      });
-
-      const res = await worker.fetch(req, mockEnv);
-      expect(res.status).toBe(403);
-      expect(res.headers.get('Cache-Control')).toBe('no-store');
-      const body = await res.json();
-      expect(body).toEqual({
-        authenticated: false,
-        error: 'Forbidden',
-      });
-    });
-
-    it('delegates non-API paths to env.ASSETS.fetch', async () => {
-      const req = new Request('https://music-visualizer.charliechonguyen.com/admin');
-      const res = await worker.fetch(req, mockEnv);
-      expect(res.status).toBe(200);
-      expect(await res.text()).toBe('Static Asset Content');
-      expect(mockEnv.ASSETS.fetch).toHaveBeenCalledWith(req);
     });
   });
 

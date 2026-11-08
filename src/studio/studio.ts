@@ -800,9 +800,9 @@ export class Studio {
       } else {
         tile(pane.addButton({ title: `Save System Preset 👑${dirty}` })).on('click', () => {
           if (typeof session.saveSystemPreset === 'function') {
-            this.run(() => session.saveSystemPreset(id), 'System preset saved remotely & propagated to all users');
+            this.run(() => session.saveSystemPreset(id), 'System preset saved');
           } else {
-            this.run(() => session.save(id), 'System preset saved remotely & propagated to all users');
+            this.run(() => session.save(id), 'System preset saved');
           }
         });
       }

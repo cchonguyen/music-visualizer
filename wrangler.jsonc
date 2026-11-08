@@ -1,6 +1,6 @@
 {
   // Hybrid Static-Assets + Edge Identity Worker: public routes remain 100% static-first;
-  // only /admin/api/* invokes the Worker to verify Cloudflare Access headers.
+  // /admin and /admin/* invoke the Worker to verify Cloudflare Access identity.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "music-visualizer",
   "main": "src/worker.ts",
@@ -9,7 +9,7 @@
     "directory": "./dist",
     "not_found_handling": "single-page-application",
     "binding": "ASSETS",
-    "run_worker_first": ["/admin/api/*"]
+    "run_worker_first": ["/admin", "/admin/*"]
   },
   // Custom domain approved by owner 2026-11-04. Cloudflare creates the DNS record
   // and certificate itself; never hand-create A/CNAME records for this.
