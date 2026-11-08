@@ -77,13 +77,12 @@ export async function promptAdminLogin(
     return null;
   },
 ): Promise<{ success: boolean; error?: string }> {
-  const input = promptFn('Enter Admin Passkey or Cloudflare Access Email:');
+  const input = promptFn('Enter Admin Secret Passkey:');
   if (!input || !input.trim()) {
     return { success: false, error: 'Cancelled' };
   }
   const clean = input.trim();
-  const credentials = clean.includes('@') ? { email: clean } : { secret: clean };
-  const res = await adminGateway.login(credentials);
+  const res = await adminGateway.login({ secret: clean });
   if (res.success) {
     showToast('👑 Admin Mode Activated');
   } else {
