@@ -1,9 +1,9 @@
 # Harness PR check (spoke template). Copy to .github/workflows/harness-pr-check.yml in a spoke.
-# Quick checks run first so build and test health are never blocked by scope audits on minor changes.
 name: Harness PR check
 
 on:
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,24 +14,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Check out the actual PR branch tip, not GitHub's synthetic merge commit
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+
+      - name: Verify branch is up-to-date with base branch
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          if ! git merge-base --is-ancestor origin/${{ github.base_ref }} HEAD; then
+            echo "::error::Worktree branch is behind ${{ github.base_ref }}! Run 'git fetch origin ${{ github.base_ref }} && git rebase origin/${{ github.base_ref }}' before merging."
+            exit 1
+          fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
-      # Quick checks from the spoke's CLAUDE.md. Delete any line the spoke has no tool for.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck
-        run: npm run typecheck --silent
+        run: npm run typecheck --if-present --silent
 
       - name: Lint
         run: npm run lint --if-present --silent
 
       - name: Unit tests
         run: npm test --silent
+
+      - name: Build check
+        run: npm run build --if-present
 
       # Scope, Red tripwires, and test-assertion audit. Advisory mode reports findings without blocking low-risk PRs.
       - name: PR scope check
