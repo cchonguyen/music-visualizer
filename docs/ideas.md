@@ -24,3 +24,4 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: ReactionDiffusion is very ugly and non-responsive. Raw note only, not investigated.
 - 2026-11-09: Waveform, dots, bars, and aurora shape settings could be about 5 times more reactive and dynamic. Lower settings should still reproduce today's behavior, while the maximum goes much higher. Raw note only, not investigated.
 - 2026-11-09: Trail fade could have a 5 times higher ceiling. Also consider a separate feedback fade and a separate post-processing fade. Raw note only, not investigated.
+- 2026-11-09: Particles could have a tinkling effect, and randomized spawning locations. Raw note only, not investigated.
