@@ -18,3 +18,6 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: More advanced bloom effects.
 - 2026-11-09: Per-preset setting in Studio to turn global camera and coloring effects on or off.
 - 2026-11-09: Randomization effects on shapes and other effect layers.
+- 2026-11-09: New effects: warp fields, ripple, swirl, vignette. Second batch: striped, 3D, and morphing color maps.
+- 2026-11-09: Menu cleanup: group and rename the sliders with one-line descriptions, or add a Basic view with an Advanced toggle. Ship the cleanup before the new effects, if that makes sense.
+- 2026-11-09: Shape layers: per-element reactivity, motion over time, or both.
