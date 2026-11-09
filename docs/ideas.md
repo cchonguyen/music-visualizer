@@ -27,3 +27,4 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: Particles could have a tinkling effect, and randomized spawning locations. Raw note only, not investigated.
 - 2026-11-09: Warp speed could have a higher ceiling, about 3 times. Raw note only, not investigated.
 - 2026-11-09: Vignette could have more options, including blending types, color types, and mapping types. Raw note only, not investigated.
+- 2026-11-09: Add a "duplicate layer" action so a layer can be copied with the same settings instead of reconfigured. Raw note only, not investigated.
