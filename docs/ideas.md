@@ -22,3 +22,4 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: Menu cleanup: group and rename the sliders with one-line descriptions, or add a Basic view with an Advanced toggle. Ship the cleanup before the new effects, if that makes sense.
 - 2026-11-09: Shape layers: per-element reactivity, motion over time, or both.
 - 2026-11-09: ReactionDiffusion is very ugly and non-responsive. Raw note only, not investigated.
+- 2026-11-09: Waveform, dots, bars, and aurora shape settings could be about 5 times more reactive and dynamic. Lower settings should still reproduce today's behavior, while the maximum goes much higher. Raw note only, not investigated.
