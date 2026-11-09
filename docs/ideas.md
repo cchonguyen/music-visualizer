@@ -12,3 +12,9 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: Make particle customization more dynamic. Explore using particles as a starfield, which is very much missing right now.
 - 2026-11-09: Add a milkdrop-like waveform to the shapes.
 - 2026-11-09: Fluid-like effects.
+- 2026-11-09: Fractal patterns.
+- 2026-11-09: Simple 3D architecture.
+- 2026-11-09: Pseudo-3D orbiting effects.
+- 2026-11-09: More advanced bloom effects.
+- 2026-11-09: Per-preset setting in Studio to turn global camera and coloring effects on or off.
+- 2026-11-09: Randomization effects on shapes and other effect layers.
