@@ -9,6 +9,9 @@ Status 2026-11-05: all slices built in code. Full details archived in `.spec/HIS
 ## projectM-inspired features (plan: /mnt/project-files/plans/projectm-ideas-implementation.md, approved 2026-11-05; contracts: .spec/PROJECTM_SPEC.md)
 Slices 5.4 to 5.10 were removed on 2026-11-08 because the work was superseded (owner decision, Charlie).
 
+## Stage 13 fix — Shape layer opacity (2026-11-09; scope in .spec/SYSTEM_SPEC.md section 1)
+- [x] **Slice 13.1: Shape layer opacity slider takes visible effect under additive blend** `[CORE / DATA]` worker: gf-coder (Haiku) Target files: `src/render/shaders/shape.frag.glsl`, `src/render/__tests__/shapeLayer.test.ts` | Coords: `[400, 410, 488]` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+
 ## Stage 11 fix follow-up — live presets config (2026-11-08)
 - [x] **Slice 11.12: Pass Supabase config into the production build and make save toasts accurate** `[CORE / DATA]` worker: gf-coder (Haiku) Target files: `.github/workflows/deploy.yml`, `src/main.ts` | Coords: `[400, 410, 487]` | Verify: npm run typecheck && npm test && npm run build
 

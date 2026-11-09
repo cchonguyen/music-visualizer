@@ -131,5 +131,6 @@ void main() {
     discard;
   }
 
+  col *= uLayerOpacity;
   fragColor = vec4(col, finalAlpha);
 }

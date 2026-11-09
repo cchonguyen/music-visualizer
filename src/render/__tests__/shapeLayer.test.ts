@@ -415,6 +415,13 @@ describe('ShapeLayer', () => {
       expect(gl.uniformValues.get('uLayerOpacity')).toBeCloseTo(0.65, 2);
     });
 
+    it('scales output color by layer opacity so additive blend respects the opacity slider', () => {
+      const scaleIdx = fragSrc.indexOf('col *= uLayerOpacity;');
+      const outIdx = fragSrc.indexOf('fragColor = vec4(');
+      expect(scaleIdx).toBeGreaterThan(-1);
+      expect(scaleIdx).toBeLessThan(outIdx);
+    });
+
     it('sets glow bloom uniform', () => {
       const layer = new ShapeLayer({ glow: 1.25 });
       layer.init(gl);
