@@ -9,3 +9,6 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: Custom color mappings, including mapping morphs, tilings, and other effect types to research.
 - 2026-11-09: Clean up the effects menu now, especially Post and Feedback. There are too many effects and it is unclear how to use them. Sliders give no clear feedback about whether they do anything.
 - 2026-11-09: Add more customizations to the unified shape layer so waveforms, dots, bars, aurora, and lines can be made more reactive or transformative.
+- 2026-11-09: Make particle customization more dynamic. Explore using particles as a starfield, which is very much missing right now.
+- 2026-11-09: Add a milkdrop-like waveform to the shapes.
+- 2026-11-09: Fluid-like effects.
