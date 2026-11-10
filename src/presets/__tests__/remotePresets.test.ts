@@ -5,6 +5,7 @@ import {
   type RemoteConfig,
   CACHED_SYSTEM_PRESETS_KEY,
   CACHED_SYSTEM_PRESETS_VERSION,
+  REMOTE_PRESET_SELECT_COLUMNS,
   normalizeSubfolder,
   serializePresetRecord,
   deserializePresetRecord,
@@ -206,6 +207,10 @@ describe('fetchRemotePresets', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [calledUrl, calledInit] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(calledUrl).toContain('/rest/v1/system_presets');
+    const select = new URL(calledUrl).searchParams.get('select');
+    expect(select).toBe(REMOTE_PRESET_SELECT_COLUMNS);
+    expect(select).not.toBe('*');
+    expect(select?.split(',')).not.toContain('updated_by');
     expect(calledInit.headers).toMatchObject({
       apikey: testConfig.anonKey,
       Authorization: `Bearer ${testConfig.anonKey}`,
@@ -260,7 +265,7 @@ describe('upsertRemotePreset', () => {
     expect(calledInit.headers).toMatchObject({
       apikey: testConfig.anonKey,
       Authorization: 'Bearer admin-token-jwt',
-      Prefer: 'resolution=merge-duplicates,return=representation',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
     });
 
     const parsedBody = JSON.parse(calledInit.body as string);
