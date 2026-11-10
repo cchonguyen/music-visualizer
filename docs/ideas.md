@@ -29,3 +29,4 @@ Raw ideas from Charlie. One dated bullet per idea. Research, specs and slices co
 - 2026-11-09: Vignette could have more options, including blending types, color types, and mapping types. Raw note only, not investigated.
 - 2026-11-09: Add a "duplicate layer" action so a layer can be copied with the same settings instead of reconfigured. Raw note only, not investigated.
 - 2026-11-09: Feedback and post-processing could have more reactive effects and sliders. Zoom, rotation, warp, blur, color, and similar could change in speed or intensity on beat hits, at set intervals, or on dynamic moments. The background could then react to the music, not only change when the preset changes. Raw note only, not investigated.
+- 2026-11-10: Be able to share the app with more people without worrying about exposing my data or admin privileges. Raw note only, not investigated.
