@@ -35,6 +35,7 @@ import { BenchmarkPanel, DebugPanel } from './ui/debugPanel';
 import { BenchmarkRunner, GpuTimedLayer, benchmarkSeconds, describeRenderer } from './render/benchmark';
 import { QualityGovernor, TIER_SETTINGS, detectTier } from './render/qualityGovernor';
 import { setAutoScale } from './gl/size';
+import { setFloatBuffersEnabled } from './gl/fbo';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector } from './render/globalDirector';
@@ -187,6 +188,8 @@ function start(): void {
   //   0 = Crown, 1 = Flight, 2 = Bars (the old keys), 3-9 = later presets, [ and ] = previous / next.
   // URL options for single checks: ?tracer (Stage 1), ?trail, ?tunnel, ?particles, ?bars, ?scenes.
   const params = new URLSearchParams(location.search);
+  // ?float=0 turns half-float trail buffers off (8-bit), to compare looks or rule them out (Slice 16.7).
+  if (params.get('float') === '0') setFloatBuffersEnabled(false);
   let compositor: Compositor | null = null;
   let session: PresetSession | null = null;
   const benchSeconds = benchmarkSeconds(params);

@@ -6,6 +6,9 @@
 // - resize() reallocates both targets. That clears the trail, which is accepted.
 // - resize() with the same size is a no-op.
 // - Rebuilt inside init() after a context restore; never reuse old GL objects.
+// - Format (Slice 16.7): RGBA8, or RGBA16F (half-float) where the browser can render to it. Half-float keeps
+//   slow trail fades and gradients smooth; 8-bit rounds them to 1/255 steps. The format is chosen once per
+//   context by `detectFeedbackFormat`, which also checks that a half-float framebuffer is complete.
 
 export interface PassTarget {
   framebuffer: WebGLFramebuffer;
@@ -20,6 +23,62 @@ export function clampSize(width: number, height: number): { width: number; heigh
   };
 }
 
+export type BufferFormat = 'rgba8' | 'rgba16f';
+
+/** Bytes one pixel of a buffer takes. */
+export function bytesPerPixel(format: BufferFormat): number {
+  return format === 'rgba16f' ? 8 : 4;
+}
+
+let floatBuffersEnabled = true;
+
+/** Turns half-float feedback buffers on or off for contexts checked after this call (a diagnostic switch). */
+export function setFloatBuffersEnabled(on: boolean): void {
+  floatBuffersEnabled = on;
+}
+
+const formatCache = new WeakMap<WebGL2RenderingContext, BufferFormat>();
+
+/**
+ * Chooses the feedback buffer format for a context and remembers it. Half-float needs EXT_color_buffer_float
+ * or EXT_color_buffer_half_float, and a 1x1 RGBA16F framebuffer must report complete. Anything else is RGBA8.
+ * Call again after a context restore: extensions have to be enabled on the new context.
+ */
+export function detectFeedbackFormat(gl: WebGL2RenderingContext): BufferFormat {
+  let format: BufferFormat = 'rgba8';
+  const hasExt = gl.getExtension("EXT_color_buffer_float") !== null || gl.getExtension("EXT_color_buffer_half_float") !== null;
+  if (floatBuffersEnabled && hasExt) {
+    if (halfFloatFramebufferIsComplete(gl)) format = 'rgba16f';
+  }
+  formatCache.set(gl, format);
+  return format;
+}
+
+/** The format chosen for this context (detected on first use). */
+export function feedbackFormat(gl: WebGL2RenderingContext): BufferFormat {
+  return formatCache.get(gl) ?? detectFeedbackFormat(gl);
+}
+
+function halfFloatFramebufferIsComplete(gl: WebGL2RenderingContext): boolean {
+  const texture = gl.createTexture();
+  const framebuffer = gl.createFramebuffer();
+  if (!texture || !framebuffer) return false;
+  try {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1, 1, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    return gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  } catch {
+    return false;
+  } finally {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.deleteFramebuffer(framebuffer);
+    gl.deleteTexture(texture);
+  }
+}
+
 export class PingPong {
   private readonly gl: WebGL2RenderingContext;
   private a: PassTarget | null = null;
@@ -27,9 +86,11 @@ export class PingPong {
   private current: 'a' | 'b' = 'a';
   private w: number;
   private h: number;
+  readonly format: BufferFormat;
 
-  constructor(gl: WebGL2RenderingContext, width: number, height: number) {
+  constructor(gl: WebGL2RenderingContext, width: number, height: number, format: BufferFormat = 'rgba8') {
     this.gl = gl;
+    this.format = format;
     const size = clampSize(width, height);
     this.w = size.width;
     this.h = size.height;
@@ -88,7 +149,11 @@ export class PingPong {
     const framebuffer = gl.createFramebuffer();
     if (!texture || !framebuffer) throw new Error('could not create ping-pong target');
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, this.w, this.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    if (this.format === 'rgba16f') {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, this.w, this.h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, this.w, this.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);

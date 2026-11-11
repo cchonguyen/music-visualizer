@@ -2,7 +2,7 @@
 // Per frame: decay last frame into `write`, add the layers on top (additive),
 // then swap. After the swap, `outputTexture()` is the finished image.
 import type { AudioFrame } from '../audio/types';
-import { PingPong, clampSize, type PassTarget } from '../gl/fbo';
+import { PingPong, clampSize, feedbackFormat, type PassTarget } from '../gl/fbo';
 import { FULLSCREEN_VERT } from '../gl/shader';
 import { getProgramCache } from '../gl/programCache';
 import { MoireLayer } from './layers/moire';
@@ -249,7 +249,8 @@ export class Scene {
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
     const b = scaledBufferSize(this.w, this.h, getEffectiveRenderScale());
-    this.pp = new PingPong(gl, b.width, b.height);
+    // Half-float where the context supports it (Slice 16.7). The snapshot below stays 8-bit, which also clamps it to 0..1.
+    this.pp = new PingPong(gl, b.width, b.height, feedbackFormat(gl));
     this.appliedScale = getEffectiveRenderScale();
     this.snapshotTarget = this.allocateSnapshot(gl, b.width, b.height);
     for (const l of this.layers) l.init(gl);

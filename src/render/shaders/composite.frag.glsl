@@ -19,23 +19,28 @@ in vec2 vUv;
 out vec4 outColor;
 
 // @blend-begin
+// Scene textures may be half-float (Slice 16.7) and hold values above 1; the blend reads them clamped to 0..1.
+vec3 sceneAt(sampler2D s, vec2 uv) {
+  return min(texture(s, uv).rgb, vec3(1.0));
+}
+
 vec3 blendAt(vec2 uv) {
   vec3 c;
   if (uStyle == 0 || uWA <= 0.0 || uWB <= 0.0) {
-    c = texture(uA, uv).rgb * uWA + texture(uB, uv).rgb * uWB;
+    c = sceneAt(uA, uv) * uWA + sceneAt(uB, uv) * uWB;
   } else if (uStyle == 1) {
     // Wipe: scene B arrives from the left, with a soft edge.
     float m = 1.0 - smoothstep(uT - 0.01, uT + 0.01, uv.x);
-    c = mix(texture(uA, uv).rgb, texture(uB, uv).rgb, m);
+    c = mix(sceneAt(uA, uv), sceneAt(uB, uv), m);
   } else if (uStyle == 2) {
     // Dissolve: random pixels change first, then the rest.
     float n = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
     float m = 1.0 - smoothstep(uT - 0.1, uT + 0.1, n);
-    c = mix(texture(uA, uv).rgb, texture(uB, uv).rgb, m);
+    c = mix(sceneAt(uA, uv), sceneAt(uB, uv), m);
   } else {
     // Zoom-through: B grows out of the centre while A fades.
     vec2 uvB = 0.5 + (uv - 0.5) / (0.6 + 0.4 * uT);
-    c = texture(uA, uv).rgb * (1.0 - uT) + texture(uB, uvB).rgb * uT;
+    c = sceneAt(uA, uv) * (1.0 - uT) + sceneAt(uB, uvB) * uT;
   }
   return c;
 }

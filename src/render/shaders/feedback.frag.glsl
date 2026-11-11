@@ -5,6 +5,12 @@ precision highp float;
 // mirror-continuous mandala with radial fold & wallpaper tiling,
 // dynamic wandering Möbius dipole flow, and luminance-gated topographic solarize.
 uniform sampler2D uPrev;
+
+// The trail buffer may be half-float (Slice 16.7), where values can pass 1. Reading it clamped to 0..1 keeps the
+// loop exactly as it was with 8-bit buffers (which clamp on every write), with finer steps between 0 and 1.
+vec4 prevTex(vec2 uv) {
+  return min(texture(uPrev, uv), vec4(1.0));
+}
 uniform vec2 uCentre;     // centre of zoom and rotate, in uv (0,0 = screen middle)
 uniform vec2 uDrift;      // slide per 1/60 s, in uv (scaled by uDt)
 uniform vec2 uStretch;    // stretch per axis (1 = none)
@@ -81,11 +87,11 @@ mat2 rot2(float a) {
 
 // 5-tap neighborhood blur of previous frame
 vec3 blurPrev(vec2 coord, float blurAmount) {
-  vec3 base = texture(uPrev, coord).rgb;
-  vec3 neighbors = texture(uPrev, coord + vec2(uTexel.x, 0.0) * 1.5).rgb
-                 + texture(uPrev, coord - vec2(uTexel.x, 0.0) * 1.5).rgb
-                 + texture(uPrev, coord + vec2(0.0, uTexel.y) * 1.5).rgb
-                 + texture(uPrev, coord - vec2(0.0, uTexel.y) * 1.5).rgb;
+  vec3 base = prevTex( coord).rgb;
+  vec3 neighbors = prevTex( coord + vec2(uTexel.x, 0.0) * 1.5).rgb
+                 + prevTex( coord - vec2(uTexel.x, 0.0) * 1.5).rgb
+                 + prevTex( coord + vec2(0.0, uTexel.y) * 1.5).rgb
+                 + prevTex( coord - vec2(0.0, uTexel.y) * 1.5).rgb;
   return mix(base, (base + neighbors) * 0.2, blurAmount);
 }
 
@@ -334,12 +340,12 @@ void main() {
     uvB = mix(clamp(pB + 0.5 + uCentre, 0.0, 1.0), fract(pB + 0.5 + uCentre), uWrap);
 
     c = vec3(
-      texture(uPrev, uvR).r,
-      texture(uPrev, uvG).g,
-      texture(uPrev, uvB).b
+      prevTex( uvR).r,
+      prevTex( uvG).g,
+      prevTex( uvB).b
     );
   } else {
-    c = texture(uPrev, uv).rgb;
+    c = prevTex( uv).rgb;
   }
 
   if (uBlur > 0.0) {
@@ -354,14 +360,14 @@ void main() {
   // Post-fetch transforms
   if (uSobel > 0.0) {
     // 3x3 Sobel edge-magnitude sample
-    vec3 s00 = texture(uPrev, uv + vec2(-uTexel.x, -uTexel.y)).rgb;
-    vec3 s01 = texture(uPrev, uv + vec2(-uTexel.x,  0.0     )).rgb;
-    vec3 s02 = texture(uPrev, uv + vec2(-uTexel.x,  uTexel.y)).rgb;
-    vec3 s10 = texture(uPrev, uv + vec2( 0.0,      -uTexel.y)).rgb;
-    vec3 s12 = texture(uPrev, uv + vec2( 0.0,       uTexel.y)).rgb;
-    vec3 s20 = texture(uPrev, uv + vec2( uTexel.x, -uTexel.y)).rgb;
-    vec3 s21 = texture(uPrev, uv + vec2( uTexel.x,  0.0     )).rgb;
-    vec3 s22 = texture(uPrev, uv + vec2( uTexel.x,  uTexel.y)).rgb;
+    vec3 s00 = prevTex( uv + vec2(-uTexel.x, -uTexel.y)).rgb;
+    vec3 s01 = prevTex( uv + vec2(-uTexel.x,  0.0     )).rgb;
+    vec3 s02 = prevTex( uv + vec2(-uTexel.x,  uTexel.y)).rgb;
+    vec3 s10 = prevTex( uv + vec2( 0.0,      -uTexel.y)).rgb;
+    vec3 s12 = prevTex( uv + vec2( 0.0,       uTexel.y)).rgb;
+    vec3 s20 = prevTex( uv + vec2( uTexel.x, -uTexel.y)).rgb;
+    vec3 s21 = prevTex( uv + vec2( uTexel.x,  0.0     )).rgb;
+    vec3 s22 = prevTex( uv + vec2( uTexel.x,  uTexel.y)).rgb;
 
     vec3 gx = (s20 + 2.0 * s21 + s22) - (s00 + 2.0 * s01 + s02);
     vec3 gy = (s02 + 2.0 * s12 + s22) - (s00 + 2.0 * s10 + s20);
