@@ -454,9 +454,9 @@ export class Compositor implements RenderLayer {
       full.swap();
       // 2) Bloom (E5): blur a half-size copy, horizontally then vertically.
       if (this.post.bloom > 0) {
-        this.blurPass(gl, full.read.texture, 2 / full.width, 0, this.bufferTarget(half.write, { width: half.width, height: half.height }));
+        this.blurPass(gl, full.read.texture, 1 / half.width, 0, this.bufferTarget(half.write, { width: half.width, height: half.height }));
         half.swap();
-        this.blurPass(gl, half.read.texture, 0, 2 / half.height, this.bufferTarget(half.write, { width: half.width, height: half.height }));
+        this.blurPass(gl, half.read.texture, 0, 1 / half.height, this.bufferTarget(half.write, { width: half.width, height: half.height }));
         half.swap();
       }
       // 3) Post chain (E4) and bloom add, into the other buffer.

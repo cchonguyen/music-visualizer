@@ -54,12 +54,12 @@ const UNIFORMS = [
   'uPrev', 'uCentre', 'uDrift', 'uStretch', 'uZoom', 'uRot', 'uWarp', 'uWarpScale', 'uWarpSpeed',
   'uTime', 'uDt', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
   'uWarpMode', 'uKaleidoN', 'uPortalRadius', 'uRgbSplit', 'uDecayRgb', 'uSobel', 'uSolarize',
-  'uSolarizePhase', 'uMobiusPoleOffset', 'uMobiusPolePolarity', 'uWarpAmp',
+  'uSolarizePhase', 'uMobiusPoleOffset', 'uWarpAmp',
   'uCurlOctaves', 'uCurlTurbulence', 'uCurlFlowPattern',
   'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin', 'uMandalaKickFlare',
   'uContourFreq', 'uContourWidth', 'uColorSpread',
   'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl', 'uMobiusMode',
-  'uKick', 'uSub', 'uHigh',
+  'uHigh',
 ] as const;
 
 export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
@@ -116,7 +116,6 @@ export class Scene {
   private appliedScale: number | null = null;
   /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
   private fb: Record<string, ParamValue> = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS };
-  private mobiusPolePolarity = 1.0;
   private poleOrbitPhase = 0.0;
   private screenDriftPhase = 0.0;
   private lastPoleA: [number, number] = [-0.48, 0.0];
@@ -551,7 +550,6 @@ export class Scene {
     gl.uniform1f?.(u('uSolarizePhase')!, timeSec * 2.0);
     const poleOffset = n('mobiusPoleOffset');
     gl.uniform1f?.(u('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.48);
-    gl.uniform1f?.(u('uMobiusPolePolarity')!, this.mobiusPolePolarity);
     gl.uniform1f?.(u('uWarpAmp')!, n('warp') || 0.0);
 
     // Slice 7.22 Curl uniforms:
@@ -594,8 +592,6 @@ export class Scene {
     gl.uniform1i?.(u('uMobiusMode')!, mobiusModeInt);
 
     // Audio modulations:
-    gl.uniform1f?.(u('uKick')!, frame?.kickEnv ?? (frame?.raw?.sub ?? 0.0));
-    gl.uniform1f?.(u('uSub')!, frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5));
     gl.uniform1f?.(u('uHigh')!, frame?.norm?.high ?? (frame?.env?.high ?? 0.5));
   }
 
