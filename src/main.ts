@@ -36,6 +36,7 @@ import { BenchmarkRunner, GpuTimedLayer, benchmarkSeconds, describeRenderer } fr
 import { QualityGovernor, TIER_SETTINGS, detectTier } from './render/qualityGovernor';
 import { setAutoScale } from './gl/size';
 import { setFloatBuffersEnabled } from './gl/fbo';
+import { maxCostForTier, presetCost } from './presets/cost';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector, type CameraUniforms, type ColorUniforms } from './render/globalDirector';
@@ -553,6 +554,8 @@ function start(): void {
     ],
   );
   if (autoScaleOn) setAutoScale(governor.scale);
+  // The phone tier also gets the lighter crossfade (shorter fade, outgoing scene not redrawn).
+  if (governor.tier === 'phone' && compositor) compositor.setLightFade(true);
   let lastRaf = performance.now();
   host.start((): AudioFrame => {
     const now = performance.now();
@@ -647,8 +650,9 @@ function start(): void {
     // Auto-cycle (T2): pick the next preset when the timer or a strong beat says so.
     if (session && switchShown && cycle.mode !== 'off' && !bench) {
       const shownId = session.shownId ?? 'crown';
-      const cycleOpts: CycleOptions = { ...cycle, calmOnly: state.calm };
-      const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags })), cycleOpts);
+      // Slow devices (phone, integrated graphics) skip Heavy presets in the cycle (Slice 16.11).
+      const cycleOpts: CycleOptions = { ...cycle, calmOnly: state.calm, maxCost: maxCostForTier(governor.tier) };
+      const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags, cost: presetCost(e.preset).level })), cycleOpts);
       const strongBeat = frame.beat && frame.beatStrength >= 0.8;
       // A few seconds before a switch, compile the next preset while it is still hidden (Slice 16.3).
       const upcoming = cycler.upcoming(shownId, pool, cycleOpts);

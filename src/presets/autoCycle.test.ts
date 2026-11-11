@@ -123,3 +123,48 @@ describe('AutoCycler.upcoming (Slice 16.3)', () => {
     expect(c.upcoming('c', ['a', 'c'], o)).toBe('a');
   });
 });
+
+describe('eligible with a cost limit (Slice 16.11)', () => {
+  const cands = [
+    { id: 'a', tags: [], cost: 'light' as const },
+    { id: 'b', tags: [], cost: 'heavy' as const },
+    { id: 'c', tags: [], cost: 'medium' as const },
+    { id: 'd', tags: ['calm'], cost: 'heavy' as const },
+  ];
+
+  it('keeps everything with no limit', () => {
+    expect(eligible(cands, opts({}))).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('drops presets heavier than the limit', () => {
+    expect(eligible(cands, opts({ maxCost: 'medium' }))).toEqual(['a', 'c']);
+    expect(eligible(cands, opts({ maxCost: 'light' }))).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('treats a missing cost as light', () => {
+    expect(eligible([{ id: 'x', tags: [] }, { id: 'y', tags: [] }, { id: 'z', tags: [], cost: 'heavy' as const }], opts({ maxCost: 'medium' }))).toEqual(['x', 'y']);
+  });
+
+  it('never filters down to fewer than two presets', () => {
+    expect(eligible([{ id: 'a', tags: [], cost: 'light' as const }, { id: 'b', tags: [], cost: 'heavy' as const }], opts({ maxCost: 'medium' }))).toEqual(['a', 'b']);
+  });
+
+  it('combines with favourites and skip', () => {
+    const list = [
+      { id: 'a', tags: ['favourite'], cost: 'light' as const },
+      { id: 'b', tags: ['favourite'], cost: 'medium' as const },
+      { id: 'c', tags: ['favourite'], cost: 'heavy' as const },
+      { id: 'd', tags: ['skip'], cost: 'light' as const },
+    ];
+    expect(eligible(list, opts({ maxCost: 'medium', favouritesOnly: true }))).toEqual(['a', 'b']);
+  });
+
+  it('combines with calm-only', () => {
+    const list = [
+      { id: 'a', tags: ['calm'], cost: 'light' as const },
+      { id: 'b', tags: ['calm'], cost: 'medium' as const },
+      { id: 'c', tags: ['calm'], cost: 'heavy' as const },
+    ];
+    expect(eligible(list, opts({ maxCost: 'medium', calmOnly: true }))).toEqual(['a', 'b']);
+  });
+});

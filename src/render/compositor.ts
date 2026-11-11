@@ -19,6 +19,7 @@
 import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
+import { LIGHT_FADE_MAX_SEC } from '../presets/cost';
 import { PingPong, bytesPerPixel, detectFeedbackFormat, feedbackFormat, type BufferFormat } from '../gl/fbo';
 import { getEffectiveRenderScale, scaledBufferSize } from '../gl/size';
 import { type RenderClock } from './clock';
@@ -169,6 +170,8 @@ export class Compositor implements RenderLayer {
   private loudnessSlow = 0;
   // How long a scene switch takes to fade (seconds). Each preset can ask for its own (slice 4.4).
   private fadeSec = RELEASE_TAU_SEC;
+  // Lighter crossfade for slower devices (Slice 16.11): shorter fades, and the outgoing scene is not redrawn.
+  private lightFade = false;
   // Slice 5.3: the canvas size as the host gave it, and the box the scene actually uses (w x h),
   // drawn at (offX, offY) on the canvas. appliedAspect is the setting the buffers were sized for.
   private rawW = 1;
@@ -213,6 +216,23 @@ export class Compositor implements RenderLayer {
   /** Crossfade time for scene switches, in seconds (0.05 to 10). Set per preset. */
   setFadeSeconds(seconds: number): void {
     this.fadeSec = Math.min(10, Math.max(0.05, seconds));
+  }
+
+  /**
+   * Lighter crossfade for slow devices. While two scenes blend, the outgoing one is not redrawn (its last image fades
+   * out) and fades last at most LIGHT_FADE_MAX_SEC. Off by default.
+   */
+  setLightFade(on: boolean): void {
+    this.lightFade = on;
+  }
+
+  isLightFade(): boolean {
+    return this.lightFade;
+  }
+
+  /** Crossfade time in use: the preset's own, capped when the lighter crossfade is on. */
+  private effectiveFadeSec(): number {
+    return this.lightFade ? Math.min(this.fadeSec, LIGHT_FADE_MAX_SEC) : this.fadeSec;
   }
 
   /** Transition style for scene switches (T1). Applies while two scenes blend. */
@@ -419,7 +439,8 @@ export class Compositor implements RenderLayer {
 
   private easeOne(name: string, w: number, dtSec: number): void {
     const t = this.targets.get(name) ?? 0;
-    let next = releaseEnvelope(w, t, dtSec, this.fadeSec, this.fadeSec);
+    const fade = this.effectiveFadeSec();
+    let next = releaseEnvelope(w, t, dtSec, fade, fade);
     if (Math.abs(next - t) < 1e-3) next = t; // settle exactly, so finished fades free buffers
     this.weights.set(name, next);
   }
@@ -585,7 +606,10 @@ export class Compositor implements RenderLayer {
     }
 
     // Each active scene renders its own buffers. It is now stale for whenever it comes back after being kept.
+    const crossfading = active.length > 1;
     for (const name of active) {
+      // Lighter crossfade: a scene that is on its way out keeps its last image instead of being drawn again.
+      if (this.lightFade && crossfading && (this.targets.get(name) ?? 0) === 0 && this.drawn.has(name)) continue;
       this.scenes.get(name)!.draw(frame, clock);
       this.drawn.add(name);
     }
