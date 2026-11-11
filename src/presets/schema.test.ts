@@ -16,6 +16,7 @@ import {
   RINGS_MODE_SPEC,
   PARTICLE_MODE_SPEC,
   type ParamSpec,
+  type ParamValue,
 } from "./schema";
 
 const density: ParamSpec = { type: "float", name: "density", label: "Density", group: "Wall", default: 0.5, min: 0, max: 1, step: 0.01 };
@@ -258,5 +259,65 @@ describe("Removed Mandala kick flare control", () => {
     expect(preset.feedback.mandalaTile?.value).toBe(0.35);
     expect(preset.feedback.radialFold?.value).toBe(0.48);
     expect(preset.feedback.zoom?.value).toBe(defaultsFor(FEEDBACK_WARP_SPECS).zoom);
+  });
+});
+
+describe("Feedback warp control visibility (Slice 15.1)", () => {
+  const MODE_ONLY: Record<string, string[]> = {
+    classic: [],
+    curl: ["curlOctaves", "curlTurbulence", "curlFlowPattern"],
+    polarFold: ["portalRadius", "radialFold", "mandalaTile", "mandalaCounterSpin", "mandalaPattern", "kaleidoN"],
+    mobius: ["mobiusPoleOffset", "mobiusFlow", "mobiusSwirl", "mobiusWander", "mobiusMode"],
+    rgbSplit: ["rgbSplit"],
+  };
+  const allModeOnly = Object.values(MODE_ONLY).flat();
+  const visibleNames = (values: Record<string, ParamValue>) =>
+    FEEDBACK_WARP_SPECS.filter((s) => isSpecVisible(s, values)).map((s) => s.name);
+
+  it("lists exactly the mode-only controls, each with a warpMode rule", () => {
+    const gated = FEEDBACK_WARP_SPECS.filter((s) => s.showWhen && "warpMode" in s.showWhen).map((s) => s.name);
+    expect(gated.sort()).toEqual([...allModeOnly].sort());
+  });
+
+  it("Classic shows no Mandala, Mobius, curl, portal or RGB split control", () => {
+    const visible = visibleNames({ warpMode: "classic" });
+    for (const name of allModeOnly) expect(visible).not.toContain(name);
+  });
+
+  for (const [mode, own] of Object.entries(MODE_ONLY)) {
+    it(`${mode} shows only its own mode-only controls`, () => {
+      const visible = visibleNames({ warpMode: mode });
+      for (const name of allModeOnly) {
+        expect(visible.includes(name), `${name} in ${mode}`).toBe(own.includes(name));
+      }
+    });
+  }
+
+  it("contour and colour spread need Solarize above 0", () => {
+    const names = ["contourFreq", "contourWidth", "colorSpread"];
+    const off = visibleNames({ warpMode: "classic", solarize: 0 });
+    const on = visibleNames({ warpMode: "classic", solarize: 0.3 });
+    for (const n of names) {
+      expect(off).not.toContain(n);
+      expect(on).toContain(n);
+    }
+    expect(off).toContain("solarize");
+  });
+
+  it("hiding a control never changes its stored value", () => {
+    const values: Record<string, ParamValue> = { warpMode: "mobius", mobiusFlow: 1.7, curlOctaves: 3 };
+    const specs = FEEDBACK_WARP_SPECS.find((s) => s.name === "curlOctaves")!;
+    expect(isSpecVisible(specs, values)).toBe(false);
+    expect(values.curlOctaves).toBe(3);
+    values.warpMode = "classic";
+    expect(values.mobiusFlow).toBe(1.7);
+  });
+
+  it("isSpecVisible supports the above rule and rejects non-numbers", () => {
+    const spec = { type: "float", name: "x", label: "X", group: "G", default: 0, min: 0, max: 1, step: 0.1, showWhen: { dep: { above: 0 } } } as ParamSpec;
+    expect(isSpecVisible(spec, { dep: 0 })).toBe(false);
+    expect(isSpecVisible(spec, { dep: 0.01 })).toBe(true);
+    expect(isSpecVisible(spec, { dep: { value: 0.5 } })).toBe(true);
+    expect(isSpecVisible(spec, { dep: "a" })).toBe(false);
   });
 });

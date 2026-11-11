@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertValidSpec, defaultsFor } from "./schema";
+import { assertValidSpec, defaultsFor, isSpecVisible, type ParamSpec } from "./schema";
 import {
   BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHAPE_DEFAULTS, SHAPE_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
@@ -237,3 +237,40 @@ describe("layer schemas", () => {
   });
 });
 
+describe("Feedback and Post dependent control visibility (Slice 15.1)", () => {
+  const byName = (specs: readonly ParamSpec[], n: string) => specs.find((s) => s.name === n)!;
+
+  it("Bloom threshold shows only while Bloom is above 0", () => {
+    const spec = byName(POST_SPECS, 'bloomThreshold');
+    expect(isSpecVisible(spec, { bloom: 0 })).toBe(false);
+    expect(isSpecVisible(spec, { bloom: 0.4 })).toBe(true);
+    expect(byName(POST_SPECS, 'bloom').showWhen).toBeUndefined();
+  });
+
+  it("Wave warp, count and speed follow the warp modes that read them", () => {
+    const visible = (n: string, mode: string) => isSpecVisible(byName(FEEDBACK_SPECS, n), { warpMode: mode });
+    for (const mode of ['classic', 'curl', 'mobius']) expect(visible('warp', mode)).toBe(true);
+    for (const mode of ['polarFold', 'rgbSplit']) expect(visible('warp', mode)).toBe(false);
+    for (const mode of ['classic', 'curl']) expect(visible('warpScale', mode)).toBe(true);
+    for (const mode of ['mobius', 'polarFold', 'rgbSplit']) expect(visible('warpScale', mode)).toBe(false);
+    for (const mode of ['classic', 'curl', 'rgbSplit']) expect(visible('warpSpeed', mode)).toBe(true);
+    for (const mode of ['mobius', 'polarFold']) expect(visible('warpSpeed', mode)).toBe(false);
+  });
+
+  it("controls without a rule stay visible and hidden controls keep their values", () => {
+    expect(byName(FEEDBACK_SPECS, 'zoom').showWhen).toBeUndefined();
+    expect(byName(FEEDBACK_SPECS, 'decay').showWhen).toBeUndefined();
+    const values = { warpMode: 'polarFold', warp: 0.7, warpScale: 2 };
+    expect(isSpecVisible(byName(FEEDBACK_SPECS, 'warp'), values)).toBe(false);
+    expect(values.warp).toBe(0.7);
+    expect(values.warpScale).toBe(2);
+  });
+
+  it("every showWhen rule on Feedback and Post points at a real control", () => {
+    const names = new Set([...FEEDBACK_SPECS, ...POST_SPECS].map((s) => s.name));
+    names.add('warpMode');
+    for (const spec of [...FEEDBACK_SPECS, ...POST_SPECS]) {
+      for (const key of Object.keys(spec.showWhen ?? {})) expect(names.has(key), `${spec.name} -> ${key}`).toBe(true);
+    }
+  });
+});

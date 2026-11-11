@@ -15,7 +15,12 @@ export type Vec3 = [number, number, number];
 
 export type ParamValue = number | boolean | string | Vec3 | undefined;
 
-export type ShowWhenCondition = Record<string, ParamValue | readonly ParamValue[]>;
+/** Numeric rule for showWhen: visible only while the controlling number is greater than `above`. */
+export interface ShowWhenAbove {
+  above: number;
+}
+
+export type ShowWhenCondition = Record<string, ParamValue | readonly ParamValue[] | ShowWhenAbove>;
 
 export interface ParamSpecBase {
   name: string; // stable key used in preset files, e.g. "density"
@@ -117,7 +122,9 @@ export function isSpecVisible(spec: ParamSpec, values: Record<string, ParamValue
     const actual = (raw !== null && typeof raw === 'object' && 'value' in raw && !Array.isArray(raw))
       ? (raw as { value: ParamValue }).value
       : (raw as ParamValue);
-    if (Array.isArray(expected)) {
+    if (expected !== null && typeof expected === 'object' && !Array.isArray(expected) && 'above' in expected) {
+      if (!(typeof actual === 'number' && actual > (expected as ShowWhenAbove).above)) return false;
+    } else if (Array.isArray(expected)) {
       if (!expected.includes(actual as never)) return false;
     } else if (actual !== expected) {
       return false;
@@ -214,6 +221,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 0.25,
     step: 0.005,
     description: "Sets the radius of the unwarped central portal disk.",
+    showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
@@ -225,6 +233,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 0.85,
     step: 0.02,
     description: "Adjusts the spatial distance between the two Möbius vortex poles.",
+    showWhen: { warpMode: "mobius" },
   },
   // Slice 7.22 additions
   {
@@ -237,6 +246,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 3,
     step: 1,
     description: "Sets the number of noise octave layers used in the curl fluid simulation.",
+    showWhen: { warpMode: "curl" },
   },
   {
     type: "float",
@@ -248,6 +258,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Controls treble-reactive smoke turbulence chaos in curl warp.",
+    showWhen: { warpMode: "curl" },
   },
   {
     type: "enum",
@@ -257,6 +268,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     default: "plumes",
     options: ["plumes", "eddies", "outflow", "inflow"],
     description: "Chooses the fluid flow pattern style governing curl vector motion.",
+    showWhen: { warpMode: "curl" },
   },
   {
     type: "float",
@@ -268,6 +280,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Controls angular sector mirroring repetition around the center.",
+    showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
@@ -279,6 +292,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Tiles the feedback buffer with crystal wallpaper symmetry.",
+    showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
@@ -290,6 +304,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Sets counter-rotational spin speed across nested mandala rings.",
+    showWhen: { warpMode: "polarFold" },
   },
   {
     type: "enum",
@@ -299,6 +314,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     default: "auto",
     options: ["auto", "4", "6", "8", "12", "16"],
     description: "Locks the rotational symmetry order for crystal mandala tiling.",
+    showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
@@ -310,6 +326,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 2.0,
     step: 0.05,
     description: "Controls the circulation flow velocity through Möbius vortex poles.",
+    showWhen: { warpMode: "mobius" },
   },
   {
     type: "float",
@@ -321,6 +338,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 2.0,
     step: 0.05,
     description: "Controls logarithmic spiral winding tightness around Möbius poles.",
+    showWhen: { warpMode: "mobius" },
   },
   {
     type: "float",
@@ -332,6 +350,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Modulates autonomous orbital wandering of Möbius poles across the screen.",
+    showWhen: { warpMode: "mobius" },
   },
   {
     type: "enum",
@@ -341,6 +360,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     default: "auto",
     options: ["auto", "dipoleFlow", "doubleVortex", "figureEight", "breathingOrbit"],
     description: "Chooses the automated trajectory pattern followed by Möbius poles.",
+    showWhen: { warpMode: "mobius" },
   },
   // Warp group (high-intensity at bottom)
   {
@@ -353,6 +373,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 16,
     step: 1,
     description: "Sets the number of radial reflection axes folded across the screen.",
+    showWhen: { warpMode: "polarFold" },
     intense: true,
     warning: "Intense visual transform. Highly sensitive to small adjustments — use with care.",
   },
@@ -366,6 +387,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 0.08,
     step: 0.001,
     description: "Displaces red, green, and blue coordinates during coordinate warping.",
+    showWhen: { warpMode: "rgbSplit" },
     intense: true,
     warning: "Intense visual transform. Highly sensitive to small adjustments — use with care.",
   },
@@ -407,6 +429,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 16.0,
     step: 0.25,
     description: "Sets the spatial frequency and count of topographic contour bands.",
+    showWhen: { solarize: { above: 0 } },
   },
   {
     type: "float",
@@ -418,6 +441,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Adjusts the stroke thickness of topographic contour bands.",
+    showWhen: { solarize: { above: 0 } },
   },
   {
     type: "float",
@@ -429,6 +453,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Spreads palette hues across topographic contour gradient cycles.",
+    showWhen: { solarize: { above: 0 } },
   },
   {
     type: "float",
