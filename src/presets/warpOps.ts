@@ -7,7 +7,7 @@ import type { EnumSpec, NumberSpec, ParamSpec } from "./schema";
  * Operators. The position in this list is the number the warp field shader switches on, so new names are
  * only ever added at the end.
  */
-export const WARP_OP_TYPES = ["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl"] as const;
+export const WARP_OP_TYPES = ["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl", "flow"] as const;
 export type WarpOpType = (typeof WARP_OP_TYPES)[number];
 
 /** Most operators a preset can stack. */
@@ -23,6 +23,7 @@ export const WARP_OP_LABELS: Readonly<Record<WarpOpType, string>> = {
   tunnel: "Tunnel perspective",
   sphere: "Sphere bulge",
   curl: "Curl noise",
+  flow: "Flow field (ink in water)",
 };
 
 function num(name: string, label: string, def: number, min: number, max: number, step: number): NumberSpec {

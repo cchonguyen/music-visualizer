@@ -5,7 +5,7 @@ precision highp float;
 // four operators. The feedback pass reads it with one lookup. Output rg holds the displacement in uv units,
 // stored as 0.5 + d / (2 * RANGE) so it works in 8-bit buffers as well as half-float ones.
 uniform int uOpCount;
-uniform int uOpType[4];      // 0 radial, 1 swirl, 2 ripple, 3 stripes, 4 stretch, 5 tile, 6 tunnel, 7 sphere, 8 curl
+uniform int uOpType[4];      // 0 radial, 1 swirl, 2 ripple, 3 stripes, 4 stretch, 5 tile, 6 tunnel, 7 sphere, 8 curl, 9 flow
 uniform float uOpAmount[4];  // signed, -1..1
 uniform float uOpScale[4];
 uniform float uOpSpeed[4];
@@ -116,6 +116,16 @@ vec2 curlOperator(vec2 q, float scale, float t, vec3 extra) {
   return vel;
 }
 
+// Flow field (Slice 20.1). Ink in water: a slowly changing one-octave stream function carries the picture along,
+// and the flow is sampled a second time where the first step would land (self-advection), so streaks bend and
+// fold into each other. This is a cheap two-step estimate, not a pressure solver.
+vec2 flowOperator(vec2 q, float scale, float t) {
+  vec2 p = q * (scale * 1.6);
+  vec2 v1 = curlNoise(p, t, 1, 0.0, 0.0);
+  vec2 v2 = curlNoise(p + v1 * 0.3, t + 3.7, 1, 0.0, 0.0);
+  return mix(v1, v2, 0.6) * 0.5;
+}
+
 // Displacement (in aspect-corrected space) the operator adds to the sample position at q.
 vec2 operatorAt(int type, vec2 q, float amount, float scale, float speed, vec3 extra) {
   float r = length(q);
@@ -156,6 +166,9 @@ vec2 operatorAt(int type, vec2 q, float amount, float scale, float speed, vec3 e
   } else if (type == 8) {
     // Curl noise: swirling smoke-like flow. 0.032 / STRENGTH keeps the old Curl mode's strength.
     return curlOperator(q, scale, t, extra) * (0.032 / STRENGTH) * amount;
+  } else if (type == 9) {
+    // Flow field: slow ink-like drift with self-advection.
+    return flowOperator(q, scale, t) * amount;
   }
   return vec2(0.0);
 }
