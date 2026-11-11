@@ -918,6 +918,32 @@ function installAdminAuthListeners(): void {
   }
 }
 
+/**
+ * Register the offline cache worker (Slice 21.10). Production only, over https or localhost.
+ * Any failure is swallowed so it never breaks the app.
+ */
+function registerServiceWorker(): void {
+  try {
+    if (!import.meta.env.PROD) return;
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const { protocol, hostname } = window.location;
+    if (protocol !== 'https:' && hostname !== 'localhost') return;
+    window.addEventListener(
+      'load',
+      () => {
+        try {
+          navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+        } catch {
+          // ignore registration errors
+        }
+      },
+      { once: true },
+    );
+  } catch {
+    // ignore support errors
+  }
+}
+
 if (typeof window !== 'undefined') {
   const isAuthPopup = Boolean(
     launchedOnAdminPath &&
@@ -958,4 +984,5 @@ if (typeof window !== 'undefined') {
   const supportText = supportNoticeText(browserSupportProblems());
   if (supportText) showNotice(supportText, 'error', 0, { dismissible: true });
   document.getElementById('start-btn')?.addEventListener('click', start, { once: true });
+  registerServiceWorker();
 }
