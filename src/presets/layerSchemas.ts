@@ -575,6 +575,48 @@ export const JULIA_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'colourSpread', label: 'Colour bands', group: 'Colour', default: JULIA_DEFAULTS.colourSpread, min: 0, max: 1, step: 0.05, description: 'How many colour bands run through the filaments.' },
 ];
 
+/** Orbit layer (Slice 20.4). */
+export const ORBIT_SHAPES = ['dot', 'ring', 'diamond'] as const;
+export interface OrbitParams {
+  count: number; // 6..96 bodies in total
+  orbits: number; // 1..5
+  radius: number; // 0.2..1.2 of half the screen height
+  tilt: number; // 0..1.4 rad
+  depth: number; // 0..1 perspective: far bodies smaller and dimmer
+  speed: number; // 0..3
+  yawSpeed: number; // 0..1, slow turn of the whole system
+  size: number; // 0.01..0.08 of screen height
+  reactivity: number; // 0..2, size pulse from the music
+  shape: string; // dot | ring | diamond
+  brightness: number;
+}
+export const ORBIT_DEFAULTS: OrbitParams = {
+  count: 32,
+  orbits: 3,
+  radius: 0.6,
+  tilt: 0.6,
+  depth: 0.6,
+  speed: 0.5,
+  yawSpeed: 0.2,
+  size: 0.035,
+  reactivity: 1,
+  shape: 'dot',
+  brightness: 1,
+};
+export const ORBIT_SPECS: readonly ParamSpec[] = [
+  { type: 'int', name: 'count', label: 'Bodies', group: 'Orbit', default: ORBIT_DEFAULTS.count, min: 6, max: 96, step: 2, description: 'How many shapes ride the orbits in total.' },
+  { type: 'int', name: 'orbits', label: 'Orbits', group: 'Orbit', default: ORBIT_DEFAULTS.orbits, min: 1, max: 5, step: 1, description: 'How many separate orbit rings there are.' },
+  { type: 'float', name: 'radius', label: 'Radius', group: 'Orbit', default: ORBIT_DEFAULTS.radius, min: 0.2, max: 1.2, step: 0.02, description: 'Size of the outer orbit as a fraction of half the screen height.' },
+  { type: 'float', name: 'tilt', label: 'Tilt', group: 'Orbit', default: ORBIT_DEFAULTS.tilt, min: 0, max: 1.4, step: 0.02, description: 'How far the orbit rings lean toward you. 0 is flat, like looking straight down on them.' },
+  { type: 'float', name: 'depth', label: 'Depth', group: 'Orbit', default: ORBIT_DEFAULTS.depth, min: 0, max: 1, step: 0.05, description: 'How strongly distance changes size and brightness. 0 makes every shape the same.' },
+  { type: 'float', name: 'speed', label: 'Orbit speed', group: 'Motion', default: ORBIT_DEFAULTS.speed, min: 0, max: 3, step: 0.05, description: 'How fast the shapes travel round. Louder passages run a little faster.' },
+  { type: 'float', name: 'yawSpeed', label: 'Turn speed', group: 'Motion', default: ORBIT_DEFAULTS.yawSpeed, min: 0, max: 1, step: 0.02, description: 'How fast the whole system slowly turns.' },
+  { type: 'float', name: 'size', label: 'Shape size', group: 'Shape', default: ORBIT_DEFAULTS.size, min: 0.01, max: 0.08, step: 0.002, description: 'Size of each shape as a fraction of the screen height.' },
+  { type: 'enum', name: 'shape', label: 'Shape', group: 'Shape', default: ORBIT_DEFAULTS.shape, options: ORBIT_SHAPES, description: 'Dot, ring or diamond.' },
+  { type: 'float', name: 'reactivity', label: 'Music reactivity', group: 'Audio', default: ORBIT_DEFAULTS.reactivity, min: 0, max: 2, step: 0.05, description: 'How much each shape swells with its own slice of the spectrum and with the kick. Only size changes, never brightness.' },
+  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: ORBIT_DEFAULTS.brightness, min: 0.1, max: 3, step: 0.05, description: 'Scales the brightness of the shapes.' },
+];
+
 export type LayerType =
   | 'shape'
   | 'tunnel'
@@ -585,7 +627,8 @@ export type LayerType =
   | 'bars'
   | 'bassPulse'
   | 'waveform'
-  | 'julia';
+  | 'julia'
+  | 'orbit';
 
 /** Studio-only view tier (Slice 15.4). Never saved in presets. A spec with no tier counts as advanced. */
 export type ControlTier = 'basic' | 'advanced';
@@ -615,6 +658,7 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   bassPulse: allBasic(BASS_PULSE_SPECS),
   waveform: allBasic(WAVEFORM_SPECS),
   julia: allBasic(JULIA_SPECS),
+  orbit: allBasic(ORBIT_SPECS),
 };
 
 /** Basic controls of the combined Feedback and post section (8). Applied in place below, these specs are not shared. */
