@@ -43,7 +43,14 @@ function itemRepo(item) {
   return m ? m[1] : null;
 }
 
-export function planBoard({ issues, items, options, optionIdsByName }) {
+function findOption(optionIdsByName, name) {
+  if (name == null) return null;
+  const want = norm(name);
+  for (const [k, id] of Object.entries(optionIdsByName ?? {})) if (norm(k) === want) return { id, name: k };
+  return null;
+}
+
+export function planBoard({ issues, items, options, optionIdsByName, dragWriteBack = false }) {
   const plan = { add: [], set: [], writeBack: [] };
   const byKey = new Map();
   for (const it of items) {
@@ -52,7 +59,7 @@ export function planBoard({ issues, items, options, optionIdsByName }) {
     if (repo) byKey.set(`${norm(repo)}#${it.content.number}`, it);
   }
   const allStatus = statusLabels(options);
-  const labelFor = (name) => allStatus.find((k) => options[k] === name) ?? null;
+  const labelFor = (name) => allStatus.find((k) => norm(options[k]) === norm(name)) ?? null;
   for (const issue of issues) {
     const item = byKey.get(`${norm(issue.repo)}#${issue.number}`);
     if (!item) {
@@ -61,14 +68,15 @@ export function planBoard({ issues, items, options, optionIdsByName }) {
     }
     const want = desiredStatus(issue, options);
     const have = item.status ?? null;
-    if (have === want) continue;
+    if (norm(have) === norm(want) && have != null) continue;
     const present = labelNames(issue.labels).filter((n) => allStatus.some((k) => norm(k) === norm(n)));
     const cardNewer = item.updated_at && issue.updated_at && item.updated_at > issue.updated_at;
     const setPlan = () => {
-      if (optionIdsByName[want]) plan.set.push({ itemId: item.id, optionId: optionIdsByName[want], name: want });
+      const opt = findOption(optionIdsByName, want);
+      if (opt) plan.set.push({ itemId: item.id, optionId: opt.id, name: opt.name });
     };
-    if (cardNewer && have !== options.done && have && optionIdsByName[have]) {
-      if (have === options.wontdo) {
+    if (dragWriteBack && cardNewer && norm(have) !== norm(options.done) && have && findOption(optionIdsByName, have)) {
+      if (norm(have) === norm(options.wontdo)) {
         if (issue.state === 'closed' && issue.state_reason === 'not_planned') continue;
         plan.writeBack.push({ repo: issue.repo, number: issue.number, addLabel: null, removeLabels: present, close: 'not_planned' });
         continue;
@@ -165,7 +173,15 @@ export async function runBoard({ env = process.env, fetchImpl = fetch, config, l
       }
     }
 
-    const plan = planBoard({ issues, items, options: cfg.statusOptions, optionIdsByName });
+    const warned = new Set();
+    for (const i of issues) {
+      const w = desiredStatus(i, cfg.statusOptions);
+      if (w && !findOption(optionIdsByName, w) && !warned.has(w)) {
+        warned.add(w);
+        log(`::warning::board-sync: status option "${w}" does not exist on project ${num}; card left without that status.`);
+      }
+    }
+    const plan = planBoard({ issues, items, options: cfg.statusOptions, optionIdsByName, dragWriteBack: cfg.dragWriteBack === true });
     const patch = (itemId, optionId) =>
       must('PATCH', `${base}/items/${itemId}`, { fields: [{ id: sf.id, value: optionId }] });
     for (const issue of plan.add) {
@@ -174,9 +190,10 @@ export async function runBoard({ env = process.env, fetchImpl = fetch, config, l
       const item = await res.json();
       log(`add ${issue.repo}#${issue.number}`);
       const want = desiredStatus(issue, cfg.statusOptions);
-      if (optionIdsByName[want]) {
-        await patch(item.id, optionIdsByName[want]);
-        log(`set ${issue.repo}#${issue.number} -> ${want}`);
+      const opt = findOption(optionIdsByName, want);
+      if (opt) {
+        await patch(item.id, opt.id);
+        log(`set ${issue.repo}#${issue.number} -> ${opt.name}`);
       }
     }
     for (const s of plan.set) {

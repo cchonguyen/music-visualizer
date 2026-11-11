@@ -20,17 +20,22 @@ jobs:
         with:
           node-version: 22
 
-      # Quick checks from the spoke's CLAUDE.md. Delete any line the spoke has no tool for.
+      # Quick checks from the spoke's CLAUDE.md. They run only when the repo has a package.json, so a
+      # repo with no app yet is not red. Delete any line the spoke has no tool for.
       - name: Install dependencies
+        if: hashFiles('package.json') != ''
         run: npm install --no-audit --no-fund
 
       - name: Typecheck
+        if: hashFiles('package.json') != ''
         run: npm run typecheck --silent
 
       - name: Lint
+        if: hashFiles('package.json') != ''
         run: npm run lint --if-present --silent
 
       - name: Unit tests
+        if: hashFiles('package.json') != ''
         run: npm test --silent
 
       # Scope, Red tripwires, and test-assertion audit. Advisory mode reports findings without blocking low-risk PRs.
