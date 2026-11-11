@@ -82,7 +82,7 @@ describe("layer schemas", () => {
   });
 
   it("SHAPE_SPECS covers all 5 orthogonal categories and validates correctly", () => {
-    expect(SHAPE_SPECS.length).toBe(37);
+    expect(SHAPE_SPECS.length).toBe(38);
     SHAPE_SPECS.forEach(assertValidSpec);
 
     const groups = new Set(SHAPE_SPECS.map(s => s.group));
@@ -116,7 +116,7 @@ describe("layer schemas", () => {
     // Category 5: Audio & Style
     const audioSpecs = SHAPE_SPECS.filter(s => s.group === 'Audio & Style');
     expect(audioSpecs.map(s => s.name)).toEqual([
-      'audioSource', 'reactivity', 'attackMs', 'releaseMs', 'colorMode', 'solidColor', 'glow',
+      'audioSource', 'reactivity', 'attackMs', 'releaseMs', 'elementDelay', 'colorMode', 'solidColor', 'glow',
     ]);
   });
 

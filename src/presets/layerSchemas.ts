@@ -420,6 +420,7 @@ export interface ShapeParams {
   reactivity: number;     // 0..15.0 (old ceiling 3.0, raised 5x in Slice 15.8)
   attackMs: number;       // 5..200
   releaseMs: number;      // 20..600
+  elementDelay: number;   // 0..1 (0 = every element reacts together)
   colorMode: ShapeColorMode;
   solidColor: string;     // "#rrggbb" (when colorMode === 'solid')
   glow: number;           // 0..2.0
@@ -464,6 +465,7 @@ export const SHAPE_DEFAULTS: ShapeParams = {
   reactivity: 1.0,
   attackMs: 12,
   releaseMs: 180,
+  elementDelay: 0,
   colorMode: 'palette',
   solidColor: '#00f0ff',
   glow: 0.6,
@@ -513,6 +515,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 15.0, step: 0.05, description: 'Scales overall dynamic sensitivity to audio input peaks.' },
   { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5, description: 'Sets smoothing attack response time in milliseconds for transient swells.' },
   { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10, description: 'Sets smoothing decay release time in milliseconds for sustained tails.' },
+  { type: 'float', name: 'elementDelay', label: 'Element delay', group: 'Audio & Style', default: SHAPE_DEFAULTS.elementDelay, min: 0, max: 1, step: 0.05, description: 'Lags each bar or dot behind the one before it, so the reaction ripples along the shape. 0 keeps every element in step.' },
   { type: 'enum', name: 'colorMode', label: 'Color mode', group: 'Audio & Style', default: SHAPE_DEFAULTS.colorMode, options: ['solid', 'palette', 'frequencyGradient', 'amplitudeHot'], description: 'Configures shader color mapping and palette gradient distribution.' },
   { type: 'colour', name: 'solidColor', label: 'Solid color', group: 'Audio & Style', default: SHAPE_DEFAULTS.solidColor, showWhen: { colorMode: 'solid' }, description: 'Sets uniform tint color when solid color mode is active.' },
   { type: 'float', name: 'glow', label: 'Glow bloom', group: 'Audio & Style', default: SHAPE_DEFAULTS.glow, min: 0, max: 2.0, step: 0.05, description: 'Controls bloom glow luminance around reactive vector outlines.' },

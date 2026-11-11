@@ -105,6 +105,15 @@ export const SHAPE_AMP_MAX = 10.0;
 /** Reactivity schema maximum (old 3.0, raised 5x in Slice 15.8). */
 export const SHAPE_REACTIVITY_MAX = 15.0;
 
+/** Frames of smoothed audio kept for per-element delay. */
+export const SHAPE_HISTORY_FRAMES = 32;
+
+/** Frames of lag for the element at texel j (0..255) at delay amount d (0..1). */
+export function elementLagFrames(delay: number, j: number): number {
+  const d = Math.min(1, Math.max(0, delay));
+  return Math.round(d * (SHAPE_HISTORY_FRAMES - 1) * (j / 255));
+}
+
 export class ShapeLayer implements RenderLayer {
   /** Accent swap mix from ColourSwap (0 = normal, 1 = swapped). */
   accentSwap = 0;
@@ -171,6 +180,11 @@ export class ShapeLayer implements RenderLayer {
   readonly peakHoldSamples = new Float32Array(256);
   readonly peakVelocities = new Float32Array(256);
   private raw256 = new Float32Array(256);
+  /** Ring of recent smoothed frames, newest at historyHead. */
+  private readonly history = new Float32Array(256 * SHAPE_HISTORY_FRAMES);
+  private historyHead = 0;
+  /** What is uploaded to the audio texture: smoothedSamples with per-element delay. */
+  readonly delayedSamples = new Float32Array(256);
 
   // Frequency bar edge cache
   private edges: BarEdge[] = [];
@@ -238,6 +252,9 @@ export class ShapeLayer implements RenderLayer {
     this.peakHoldSamples.fill(0);
     this.peakVelocities.fill(0);
     this.raw256.fill(0);
+    this.history.fill(0);
+    this.historyHead = 0;
+    this.delayedSamples.fill(0);
     this.edges = [];
     this.edgeSampleRate = -1;
     this.edgeFftSize = -1;
@@ -376,7 +393,18 @@ export class ShapeLayer implements RenderLayer {
     }
 
     // Upload audio & peak textures
-    updateDataTexture(gl, this.audioTex, this.smoothedSamples);
+    this.historyHead = (this.historyHead + 1) % SHAPE_HISTORY_FRAMES;
+    this.history.set(this.smoothedSamples, this.historyHead * 256);
+    if (this.p.elementDelay > 0) {
+      for (let j = 0; j < 256; j++) {
+        const lag = elementLagFrames(this.p.elementDelay, j);
+        const slot = (this.historyHead - lag + SHAPE_HISTORY_FRAMES) % SHAPE_HISTORY_FRAMES;
+        this.delayedSamples[j] = this.history[slot * 256 + j]!;
+      }
+    } else {
+      this.delayedSamples.set(this.smoothedSamples);
+    }
+    updateDataTexture(gl, this.audioTex, this.delayedSamples);
     updateDataTexture(gl, this.peakTex, this.peakHoldSamples);
 
     // 4. Propagation engine: compute instance transforms
