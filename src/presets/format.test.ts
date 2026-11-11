@@ -193,3 +193,31 @@ describe("parsePreset: director profile flags (Slice 15.7)", () => {
     expect(again.directorProfile).toEqual(preset.directorProfile);
   });
 });
+
+describe("parsePreset: reactions (Slice 17.3)", () => {
+  const withReactions = {
+    ...minimal,
+    reactions: [
+      { trigger: { type: "beat" }, response: "kick", target: { group: "feedback", name: "zoom" }, amount: 0.2, ease: 0.3 },
+      { trigger: { type: "beat" }, response: "kick", target: { group: "feedback", name: "missing" }, amount: 0.2, ease: 0.3 },
+    ],
+  };
+
+  it("keeps valid reactions and drops ones that point at a missing control", () => {
+    const { preset, warnings } = parsePreset(withReactions, registry);
+    expect(preset.reactions).toHaveLength(1);
+    expect(preset.reactions![0]!.target.name).toBe("zoom");
+    expect(warnings.some((w) => w.includes("reactions[1]"))).toBe(true);
+  });
+
+  it("leaves old presets with no reactions field at all", () => {
+    const { preset } = parsePreset(minimal, registry);
+    expect("reactions" in preset).toBe(false);
+  });
+
+  it("round-trips through JSON", () => {
+    const first = parsePreset(withReactions, registry).preset;
+    const second = parsePreset(JSON.parse(JSON.stringify(first)), registry).preset;
+    expect(second.reactions).toEqual(first.reactions);
+  });
+});
