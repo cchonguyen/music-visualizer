@@ -69,6 +69,7 @@ describe("layer schemas", () => {
 
   it("every layer type is registered including shape", () => {
     expect(Object.keys(LAYER_SPECS).sort()).toEqual([
+      "architecture",
       "bars",
       "bassPulse",
       "crown",

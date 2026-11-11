@@ -23,6 +23,7 @@ const LAYER_COST: Record<string, number> = {
   chladniSand: 3,
   julia: 3,
   orbit: 2,
+  architecture: 4,
   particles: 3,
   tunnel: 2,
   moire: 2,

@@ -617,6 +617,48 @@ export const ORBIT_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: ORBIT_DEFAULTS.brightness, min: 0.1, max: 3, step: 0.05, description: 'Scales the brightness of the shapes.' },
 ];
 
+/** Architecture layer (Slice 20.5). The position in the mode list is the number the shader switches on. */
+export const ARCHITECTURE_MODES = ['corridor', 'colonnade', 'floor'] as const;
+export interface ArchitectureParams {
+  mode: string; // corridor | colonnade | floor
+  speed: number; // 0..3, how fast the camera glides forward
+  gridSize: number; // 0.5..4, grid cell size on the floor and ceiling
+  pillarSpacing: number; // 1..8, distance between pillars along the walls
+  roomWidth: number; // 1..4, distance from the middle to each wall
+  roomHeight: number; // 0.5..3, distance from the middle to the floor and ceiling
+  lineWidth: number; // 0.02..0.3 of a cell
+  reactivity: number; // 0..1, how much bass widens the lines
+  fog: number; // 0..2, how quickly distant parts fade
+  horizon: number; // -0.3..0.3, vertical shift of the horizon
+  brightness: number;
+}
+export const ARCHITECTURE_DEFAULTS: ArchitectureParams = {
+  mode: 'corridor',
+  speed: 0.8,
+  gridSize: 1.5,
+  pillarSpacing: 3,
+  roomWidth: 2,
+  roomHeight: 1,
+  lineWidth: 0.06,
+  reactivity: 0.5,
+  fog: 0.8,
+  horizon: 0,
+  brightness: 1,
+};
+export const ARCHITECTURE_SPECS: readonly ParamSpec[] = [
+  { type: 'enum', name: 'mode', label: 'Room', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.mode, options: ARCHITECTURE_MODES, description: 'Corridor has solid walls. Colonnade has pillars with open gaps. Floor draws a grid floor only.' },
+  { type: 'float', name: 'speed', label: 'Glide speed', group: 'Motion', default: ARCHITECTURE_DEFAULTS.speed, min: 0, max: 3, step: 0.05, description: 'How fast the camera glides forward. Louder passages run a little faster. 0 holds still.' },
+  { type: 'float', name: 'gridSize', label: 'Grid size', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.gridSize, min: 0.5, max: 4, step: 0.1, description: 'Size of each square on the floor and ceiling.' },
+  { type: 'float', name: 'pillarSpacing', label: 'Pillar spacing', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.pillarSpacing, min: 1, max: 8, step: 0.25, description: 'Distance between pillars along the walls.' },
+  { type: 'float', name: 'roomWidth', label: 'Room width', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.roomWidth, min: 1, max: 4, step: 0.1, description: 'How far the walls are from the middle.' },
+  { type: 'float', name: 'roomHeight', label: 'Room height', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.roomHeight, min: 0.5, max: 3, step: 0.1, description: 'How far the floor and ceiling are from the middle.' },
+  { type: 'float', name: 'lineWidth', label: 'Line width', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.lineWidth, min: 0.02, max: 0.3, step: 0.01, description: 'Thickness of the grid lines as a fraction of a square.' },
+  { type: 'float', name: 'reactivity', label: 'Music reactivity', group: 'Audio', default: ARCHITECTURE_DEFAULTS.reactivity, min: 0, max: 1, step: 0.05, description: 'How much the bass slowly widens the grid lines. 0 ignores the music for line width.' },
+  { type: 'float', name: 'fog', label: 'Fog', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.fog, min: 0, max: 2, step: 0.05, description: 'How quickly distant parts fade out.' },
+  { type: 'float', name: 'horizon', label: 'Horizon height', group: 'Architecture', default: ARCHITECTURE_DEFAULTS.horizon, min: -0.3, max: 0.3, step: 0.01, description: 'Moves the horizon up or down the screen.' },
+  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: ARCHITECTURE_DEFAULTS.brightness, min: 0.1, max: 3, step: 0.05, description: 'Scales the brightness of the lines and pillars.' },
+];
+
 export type LayerType =
   | 'shape'
   | 'tunnel'
@@ -628,7 +670,8 @@ export type LayerType =
   | 'bassPulse'
   | 'waveform'
   | 'julia'
-  | 'orbit';
+  | 'orbit'
+  | 'architecture';
 
 /** Studio-only view tier (Slice 15.4). Never saved in presets. A spec with no tier counts as advanced. */
 export type ControlTier = 'basic' | 'advanced';
@@ -659,6 +702,7 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   waveform: allBasic(WAVEFORM_SPECS),
   julia: allBasic(JULIA_SPECS),
   orbit: allBasic(ORBIT_SPECS),
+  architecture: allBasic(ARCHITECTURE_SPECS),
 };
 
 /** Basic controls of the combined Feedback and post section (8). Applied in place below, these specs are not shared. */
