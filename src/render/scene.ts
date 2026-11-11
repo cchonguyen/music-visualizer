@@ -3,7 +3,10 @@
 // then swap. After the swap, `outputTexture()` is the finished image.
 import type { AudioFrame } from '../audio/types';
 import { PingPong, clampSize, type PassTarget } from '../gl/fbo';
-import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
+import { FULLSCREEN_VERT } from '../gl/shader';
+import { getProgramCache } from '../gl/programCache';
+import { MoireLayer } from './layers/moire';
+import { SpectralTerrainLayer } from './layers/spectralTerrain';
 import { createVao } from '../gl/vao';
 import { clampDt, type RenderClock } from './clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
@@ -186,7 +189,7 @@ export class Scene {
     const pp = this.pp;
     if (!gl || !pp || !this.vao) return;
     if (!this.blitProg) {
-      this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
+      this.blitProg = getProgramCache(gl).acquire(FULLSCREEN_VERT, BLIT_FRAG, 'blit');
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, pp.read.framebuffer);
     gl.viewport(0, 0, pp.width, pp.height);
@@ -235,9 +238,13 @@ export class Scene {
   }
 
   init(gl: WebGL2RenderingContext): void {
+    // Programs are shared between scenes through the cache. A second init without a dispose in
+    // between (context restore) holds dead programs, which the cache drops on its own.
+    if (this.gl && !this.gl.isContextLost()) this.releasePrograms();
     this.gl = gl;
-    this.prog = compileProgram(gl, FULLSCREEN_VERT, feedbackSrc, `feedback:${this.name}`);
-    this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
+    const cache = getProgramCache(gl);
+    this.prog = cache.acquire(FULLSCREEN_VERT, feedbackSrc, 'feedback');
+    this.blitProg = cache.acquire(FULLSCREEN_VERT, BLIT_FRAG, 'blit');
     this.uni.clear();
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
@@ -282,9 +289,7 @@ export class Scene {
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 
-    const hasTerrain = this.layers.some(
-      (layer) => Boolean(layer && (('type' in layer && (layer as unknown as { type: string }).type === 'spectralTerrain') || layer.constructor?.name === 'SpectralTerrainLayer'))
-    );
+    const hasTerrain = this.layers.some((layer) => layer instanceof SpectralTerrainLayer);
     const prevTerrain = hasTerrain ? getTerrainState(gl) : null;
     if (hasTerrain) {
       clearTerrainState(gl);
@@ -359,7 +364,7 @@ export class Scene {
       }
       effectiveOpacity *= this.foregroundOpacity;
 
-      const isMoire = ('type' in layer && (layer as unknown as { type: string }).type === 'moire') || layer.constructor?.name === 'MoireLayer';
+      const isMoire = layer instanceof MoireLayer;
       let sceneTex: WebGLTexture | null = null;
       if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
@@ -414,7 +419,7 @@ export class Scene {
     const hasOverlay = this.layers.some((_, i) => (this.layerConfigs[i]?.trails ?? true) === false);
     if (hasOverlay) {
       if (!this.blitProg) {
-        this.blitProg = compileProgram(gl, FULLSCREEN_VERT, BLIT_FRAG, `blit:${this.name}`);
+        this.blitProg = getProgramCache(gl).acquire(FULLSCREEN_VERT, BLIT_FRAG, 'blit');
       }
       const writeTarget = {
         kind: 'fbo' as const,
@@ -443,7 +448,7 @@ export class Scene {
         if (cfg.trails !== false) continue;
 
         const overlayOpacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
-        const isMoire = ('type' in layer && (layer as unknown as { type: string }).type === 'moire') || layer.constructor?.name === 'MoireLayer';
+        const isMoire = layer instanceof MoireLayer;
         let sceneTex: WebGLTexture | null = null;
         if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
@@ -595,14 +600,24 @@ export class Scene {
     gl.uniform1f?.(u('uHigh')!, frame?.norm?.high ?? (frame?.env?.high ?? 0.5));
   }
 
+  /** Lets go of this scene's shared programs. The cache keeps them for the next scene. */
+  private releasePrograms(): void {
+    const gl = this.gl;
+    if (!gl) return;
+    const cache = getProgramCache(gl);
+    if (this.prog) cache.release(this.prog);
+    if (this.blitProg) cache.release(this.blitProg);
+    this.prog = null;
+    this.blitProg = null;
+  }
+
   dispose(): void {
     const gl = this.gl;
     for (const l of this.layers) l.dispose();
     this.pp?.dispose();
     this.freeSnapshot();
     if (gl) {
-      if (this.prog) gl.deleteProgram(this.prog);
-      if (this.blitProg) gl.deleteProgram(this.blitProg);
+      this.releasePrograms();
       if (this.vao) gl.deleteVertexArray(this.vao);
     }
     this.pp = null;
