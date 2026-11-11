@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Scene } from '../scene';
 import { WaveformLayer } from '../layers/waveform';
 import { ParticleLayer } from '../layers/particles';
+import { MoireLayer } from '../layers/moire';
 import { buildScene, hasCrownLayer } from '../../presets/loader';
 import { hasCrownLayer as mainHasCrownLayer } from '../../main';
 import type { AudioFrame } from '../../audio/types';
@@ -651,5 +652,32 @@ describe('Scene draw loop reuses its objects (Slice 16.8)', () => {
     const mark = (gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length;
     scene.draw(makeMockFrame(), mockClock);
     expect((gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length - mark).toBe(drawsBefore);
+  });
+});
+
+describe('Moire overlay reads the finished trail image directly (Slice 16.10)', () => {
+  function drawCount(makeLayer: () => RenderLayer): number {
+    const gl = createMockGl();
+    const scene = new Scene('s', [makeLayer()], [{ opacity: 1, blend: 'max', trails: false }]);
+    scene.init(gl);
+    scene.resize(64, 36, 1);
+    scene.draw(makeMockFrame(), mockClock);
+    return (gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length;
+  }
+
+  it('makes no extra full-size copy for a moire layer compared with any other overlay layer', () => {
+    const plain = () => ({ init: vi.fn(), resize: vi.fn(), draw: vi.fn(), dispose: vi.fn() });
+    const moire = () => Object.assign(Object.create(MoireLayer.prototype), plain()) as RenderLayer;
+    expect(drawCount(moire)).toBe(drawCount(plain));
+  });
+
+  it('still hands the moire layer a scene texture', () => {
+    const gl = createMockGl();
+    const draw = vi.fn();
+    const layer = Object.assign(Object.create(MoireLayer.prototype), { init: vi.fn(), resize: vi.fn(), draw, dispose: vi.fn() }) as RenderLayer;
+    const scene = new Scene('s', [layer], [{ opacity: 1, blend: 'max', trails: false }]);
+    scene.init(gl);
+    scene.draw(makeMockFrame(), mockClock);
+    expect((draw.mock.calls[0]![3] as { sceneTex?: unknown }).sceneTex).toBeTruthy();
   });
 });

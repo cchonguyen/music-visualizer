@@ -6,7 +6,6 @@ layout(location = 0) in vec2 aVertex; // x = binIndex (0..127), y = isSkirtBotto
 
 uniform sampler2D uHistoryTex; // TEXTURE5 private 128x64 ring-buffer texture
 uniform int uHeadRow;          // 0..63
-uniform int uRidgeIndex;       // 0..63 (0 = back/horizon, 63 = front/foreground)
 uniform float uRidgeCount;     // 64.0
 uniform float uElevationScale; // peak height scale
 uniform float uTerrainWidth;   // terrain width scale
@@ -16,7 +15,7 @@ uniform float uBrightness;
 uniform float uLineThickness;  // 0.5..4.0
 uniform int uRidgeShape;       // 0 = smooth, 1 = rounded, 2 = pointed, 3 = stepped
 uniform int uLayoutMode;       // 0 = fullHorizon, 1 = centerPeak, 2 = canyon
-uniform int uIsSkirtPass;      // 1 = skirt pass, 0 = ridge line pass, 2 = longitudinal grid lines
+uniform int uIsSkirtPass;      // 0 = ridges (one instance per ridge: skirt then line), 2 = longitudinal grid lines
 uniform vec3 uAccent;
 uniform vec3 uBase;
 
@@ -24,14 +23,18 @@ out vec4 vColor;
 out vec2 vPosNorm;
 out float vElevation;
 out float vDepth;
+flat out int vKind;             // 1 = skirt vertex, 0 = line vertex (ribbon or grid line)
 
 void main() {
   float binIndex = aVertex.x;
   float attrY = aVertex.y;
 
   // When uIsSkirtPass == 2 (longitudinal grid lines), attrY holds the ridge index (0..63).
-  // Otherwise, uRidgeIndex is the active ridge, and attrY is isSkirtBottom (0.0 or 1.0).
-  float ridgeIdx = (uIsSkirtPass == 2) ? attrY : float(uRidgeIndex);
+  // Otherwise the instance is the ridge (0 = back/horizon, 63 = front), and attrY is isSkirtBottom (0.0 or 1.0).
+  // Per instance, vertices 0..256 are the skirt strip and 257..513 the line ribbon (see spectralTerrain.ts).
+  int kind = (uIsSkirtPass == 2) ? 0 : ((gl_VertexID <= 256) ? 1 : 0);
+  vKind = kind;
+  float ridgeIdx = (uIsSkirtPass == 2) ? attrY : float(gl_InstanceID);
   float isSkirtBottom = (uIsSkirtPass == 2) ? 0.0 : attrY;
 
   // Normalized depth t in [0.0, 1.0]: 0.0 is back (horizon), 1.0 is front (foreground)
@@ -109,7 +112,7 @@ void main() {
   float ribbonHalfThick = max(uLineThickness * 0.0055 * perspectiveScale, 0.0028);
 
   float yPos;
-  if (uIsSkirtPass == 1) {
+  if (kind == 1) {
     yPos = mix(yTop, yBottom, isSkirtBottom);
   } else if (uIsSkirtPass == 2) {
     yPos = yTop;
@@ -123,7 +126,7 @@ void main() {
   // Legacy vertex color for compatibility
   float depthFade = mix(0.5, 1.0, t);
   vec3 lineColor = mix(uBase, uAccent, clamp(elevation * 2.5, 0.0, 1.0)) * uBrightness * depthFade;
-  vColor = (uIsSkirtPass == 1) ? vec4(vec3(0.005), 0.12) : vec4(lineColor, 1.0);
+  vColor = (kind == 1) ? vec4(vec3(0.005), 0.12) : vec4(lineColor, 1.0);
 
   vPosNorm = vec2(xNorm, isSkirtBottom);
   vElevation = elevation;
