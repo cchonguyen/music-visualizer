@@ -17,6 +17,7 @@ import {
   type CameraMode,
   type ColorMood,
 } from '../render/globalDirector';
+import { INTENSITY_OPTIONS, isIntensity, type Intensity } from '../render/safety';
 
 export const EXPERIENCE_LABELS: Record<string, string> = {
   cinematic: 'Cinematic',
@@ -197,7 +198,15 @@ export function attachSwipeDismiss(sheet: HTMLElement, close: () => void): void 
 export interface ControlsState {
   calm: boolean;
   fileName: string;
+  /** Viewer intensity (slice 21.3). Optional, so older callers keep working; missing means Full. */
+  intensity?: Intensity;
 }
+
+export const INTENSITY_LABELS: Readonly<Record<Intensity, string>> = {
+  full: 'Full',
+  reduced: 'Reduced',
+  calm: 'Calm',
+};
 
 /** Returns true if the target is an editable form control or contenteditable element. */
 export function isEditableTarget(target: EventTarget | null): boolean {
@@ -509,6 +518,33 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       }
     });
   }
+
+  // Intensity control (slice 21.3): Full, Reduced or Calm. It only tightens the brightness
+  // limiter, which main.ts applies each frame from state.intensity. Built here, next to the
+  // experience HUD, so index.html needs no change.
+  const intensitySelect = document.createElement('select');
+  intensitySelect.id = 'intensity-select';
+  intensitySelect.setAttribute('aria-label', 'Intensity');
+  for (const opt of INTENSITY_OPTIONS) {
+    const option = document.createElement('option');
+    option.value = opt;
+    option.textContent = INTENSITY_LABELS[opt];
+    intensitySelect.appendChild(option);
+  }
+  const intensityField = document.createElement('label');
+  intensityField.className = 'exp-field';
+  const intensityName = document.createElement('span');
+  intensityName.textContent = 'Intensity';
+  intensityField.append(intensityName, intensitySelect);
+  expCameraSelect?.closest('.exp-controls-row')?.appendChild(intensityField);
+  const syncIntensitySelect = () => {
+    const current: Intensity = isIntensity(state.intensity) ? state.intensity : 'full';
+    if (intensitySelect.value !== current) intensitySelect.value = current;
+  };
+  intensitySelect.addEventListener('change', () => {
+    state.intensity = isIntensity(intensitySelect.value) ? intensitySelect.value : 'full';
+  });
+  syncIntensitySelect();
 
   // Beat sensitivity: higher means more onsets are reported as beats (slice 5.1). Markup is in index.html.
   const beatInput = $<HTMLInputElement>('beat-sensitivity');
@@ -867,6 +903,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   return {
     // Called once per frame to keep the playback row in sync.
     tick() {
+      // Reduced-motion changes made in main.ts show up here (slice 21.3).
+      syncIntensitySelect();
       const media = engine.media;
       if (playback) playback.hidden = !media;
       if (!media) return;
