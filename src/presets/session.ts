@@ -51,6 +51,168 @@ export const CUSTOM_PALETTES_KEY = 'mv.customDirectorPalettes';
 export const SYSTEM_TAG_OVERRIDES_KEY = 'mv.systemPresetTagOverrides';
 export const USER_PRESET_FOLDERS_KEY = 'mv.userPresetFolders';
 
+// --- Whole-library export and import (slice 21.9) ---
+// One JSON file: user presets (with their tags and folder), folders, favourites and built-in tag overrides.
+// Plain data only: the file is parsed as JSON and checked field by field. Nothing in it is run.
+export const LIBRARY_KIND = 'mv-library';
+export const LIBRARY_VERSION = 1;
+const LIBRARY_MAX_CHARS = 20_000_000;
+const LIBRARY_MAX_PRESETS = 2000;
+const LIBRARY_MAX_FOLDERS = 500;
+const LIBRARY_MAX_TAGS = 32;
+const LIBRARY_MAX_TEXT = 200;
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+export interface LibraryPresetEntry {
+  id: string;
+  folderId?: string;
+  preset: Preset;
+}
+
+export interface LibraryFile {
+  kind: typeof LIBRARY_KIND;
+  version: typeof LIBRARY_VERSION;
+  exportedAt: string;
+  folders: UserPresetFolder[];
+  presets: LibraryPresetEntry[];
+  /** Ids of user presets tagged "favourite" (the tag is also inside each preset). */
+  favourites: string[];
+  /** Built-in preset id to its tag list (tags the user changed on a built-in preset). */
+  tags: Record<string, string[]>;
+}
+
+export interface ParsedLibrary {
+  folders: UserPresetFolder[];
+  presets: LibraryPresetEntry[];
+  favourites: string[];
+  tags: Record<string, string[]>;
+  warnings: string[];
+}
+
+export interface LibraryImportResult {
+  presetsAdded: number;
+  /** Presets already in this browser with the same content, so not added again. */
+  presetsSkipped: number;
+  foldersAdded: number;
+  tagsApplied: number;
+  warnings: string[];
+}
+
+let activeSession: PresetSession | null = null;
+
+/** The session on this page (the latest one built). Main controls use it for the library buttons. */
+export function getActiveSession(): PresetSession | null {
+  return activeSession;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+function libraryError(message: string): PresetFormatError {
+  return new PresetFormatError(`library file: ${message}`);
+}
+
+function libraryText(v: unknown, what: string, max = LIBRARY_MAX_TEXT): string {
+  if (typeof v !== 'string') throw libraryError(`${what} must be text`);
+  const t = v.trim();
+  if (!t) throw libraryError(`${what} is empty`);
+  if (t.length > max) throw libraryError(`${what} is too long`);
+  return t;
+}
+
+/**
+ * Checks a library file's text and returns its parts. Throws PresetFormatError on the first problem,
+ * so a bad file changes nothing. Data only: JSON.parse and field checks, no code is run.
+ */
+export function parseLibraryFile(text: string, registry: SchemaRegistry): ParsedLibrary {
+  if (typeof text !== 'string' || text.length === 0 || text.length > LIBRARY_MAX_CHARS) {
+    throw new PresetFormatError('the library file is empty or too large');
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw new PresetFormatError('the file is not valid JSON');
+  }
+  if (!isPlainObject(raw) || raw.kind !== LIBRARY_KIND) {
+    throw new PresetFormatError('the file is not a library export from this app');
+  }
+  if (raw.version !== LIBRARY_VERSION) {
+    throw libraryError(`unsupported version (${String(raw.version)})`);
+  }
+  const warnings: string[] = [];
+
+  if (!Array.isArray(raw.folders) || raw.folders.length > LIBRARY_MAX_FOLDERS) {
+    throw libraryError('folders must be a list');
+  }
+  const folderIds = new Set<string>();
+  const folders: UserPresetFolder[] = raw.folders.map((f: unknown, i: number) => {
+    if (!isPlainObject(f)) throw libraryError(`folder ${i + 1} is not an object`);
+    const id = libraryText(f.id, `folder ${i + 1} id`);
+    if (folderIds.has(id)) throw libraryError(`folder id "${id}" appears twice`);
+    folderIds.add(id);
+    const name = libraryText(f.name, `folder "${id}" name`, 100);
+    if (typeof f.createdAt !== 'number' || !Number.isFinite(f.createdAt)) {
+      throw libraryError(`folder "${id}" needs a creation time`);
+    }
+    return { id, name, createdAt: f.createdAt };
+  });
+
+  if (!Array.isArray(raw.presets) || raw.presets.length > LIBRARY_MAX_PRESETS) {
+    throw libraryError('presets must be a list');
+  }
+  const presetIds = new Set<string>();
+  const presets: LibraryPresetEntry[] = raw.presets.map((item: unknown, i: number) => {
+    if (!isPlainObject(item)) throw libraryError(`preset ${i + 1} is not an object`);
+    const id = libraryText(item.id, `preset ${i + 1} id`);
+    if (presetIds.has(id)) throw libraryError(`preset id "${id}" appears twice`);
+    presetIds.add(id);
+    let folderId: string | undefined;
+    if (item.folderId !== undefined && item.folderId !== null) {
+      const wanted = libraryText(item.folderId, `preset "${id}" folder`);
+      if (folderIds.has(wanted)) {
+        folderId = wanted;
+      } else {
+        warnings.push(`preset "${id}": its folder is not in the file, so it is unfiled`);
+      }
+    }
+    let parsed: { preset: Preset; warnings: string[] };
+    try {
+      parsed = parsePreset(item.preset, registry);
+    } catch (err) {
+      throw libraryError(`preset "${id}" is not a valid preset (${(err as Error).message})`);
+    }
+    for (const w of parsed.warnings) warnings.push(`preset "${id}": ${w}`);
+    return folderId ? { id, folderId, preset: parsed.preset } : { id, preset: parsed.preset };
+  });
+
+  const favourites: string[] = [];
+  if (raw.favourites !== undefined && raw.favourites !== null) {
+    if (!Array.isArray(raw.favourites)) throw libraryError('favourites must be a list');
+    for (const f of raw.favourites) {
+      const id = libraryText(f, 'a favourite id');
+      if (!presetIds.has(id)) throw libraryError(`favourite "${id}" is not a preset in the file`);
+      favourites.push(id);
+    }
+  }
+
+  const tags: Record<string, string[]> = {};
+  if (raw.tags !== undefined && raw.tags !== null) {
+    if (!isPlainObject(raw.tags)) throw libraryError('tags must be an object');
+    for (const key of Object.keys(raw.tags)) {
+      if (UNSAFE_KEYS.has(key)) throw libraryError(`tag key "${key}" is not allowed`);
+      const list = raw.tags[key];
+      if (!Array.isArray(list) || list.length > LIBRARY_MAX_TAGS) {
+        throw libraryError(`tags for "${key}" must be a short list`);
+      }
+      tags[key] = list.map((t: unknown) => libraryText(t, `a tag on "${key}"`, 40));
+    }
+  }
+
+  return { folders, presets, favourites, tags, warnings };
+}
+
 export interface UserPresetFolder {
   /** Unique stable ID, e.g. "folder-1731000000-abc123" */
   id: string;
@@ -201,6 +363,7 @@ export class PresetSession {
     this.loadCustomPalettes();
     this.loadUserPresetFolders();
     this.loadSystemTagOverrides();
+    activeSession = this;
   }
 
   setAdminGateway(gateway: IAdminGateway | undefined): void {
@@ -1101,6 +1264,102 @@ export class PresetSession {
       clone.directorProfile.useGlobalColour = clone.directorProfile.useGlobalColour !== false;
     }
     return JSON.stringify(clone, null, 2);
+  }
+
+  /** The whole user library as one JSON file (slice 21.9): saved presets, folders, favourites and tags. */
+  exportLibrary(now: Date = new Date()): string {
+    const presets: LibraryPresetEntry[] = [...this.entries.values()]
+      .filter((e) => !e.builtin)
+      .map((e) => {
+        const saved = JSON.parse(e.savedJson) as Preset;
+        const folderId = this.getPresetFolder(e.id);
+        return folderId ? { id: e.id, folderId, preset: saved } : { id: e.id, preset: saved };
+      });
+    const favourites = presets.filter((p) => (p.preset.tags ?? []).includes('favourite')).map((p) => p.id);
+    const tags: Record<string, string[]> = {};
+    for (const id of Object.keys(this.systemTagOverrides)) {
+      tags[id] = [...this.systemTagOverrides[id]!];
+    }
+    const file: LibraryFile = {
+      kind: LIBRARY_KIND,
+      version: LIBRARY_VERSION,
+      exportedAt: now.toISOString(),
+      folders: this.folders.map((f) => ({ ...f })),
+      presets,
+      favourites,
+      tags,
+    };
+    return JSON.stringify(file, null, 2);
+  }
+
+  /**
+   * Merges a library file into this browser (slice 21.9). Nothing changes unless the whole file is valid.
+   * Folders with the same id are the same folder (the local name is kept). A preset with identical content
+   * is not added twice. A preset whose id is taken keeps its content under a new id. Local tag choices on
+   * built-in presets win over the file's.
+   */
+  importLibrary(text: string): LibraryImportResult {
+    const lib = parseLibraryFile(text, this.registry);
+    const result: LibraryImportResult = {
+      presetsAdded: 0,
+      presetsSkipped: 0,
+      foldersAdded: 0,
+      tagsApplied: 0,
+      warnings: [...lib.warnings],
+    };
+
+    for (const f of lib.folders) {
+      if (this.folders.some((x) => x.id === f.id)) continue;
+      this.folders.push({ ...f });
+      result.foldersAdded++;
+    }
+
+    const knownJson = new Set<string>();
+    for (const e of this.entries.values()) {
+      if (!e.builtin) knownJson.add(e.savedJson);
+    }
+    const favouriteIds = new Set(lib.favourites);
+    for (const p of lib.presets) {
+      const preset = structuredClone(p.preset);
+      if (favouriteIds.has(p.id) && !preset.tags.includes('favourite')) preset.tags.push('favourite');
+      const json = JSON.stringify(preset);
+      if (knownJson.has(json)) {
+        result.presetsSkipped++;
+        continue;
+      }
+      let id = p.id;
+      while (this.entries.has(id)) {
+        id = `user-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+      }
+      const folderId = p.folderId && this.folders.some((f) => f.id === p.folderId) ? p.folderId : undefined;
+      this.entries.set(id, { id, builtin: false, preset, savedJson: json, folderId });
+      knownJson.add(json);
+      result.presetsAdded++;
+    }
+
+    for (const [id, list] of Object.entries(lib.tags)) {
+      const entry = this.entries.get(id);
+      if (!entry || !entry.builtin) {
+        result.warnings.push(`tags for "${id}" skipped: no such built-in preset`);
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(this.systemTagOverrides, id)) continue;
+      this.systemTagOverrides[id] = [...list];
+      entry.preset.tags = [...list];
+      entry.savedJson = JSON.stringify(entry.preset);
+      result.tagsApplied++;
+    }
+
+    this.persistFolders();
+    if (result.tagsApplied > 0) {
+      try {
+        this.storage?.setItem(SYSTEM_TAG_OVERRIDES_KEY, JSON.stringify(this.systemTagOverrides));
+      } catch {
+        throw new Error('Could not save to this browser (storage full or blocked). Use Export to keep a copy.');
+      }
+    }
+    this.persist();
+    return result;
   }
 
   /** Reads a JSON text as a new user preset. Throws PresetFormatError if it cannot be repaired.

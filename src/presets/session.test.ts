@@ -1040,3 +1040,113 @@ describe('director profile on load (Slice 15.7)', () => {
     expect(dp.useGlobalColour).toBe(true);
   });
 });
+
+describe('whole library export and import (slice 21.9)', () => {
+  /** A fresh browser with the built-ins and nothing else saved. */
+  function freshBrowser(store: Storage = memoryStorage()) {
+    const s = new PresetSession(fakeHost().host, SCHEMAS, store);
+    for (const b of BUILTIN_PRESETS) s.addBuiltin(b.id, b.preset);
+    return { session: s, storage: store };
+  }
+
+  it('writes one file with the user presets, folders, favourites and tags', () => {
+    const folder = session.createFolder('Chill');
+    const id = session.saveAs('crown', 'Night drive', folder.id);
+    session.setPresetTags(id, ['favourite']);
+    session.setPresetTags('flight', ['tuned']);
+    const out = JSON.parse(session.exportLibrary(new Date('2026-11-11T00:00:00Z')));
+    expect(out.kind).toBe('mv-library');
+    expect(out.version).toBe(1);
+    expect(out.exportedAt).toBe('2026-11-11T00:00:00.000Z');
+    expect(out.folders).toEqual([folder]);
+    expect(out.presets).toHaveLength(1);
+    expect(out.presets[0].id).toBe(id);
+    expect(out.presets[0].folderId).toBe(folder.id);
+    expect(out.presets[0].preset.name).toBe('Night drive');
+    expect(out.favourites).toEqual([id]);
+    expect(out.tags).toEqual({ flight: ['tuned'] });
+  });
+
+  it('export, clear site data, import gives back the same library', () => {
+    const folder = session.createFolder('Chill');
+    const id = session.saveAs('crown', 'Night drive', folder.id);
+    session.setPresetTags(id, ['favourite']);
+    session.setPresetTags('flight', ['tuned']);
+    const text = session.exportLibrary();
+
+    // Clear site data: a browser with nothing saved.
+    const store = memoryStorage();
+    const fresh = freshBrowser(store);
+    const res = fresh.session.importLibrary(text);
+    expect(res.presetsAdded).toBe(1);
+    expect(res.presetsSkipped).toBe(0);
+    expect(res.foldersAdded).toBe(1);
+    expect(res.tagsApplied).toBe(1);
+
+    expect(fresh.session.get(id)!.preset.name).toBe('Night drive');
+    expect(fresh.session.getPresetFolder(id)).toBe(folder.id);
+    expect(fresh.session.get(id)!.preset.tags).toContain('favourite');
+    expect(fresh.session.get('flight')!.preset.tags).toEqual(['tuned']);
+    expect(JSON.parse(fresh.session.exportLibrary()).presets).toEqual(JSON.parse(text).presets);
+    expect(JSON.parse(fresh.session.exportLibrary()).folders).toEqual(JSON.parse(text).folders);
+
+    // Saved to local storage, so a page reload sees it too.
+    const reopened = new PresetSession(fakeHost().host, SCHEMAS, store);
+    expect(reopened.loadUserPresets()).toEqual([]);
+    expect(reopened.get(id)!.preset.name).toBe('Night drive');
+    expect(reopened.getFolders().map((f) => f.name)).toEqual(['Chill']);
+  });
+
+  it('importing the same file twice adds nothing the second time', () => {
+    session.saveAs('crown', 'Once only');
+    const text = session.exportLibrary();
+    const fresh = freshBrowser();
+    expect(fresh.session.importLibrary(text).presetsAdded).toBe(1);
+    const again = fresh.session.importLibrary(text);
+    expect(again.presetsAdded).toBe(0);
+    expect(again.presetsSkipped).toBe(1);
+    expect(again.foldersAdded).toBe(0);
+    expect(fresh.session.list().filter((e) => !e.builtin)).toHaveLength(1);
+  });
+
+  it('keeps a local folder name and never overwrites a built-in preset', () => {
+    const folder = session.createFolder('Mine');
+    session.saveAs('crown', 'Kept', folder.id);
+    const text = session.exportLibrary();
+    const fresh = freshBrowser();
+    fresh.session.createFolder('Local name');
+    const localFolderId = fresh.session.getFolders()[0]!.id;
+    const edited = JSON.parse(text);
+    edited.folders[0].id = localFolderId;
+    edited.folders[0].name = 'From file';
+    edited.presets[0].folderId = localFolderId;
+    fresh.session.importLibrary(JSON.stringify(edited));
+    expect(fresh.session.getFolders().map((f) => f.name)).toEqual(['Local name']);
+    // A preset whose id belongs to a built-in gets a new id, so the built-in is untouched.
+    const crownName = fresh.session.get('crown')!.preset.name;
+    edited.presets[0].id = 'crown';
+    edited.presets[0].preset.name = 'Different content';
+    fresh.session.importLibrary(JSON.stringify(edited));
+    expect(fresh.session.get('crown')!.builtin).toBe(true);
+    expect(fresh.session.get('crown')!.preset.name).toBe(crownName);
+    expect(fresh.session.list().filter((e) => !e.builtin).map((e) => e.preset.name).sort()).toEqual(['Different content', 'Kept']);
+  });
+
+  it('rejects files that are not this format and changes nothing', () => {
+    session.saveAs('crown', 'Keep me');
+    const target = freshBrowser();
+    const before = target.session.list().length;
+    expect(() => target.session.importLibrary('not json')).toThrow(/not valid JSON/);
+    expect(() => target.session.importLibrary(JSON.stringify({ kind: 'mv-experience-bundle', version: 1 }))).toThrow(/not a library export/);
+    expect(() => target.session.importLibrary(JSON.stringify({ kind: 'mv-library', version: 2, folders: [], presets: [] }))).toThrow(/unsupported version/);
+    expect(() => target.session.importLibrary(JSON.stringify({ kind: 'mv-library', version: 1, folders: [], presets: [], favourites: ['nope'] }))).toThrow(/not a preset in the file/);
+    expect(() => target.session.importLibrary('{"kind":"mv-library","version":1,"folders":[],"presets":[],"tags":{"__proto__":["x"]}}')).toThrow(/not allowed/);
+
+    // One bad folder in an otherwise good file: nothing from the file is added.
+    const good = JSON.parse(session.exportLibrary());
+    good.folders = [{ id: 'f1', name: '', createdAt: 1 }];
+    expect(() => target.session.importLibrary(JSON.stringify(good))).toThrow(/folder "f1" name is empty/);
+    expect(target.session.list()).toHaveLength(before);
+    expect(target.session.getFolders()).toHaveLength(0);
+  });
+});
