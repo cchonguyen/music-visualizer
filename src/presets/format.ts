@@ -2,6 +2,7 @@
 // any JSON (hand-edited, imported, or saved by an older version) into a safe Preset.
 import { AUDIO_SOURCES, REMOVED_FEEDBACK_SETTINGS, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
 import type { GlobalDirectorSettings } from "../render/globalDirector";
+import { parseReactions, type Reaction } from "./reactions";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
 export const PRESET_VERSION = 1 as const;
@@ -66,6 +67,8 @@ export interface Preset {
   feedback: Settings;
   layers: LayerEntry[];
   post: Settings;
+  /** Slice 17.3: triggers that move Feedback and Post controls (kick, step, flip, drift, pick). Missing means none. */
+  reactions?: Reaction[];
   directorProfile?: {
     cameraMode?: string;
     colorMood?: string;
@@ -308,6 +311,8 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
   const feedback = parseSettings(raw.feedback, registry.feedback, "feedback", warnings, REMOVED_FEEDBACK_SETTINGS);
   migrateWarpZero(feedback);
 
+  const reactions = parseReactions(raw.reactions, { feedback: registry.feedback, post: registry.post }, warnings);
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
@@ -316,6 +321,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     feedback,
     layers,
     post: parseSettings(raw.post, registry.post, "post", warnings),
+    ...(reactions.length > 0 ? { reactions } : {}),
     ...(directorProfile ? { directorProfile } : {}),
   };
   return { preset, warnings };
