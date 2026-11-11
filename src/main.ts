@@ -290,7 +290,7 @@ function start(): void {
   // Presets whose scene currently holds reacted values, so they can be put back when reactions stop.
   const reactedIds = new Set<string>();
   const director = getGlobalDirector();
-  // Auto-cycle (T2): off by default. Keys: C timer, B beat, X shuffle.
+  // Auto-cycle (T2): timer mode by default. Keys: C timer (C again turns it off), B beat, X shuffle.
   const cycle: CycleOptions = { ...DEFAULT_CYCLE };
   const cycler = new AutoCycler();
   let switchShown: ((id: string) => void) | null = null;
