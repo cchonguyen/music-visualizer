@@ -7,6 +7,9 @@ import { OrbitLayer, orbitCounts, ORBIT_BANDS } from '../layers/orbit';
 import orbitVertSrc from '../shaders/orbit.vert.glsl?raw';
 import orbitFragSrc from '../shaders/orbit.frag.glsl?raw';
 import { ORBIT_SPECS, ORBIT_SHAPES } from '../../presets/layerSchemas';
+import { ArchitectureLayer, architectureLineWidth } from '../layers/architecture';
+import archFragSrc from '../shaders/architecture.frag.glsl?raw';
+import { ARCHITECTURE_SPECS, ARCHITECTURE_MODES } from '../../presets/layerSchemas';
 import { costScore } from '../../presets/cost';
 import { SpectralTerrainLayer, RIDGE_VERTS, TERRAIN_HISTORY_UNIT, TERRAIN_BINS, TERRAIN_RIDGES } from '../layers/spectralTerrain';
 import moireFragSrc from '../shaders/moire.frag.glsl?raw';
@@ -913,5 +916,51 @@ describe('Slice 20.4: Orbit layer', () => {
 
   it('counts Orbit as a cost-2 layer', () => {
     expect(costScore({ feedback: {}, post: {}, layers: [{ type: 'orbit', enabled: true, params: {} } as never] })).toBe(2);
+  });
+});
+
+describe('Slice 20.5: Architecture layer', () => {
+  it('has valid specs, registered in the layer table and the loader', () => {
+    for (const spec of ARCHITECTURE_SPECS) expect(() => assertValidSpec(spec)).not.toThrow();
+    expect(LAYER_SPECS.architecture!.map((s) => s.name)).toEqual(ARCHITECTURE_SPECS.map((s) => s.name));
+    expect(LAYER_FACTORIES.architecture!({ mode: 'colonnade' })).toBeInstanceOf(ArchitectureLayer);
+    expect(() => applyValues(new ArchitectureLayer(), { fog: 1, mode: 'floor' })).not.toThrow();
+  });
+
+  it('bass widens the lines only a little and never past the limits', () => {
+    expect(architectureLineWidth(0.06, 0, 1)).toBeCloseTo(0.06, 10);
+    expect(architectureLineWidth(0.06, 1, 1)).toBeCloseTo(0.16, 10);
+    expect(architectureLineWidth(0.06, 1, 0)).toBeCloseTo(0.06, 10);
+    expect(architectureLineWidth(0.29, 1, 1)).toBe(0.3);
+    expect(architectureLineWidth(0.001, 0, 1)).toBe(0.02);
+    expect(architectureLineWidth(0.06, 9, 9)).toBeCloseTo(0.16, 10);
+  });
+
+  it('draws one fullscreen triangle with the room mode number and a forward-only glide', () => {
+    const gl = createMockGl();
+    const layer = new ArchitectureLayer({ mode: 'colonnade' });
+    layer.init(gl);
+    const frame = createDummyAudioFrame();
+    (frame as { energy: number }).energy = 0;
+    for (let i = 0; i < 3; i++) layer.draw(frame, { ...dummyClock, dtSec: 0.016 }, dummyTarget);
+    expect(gl.uniform1i).toHaveBeenCalledWith({ name: 'uMode' }, ARCHITECTURE_MODES.indexOf('colonnade'));
+    expect(gl.drawArrays).toHaveBeenCalledTimes(3);
+    const travel = (gl.uniform1f as ReturnType<typeof vi.fn>).mock.calls.filter((c) => (c[0] as { name: string }).name === 'uTravel').map((c) => c[1] as number);
+    expect(travel[1]!).toBeGreaterThan(travel[0]!);
+    expect(travel[2]!).toBeGreaterThan(travel[1]!);
+    layer.dispose();
+  });
+
+  it('shader is analytic: no ray march loop, derivatives outside the branch, premultiplied output', () => {
+    expect(archFragSrc).not.toMatch(/\bfor\s*\(/);
+    expect(archFragSrc).not.toMatch(/\bwhile\s*\(/);
+    expect(archFragSrc).toContain('float tFloor');
+    expect(archFragSrc).toContain('float tWall');
+    expect(archFragSrc.indexOf('floorLines =')).toBeLessThan(archFragSrc.indexOf('if (tFloor <= tWall)'));
+    expect(archFragSrc).toContain('fragColor = vec4(');
+  });
+
+  it('is tagged Medium on its own until it has been measured on a phone', () => {
+    expect(costScore({ feedback: {}, post: {}, layers: [{ type: 'architecture', enabled: true, params: {} } as never] })).toBe(4);
   });
 });

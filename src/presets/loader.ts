@@ -17,6 +17,7 @@ import { ChladniSandLayer } from '../render/layers/chladniSand';
 import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import { JuliaLayer } from '../render/layers/julia';
 import { OrbitLayer } from '../render/layers/orbit';
+import { ArchitectureLayer } from '../render/layers/architecture';
 import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
 import type { ResolvedWarpOp } from '../render/warpField';
@@ -25,7 +26,7 @@ import { LinkRunner, type LinkInputs } from './links';
 import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
-import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams, JuliaParams, OrbitParams } from './layerSchemas';
+import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams, JuliaParams, OrbitParams, ArchitectureParams } from './layerSchemas';
 import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
 
 // Register moire and spectralTerrain in LAYER_SPECS for loader consumers
@@ -105,6 +106,7 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   reactionDiffusion: (p) => new ReactionDiffusionLayer(p as Partial<ReactionDiffusionParams>),
   julia: (p) => new JuliaLayer(p as Partial<JuliaParams>),
   orbit: (p) => new OrbitLayer(p as Partial<OrbitParams>),
+  architecture: (p) => new ArchitectureLayer(p as Partial<ArchitectureParams>),
 };
 
 /** Builds a scene with fresh layers. Disabled layers are skipped. */
@@ -175,6 +177,7 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof ReactionDiffusionLayer) layer.setParams(values as Partial<ReactionDiffusionParams>);
   else if (layer instanceof JuliaLayer) layer.setParams(values as Partial<JuliaParams>);
   else if (layer instanceof OrbitLayer) layer.setParams(values as Partial<OrbitParams>);
+  else if (layer instanceof ArchitectureLayer) layer.setParams(values as Partial<ArchitectureParams>);
 }
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */
