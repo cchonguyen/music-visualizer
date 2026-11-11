@@ -535,6 +535,105 @@ describe('buildLayerControls (live Opacity, Blend, Trails)', () => {
   });
 });
 
+describe('reset to default and changed marker (Slice 15.5)', () => {
+  const spec: any = { type: 'float', name: 'gain', label: 'Gain', group: 'G', default: 0.5, min: 0, max: 1, step: 0.01 };
+  const resetBtn = (b: any) => b.element.querySelector('.studio-reset');
+
+  it('marker appears only when the value differs from the default', () => {
+    const pane = createMockPane();
+    const bag: Record<string, any> = { gain: 0.5 };
+    bindSpec(pane, spec, bag, vi.fn() as unknown as () => void);
+    const b = pane.bindings[0]!;
+    expect(b.element.classList.contains('studio-changed')).toBe(false);
+    b.fire('change', 0.8);
+    expect(b.element.classList.contains('studio-changed')).toBe(true);
+    b.fire('change', 0.5);
+    expect(b.element.classList.contains('studio-changed')).toBe(false);
+  });
+
+  it('every bound control gets a reset button', () => {
+    const pane = createMockPane();
+    bindSpec(pane, spec, { gain: 0.5 }, vi.fn() as unknown as () => void);
+    expect(resetBtn(pane.bindings[0]!)).not.toBeNull();
+  });
+
+  it('reset restores the spec default and goes through the normal edit callback', () => {
+    const pane = createMockPane();
+    const bag: Record<string, any> = { gain: 0.9 };
+    const onEdit = vi.fn();
+    bindSpec(pane, spec, bag, onEdit as unknown as () => void);
+    const b = pane.bindings[0]!;
+    expect(b.element.classList.contains('studio-changed')).toBe(true);
+    resetBtn(b).dispatchEvent({ type: 'click' });
+    expect(bag.gain).toBe(0.5);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(b.element.classList.contains('studio-changed')).toBe(false);
+  });
+
+  it('reset is a no-op on an unchanged control', () => {
+    const pane = createMockPane();
+    const bag: Record<string, any> = { gain: 0.5 };
+    const onEdit = vi.fn();
+    bindSpec(pane, spec, bag, onEdit as unknown as () => void);
+    const b = pane.bindings[0]!;
+    resetBtn(b).dispatchEvent({ type: 'click' });
+    expect(bag.gain).toBe(0.5);
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(b.element.classList.contains('studio-changed')).toBe(false);
+  });
+
+  it('default comes from the spec, not from the value the control started with', () => {
+    const pane = createMockPane();
+    const bag: Record<string, any> = { gain: 0.2 };
+    bindSpec(pane, spec, bag, (vi.fn() as unknown as () => void));
+    resetBtn(pane.bindings[0]!).dispatchEvent({ type: 'click' });
+    expect(bag.gain).toBe(0.5);
+  });
+
+  it('vec3 reset restores all three channels', () => {
+    const pane = createMockPane();
+    const v: Vec3Spec = { type: 'vec3', name: 'rgb', label: 'RGB', group: 'G', default: [1, 1, 1], min: 0, max: 2, step: 0.01 };
+    const bag: Record<string, any> = { rgb: [0.2, 0.3, 0.4] };
+    bindSpec(pane, v, bag, vi.fn() as unknown as () => void);
+    resetBtn(pane.bindings[0]!).dispatchEvent({ type: 'click' });
+    expect(bag.rgb).toEqual([1, 1, 1]);
+  });
+
+  it('layer Opacity reset updates the layer entry and commits the session', () => {
+    const pane = createMockPane();
+    const layer: LayerEntry = { type: 'bars', enabled: true, opacity: 0.3, blend: 'max', trails: true, params: {} };
+    const preset: Preset = { version: 1, name: 'T', tags: [], transition: { style: 'crossfade', seconds: 1 }, feedback: {}, layers: [layer], post: {} };
+    const scene = new Scene('s', [], [{ opacity: 0.3, blend: 'max', trails: true }]);
+    const commit = vi.fn();
+    buildLayerControls(pane, layer, preset, scene, { commit });
+    resetBtn(pane.bindings[0]!).dispatchEvent({ type: 'click' });
+    expect(layer.opacity).toBe(1);
+    expect(scene.getLayerConfigs()[0]!.opacity).toBe(1);
+    expect(commit).toHaveBeenCalled();
+  });
+
+  it('reset and marker work in the Basic and Advanced views of a section', () => {
+    const specs: any[] = [
+      { ...spec, tier: 'basic' },
+      { type: 'float', name: 'other', label: 'Other', group: 'G', default: 0.1, min: 0, max: 1, step: 0.01, tier: 'advanced' },
+    ];
+    const pane = createMockPane();
+    const settings: Record<string, any> = { gain: 0.9, other: 0.7 };
+    const apply = vi.fn();
+    bindSection(pane, 'test', specs, settings, apply);
+    const all = [...pane.folders.flatMap((f) => f.folder.folders.flatMap((g) => g.folder.bindings)), ...pane.folders.flatMap((f) => f.folder.bindings)];
+    const gain = all.find((b) => b.prop === 'gain')!;
+    const other = all.find((b) => b.prop === 'other')!;
+    expect(gain.element.classList.contains('studio-changed')).toBe(true);
+    expect(other.element.classList.contains('studio-changed')).toBe(true);
+    resetBtn(gain).dispatchEvent({ type: 'click' });
+    resetBtn(other).dispatchEvent({ type: 'click' });
+    expect(settings.gain).toBe(0.5);
+    expect(settings.other).toBe(0.1);
+    expect(apply).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('bindSpec (vec3 / decayRgb bindings)', () => {
   const decayRgbSpec: Vec3Spec = {
     type: 'vec3',

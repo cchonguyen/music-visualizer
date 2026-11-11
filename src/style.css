@@ -975,3 +975,12 @@ dialog#shortcuts .short { display: none; }
   background: rgba(255, 215, 0, 0.1);
 }
 
+
+/* Reset to default and changed marker on Studio controls (slice 15.5). Theme tokens only, so light and dark both work. */
+.studio .tp-lblv { position: relative; }
+.studio .studio-reset { flex: none; margin-left: 4px; padding: 0 6px; min-width: 24px; min-height: 24px; font: inherit; line-height: 1; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.studio .studio-reset[hidden] { display: none; }
+.studio .studio-reset:hover { background: var(--hover); }
+.studio .studio-reset:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.studio .studio-changed { box-shadow: inset 3px 0 0 var(--accent); }
+.studio .studio-changed .tp-lblv_l::before { content: "\25CF"; margin-right: .35em; color: var(--accent); font-size: .7em; vertical-align: middle; }
