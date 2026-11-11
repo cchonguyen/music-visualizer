@@ -10,8 +10,8 @@ import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import fragSrc from '../shaders/particles.frag.glsl?raw';
 import vertSrc from '../shaders/particles.vert.glsl?raw';
-import { highFlash, POOL_SIZE } from '../particleState';
-import { getCrownHeights } from '../crownStore';
+import { effectiveParticleCount, highFlash } from '../particleState';
+import { getEffectiveRenderScale } from '../../gl/size';
 import { blendAccents } from '../colourSwap';
 import { getVisualGain } from '../gainStore';
 import { BandTexture } from '../bandTexture';
@@ -51,6 +51,7 @@ export const PARTICLE_DISPLACE_SPEC = {
 };
 
 const PARTICLE_SHAPES = ['streak', 'dot', 'star', 'ring'];
+const SPAWN_AREAS = ['centre', 'ring', 'fullScreen', 'edges'];
 /** First texture unit for the band textures (sub, mid, high take the next two). */
 const BAND_UNIT = 1;
 
@@ -103,7 +104,6 @@ export class ParticleLayer implements RenderLayer {
   private uBrightness: WebGLUniformLocation | null = null;
   private uEnergy: WebGLUniformLocation | null = null;
   private uTwinkleTime: WebGLUniformLocation | null = null;
-  private uCrown: WebGLUniformLocation | null = null;
   private uShape: WebGLUniformLocation | null = null;
   private uRotation: WebGLUniformLocation | null = null;
   private uZoom: WebGLUniformLocation | null = null;
@@ -122,7 +122,10 @@ export class ParticleLayer implements RenderLayer {
   private uTexHigh: WebGLUniformLocation | null = null;
   private uMode: WebGLUniformLocation | null = null;
   private uSubTwist: WebGLUniformLocation | null = null;
-  private uFlowSpeed: WebGLUniformLocation | null = null;
+  private uCount: WebGLUniformLocation | null = null;
+  private uSpawnArea: WebGLUniformLocation | null = null;
+  private uTwinkleRate: WebGLUniformLocation | null = null;
+  private uTwinkleDepth: WebGLUniformLocation | null = null;
   private uFlowPhase: WebGLUniformLocation | null = null;
   private uTwistPhase: WebGLUniformLocation | null = null;
   private uDivergenceAngle: WebGLUniformLocation | null = null;
@@ -184,7 +187,6 @@ export class ParticleLayer implements RenderLayer {
     this.uBrightness = gl.getUniformLocation(this.program, 'uBrightness');
     this.uEnergy = gl.getUniformLocation(this.program, 'uEnergy');
     this.uTwinkleTime = gl.getUniformLocation(this.program, 'uTwinkleTime');
-    this.uCrown = gl.getUniformLocation(this.program, 'uCrown[0]');
     this.uShape = gl.getUniformLocation(this.program, 'uShape');
     this.uRotation = gl.getUniformLocation(this.program, 'uRotation');
     this.uZoom = gl.getUniformLocation(this.program, 'uZoom');
@@ -203,7 +205,10 @@ export class ParticleLayer implements RenderLayer {
     this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
     this.uMode = gl.getUniformLocation(this.program, 'uMode');
     this.uSubTwist = gl.getUniformLocation(this.program, 'uSubTwist');
-    this.uFlowSpeed = gl.getUniformLocation(this.program, 'uFlowSpeed');
+    this.uCount = gl.getUniformLocation(this.program, 'uCount');
+    this.uSpawnArea = gl.getUniformLocation(this.program, 'uSpawnArea');
+    this.uTwinkleRate = gl.getUniformLocation(this.program, 'uTwinkleRate');
+    this.uTwinkleDepth = gl.getUniformLocation(this.program, 'uTwinkleDepth');
     this.uFlowPhase = gl.getUniformLocation(this.program, 'uFlowPhase');
     this.uTwistPhase = gl.getUniformLocation(this.program, 'uTwistPhase');
     this.uDivergenceAngle = gl.getUniformLocation(this.program, 'uDivergenceAngle');
@@ -331,8 +336,6 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uBrightness, this.p.brightness * opacity);
     gl.uniform1f(this.uEnergy, clamp01(frame.energy));
     gl.uniform1f(this.uTwinkleTime, twinkleTime);
-    // Crown heights (P5): each particle launches from the tip of its crown bar (zero when the crown is off).
-    gl.uniform1fv(this.uCrown, getCrownHeights());
 
     const mode = this.p.mode;
     const isPhyllotaxis = mode === 'phyllotaxis';
@@ -341,7 +344,11 @@ export class ParticleLayer implements RenderLayer {
     else if (mode === 'field') modeInt = 2;
     gl.uniform1i(this.uMode, modeInt);
     gl.uniform1f(this.uSubTwist, (this.calm ? 0 : (frame.norm?.sub ?? 0)) * 5.0);
-    gl.uniform1f(this.uFlowSpeed, this.p.flowSpeed ?? 2.5);
+    const count = effectiveParticleCount(this.p.count ?? PARTICLE_DEFAULTS.count, getEffectiveRenderScale());
+    gl.uniform1f(this.uCount, count);
+    gl.uniform1i(this.uSpawnArea, Math.max(0, SPAWN_AREAS.indexOf(this.p.spawnArea ?? 'centre')));
+    gl.uniform1f(this.uTwinkleRate, this.p.twinkleRate ?? PARTICLE_DEFAULTS.twinkleRate);
+    gl.uniform1f(this.uTwinkleDepth, this.p.twinkleDepth ?? PARTICLE_DEFAULTS.twinkleDepth);
 
     // Seed shape (0 = orb, 1 = petal, 2 = star)
     const seedShape = this.p.seedShape ?? 'petal';
@@ -405,7 +412,7 @@ export class ParticleLayer implements RenderLayer {
     }
 
     gl.bindVertexArray(this.vao);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, POOL_SIZE);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
     gl.bindVertexArray(null);
   }
 
@@ -423,7 +430,10 @@ export class ParticleLayer implements RenderLayer {
     this.uTexHigh = null;
     this.uMode = null;
     this.uSubTwist = null;
-    this.uFlowSpeed = null;
+    this.uCount = null;
+    this.uSpawnArea = null;
+    this.uTwinkleRate = null;
+    this.uTwinkleDepth = null;
     this.uFlowPhase = null;
     this.uTwistPhase = null;
     this.uDivergenceAngle = null;
@@ -457,7 +467,6 @@ export class ParticleLayer implements RenderLayer {
     this.uBrightness = null;
     this.uEnergy = null;
     this.uTwinkleTime = null;
-    this.uCrown = null;
     this.gl = null;
   }
 }

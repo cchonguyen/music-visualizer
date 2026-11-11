@@ -81,6 +81,10 @@ export interface ParticleParams {
   size: number; // 0.5..4, multiplies streak length and width (2 = doubled, the 2026-11-06 default)
   followScene: boolean; // inherit the scene's zoom and rotation so particles blend with the trail
   beatReactivity?: number;
+  count: number; // 50..4000: how many particles (600 = as before); thinned on weaker devices
+  spawnArea: string; // centre | ring | fullScreen | edges
+  twinkleRate: number; // 0..3: multiplies twinkle speed (1 = as before)
+  twinkleDepth: number; // 0..1: how far a twinkle dims a particle (0.55 = as before)
 }
 
 export const PARTICLE_DEFAULTS: ParticleParams = {
@@ -98,6 +102,10 @@ export const PARTICLE_DEFAULTS: ParticleParams = {
   size: 2,
   followScene: false,
   beatReactivity: 1.0,
+  count: 600,
+  spawnArea: 'centre',
+  twinkleRate: 1,
+  twinkleDepth: 0.55,
 };
 
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
@@ -115,6 +123,10 @@ export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: PARTICLE_DEFAULTS.texture, description: 'Enables high-frequency audio modulation of sparkle brightness.' },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: PARTICLE_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Scales high-frequency texture modulation intensity.' },
   { type: 'float', name: 'beatReactivity', label: 'Beat glow & push', group: 'Motion', default: PARTICLE_DEFAULTS.beatReactivity ?? 1.0, min: 0, max: 2, step: 0.05, description: 'Scales particle outward explosive propulsion driven by musical beats.' },
+  { type: 'int', name: 'count', label: 'Particle count', group: 'Shape', default: PARTICLE_DEFAULTS.count, min: 50, max: 4000, step: 50, description: 'Sets how many particles are drawn. Weaker devices draw fewer.' },
+  { type: 'enum', name: 'spawnArea', label: 'Spawn area', group: 'Motion', default: PARTICLE_DEFAULTS.spawnArea, options: ['centre', 'ring', 'fullScreen', 'edges'], description: 'Chooses where particles are born: the centre, a ring, anywhere on screen, or the screen edges.' },
+  { type: 'float', name: 'twinkleRate', label: 'Twinkle speed', group: 'Sparkle', default: PARTICLE_DEFAULTS.twinkleRate, min: 0, max: 3, step: 0.05, description: 'Multiplies how fast particles twinkle. 0 stops the twinkle.' },
+  { type: 'float', name: 'twinkleDepth', label: 'Twinkle depth', group: 'Sparkle', default: PARTICLE_DEFAULTS.twinkleDepth, min: 0, max: 1, step: 0.01, description: 'Sets how far a twinkle dims a particle. 0 is steady, 1 blinks fully off.' },
 ];
 export const PARTICLES_SCHEMA = PARTICLE_SPECS;
 

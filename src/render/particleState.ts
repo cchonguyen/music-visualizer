@@ -3,8 +3,24 @@
 
 import { releaseEnvelope, RELEASE_TAU_SEC } from './releaseEnvelope';
 
-/** Fixed number of particles in the pool. Must match the shader's loop/instance count. */
+/** Default particle count. Presets that do not set a count keep drawing this many. */
 export const POOL_SIZE = 600;
+/** Fewest and most particles a layer can ask for. */
+export const MIN_PARTICLES = 50;
+export const MAX_PARTICLES = 4000;
+/** The render scale never thins the particles below this share of what was asked for. */
+const MIN_COUNT_SHARE = 0.25;
+
+/**
+ * Number of particles to draw: the requested count, thinned when the render scale is below 100%
+ * (weaker devices and the quality governor lower the scale). At scale 1 the request is used as is.
+ */
+export function effectiveParticleCount(requested: number, renderScale: number): number {
+  const asked = Number.isFinite(requested) ? requested : POOL_SIZE;
+  const base = Math.min(MAX_PARTICLES, Math.max(MIN_PARTICLES, Math.round(asked)));
+  const scale = Number.isFinite(renderScale) ? Math.min(1, Math.max(MIN_COUNT_SHARE, renderScale)) : 1;
+  return Math.max(MIN_PARTICLES, Math.round(base * scale));
+}
 
 /** Spawn radius (C3): particles start at the crown bar tips, r = 0.16, the inner rim of the tunnel. */
 export const SPAWN_RADIUS = 0.16;

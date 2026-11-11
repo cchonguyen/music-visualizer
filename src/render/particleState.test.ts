@@ -4,6 +4,9 @@ import {
   hash01,
   highFlash,
   POOL_SIZE,
+  MIN_PARTICLES,
+  MAX_PARTICLES,
+  effectiveParticleCount,
   radialSpeedFor,
   radiusFor,
   SPAWN_RADIUS,
@@ -167,5 +170,21 @@ describe('highFlash', () => {
 
   it('treats negative dt as 0', () => {
     expect(highFlash(0.5, false, -1)).toBe(0.5);
+  });
+});
+
+describe('effectiveParticleCount (Slice 19.5)', () => {
+  it('keeps the default 600 at full render scale', () => {
+    expect(effectiveParticleCount(POOL_SIZE, 1)).toBe(600);
+  });
+  it('thins the count as the render scale drops, never below a quarter', () => {
+    expect(effectiveParticleCount(2000, 0.5)).toBe(1000);
+    expect(effectiveParticleCount(2000, 0.1)).toBe(500);
+  });
+  it('clamps to the allowed range and survives bad input', () => {
+    expect(effectiveParticleCount(10, 1)).toBe(MIN_PARTICLES);
+    expect(effectiveParticleCount(99999, 1)).toBe(MAX_PARTICLES);
+    expect(effectiveParticleCount(NaN, 1)).toBe(600);
+    expect(effectiveParticleCount(600, NaN)).toBe(600);
   });
 });
