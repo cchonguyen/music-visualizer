@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyLinkedPreset, buildScene, createLayersFromPreset, hasCrownLayer, LAYER_FACTORIES } from './loader';
+import { applyLinkedPreset, applyPresetToScene, buildScene, createLayersFromPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES } from './loader';
 import { LinkRunner, ReactionBank } from './links';
 import { previewPreset } from './session';
 import type { AudioFrame } from '../audio/types';
@@ -331,5 +331,51 @@ describe('applyLinkedPreset with reactions (Slice 17.4)', () => {
     const post = applyLinkedPreset(preset, scene, new LinkRunner(), 'r', { frame: frameWith(true), timeSec: 0, sectionContrast: 0 }, 1 / 60, null);
     expect(applied[0]!.zoom).toBe(1);
     expect(post.hueShift).toBe(0);
+  });
+});
+
+describe('warp operator stack (Slice 18.2)', () => {
+  const withWarp = (warp: unknown) => parsePreset({ version: PRESET_VERSION, name: 'warp-test', warp }, schemas).preset;
+  const inputs = (timeSec: number) => ({ frame: {} as AudioFrame, timeSec, sectionContrast: 0 });
+
+  it('a preset without a stack gives the scene no operators', () => {
+    const scene = buildScene('plain', withWarp(undefined));
+    expect(scene.getWarpOps()).toEqual([]);
+  });
+
+  it('buildScene passes the stack to the scene as plain values', () => {
+    const scene = buildScene('w', withWarp([{ type: 'radial', params: { amount: 0.7 } }, { type: 'ripple', enabled: false }]));
+    const ops = scene.getWarpOps();
+    expect(ops.map((o) => o.type)).toEqual(['radial', 'ripple']);
+    expect(ops[0]!.values.amount).toBe(0.7);
+    expect(ops[1]!.enabled).toBe(false);
+  });
+
+  it('hasLinks sees a link on an operator setting', () => {
+    const linked = withWarp([{ type: 'swirl', params: { amount: { value: 0.2, link: { source: 'lfoSine', amount: 1, smooth: 0 } } } }]);
+    expect(hasLinks(linked)).toBe(true);
+    expect(hasLinks(withWarp([{ type: 'swirl' }]))).toBe(false);
+  });
+
+  it('applyLinkedPreset resolves operator morphs each frame', () => {
+    const preset = withWarp([{ type: 'swirl', params: { amount: { value: 0.1, morph: { to: 0.9, rate: 0.5 } } } }]);
+    const scene = buildScene('w', preset);
+    const runner = new LinkRunner();
+    applyLinkedPreset(preset, scene, runner, 'w', inputs(0), 0.016);
+    expect(scene.getWarpOps()[0]!.values.amount).toBeCloseTo(0.1, 5);
+    let peak = 0;
+    for (let i = 1; i <= 20; i++) {
+      applyLinkedPreset(preset, scene, runner, 'w', inputs(i * 0.1), 0.1);
+      peak = Math.max(peak, scene.getWarpOps()[0]!.values.amount as number);
+    }
+    expect(peak).toBeGreaterThan(0.5);
+    expect(peak).toBeLessThanOrEqual(0.9 + 1e-9);
+  });
+
+  it('applyPresetToScene clears the stack when the preset has none', () => {
+    const scene = buildScene('w', withWarp([{ type: 'radial' }]));
+    expect(scene.getWarpOps()).toHaveLength(1);
+    applyPresetToScene(withWarp(undefined), scene);
+    expect(scene.getWarpOps()).toEqual([]);
   });
 });

@@ -64,6 +64,11 @@ uniform int uMobiusMode;        // 0: auto, 1: dipoleFlow, 2: doubleVortex, 3: f
 // Audio modulation uniforms:
 uniform float uHigh;
 
+// Warp field (Slice 18.2): a small texture of displacement drawn from the preset's operator stack.
+// uWarpFieldOn is 0 when the stack is empty, and then the lookup is skipped (the picture is as before).
+uniform sampler2D uField;
+uniform float uWarpFieldOn;
+
 in vec2 vUv;
 out vec4 outColor;
 
@@ -311,6 +316,11 @@ void main() {
     // 'classic': wave warp
     float w = sin(uTime * uWarpSpeed + p.y * uWarpScale * TWO_PI) + cos(uTime * uWarpSpeed + p.x * uWarpScale * TWO_PI);
     p += uWarp * 0.02 * tick * vec2(w, -w);
+  }
+
+  // Warp field: one lookup, added to the sample position. Stored as 0.5 + d / (2 * 0.5), so 0.5 is no change.
+  if (uWarpFieldOn > 0.5) {
+    p += texture(uField, vUv).rg - 0.5;
   }
 
   p -= uDrift * tick;
