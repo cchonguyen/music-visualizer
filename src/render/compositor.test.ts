@@ -5,6 +5,8 @@ import type { AudioFrame } from '../audio/types';
 import type { RenderLayer, RenderTarget } from './layer';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
+import copySrc from './shaders/copy.frag.glsl?raw';
+import { setAutoScale, setRenderScale } from '../gl/size';
 
 const mk = (name: string) => new Scene(name, []);
 
@@ -354,5 +356,76 @@ describe('final pass count (Slice 16.4)', () => {
     expect(safetyOff).toHaveLength(1);
     const hue = uniforms.find((x) => x.name === 'uHue')!;
     expect(uniforms.filter((x) => x.name === 'uCap' && x.prog === hue.prog)).toHaveLength(1);
+  });
+});
+
+describe('render scale covers the whole chain (Slice 16.5)', () => {
+  /** Draws one frame and returns, in order, the fragment source of each program used. */
+  function frameWith(post: Record<string, number>, opts: { scale?: number; auto?: number }) {
+    setRenderScale(opts.scale ?? 1);
+    setAutoScale(opts.auto ?? 1);
+    try {
+      const gl = createMockGl() as unknown as Record<string, unknown>;
+      const fragOf = new Map<unknown, string>();
+      const shaderSrc = new Map<unknown, string>();
+      gl.createShader = vi.fn(() => ({}));
+      gl.shaderSource = vi.fn((sh: unknown, src: string) => shaderSrc.set(sh, src));
+      gl.createProgram = vi.fn(() => ({}));
+      gl.attachShader = vi.fn((p: unknown, sh: unknown) => {
+        const src = shaderSrc.get(sh) ?? '';
+        if (!src.includes('gl_VertexID')) fragOf.set(p, src);
+      });
+      const used: string[] = [];
+      gl.useProgram = vi.fn((p: unknown) => used.push(fragOf.get(p) ?? ''));
+      const viewports: number[][] = [];
+      gl.viewport = vi.fn((...a: number[]) => viewports.push(a));
+      const comp = new Compositor([new Scene('a', [spyLayer()])]);
+      comp.init(gl as unknown as WebGL2RenderingContext);
+      comp.resize(64, 36, 1);
+      comp.setPost(post);
+      comp.setWeights({ a: 1 });
+      for (let i = 0; i < 3; i++) comp.draw(FRAME, clock(0.1), TARGET);
+      used.length = 0;
+      viewports.length = 0;
+      comp.draw(FRAME, clock(0.1), TARGET);
+      return { used, viewports, comp };
+    } finally {
+      setRenderScale(1);
+      setAutoScale(1);
+    }
+  }
+
+  it('at 100% there is no copy pass: the final pass draws straight to the canvas', () => {
+    const { used, viewports } = frameWith({ saturation: 1.3 }, {});
+    expect(used.some((u) => u === copySrc)).toBe(false);
+    expect(viewports[viewports.length - 1]).toEqual([0, 0, 64, 36]);
+  });
+
+  it('at 50% the final pass runs at half size and one copy pass upscales it', () => {
+    const { used, viewports } = frameWith({ saturation: 1.3 }, { scale: 0.5 });
+    expect(used[used.length - 1]).toBe(copySrc);
+    expect(used.filter((u) => u === copySrc)).toHaveLength(1);
+    expect(used[used.length - 2]).toBe(postSrc);
+    expect(viewports[viewports.length - 2]).toEqual([0, 0, 32, 18]);
+    expect(viewports[viewports.length - 1]).toEqual([0, 0, 64, 36]);
+  });
+
+  it('the no-post path is scaled the same way', () => {
+    const { used, viewports } = frameWith({}, { scale: 0.75 });
+    expect(used[used.length - 1]).toBe(copySrc);
+    expect(used[used.length - 2]).toBe(compositeSrc);
+    expect(viewports[viewports.length - 2]).toEqual([0, 0, 48, 27]);
+  });
+
+  it('automatic scaling below the owner ceiling scales the chain, at a size the three steps do not offer', () => {
+    const { used, viewports } = frameWith({ saturation: 1.3 }, { scale: 1, auto: 0.6 });
+    expect(used[used.length - 1]).toBe(copySrc);
+    expect(viewports[viewports.length - 2]).toEqual([0, 0, 38, 22]);
+  });
+
+  it('the safety pass is still the last blend-or-post program before the copy', () => {
+    const { used } = frameWith({ bloom: 0.5 }, { scale: 0.5 });
+    expect(used[used.length - 1]).toBe(copySrc);
+    expect(used[used.length - 2]).toBe(postSrc);
   });
 });
