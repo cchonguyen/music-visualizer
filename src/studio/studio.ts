@@ -952,6 +952,23 @@ export class Studio {
     const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
     this.sectionFolders.push(dirFolder);
     buildGlobalDirectorControls(dirFolder);
+    // Per-preset: false applies this preset's own camera or colour profile on load (Slice 15.7).
+    const profileFlags = {
+      useGlobalCamera: preset.directorProfile?.useGlobalCamera !== false,
+      useGlobalColour: preset.directorProfile?.useGlobalColour !== false,
+    };
+    const setProfileFlag = (key: 'useGlobalCamera' | 'useGlobalColour', value: boolean) => {
+      if (!preset.directorProfile) {
+        const g = getGlobalDirector().getSettings();
+        preset.directorProfile = { cameraMode: g.cameraMode, colorMood: g.colorMood, colorIntensity: g.colorIntensity };
+      }
+      preset.directorProfile[key] = value;
+      session.commit(id);
+    };
+    dirFolder.addBinding(profileFlags, 'useGlobalCamera', { label: 'Use global camera' })
+      .on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalCamera', Boolean(ev.value)));
+    dirFolder.addBinding(profileFlags, 'useGlobalColour', { label: 'Use global colour' })
+      .on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalColour', Boolean(ev.value)));
 
     // --- Layer stack ----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });

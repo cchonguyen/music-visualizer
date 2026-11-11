@@ -70,6 +70,10 @@ export interface Preset {
     cameraMode?: string;
     colorMood?: string;
     colorIntensity?: number;
+    /** false: apply this preset's cameraMode on load. Missing means true (use the global camera). */
+    useGlobalCamera?: boolean;
+    /** false: apply this preset's colorMood and colorIntensity on load. Missing means true. */
+    useGlobalColour?: boolean;
   };
 }
 
@@ -278,9 +282,9 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     });
   });
 
-  let directorProfile: { cameraMode?: string; colorMood?: string; colorIntensity?: number } | undefined;
+  let directorProfile: NonNullable<Preset['directorProfile']> | undefined;
   if (isRecord(raw.directorProfile)) {
-    const dp: { cameraMode?: string; colorMood?: string; colorIntensity?: number } = {};
+    const dp: NonNullable<Preset['directorProfile']> = {};
     if (typeof raw.directorProfile.cameraMode === "string" && raw.directorProfile.cameraMode.trim() !== "") {
       dp.cameraMode = raw.directorProfile.cameraMode.trim();
     }
@@ -289,6 +293,12 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     }
     if (typeof raw.directorProfile.colorIntensity === "number" && Number.isFinite(raw.directorProfile.colorIntensity)) {
       dp.colorIntensity = Math.max(0, Math.min(1, raw.directorProfile.colorIntensity));
+    }
+    if (typeof raw.directorProfile.useGlobalCamera === "boolean") {
+      dp.useGlobalCamera = raw.directorProfile.useGlobalCamera;
+    }
+    if (typeof raw.directorProfile.useGlobalColour === "boolean") {
+      dp.useGlobalColour = raw.directorProfile.useGlobalColour;
     }
     if (Object.keys(dp).length > 0) {
       directorProfile = dp;

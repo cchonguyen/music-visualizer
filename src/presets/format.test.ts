@@ -166,3 +166,30 @@ describe("parsePreset: warp zero migration (Slice 15.3)", () => {
     }
   });
 });
+
+describe("parsePreset: director profile flags (Slice 15.7)", () => {
+  it("keeps explicit useGlobalCamera and useGlobalColour booleans", () => {
+    const { preset } = parsePreset(
+      { ...minimal, directorProfile: { cameraMode: "dutchRoll", useGlobalCamera: false, useGlobalColour: true } },
+      registry,
+    );
+    expect(preset.directorProfile?.useGlobalCamera).toBe(false);
+    expect(preset.directorProfile?.useGlobalColour).toBe(true);
+  });
+
+  it("leaves the flags missing (meaning true) in old presets", () => {
+    const { preset } = parsePreset({ ...minimal, directorProfile: { colorMood: "ember" } }, registry);
+    expect(preset.directorProfile?.useGlobalCamera).toBeUndefined();
+    expect(preset.directorProfile?.useGlobalColour).toBeUndefined();
+  });
+
+  it("ignores non-boolean flag values and round-trips through JSON", () => {
+    const { preset } = parsePreset(
+      { ...minimal, directorProfile: { colorMood: "ember", useGlobalCamera: "no", useGlobalColour: false } },
+      registry,
+    );
+    expect(preset.directorProfile?.useGlobalCamera).toBeUndefined();
+    const again = parsePreset(JSON.parse(JSON.stringify(preset)), registry).preset;
+    expect(again.directorProfile).toEqual(preset.directorProfile);
+  });
+});

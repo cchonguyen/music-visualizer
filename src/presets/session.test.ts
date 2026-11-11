@@ -14,6 +14,7 @@ import { BUILTIN_PRESETS, SCHEMAS } from './builtin';
 import { AdminGateway } from './adminGateway';
 import type { RemotePresetRecord } from './remotePresets';
 import type { Scene } from '../render/scene';
+import { getGlobalDirector, resetGlobalDirector } from '../render/globalDirector';
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();
@@ -968,5 +969,74 @@ describe('duplicate, solo and mute layer (Slice 15.6)', () => {
     expect(session.isMuted('flight', 1)).toBe(true);
     session.shiftMonitorAfterRemove('flight', 0);
     expect(session.isMuted('flight', 0)).toBe(true);
+  });
+});
+
+describe('director profile on load (Slice 15.7)', () => {
+  const profile = { cameraMode: 'dutchRoll', colorMood: 'ember', colorIntensity: 0.9 };
+
+  beforeEach(() => {
+    resetGlobalDirector();
+    getGlobalDirector().updateSettings({ cameraMode: 'craneSway', colorMood: 'vapor', colorIntensity: 0.3 });
+  });
+
+  function setProfile(id: string, extra: Record<string, boolean>) {
+    session.get(id)!.preset.directorProfile = { ...profile, ...extra } as never;
+  }
+
+  it('keeps the global settings when both flags are true or missing', () => {
+    setProfile('flight', {});
+    session.show('flight');
+    setProfile('crown', { useGlobalCamera: true, useGlobalColour: true });
+    session.show('crown');
+    const s = getGlobalDirector().getSettings();
+    expect([s.cameraMode, s.colorMood, s.colorIntensity]).toEqual(['craneSway', 'vapor', 0.3]);
+  });
+
+  it('applies the whole profile when both flags are false', () => {
+    setProfile('flight', { useGlobalCamera: false, useGlobalColour: false });
+    session.show('flight');
+    const s = getGlobalDirector().getSettings();
+    expect([s.cameraMode, s.colorMood, s.colorIntensity]).toEqual(['dutchRoll', 'ember', 0.9]);
+  });
+
+  it('treats the two flags independently', () => {
+    setProfile('flight', { useGlobalCamera: false, useGlobalColour: true });
+    session.show('flight');
+    let s = getGlobalDirector().getSettings();
+    expect([s.cameraMode, s.colorMood, s.colorIntensity]).toEqual(['dutchRoll', 'vapor', 0.3]);
+    setProfile('crown', { useGlobalCamera: true, useGlobalColour: false });
+    session.show('crown');
+    s = getGlobalDirector().getSettings();
+    expect([s.cameraMode, s.colorMood, s.colorIntensity]).toEqual(['craneSway', 'ember', 0.9]);
+  });
+
+  it('hands the globals back when a later preset uses them', () => {
+    setProfile('flight', { useGlobalCamera: false, useGlobalColour: false });
+    session.show('flight');
+    session.show('crown');
+    const s = getGlobalDirector().getSettings();
+    expect([s.cameraMode, s.colorMood, s.colorIntensity]).toEqual(['craneSway', 'vapor', 0.3]);
+  });
+
+  it('presets without a profile load with both flags true and change nothing', () => {
+    const entry = session.get('flight')!;
+    delete entry.preset.directorProfile;
+    session.show('flight');
+    const s = getGlobalDirector().getSettings();
+    expect([s.cameraMode, s.colorMood, s.colorIntensity]).toEqual(['craneSway', 'vapor', 0.3]);
+    const out = JSON.parse(session.exportJson('flight'));
+    expect(out.directorProfile).toBeUndefined();
+  });
+
+  it('exports both flags and they survive import', () => {
+    setProfile('flight', { useGlobalCamera: false });
+    const out = JSON.parse(session.exportJson('flight'));
+    expect(out.directorProfile.useGlobalCamera).toBe(false);
+    expect(out.directorProfile.useGlobalColour).toBe(true);
+    const { id } = session.importJson(JSON.stringify(out));
+    const dp = session.get(id)!.preset.directorProfile!;
+    expect(dp.useGlobalCamera).toBe(false);
+    expect(dp.useGlobalColour).toBe(true);
   });
 });

@@ -293,7 +293,42 @@ export class PresetSession {
     this.host.setWeights({ [id]: 1 });
     this.host.setPost(valuesOf(entry.preset.post));
     this.host.setTransition(entry.preset.transition.style);
+    this.applyDirectorProfile(entry.preset);
     this.current = id;
+  }
+
+  /** Global director values saved while a preset's own profile is in charge (restored when a preset uses the globals). */
+  private globalBackup: { cameraMode?: GlobalDirectorSettings['cameraMode']; colorMood?: GlobalDirectorSettings['colorMood']; colorIntensity?: number } = {};
+
+  /**
+   * Applies the preset's director profile. With useGlobalCamera / useGlobalColour true (the default)
+   * the global settings stay in charge; with false, the profile's values are used for this preset.
+   */
+  private applyDirectorProfile(preset: Preset): void {
+    const director = getGlobalDirector();
+    const dp = preset.directorProfile;
+    const cur = director.getSettings();
+    const b = this.globalBackup;
+    const next: Partial<GlobalDirectorSettings> = {};
+    if (dp && dp.useGlobalCamera === false && dp.cameraMode !== undefined) {
+      if (b.cameraMode === undefined) b.cameraMode = cur.cameraMode;
+      next.cameraMode = dp.cameraMode as GlobalDirectorSettings['cameraMode'];
+    } else if (b.cameraMode !== undefined) {
+      next.cameraMode = b.cameraMode;
+      delete b.cameraMode;
+    }
+    if (dp && dp.useGlobalColour === false && (dp.colorMood !== undefined || dp.colorIntensity !== undefined)) {
+      if (b.colorMood === undefined) b.colorMood = cur.colorMood;
+      if (b.colorIntensity === undefined) b.colorIntensity = cur.colorIntensity;
+      if (dp.colorMood !== undefined) next.colorMood = dp.colorMood as GlobalDirectorSettings['colorMood'];
+      if (dp.colorIntensity !== undefined) next.colorIntensity = dp.colorIntensity;
+    } else if (b.colorMood !== undefined || b.colorIntensity !== undefined) {
+      if (b.colorMood !== undefined) next.colorMood = b.colorMood;
+      if (b.colorIntensity !== undefined) next.colorIntensity = b.colorIntensity;
+      delete b.colorMood;
+      delete b.colorIntensity;
+    }
+    if (Object.keys(next).length > 0) director.updateSettings(next);
   }
 
   /**
@@ -1060,6 +1095,10 @@ export class PresetSession {
             colorIntensity: director.getSettings().colorIntensity,
           };
       clone.directorProfile = profile;
+    }
+    if (clone.directorProfile) {
+      clone.directorProfile.useGlobalCamera = clone.directorProfile.useGlobalCamera !== false;
+      clone.directorProfile.useGlobalColour = clone.directorProfile.useGlobalColour !== false;
     }
     return JSON.stringify(clone, null, 2);
   }
