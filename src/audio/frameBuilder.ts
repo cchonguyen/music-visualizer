@@ -110,6 +110,8 @@ export class FrameBuilder {
   // frame past the next build().
   private readonly frame: AudioFrame;
 
+  // True once this frame's band waveforms have been split.
+  private bandsFresh = false;
   private hasPrevSpectrum = false;
   private frameIndex = 0;
   private prevTime: number | null = null;
@@ -178,6 +180,23 @@ export class FrameBuilder {
       smoothedSpectrum: this.smoothedSpectrum,
       sampleRate: this.sampleRate,
     };
+    // Splitting the waveform into three bands runs 10 filter passes over the whole buffer, so it is done on
+    // first read each frame instead of on every build (Slice 16.9). The filters keep no state between frames,
+    // so the result is the same as splitting eagerly.
+    Object.defineProperty(this.frame, 'bandWaveforms', {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        if (!this.bandsFresh) {
+          this.splitter.split(this.waveform, this.bandWaveforms);
+          this.bandsFresh = true;
+        }
+        return this.bandWaveforms;
+      },
+      set: () => {
+        // The arrays belong to the builder; assignments are ignored.
+      },
+    });
   }
 
   /**
@@ -197,7 +216,8 @@ export class FrameBuilder {
         : Math.min(0.1, Math.max(0, timeSec - this.prevTime));
 
     this.copyWaveform(floatWaveform);
-    this.splitter.split(this.waveform, this.bandWaveforms);
+    // The band waveforms are split only if a layer reads them this frame (see the getter in the constructor).
+    this.bandsFresh = false;
     this.copySpectrum(byteSpectrum);
 
     const bands = computeBands(this.spectrum, this.sampleRate, this.fftSize);

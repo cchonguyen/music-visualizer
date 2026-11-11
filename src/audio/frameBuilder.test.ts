@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { BandSplitter } from "./bandWaveforms";
 import { FrameBuilder, loudnessFromWaveform } from "./frameBuilder";
 import { binForFrequency } from "./bands";
 
@@ -356,5 +357,62 @@ describe("Slice 7.44 rock-solid kick & beat detection gating", () => {
     const f3 = builder.build(46 * STEP_SEC, kickSpectrum(), silentWaveform);
     expect(f3.beat).toBe(true);
     expect(f3.kickPulse).toBe(true);
+  });
+});
+
+describe("FrameBuilder band waveforms on demand (Slice 16.9)", () => {
+  function sine(freq: number): Float32Array {
+    const w = new Float32Array(FFT_SIZE);
+    for (let i = 0; i < FFT_SIZE; i += 1) w[i] = 0.5 * Math.sin((2 * Math.PI * freq * i) / SAMPLE_RATE);
+    return w;
+  }
+
+  it("does not split the waveform when nothing reads the bands", () => {
+    const split = vi.spyOn(BandSplitter.prototype, "split");
+    const b = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    for (let i = 0; i < 5; i += 1) b.build(i * STEP_SEC, kickSpectrum(), sine(60));
+    expect(split).not.toHaveBeenCalled();
+    split.mockRestore();
+  });
+
+  it("splits once per frame on first read, and again after the next build", () => {
+    const split = vi.spyOn(BandSplitter.prototype, "split");
+    const b = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    const f1 = b.build(0, kickSpectrum(), sine(60));
+    void f1.bandWaveforms.sub;
+    void f1.bandWaveforms.mid;
+    expect(split).toHaveBeenCalledTimes(1);
+    const f2 = b.build(STEP_SEC, kickSpectrum(), sine(60));
+    void f2.bandWaveforms.high;
+    expect(split).toHaveBeenCalledTimes(2);
+    split.mockRestore();
+  });
+
+  it("gives the same arrays as an eager split would", () => {
+    const wave = sine(1000);
+    const lazy = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    const frame = lazy.build(0, emptySpectrum(), wave);
+    const expected = { sub: new Float32Array(FFT_SIZE), mid: new Float32Array(FFT_SIZE), high: new Float32Array(FFT_SIZE) };
+    new BandSplitter(SAMPLE_RATE).split(wave, expected);
+    expect(Array.from(frame.bandWaveforms.mid)).toEqual(Array.from(expected.mid));
+    expect(Array.from(frame.bandWaveforms.sub)).toEqual(Array.from(expected.sub));
+    expect(Array.from(frame.bandWaveforms.high)).toEqual(Array.from(expected.high));
+  });
+
+  it("reflects the current frame's waveform, not a stale one, after a skipped frame", () => {
+    const b = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    b.build(0, emptySpectrum(), sine(60));
+    const f = b.build(STEP_SEC, emptySpectrum(), sine(5000));
+    const rms = (a: Float32Array) => Math.sqrt(a.reduce((t, v) => t + v * v, 0) / a.length);
+    expect(rms(f.bandWaveforms.high)).toBeGreaterThan(rms(f.bandWaveforms.sub));
+  });
+
+  it("keeps the property listed and ignores assignment", () => {
+    const b = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    const f = b.build(0, emptySpectrum(), silentWaveform);
+    expect(Object.keys(f)).toContain("bandWaveforms");
+    const before = f.bandWaveforms;
+    (f as { bandWaveforms: unknown }).bandWaveforms = null;
+    expect(f.bandWaveforms).toBe(before);
   });
 });

@@ -23,6 +23,8 @@ export class FrameBudget {
   private readonly capacity: number;
   private readonly buffer: number[] = [];
   private next = 0;
+  // Reused by summary() so reading the stats does not allocate a sorted copy every time.
+  private scratch: number[] = [];
 
   constructor(budgetMs = FRAME_BUDGET_MS, capacity = 600) {
     this.budgetMs = budgetMs;
@@ -43,7 +45,10 @@ export class FrameBudget {
   summary(): FrameBudgetSummary {
     const n = this.buffer.length;
     if (n === 0) return { samples: 0, p50Ms: 0, p95Ms: 0, overBudgetPct: 0 };
-    const sorted = this.buffer.slice().sort((a, b) => a - b);
+    const sorted = this.scratch;
+    sorted.length = n;
+    for (let i = 0; i < n; i++) sorted[i] = this.buffer[i]!;
+    sorted.sort((a, b) => a - b);
     let over = 0;
     for (const v of this.buffer) if (v > this.budgetMs) over++;
     return {
