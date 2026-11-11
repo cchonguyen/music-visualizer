@@ -1134,3 +1134,68 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
     });
   });
 });
+
+describe('Director uniforms without per-frame allocation (Slice 16.8)', () => {
+  beforeEach(() => {
+    globalThis.localStorage = createMemoryStorage();
+    resetGlobalDirector();
+  });
+
+  const moves: CameraMove[] = ['craneSway', 'dutchRoll', 'breathingPush', 'horizonTilt', 'stillAnchor'];
+
+  it('evaluateCameraMove fills and returns the object it is given, with the same values as a fresh call', () => {
+    const out = { panX: 9, panY: 9, zoom: 9, roll: 9, tiltX: 9, tiltY: 9 };
+    for (const m of moves) {
+      const fresh = evaluateCameraMove(m, 7.5, 0.4);
+      expect(evaluateCameraMove(m, 7.5, 0.4, out)).toBe(out);
+      expect(out).toEqual(fresh);
+    }
+  });
+
+  it('getCameraUniforms(out) returns out and matches a call without it, frame after frame', () => {
+    const d = new GlobalDirector();
+    d.updateSettings({ cameraMode: 'auto', cameraIntensity: 0.8 });
+    const out = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
+    for (let i = 0; i < 40; i++) {
+      d.advance(0.1, { energy: 0.3 + (i % 5) * 0.1 }, 0.5);
+      const fresh = d.getCameraUniforms();
+      expect(d.getCameraUniforms(out)).toBe(out);
+      expect(out).toEqual(fresh);
+    }
+  });
+
+  it('getCameraUniforms(out) gives the neutral pose when the camera is off', () => {
+    const d = new GlobalDirector();
+    d.updateSettings({ cameraMode: 'off' });
+    const out = { panX: 5, panY: 5, zoom: 5, roll: 5, tiltX: 5, tiltY: 5 };
+    expect(d.getCameraUniforms(out)).toEqual({ panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 });
+  });
+
+  it('getColorUniforms(out) returns out and matches a call without it, including the native mood', () => {
+    const d = new GlobalDirector();
+    const out = { shadowTint: [0, 0, 0] as [number, number, number], highlightTint: [0, 0, 0] as [number, number, number], spatialSpread: 7, gradAngle: 7, intensity: 7, cycleAngle: 7 };
+    d.updateSettings({ colorMood: 'native' });
+    expect(d.getColorUniforms(out)).toBe(out);
+    expect(out).toEqual(d.getColorUniforms());
+    const keep = out.shadowTint;
+    d.updateSettings({ colorMood: 'cyberpunk', colorIntensity: 0.9 });
+    for (let i = 0; i < 20; i++) {
+      d.advance(0.1, { energy: 0.6 }, 0.5);
+      const fresh = d.getColorUniforms();
+      expect(d.getColorUniforms(out)).toBe(out);
+      expect(out).toEqual(fresh);
+    }
+    // The tint arrays are filled in place, not replaced.
+    expect(out.shadowTint).toBe(keep);
+  });
+
+  it('a result taken without out is its own object, so earlier results do not change later', () => {
+    const d = new GlobalDirector();
+    d.updateSettings({ cameraMode: 'auto', cameraIntensity: 0.8 });
+    const a = d.getCameraUniforms();
+    const copy = { ...a };
+    d.advance(5, { energy: 0.9 }, 0.5);
+    d.getCameraUniforms();
+    expect(a).toEqual(copy);
+  });
+});

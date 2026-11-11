@@ -38,7 +38,7 @@ import { setAutoScale } from './gl/size';
 import { setFloatBuffersEnabled } from './gl/fbo';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
-import { getGlobalDirector } from './render/globalDirector';
+import { getGlobalDirector, type CameraUniforms, type ColorUniforms } from './render/globalDirector';
 import { clampDt } from './render/clock';
 import { adminGateway, AdminGateway } from './presets/adminGateway';
 import {
@@ -534,6 +534,9 @@ function start(): void {
     showNotice(s === 'lost' ? 'Graphics reset… restarting visuals.' : 'Visuals restarted.', 'info', 3000);
 
   let preparedId: string | null = null;
+  // Filled by the director every frame instead of building new objects (Slice 16.8).
+  const camScratch: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
+  const colourScratch: ColorUniforms = { shadowTint: [1, 1, 1], highlightTint: [1, 1, 1], spatialSpread: 0, gradAngle: 0, intensity: 0, cycleAngle: 0 };
   // Automatic resolution scaling (Slice 16.6). Off in benchmark mode, so results are comparable, and with ?autoscale=0.
   const autoScaleOn = benchSeconds === null && params.get('autoscale') !== '0';
   const governor = new QualityGovernor(
@@ -623,7 +626,7 @@ function start(): void {
     director.advance(dtSec, frame, contrast);
     if (compositor) {
       compositor.calm = state.calm;
-      compositor.setDirectorState(director.getCameraUniforms(), director.getColorUniforms());
+      compositor.setDirectorState(director.getCameraUniforms(camScratch), director.getColorUniforms(colourScratch));
     }
 
     // Visual gain bends the reaction curve (gainStore.shapeReaction): low = calmer, high =
