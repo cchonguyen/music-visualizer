@@ -69,6 +69,7 @@ function createMockGl(): WebGL2RenderingContext {
     texSubImage2D: vi.fn(),
     framebufferTexture2D: vi.fn(),
     drawArrays: vi.fn(),
+    drawArraysInstanced: vi.fn(),
     enable: vi.fn(),
     disable: vi.fn(),
     blendEquation: vi.fn(),

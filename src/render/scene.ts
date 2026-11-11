@@ -475,23 +475,9 @@ export class Scene {
 
         const overlayOpacity = (cfg.opacity ?? 1.0) * this.foregroundOpacity;
         const isMoire = layer instanceof MoireLayer;
-        let sceneTex: WebGLTexture | null = null;
-        if (isMoire && this.snapshotTarget && this.blitProg && this.vao) {
-          gl.bindFramebuffer(gl.FRAMEBUFFER, this.snapshotTarget.framebuffer);
-          gl.viewport(0, 0, pp.width, pp.height);
-          gl.disable(gl.BLEND);
-          gl.useProgram(this.blitProg);
-          gl.activeTexture(gl.TEXTURE0);
-          gl.bindTexture(gl.TEXTURE_2D, writeTarget.texture);
-          if (this.blitSrcLoc !== null) gl.uniform1i(this.blitSrcLoc, 0);
-          gl.bindVertexArray(this.vao);
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
-          gl.bindVertexArray(null);
-          gl.bindTexture(gl.TEXTURE_2D, null);
-
-          bindTarget(gl, writeTarget);
-          sceneTex = this.snapshotTarget.texture;
-        }
+        // The overlay buffer began as a copy of the finished trail image, which is exactly what pp.read holds and
+        // is not being drawn into, so the moire layer reads it directly. No extra full-size copy (Slice 16.10).
+        const sceneTex: WebGLTexture | null = isMoire ? pp.read.texture : null;
 
         applyLayerBlend(gl, cfg.blend);
 

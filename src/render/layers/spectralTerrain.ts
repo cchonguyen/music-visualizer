@@ -32,6 +32,11 @@ const LAYOUT_MODES: Record<string, number> = {
   canyon: 2,
 };
 
+/** Vertices in one skirt strip (a top and a bottom vertex per bin). */
+const SKIRT_VERTS = TERRAIN_BINS * 2;
+/** Vertices per ridge instance: skirt, two joining vertices, ribbon. */
+export const RIDGE_VERTS = SKIRT_VERTS * 2 + 2;
+
 export class SpectralTerrainLayer implements RenderLayer {
   private p: SpectralTerrainParams;
 
@@ -48,8 +53,9 @@ export class SpectralTerrainLayer implements RenderLayer {
 
   private lineVao: WebGLVertexArrayObject | null = null;
   private lineVbo: WebGLBuffer | null = null;
-  private skirtVao: WebGLVertexArrayObject | null = null;
-  private skirtVbo: WebGLBuffer | null = null;
+  // One instanced strip per ridge: skirt, two degenerate vertices, then the line ribbon (Slice 16.10).
+  private ridgeVao: WebGLVertexArrayObject | null = null;
+  private ridgeVbo: WebGLBuffer | null = null;
 
   private historyTex: WebGLTexture | null = null;
   private headRow = 0;
@@ -62,7 +68,6 @@ export class SpectralTerrainLayer implements RenderLayer {
 
   private uHistoryTex: WebGLUniformLocation | null = null;
   private uHeadRow: WebGLUniformLocation | null = null;
-  private uRidgeIndex: WebGLUniformLocation | null = null;
   private uRidgeCount: WebGLUniformLocation | null = null;
   private uElevationScale: WebGLUniformLocation | null = null;
   private uTerrainWidth: WebGLUniformLocation | null = null;
@@ -88,7 +93,6 @@ export class SpectralTerrainLayer implements RenderLayer {
 
     this.uHistoryTex = gl.getUniformLocation(this.program, 'uHistoryTex');
     this.uHeadRow = gl.getUniformLocation(this.program, 'uHeadRow');
-    this.uRidgeIndex = gl.getUniformLocation(this.program, 'uRidgeIndex');
     this.uRidgeCount = gl.getUniformLocation(this.program, 'uRidgeCount');
     this.uElevationScale = gl.getUniformLocation(this.program, 'uElevationScale');
     this.uTerrainWidth = gl.getUniformLocation(this.program, 'uTerrainWidth');
@@ -133,20 +137,27 @@ export class SpectralTerrainLayer implements RenderLayer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
 
-    // 2. Create Skirt / Ribbon VAO and VBO (256 vertices: pairs of top (binIndex, 0.0) and bottom (binIndex, 1.0))
-    // Used for both occlusion skirts and quad strip line ribbons
-    const skirtData = new Float32Array(TERRAIN_BINS * 4);
+    // 2. Create the ridge VAO and VBO. Per instance (one ridge): vertices 0..255 are the occlusion skirt strip
+    // (pairs of top (binIndex, 0.0) and bottom (binIndex, 1.0)); vertex 256 repeats the last skirt vertex and
+    // vertex 257 repeats the first ribbon vertex, so the two strips join through zero-area triangles; vertices
+    // 258..513 are the line ribbon (same pairs, offset up and down by the line thickness in the shader).
+    const pairs = new Float32Array(TERRAIN_BINS * 4);
     for (let i = 0; i < TERRAIN_BINS; i++) {
-      skirtData[i * 4] = i;
-      skirtData[i * 4 + 1] = 0.0;
-      skirtData[i * 4 + 2] = i;
-      skirtData[i * 4 + 3] = 1.0;
+      pairs[i * 4] = i;
+      pairs[i * 4 + 1] = 0.0;
+      pairs[i * 4 + 2] = i;
+      pairs[i * 4 + 3] = 1.0;
     }
-    this.skirtVao = gl.createVertexArray();
-    this.skirtVbo = gl.createBuffer();
-    gl.bindVertexArray(this.skirtVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.skirtVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, skirtData, gl.STATIC_DRAW);
+    const ridgeData = new Float32Array((RIDGE_VERTS) * 2);
+    ridgeData.set(pairs, 0);
+    ridgeData.set([TERRAIN_BINS - 1, 1.0], SKIRT_VERTS * 2); // vertex 256: repeat last skirt vertex
+    ridgeData.set([0, 0.0], (SKIRT_VERTS + 1) * 2); // vertex 257: repeat first ribbon vertex
+    ridgeData.set(pairs, (SKIRT_VERTS + 2) * 2);
+    this.ridgeVao = gl.createVertexArray();
+    this.ridgeVbo = gl.createBuffer();
+    gl.bindVertexArray(this.ridgeVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.ridgeVbo);
+    gl.bufferData(gl.ARRAY_BUFFER, ridgeData, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
 
@@ -210,7 +221,7 @@ export class SpectralTerrainLayer implements RenderLayer {
       !gl ||
       !this.program ||
       !this.lineVao ||
-      !this.skirtVao ||
+      !this.ridgeVao ||
       !this.historyTex
     ) {
       throw new Error('SpectralTerrainLayer: draw before init');
@@ -287,36 +298,22 @@ export class SpectralTerrainLayer implements RenderLayer {
     gl.uniform3fv(this.uColorA, palette.accentA);
     gl.uniform3fv(this.uColorB, palette.accentB);
 
-    // Enable blending for occlusion skirts and lines
+    // One blend function for everything: the skirt outputs its colour with its alpha, and lines output colour times
+    // alpha with alpha 0, which makes ONE, ONE_MINUS_SRC_ALPHA add the line colour exactly as SRC_ALPHA, ONE did.
     gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Draw 64 perspective ridges from back to front (z = 0..63)
-    for (let z = 0; z < TERRAIN_RIDGES; z++) {
-      gl.uniform1i(this.uRidgeIndex, z);
-
-      // 1. Dark occlusion skirt with gl.FUNC_ADD and ONE, ONE_MINUS_SRC_ALPHA
-      gl.uniform1i(this.uIsSkirtPass, 1);
-      gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      gl.bindVertexArray(this.skirtVao);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
-
-      // 2. Glowing ridge line with gl.FUNC_ADD and SRC_ALPHA, ONE
-      gl.uniform1i(this.uIsSkirtPass, 0);
-      gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-
-      // Quad strip ribbon: 2 vertices per bin offset vertically by lineThickness (256 vertices)
-      gl.bindVertexArray(this.skirtVao);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
-    }
+    // All 64 ridges in one instanced call, drawn in instance order (0 = back ... 63 = front), each ridge as
+    // its skirt and then its line, so a front skirt still hides the lines behind it.
+    gl.uniform1i(this.uIsSkirtPass, 0);
+    gl.bindVertexArray(this.ridgeVao);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, RIDGE_VERTS, TERRAIN_RIDGES);
 
     // 3. Draw 3D front-to-back longitudinal perspective lines connecting the 64 rows
     const gridCols = Math.min(MAX_GRID_COLS, Math.max(0, this.p.gridCols ?? SPECTRAL_TERRAIN_DEFAULTS.gridCols));
     if (gridCols > 0) {
       gl.uniform1i(this.uIsSkirtPass, 2);
-      gl.blendEquation(gl.FUNC_ADD);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
       gl.bindVertexArray(this.lineVao);
       for (let c = 0; c < gridCols; c++) {
         gl.drawArrays(gl.LINE_STRIP, TERRAIN_BINS + c * TERRAIN_RIDGES, TERRAIN_RIDGES);
@@ -340,16 +337,16 @@ export class SpectralTerrainLayer implements RenderLayer {
       if (this.program) gl.deleteProgram(this.program);
       if (this.lineVao) gl.deleteVertexArray(this.lineVao);
       if (this.lineVbo) gl.deleteBuffer(this.lineVbo);
-      if (this.skirtVao) gl.deleteVertexArray(this.skirtVao);
-      if (this.skirtVbo) gl.deleteBuffer(this.skirtVbo);
+      if (this.ridgeVao) gl.deleteVertexArray(this.ridgeVao);
+      if (this.ridgeVbo) gl.deleteBuffer(this.ridgeVbo);
       if (this.historyTex) gl.deleteTexture(this.historyTex);
     }
     this.gl = null;
     this.program = null;
     this.lineVao = null;
     this.lineVbo = null;
-    this.skirtVao = null;
-    this.skirtVbo = null;
+    this.ridgeVao = null;
+    this.ridgeVbo = null;
     this.historyTex = null;
   }
 }

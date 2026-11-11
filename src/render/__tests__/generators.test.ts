@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MoireLayer } from '../layers/moire';
-import { SpectralTerrainLayer, TERRAIN_HISTORY_UNIT, TERRAIN_BINS, TERRAIN_RIDGES } from '../layers/spectralTerrain';
+import { SpectralTerrainLayer, RIDGE_VERTS, TERRAIN_HISTORY_UNIT, TERRAIN_BINS, TERRAIN_RIDGES } from '../layers/spectralTerrain';
 import moireFragSrc from '../shaders/moire.frag.glsl?raw';
 import terrainVertSrc from '../shaders/spectralTerrain.vert.glsl?raw';
 import terrainFragSrc from '../shaders/spectralTerrain.frag.glsl?raw';
@@ -442,7 +442,7 @@ describe('Slice 7.13: SpectralTerrainLayer and shaders', () => {
     expect(layer.getHeadRow()).toBe(2);
   });
 
-  it('renders 64 ridges back-to-front as skirt and ribbon (TRIANGLE_STRIP) plus longitudinal grid lines (LINE_STRIP)', () => {
+  it('draws all 64 ridges in one instanced strip call (skirt then line per ridge) plus longitudinal grid lines (LINE_STRIP)', () => {
     const gl = createMockGl();
     const layer = new SpectralTerrainLayer({ gridCols: 5 });
     layer.init(gl);
@@ -450,23 +450,50 @@ describe('Slice 7.13: SpectralTerrainLayer and shaders', () => {
     const frame = createDummyAudioFrame();
     layer.draw(frame, dummyClock, dummyTarget);
 
-    // 64 ridges * 2 strip draws (skirt + ribbon) + 5 grid-column line strips
-    expect(gl.drawArrays).toHaveBeenCalledTimes(TERRAIN_RIDGES * 2 + 5);
+    // One instanced call for every ridge, instead of 64 * 2 separate strip draws.
+    expect(gl.drawArraysInstanced).toHaveBeenCalledTimes(1);
+    expect(gl.drawArraysInstanced).toHaveBeenCalledWith(gl.TRIANGLE_STRIP, 0, RIDGE_VERTS, TERRAIN_RIDGES);
+    // Skirt strip (256) + 2 joining vertices + ribbon strip (256)
+    expect(RIDGE_VERTS).toBe(TERRAIN_BINS * 4 + 2);
+
+    // Only the grid-column line strips use drawArrays now: one LINE_STRIP per column, after the bin vertices
+    expect(gl.drawArrays).toHaveBeenCalledTimes(5);
     const calls = (gl.drawArrays as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    const strips = calls.filter((c) => c[0] === gl.TRIANGLE_STRIP);
-    expect(strips.length).toBe(TERRAIN_RIDGES * 2);
-    for (const c of strips) expect(c).toEqual([gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2]);
+    calls.forEach((c, i) => expect(c).toEqual([gl.LINE_STRIP, TERRAIN_BINS + i * TERRAIN_RIDGES, TERRAIN_RIDGES]));
 
-    // Grid lines: one LINE_STRIP per column, TERRAIN_RIDGES vertices each, after the bin vertices
-    const lines = calls.filter((c) => c[0] === gl.LINE_STRIP);
-    expect(lines.length).toBe(5);
-    lines.forEach((c, i) => expect(c).toEqual([gl.LINE_STRIP, TERRAIN_BINS + i * TERRAIN_RIDGES, TERRAIN_RIDGES]));
-
-    // Blending enabled with ONE, ONE_MINUS_SRC_ALPHA for skirts and SRC_ALPHA, ONE for lines
+    // One blend function for skirt and lines; the shader premultiplies the line colour
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND);
     expect(gl.blendFunc).toHaveBeenCalledWith(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    expect(gl.blendFunc).toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE);
+    expect(gl.blendFunc).not.toHaveBeenCalledWith(gl.SRC_ALPHA, gl.ONE);
+    // The ridge draw comes before the grid lines
+    const inst = (gl.drawArraysInstanced as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0]!;
+    const firstLine = (gl.drawArrays as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0]!;
+    expect(inst).toBeLessThan(firstLine);
   });
+
+  it('the instanced vertex shader takes the ridge from gl_InstanceID and joins skirt and ribbon with degenerate vertices', () => {
+    expect(terrainVertSrc).toContain('float(gl_InstanceID)');
+    expect(terrainVertSrc).not.toContain('uRidgeIndex');
+    expect(terrainVertSrc).toContain('gl_VertexID <= 256');
+    expect(terrainFragSrc).toContain('vKind == 1');
+    expect(terrainFragSrc).toContain('vec4(finalRgb * lineAlpha, 0.0)');
+  });
+
+  it('the ridge vertex buffer holds skirt, two repeated joiners, then ribbon', () => {
+    const gl = createMockGl();
+    const layer = new SpectralTerrainLayer();
+    layer.init(gl);
+    const uploads = (gl.bufferData as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => c[1] as Float32Array);
+    const data = uploads.find((d) => d.length === RIDGE_VERTS * 2)!;
+    expect(data).toBeDefined();
+    const v = (i: number) => [data[i * 2], data[i * 2 + 1]];
+    expect(v(255)).toEqual([TERRAIN_BINS - 1, 1]);
+    expect(v(256)).toEqual(v(255));
+    expect(v(257)).toEqual(v(258));
+    expect(v(258)).toEqual([0, 0]);
+    expect(v(RIDGE_VERTS - 1)).toEqual([TERRAIN_BINS - 1, 1]);
+  });
+
 
   it('protects texture unit 0: never unbinds texture unit 0 during history upload or draw (Slice 7.38)', () => {
     const gl = createMockGl();

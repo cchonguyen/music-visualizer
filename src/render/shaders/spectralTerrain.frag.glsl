@@ -15,11 +15,12 @@ in vec4 vColor;
 in vec2 vPosNorm;
 in float vElevation;
 in float vDepth;
+flat in int vKind;
 
 out vec4 outColor;
 
 void main() {
-  if (uIsSkirtPass == 1) {
+  if (vKind == 1) {
     // Soft transparent dark-indigo tint: alpha = 0.12 * uSkirtOpacity * uLayerOpacity
     outColor = vec4(vec3(0.005), 0.12 * uSkirtOpacity * uLayerOpacity);
   } else {
@@ -37,7 +38,8 @@ void main() {
     float depthFade = mix(0.55, 1.0, vDepth);
     vec3 finalRgb = crestColor * uBrightness * depthFade;
     float lineAlpha = clamp(uLayerOpacity, 0.0, 1.0);
-    outColor = vec4(finalRgb, lineAlpha);
+    // Premultiplied with alpha 0, so ONE, ONE_MINUS_SRC_ALPHA adds finalRgb * lineAlpha to what is there.
+    outColor = vec4(finalRgb * lineAlpha, 0.0);
   }
 
   // Fallback branch ensuring outColor = vColor is preserved
