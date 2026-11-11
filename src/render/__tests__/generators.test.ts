@@ -442,22 +442,25 @@ describe('Slice 7.13: SpectralTerrainLayer and shaders', () => {
     expect(layer.getHeadRow()).toBe(2);
   });
 
-  it('renders 64 ridges back-to-front with occlusion skirt (TRIANGLE_STRIP) and line (LINE_STRIP)', () => {
+  it('renders 64 ridges back-to-front as skirt and ribbon (TRIANGLE_STRIP) plus longitudinal grid lines (LINE_STRIP)', () => {
     const gl = createMockGl();
-    const layer = new SpectralTerrainLayer();
+    const layer = new SpectralTerrainLayer({ gridCols: 5 });
     layer.init(gl);
 
     const frame = createDummyAudioFrame();
     layer.draw(frame, dummyClock, dummyTarget);
 
-    // 64 ridges * 2 draw calls each = 128 draw calls
-    expect(gl.drawArrays).toHaveBeenCalledTimes(TERRAIN_RIDGES * 2);
+    // 64 ridges * 2 strip draws (skirt + ribbon) + 5 grid-column line strips
+    expect(gl.drawArrays).toHaveBeenCalledTimes(TERRAIN_RIDGES * 2 + 5);
+    const calls = (gl.drawArrays as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const strips = calls.filter((c) => c[0] === gl.TRIANGLE_STRIP);
+    expect(strips.length).toBe(TERRAIN_RIDGES * 2);
+    for (const c of strips) expect(c).toEqual([gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2]);
 
-    // Occlusion skirt draw calls: TRIANGLE_STRIP with 256 vertices
-    expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
-
-    // Line draw calls: LINE_STRIP with 128 vertices
-    expect(gl.drawArrays).toHaveBeenCalledWith(gl.LINE_STRIP, 0, TERRAIN_BINS);
+    // Grid lines: one LINE_STRIP per column, TERRAIN_RIDGES vertices each, after the bin vertices
+    const lines = calls.filter((c) => c[0] === gl.LINE_STRIP);
+    expect(lines.length).toBe(5);
+    lines.forEach((c, i) => expect(c).toEqual([gl.LINE_STRIP, TERRAIN_BINS + i * TERRAIN_RIDGES, TERRAIN_RIDGES]));
 
     // Blending enabled with ONE, ONE_MINUS_SRC_ALPHA for skirts and SRC_ALPHA, ONE for lines
     expect(gl.enable).toHaveBeenCalledWith(gl.BLEND);

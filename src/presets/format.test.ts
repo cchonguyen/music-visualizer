@@ -67,13 +67,22 @@ describe("parsePreset: repairs with warnings", () => {
     expect(warnings.some((w) => w.includes('unknown layer type "spiral"'))).toBe(true);
   });
 
+  it("keeps screen as a valid blend mode with no warning", () => {
+    const { preset, warnings } = parsePreset(
+      { ...minimal, layers: [{ type: "tunnel", blend: "screen" }] },
+      registry,
+    );
+    expect(preset.layers[0]?.blend).toBe("screen");
+    expect(warnings).toEqual([]);
+  });
+
   it("clamps layer opacity and defaults a bad blend mode", () => {
     const { preset, warnings } = parsePreset(
-      { ...minimal, layers: [{ type: "tunnel", opacity: 4, blend: "screen" }] },
+      { ...minimal, layers: [{ type: "tunnel", opacity: 4, blend: "multiply" }] },
       registry,
     );
     expect(preset.layers[0]?.opacity).toBe(1);
-    expect(preset.layers[0]?.blend).toBe("add");
+    expect(preset.layers[0]?.blend).toBe("max");
     expect(warnings.length).toBe(2);
   });
 });

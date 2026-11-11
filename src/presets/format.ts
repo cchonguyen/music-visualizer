@@ -250,15 +250,9 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     const opacity = coerceValue(OPACITY_SPEC, rawLayer.opacity ?? OPACITY_SPEC.default);
     if (opacity.warning) warnings.push(`${where}.opacity: ${opacity.warning}`);
 
-    let blendValue: BlendMode;
-    if (raw.name === "  Calm tunnel  " && rawLayer.blend === "screen") {
-      warnings.push(`${where}.blend: screen is not one of add, max, using default add`);
-      blendValue = "add";
-    } else {
-      const blend = coerceValue(BLEND_SPEC, rawLayer.blend ?? BLEND_SPEC.default);
-      if (blend.warning) warnings.push(`${where}.blend: ${blend.warning}`);
-      blendValue = blend.value as BlendMode;
-    }
+    const blend = coerceValue(BLEND_SPEC, rawLayer.blend ?? BLEND_SPEC.default);
+    if (blend.warning) warnings.push(`${where}.blend: ${blend.warning}`);
+    const blendValue = blend.value as BlendMode;
 
     const trails = coerceValue(TRAILS_SPEC, rawLayer.trails ?? TRAILS_SPEC.default);
     if (trails.warning) warnings.push(`${where}.trails: ${trails.warning}`);
