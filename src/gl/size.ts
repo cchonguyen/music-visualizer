@@ -89,13 +89,39 @@ export function setRenderScale(v: number): RenderScale {
   return renderScale;
 }
 
-/** Feedback buffer size at a render scale. Never smaller than 1x1. */
+// Automatic resolution scaling (slice 16.5 holds the value, 16.6 drives it). Unlike the owner's choice above it is not
+// limited to three steps. The owner's choice is a ceiling: the scale in use is the smaller of the two.
+export const MIN_RENDER_SCALE = 0.25;
+
+/** Clamps any scale to MIN_RENDER_SCALE..1. Non-finite input gives 1. */
+export function clampAutoScale(v: number): number {
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(1, Math.max(MIN_RENDER_SCALE, v));
+}
+
+let autoScale = 1;
+
+export function getAutoScale(): number {
+  return autoScale;
+}
+
+export function setAutoScale(v: number): number {
+  autoScale = clampAutoScale(v);
+  return autoScale;
+}
+
+/** The scale the whole render chain runs at: the automatic scale, never above the owner's choice. */
+export function getEffectiveRenderScale(): number {
+  return Math.min(renderScale, autoScale);
+}
+
+/** Buffer size at a render scale (any value from MIN_RENDER_SCALE to 1). Never smaller than 1x1. */
 export function scaledBufferSize(
   width: number,
   height: number,
   scale: number,
 ): { width: number; height: number } {
-  const s = clampRenderScale(scale);
+  const s = clampAutoScale(scale);
   return {
     width: Math.max(1, Math.round(width * s)),
     height: Math.max(1, Math.round(height * s)),

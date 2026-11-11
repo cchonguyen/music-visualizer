@@ -14,11 +14,13 @@
 // - One full-size pass after the scenes (Slice 16.4): with no post effect, composite.frag does blend and safety;
 //   with post effects, post.frag does blend, post and safety together. Bloom adds three half-size passes
 //   (blend, blur, blur) before it. Neither path has a full-size intermediate buffer.
+// - Render scale (Slice 16.5) covers the whole chain: below 100% the final pass and the bloom buffers run at the
+//   scaled size, and one copy pass upscales the result to the canvas. At 100% there is no copy pass.
 import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { PingPong } from '../gl/fbo';
-import { getRenderScale, scaledBufferSize } from '../gl/size';
+import { getEffectiveRenderScale, scaledBufferSize } from '../gl/size';
 import { type RenderClock } from './clock';
 import { BrightnessLimiter } from './safety';
 import { RELEASE_TAU_SEC, releaseEnvelope } from './releaseEnvelope';
@@ -29,6 +31,7 @@ import type { CameraUniforms, ColorUniforms } from './globalDirector';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import blurSrc from './shaders/blur.frag.glsl?raw';
+import copySrc from './shaders/copy.frag.glsl?raw';
 
 /** Post settings with identity values (see post.frag.glsl). */
 export const POST_IDENTITY = {
@@ -133,8 +136,12 @@ export class Compositor implements RenderLayer {
   private prog: WebGLProgram | null = null;
   private postProg: WebGLProgram | null = null;
   private blurProg: WebGLProgram | null = null;
+  private copyProg: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
   private half: PingPong | null = null;
+  // Below 100% render scale the final pass draws into `scaled` (its `write` side only) and a copy pass upscales it.
+  private scaled: PingPong | null = null;
+  private appliedScale = 1;
   // Uniform locations, cached per program (a name can be missing from one program and present in another).
   private locs = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
   private post: PostValues = { ...POST_IDENTITY };
@@ -360,7 +367,7 @@ export class Compositor implements RenderLayer {
   /** Disposes the oldest off-screen scenes beyond what the count and memory caps allow. */
   private trimKept(): void {
     const kept = [...this.ready].filter((n) => (this.weights.get(n) ?? 0) === 0 && (this.targets.get(n) ?? 0) === 0);
-    const limit = retainLimit(this.w, this.h, getRenderScale());
+    const limit = retainLimit(this.w, this.h, getEffectiveRenderScale());
     if (kept.length <= limit) return;
     kept.sort((x, y) => (this.lastUsed.get(x) ?? 0) - (this.lastUsed.get(y) ?? 0));
     for (const name of kept.slice(0, kept.length - limit)) {
@@ -398,10 +405,14 @@ export class Compositor implements RenderLayer {
     this.prog = compileProgram(gl, FULLSCREEN_VERT, compositeSrc, 'composite');
     this.postProg = compileProgram(gl, FULLSCREEN_VERT, postSrc, 'post');
     this.blurProg = compileProgram(gl, FULLSCREEN_VERT, blurSrc, 'blur');
+    this.copyProg = compileProgram(gl, FULLSCREEN_VERT, copySrc, 'copy');
     this.locs.clear();
     this.vao = createVao(gl);
     this.half?.dispose();
-    this.half = new PingPong(gl, Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
+    this.scaled?.dispose();
+    this.half = null;
+    this.scaled = null;
+    this.fitScaleBuffers(gl);
     this.ready.clear();
     this.stale.clear();
     this.drawn.clear();
@@ -419,8 +430,30 @@ export class Compositor implements RenderLayer {
     this.offX = box.offX;
     this.offY = box.offY;
     this.appliedAspect = aspectCorrect;
-    this.half?.resize(Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
+    if (this.gl) this.fitScaleBuffers(this.gl);
     for (const name of this.ready) this.scenes.get(name)?.resize(this.w, this.h, dpr);
+  }
+
+  /**
+   * Sizes the bloom buffers, and the buffer the final pass draws into when the render scale is below 100%, for
+   * the current box and scale. A size that is unchanged is left alone.
+   */
+  private fitScaleBuffers(gl: WebGL2RenderingContext): void {
+    const scale = getEffectiveRenderScale();
+    this.appliedScale = scale;
+    const sc = scaledBufferSize(this.w, this.h, scale);
+    const hw = Math.max(1, sc.width >> 1);
+    const hh = Math.max(1, sc.height >> 1);
+    if (this.half) this.half.resize(hw, hh);
+    else this.half = new PingPong(gl, hw, hh);
+    if (sc.width === this.w && sc.height === this.h) {
+      this.scaled?.dispose();
+      this.scaled = null;
+    } else if (this.scaled) {
+      this.scaled.resize(sc.width, sc.height);
+    } else {
+      this.scaled = new PingPong(gl, sc.width, sc.height);
+    }
   }
 
   private postActive(): boolean {
@@ -432,6 +465,8 @@ export class Compositor implements RenderLayer {
     if (!gl || !this.prog || !this.vao) throw new Error('Compositor: draw before init');
     // The setting was toggled since the buffers were sized: re-fit them (slice 5.3).
     if (aspectCorrect !== this.appliedAspect) this.resize(this.rawW, this.rawH, this.dpr);
+    // The render scale changed (the owner's choice or automatic scaling): re-fit the chain's buffers.
+    if (getEffectiveRenderScale() !== this.appliedScale) this.fitScaleBuffers(gl);
 
     const isMorph = TRANSITIONS[this.transition] === 'morph';
 
@@ -535,9 +570,12 @@ export class Compositor implements RenderLayer {
     const texA = sceneA?.outputTexture() ?? null;
     const texB = sceneB?.outputTexture() ?? null;
     const half = this.half;
+    // Below 100% the final pass draws into the scaled buffer; the copy pass after it upscales to the target.
+    const scaled = this.scaled;
+    const finalDest: RenderTarget = scaled ? this.bufferTarget(scaled.write, { width: scaled.width, height: scaled.height }) : target;
     if (!this.postActive() || !half || !this.postProg || !this.blurProg) {
       // No post effect: one pass, blend and safety together (the look before E4).
-      this.blendPass(gl, texA, texB, wA, wB, cap, 1, target);
+      this.blendPass(gl, texA, texB, wA, wB, cap, 1, finalDest);
     } else {
       // Bloom (E5) needs a blurred copy of the blended image: blend at half size, then blur it
       // horizontally and vertically. These are quarter-area passes.
@@ -553,8 +591,9 @@ export class Compositor implements RenderLayer {
         bloomTex = half.read.texture;
       }
       // The one full-size pass: blend, post chain and safety, straight into the real target.
-      this.finalPass(gl, texA, texB, wA, wB, cap, bloomTex, target);
+      this.finalPass(gl, texA, texB, wA, wB, cap, bloomTex, finalDest);
     }
+    if (scaled) this.upscalePass(gl, scaled.write.texture, target);
 
     // Fades that have finished keep their buffers, up to the cap (oldest first out).
     for (const name of this.ready) {
@@ -598,6 +637,20 @@ export class Compositor implements RenderLayer {
     gl.uniform1i(this.u(prog, 'uStyle'), this.transition);
     const sum = wA + wB;
     gl.uniform1f(this.u(prog, 'uT'), sum > 0 ? wB / sum : 0);
+    gl.bindVertexArray(this.vao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindVertexArray(null);
+  }
+
+  /** Copies the scaled picture to the real target, stretched to fill it. The one upscale in the chain. */
+  private upscalePass(gl: WebGL2RenderingContext, src: WebGLTexture, target: RenderTarget): void {
+    const prog = this.copyProg!;
+    this.bindTo(gl, target);
+    gl.disable(gl.BLEND);
+    gl.useProgram(prog);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, src);
+    gl.uniform1i(this.u(prog, 'uSrc'), 0);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
@@ -678,14 +731,17 @@ export class Compositor implements RenderLayer {
     this.drawn.clear();
     this.half?.dispose();
     this.half = null;
+    this.scaled?.dispose();
+    this.scaled = null;
     const gl = this.gl;
     if (gl) {
-      for (const prog of [this.prog, this.postProg, this.blurProg]) if (prog) gl.deleteProgram(prog);
+      for (const prog of [this.prog, this.postProg, this.blurProg, this.copyProg]) if (prog) gl.deleteProgram(prog);
       if (this.vao) gl.deleteVertexArray(this.vao);
     }
     this.prog = null;
     this.postProg = null;
     this.blurProg = null;
+    this.copyProg = null;
     this.locs.clear();
     this.vao = null;
     this.gl = null;
