@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { assertValidSpec, coerceValue, defaultsFor, isSpecVisible, type ParamSpec } from "./schema";
+import { SCHEMAS } from "./builtin";
+import { parsePreset, PRESET_VERSION } from "./format";
 import {
   BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHAPE_DEFAULTS, SHAPE_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
@@ -299,5 +301,37 @@ describe("Trail fade and warp speed ceilings (Slice 15.9)", () => {
     expect(coerceValue(byName('warpSpeed'), 15)).toEqual({ value: 15 });
     expect(coerceValue(byName('fade'), 0.5).value).toBe(0.1);
     expect(coerceValue(byName('warpSpeed'), 40).value).toBe(15);
+  });
+});
+
+describe("Trail fades are three clearly named controls (Slice 17.7)", () => {
+  const find = (name: string) => SCHEMAS.feedback.find((s) => s.name === name)!;
+
+  it("Trail length, Trail fade-out and Trail colour fade each have their own name and explanation", () => {
+    const labels = ["decay", "fade", "decayRgb"].map((n) => find(n).label);
+    expect(labels).toEqual(["Trail length", "Trail fade-out", "Trail colour fade (R, G, B)"]);
+    const descriptions = ["decay", "fade", "decayRgb"].map((n) => find(n).description ?? "");
+    expect(new Set(descriptions).size).toBe(3);
+    for (const d of descriptions) expect(d.length).toBeGreaterThan(40);
+    // No old, overlapping wording is left.
+    for (const n of ["decay", "fade", "decayRgb"]) expect(find(n).label).not.toMatch(/persistence|per frame|per colour/i);
+  });
+
+  it("keeps the stored names, defaults and ranges, so every saved preset loads and looks the same with no migration", () => {
+    expect(find("decay")).toMatchObject({ type: "float", default: 0.92, max: 1 });
+    expect(find("fade")).toMatchObject({ type: "float", default: 0.004, min: 0, max: 0.1 });
+    expect(find("decayRgb")).toMatchObject({ type: "vec3", default: [1, 1, 1] });
+  });
+
+  it("an old preset's trail values parse unchanged and without a warning", () => {
+    const registry = { feedback: SCHEMAS.feedback, post: [], layers: {} };
+    const { preset, warnings } = parsePreset(
+      { version: PRESET_VERSION, name: "old trails", feedback: { decay: 0.95, fade: 0.01, decayRgb: [0.9, 0.95, 1] } },
+      registry,
+    );
+    expect(warnings).toEqual([]);
+    expect(preset.feedback.decay?.value).toBe(0.95);
+    expect(preset.feedback.fade?.value).toBe(0.01);
+    expect(preset.feedback.decayRgb?.value).toEqual([0.9, 0.95, 1]);
   });
 });
