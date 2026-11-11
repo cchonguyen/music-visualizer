@@ -1,5 +1,7 @@
 // Auto-cycle (slice T2): picks the next preset on a timer or on a strong beat. Pure logic.
 // Presets tagged "skip" are never picked. With `favouritesOnly`, only presets tagged "favourite" are used.
+import { withinCost, type CostLevel } from './cost';
+
 export type CycleMode = 'off' | 'timer' | 'beat';
 
 export interface CycleOptions {
@@ -9,11 +11,15 @@ export interface CycleOptions {
   shuffle: boolean;
   favouritesOnly: boolean;
   calmOnly?: boolean;
+  /** Skip presets heavier than this (Slice 16.11). Missing means no limit. Ignored if it would leave fewer than 2 presets. */
+  maxCost?: CostLevel;
 }
 
 export interface CycleCandidate {
   id: string;
   tags: readonly string[];
+  /** Cost level from presets/cost.ts. Missing counts as Light. */
+  cost?: CostLevel;
 }
 
 /** How many seconds before a switch the next preset is chosen, so it can be prepared (Slice 16.3). */
@@ -24,9 +30,13 @@ export const DEFAULT_CYCLE: CycleOptions = { mode: 'off', intervalSec: 20, minGa
 /** Presets that the cycle may show, in their list order. */
 export function eligible(candidates: readonly CycleCandidate[], opts: CycleOptions): string[] {
   const nonSkipped = candidates.filter((c) => !c.tags.includes('skip'));
-  const base = opts.favouritesOnly
+  const favourite = opts.favouritesOnly
     ? nonSkipped.filter((c) => c.tags.includes('favourite'))
     : nonSkipped;
+  // Slice 16.11: devices that cannot keep up skip the heaviest presets, unless that would leave nothing to switch to.
+  const max = opts.maxCost;
+  const light = max ? favourite.filter((c) => withinCost(c.cost ?? 'light', max)) : favourite;
+  const base = light.length >= 2 ? light : favourite;
 
   if (opts.calmOnly === true) {
     const calm = base.filter((c) => c.tags.includes('calm'));
