@@ -726,8 +726,8 @@ export const PARTICLE_MODE_SPEC: EnumSpec = {
   label: "Layout mode",
   group: "Shape",
   default: "radial",
-  options: ["radial", "phyllotaxis"],
-  description: "Selects particle distribution layout between radial explosion and phyllotaxis spiral.",
+  options: ["radial", "phyllotaxis", "field"],
+  description: "Selects particle layout: radial explosion, phyllotaxis spiral, or a starfield (field) of stars flying toward you.",
 };
 
 /** Particle seed shape, phyllotaxis pattern, and petal stretch options (Slice 7.29). */

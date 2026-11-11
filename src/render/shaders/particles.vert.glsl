@@ -25,7 +25,7 @@ uniform float uWarp;        // scene wave warp (morph), 0..1, only used when fol
 uniform float uWarpScale;   // scene wave count
 uniform float uWarpSpeed;   // scene wave speed
 uniform float uTime;        // scene time in seconds
-uniform int uMode;          // 0 = radial (default), 1 = phyllotaxis
+uniform int uMode;          // 0 = radial (default), 1 = phyllotaxis, 2 = starfield
 uniform float uSubTwist;    // sub-bass twist for phyllotaxis
 uniform float uFlowPhase;
 uniform float uTwistPhase;
@@ -37,6 +37,7 @@ uniform float uBeatReactivity;
 uniform sampler2D uTerrainTex;
 uniform float uTerrainDisplace;
 uniform float uTerrainWriteRow;
+uniform float uFlash;       // high-band flash envelope, 0..1 (starfield sparkle bursts)
 uniform float uCount;       // live particle count (the instance count drawn)
 uniform int uSpawnArea;     // 0 = centre (default), 1 = ring, 2 = full screen, 3 = edges
 uniform float uTwinkleRate; // multiplies the twinkle speed (1 = as before)
@@ -122,6 +123,38 @@ void main() {
     float sinR = sin(uRotation);
     vec2 turned = (vec2(cosR * point.x - sinR * point.y, sinR * point.x + cosR * point.y) * uStretch) / uZoom + uCentre;
     gl_Position = vec4(turned.x / uAspect, turned.y, 0.0, 1.0);
+    return;
+  }
+
+  if (uMode == 2) {
+    // Starfield: each star has a fixed direction and flies toward the viewer. Depth z goes from 1 (far)
+    // to 0.04 (near); the perspective divide pos = anchor * 0.25 / z sweeps it from the centre out past the edge.
+    // Nearer stars are bigger, brighter and leave longer streaks. uPhase is energy-driven, so loud music flies faster.
+    float sSeed = hash01(id, 0.0);
+    float sLife = fract(uPhase * mix(0.06, 0.16, hash01(id, 1.0)) + sSeed);
+    float z = max(0.04, 1.0 - sLife);
+    float a = hash01(id, 2.0) * TAU;
+    float rr = 0.15 + 0.85 * sqrt(hash01(id, 7.0));
+    vec2 anchor = vec2(cos(a), sin(a)) * rr * vec2(uAspect, 1.0);
+    vec2 sPos = anchor * (0.25 / z);
+    vec2 sAxis = normalize(sPos);
+    vec2 sPerp = vec2(-sAxis.y, sAxis.x);
+    float near = sLife;
+    float sSize = (0.4 + 1.6 * near) * uSize;
+    float sLen = (0.004 + 0.05 * near * near * (0.3 + clamp(uEnergy, 0.0, 1.0))) * uSize;
+    float sHalf = mix(0.0015, 0.003, hash01(id, 6.0)) * sSize;
+    vLocal = CORNERS[gl_VertexID];
+    float st = vLocal.x * 0.5 + 0.5;
+    vec2 sPoint = sPos - sAxis * sLen * (1.0 - st) + sPerp * vLocal.y * sHalf;
+    vMix = hash01(id, 6.0);
+    vFade = smoothstep(0.0, 0.12, sLife) * smoothstep(0.0, 0.06, z);
+    float stw = 0.5 + 0.5 * sin(uTwinkleTime * mix(6.0, 14.0, hash01(id, 4.0)) * uTwinkleRate + hash01(id, 5.0) * TAU);
+    float burst = (hash01(id, 10.0) < 0.4 * uFlash) ? 1.8 : 1.0;
+    vTwinkle = (1.0 - uTwinkleDepth * (1.0 - stw * stw)) * mix(0.35, 1.0, near) * burst;
+    float sc = cos(uRotation);
+    float ss = sin(uRotation);
+    vec2 sTurned = (vec2(sc * sPoint.x - ss * sPoint.y, ss * sPoint.x + sc * sPoint.y) * uStretch) / uZoom + uCentre;
+    gl_Position = vec4(sTurned.x / uAspect, sTurned.y, 0.0, 1.0);
     return;
   }
 
