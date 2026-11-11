@@ -32,8 +32,8 @@ describe("warp operator schema", () => {
     expect(amount && amount.type === "float" && amount.min).toBeLessThan(0);
   });
 
-  it("lists the nine operators, with the first four in their original positions", () => {
-    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl"]);
+  it("lists the ten operators, with the first four in their original positions", () => {
+    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl", "flow"]);
   });
 
   it("every type has the common settings, and only Curl noise has more", () => {
@@ -44,6 +44,15 @@ describe("warp operator schema", () => {
       if (type !== "curl") expect(names(type)).toEqual(common);
     }
     expect(names("curl").slice(common.length)).toEqual(["octaves", "turbulence", "flow"]);
+  });
+
+  it("flow field has the common settings and a label", () => {
+    expect(WARP_OP_TYPES).toContain("flow");
+    expect(WARP_OP_LABELS.flow).toMatch(/flow/i);
+    expect(isWarpOpType("flow")).toBe(true);
+    const d = defaultsFor(warpOpSpecs("flow"));
+    expect(Math.abs(d.amount as number)).toBeGreaterThan(0);
+    expect(d.scale).toBe(1);
   });
 
   it("curl noise starts with the old Curl mode's settings", () => {
