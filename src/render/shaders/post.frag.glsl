@@ -42,6 +42,14 @@ uniform float uGamma;     // 1 = unchanged
 uniform float uBright;    // added after the grade
 uniform float uMirror;    // 0 = off, 2..8 = kaleidoscope folds
 uniform float uVignette;  // 0..1 darker edges
+// Vignette options (Slice 18.9). The defaults draw the classic dark oval vignette.
+uniform int uVigShape;     // 0 oval (follows the screen), 1 round, 2 box
+uniform float uVigSoft;    // width of the fade, 0.4 = the classic one
+uniform int uVigBlend;     // 0 darken, 1 tint, 2 add, 3 hue shift
+uniform vec3 uVigColour;   // black with darken = classic
+uniform float uVigUseGrad; // 1 = colour from uVigGrad instead
+uniform sampler2D uVigGrad;
+uniform float uAspect;     // width / height of the picture
 uniform float uChroma;    // red/blue split, in uv
 uniform float uBloomAmt;  // 0 = off
 uniform float uBloomThr;  // brightness above this glows
@@ -229,8 +237,29 @@ void main() {
     c += glow * uBloomAmt * (1.0 + uBloomPulse * uBeat);
   }
 
-  float d = length(vUv - 0.5);
-  c *= 1.0 - uVignette * smoothstep(0.35, 0.75, d);
+  vec2 vp = vUv - 0.5;
+  float d = length(vp);
+  if (uVigShape == 1) {
+    // Round: a true circle, scaled so the corners stay at the same distance as the oval.
+    d = length(vp * vec2(uAspect, 1.0)) / sqrt(uAspect * uAspect + 1.0) * 1.41421356;
+  } else if (uVigShape == 2) {
+    d = max(abs(vp.x), abs(vp.y)) * 1.41421356;
+  }
+  if (uVignette > 0.0) {
+    // The fade is centred on 0.55 and uVigSoft wide: 0.4 gives smoothstep(0.35, 0.75) like before.
+    float k = uVignette * smoothstep(0.55 - uVigSoft * 0.5, 0.55 + uVigSoft * 0.5, d);
+    vec3 vc = uVigColour;
+    if (uVigUseGrad > 0.5) vc = texture(uVigGrad, vec2(clamp(d / 0.70710678, 0.0, 1.0), 0.5)).rgb;
+    if (uVigBlend == 0) {
+      c *= mix(vec3(1.0), vc, k);
+    } else if (uVigBlend == 1) {
+      c = mix(c, vc, k);
+    } else if (uVigBlend == 2) {
+      c += vc * k;
+    } else {
+      c = hueRotate(c, k * 3.14159265);
+    }
+  }
   // The safety rules read the finished picture. Clamp first: the post chain can push values past 1.
   c = clamp(c, 0.0, 1.0);
   c = applySafety(c);

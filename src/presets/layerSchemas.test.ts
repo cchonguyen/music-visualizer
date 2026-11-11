@@ -278,6 +278,24 @@ describe("Feedback and Post dependent control visibility (Slice 15.1)", () => {
     expect(byName(POST_SPECS, 'colourMapMix').default).toBe(0);
   });
 
+  it("the vignette options default to the classic dark oval, and show only while the vignette is on (Slice 18.9)", () => {
+    expect(byName(POST_SPECS, 'vignetteShape').default).toBe('oval');
+    expect(byName(POST_SPECS, 'vignetteBlend').default).toBe('darken');
+    expect(byName(POST_SPECS, 'vignetteColour').default).toBe('#000000');
+    expect(byName(POST_SPECS, 'vignetteGradient').default).toBe('none');
+    expect(byName(POST_SPECS, 'vignetteSoftness').default).toBe(0.4);
+    expect(byName(POST_SPECS, 'vignette').showWhen).toBeUndefined();
+    for (const name of ['vignetteShape', 'vignetteSoftness', 'vignetteBlend', 'vignetteColour', 'vignetteGradient']) {
+      expect(isSpecVisible(byName(POST_SPECS, name), { vignette: 0 }), name).toBe(false);
+      expect(isSpecVisible(byName(POST_SPECS, name), { vignette: 0.5, vignetteGradient: 'none' }), name).toBe(true);
+    }
+  });
+
+  it("the vignette colour hides while a gradient is chosen (Slice 18.9)", () => {
+    const colour = byName(POST_SPECS, 'vignetteColour');
+    expect(isSpecVisible(colour, { vignette: 0.5, vignetteGradient: 'heat' })).toBe(false);
+  });
+
   it("Wave warp, count and speed follow the warp modes that read them", () => {
     const visible = (n: string, mode: string) => isSpecVisible(byName(FEEDBACK_SPECS, n), { warpMode: mode });
     for (const mode of ['classic', 'curl', 'mobius']) expect(visible('warp', mode)).toBe(true);

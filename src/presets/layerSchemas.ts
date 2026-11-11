@@ -581,6 +581,10 @@ export const FEEDBACK_DEFAULTS = {
   hueDrift: 0,
   blur: 0,
 } as const;
+/** Vignette shapes and blends (Slice 18.9). The position in each list is the number the post shader switches on. */
+export const VIGNETTE_SHAPES = ['oval', 'round', 'box'] as const;
+export const VIGNETTE_BLENDS = ['darken', 'tint', 'add', 'hueShift'] as const;
+
 // Post chain (slice E4) and bloom (E5). Shown only, after the feedback trail. Defaults = no effect.
 export const POST_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'hueShift', label: 'Hue shift, whole image (rad)', group: 'Colour', default: 0, min: -3.14, max: 3.14, step: 0.01, description: 'Applies a global hue rotation offset to the rendered composition.' },
@@ -589,6 +593,11 @@ export const POST_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'gamma', label: 'Gamma', group: 'Colour', default: 1, min: 0.5, max: 2, step: 0.01, description: 'Applies non-linear power curve luminance correction.' },
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: 0, min: -0.5, max: 0.5, step: 0.01, description: 'Adjusts global master image brightness offset.' },
   { type: 'float', name: 'vignette', label: 'Vignette', group: 'Shape', default: 0, min: 0, max: 1, step: 0.01, description: 'Darkens viewport corners with a soft radial falloff mask.' },
+  { type: 'enum', name: 'vignetteShape', label: 'Vignette shape', group: 'Shape', default: 'oval', options: VIGNETTE_SHAPES, showWhen: { vignette: { above: 0 } }, description: 'Oval follows the screen shape (the classic vignette). Round is a true circle. Box hugs the edges.' },
+  { type: 'float', name: 'vignetteSoftness', label: 'Vignette softness', group: 'Shape', default: 0.4, min: 0.02, max: 1, step: 0.01, showWhen: { vignette: { above: 0 } }, description: 'How gradually the vignette fades in from the middle to the edge.' },
+  { type: 'enum', name: 'vignetteBlend', label: 'Vignette blend', group: 'Shape', default: 'darken', options: VIGNETTE_BLENDS, showWhen: { vignette: { above: 0 } }, description: 'Darken multiplies the picture, tint mixes toward the colour, add lights the edge with it, hue shift turns the colours around toward the edge.' },
+  { type: 'colour', name: 'vignetteColour', label: 'Vignette colour', group: 'Shape', default: '#000000', showWhen: { vignette: { above: 0 }, vignetteGradient: 'none' }, description: 'Colour used by the vignette. Black with Darken is the classic look.' },
+  { type: 'enum', name: 'vignetteGradient', label: 'Vignette gradient (or none)', group: 'Shape', default: 'none', options: ['none', ...GRADIENT_NAMES], showWhen: { vignette: { above: 0 } }, description: 'Colours the vignette from a gradient, running from the middle to the corner, instead of one colour.' },
   {
     type: 'int',
     name: 'mirror',
