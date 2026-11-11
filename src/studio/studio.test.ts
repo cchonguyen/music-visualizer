@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toastModule from '../ui/toast';
 import {
   DELETE_CONFIRM_MS,
@@ -21,12 +21,17 @@ import {
   SYSTEM_OPTGROUP_LABELS,
   renderPresetSelectHierarchy,
   Studio,
+  loadStudioView,
+  saveStudioView,
+  isSpecShown,
+  STUDIO_VIEW_KEY,
 } from './studio';
 import { getGlobalDirector, resetGlobalDirector } from '../render/globalDirector';
 import { Scene } from '../render/scene';
 import type { Preset, LayerEntry } from '../presets/format';
 import type { Vec3Spec } from '../presets/schema';
-import { LAYER_SPECS, POST_SPECS } from '../presets/layerSchemas';
+import { LAYER_SPECS, POST_SPECS, tierOf } from '../presets/layerSchemas';
+import type { ParamSpec } from '../presets/schema';
 import { FEEDBACK_POST_LAYOUT, feedbackPostGroupOf, layoutFeedbackPost } from '../presets/schema';
 import { SCHEMAS } from '../presets/builtin';
 import { parsePreset } from '../presets/format';
@@ -821,6 +826,7 @@ describe('Conditional visibility with showWhen (Slice 9.4)', () => {
     const onApply = vi.fn();
     const onCommit = vi.fn();
 
+    saveStudioView('advanced'); // sides and starInner are advanced controls
     const { specBindings } = bindSection(pane, '1. Shape (circle · bars)', specs, layer.params, onApply, onCommit);
 
     const findBlade = (name: string) => {
@@ -2775,5 +2781,89 @@ describe('Feedback and Post regrouped into Motion, Warp, Trails, Colour (Slice 1
     (settings as any).bloom = 0.4;
     expect(post.bloom).toBe(0.4);
     expect(feedback.bloom).toBeUndefined();
+  });
+});
+
+describe('Basic and Advanced views (Slice 15.4)', () => {
+  const stubStorage = (impl: Partial<Storage>) => vi.stubGlobal('localStorage', impl as Storage);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    saveStudioView('basic');
+  });
+
+  const sections = (): Array<[string, readonly ParamSpec[]]> => [
+    ...['shape', 'tunnel', 'particles', 'crown', 'rings', 'shockwave', 'bars', 'bassPulse', 'waveform'].map((k) => [k, LAYER_SPECS[k]!] as [string, readonly ParamSpec[]]),
+    ['feedback and post', layoutFeedbackPost(SCHEMAS.feedback, SCHEMAS.post)],
+  ];
+
+  it('treats a spec with no tier as advanced and a basic one as basic', () => {
+    expect(tierOf({ type: 'bool', name: 'x', label: 'X', group: 'G', default: false })).toBe('advanced');
+    expect(tierOf({ type: 'bool', name: 'x', label: 'X', group: 'G', default: false, tier: 'basic' } as ParamSpec)).toBe('basic');
+  });
+
+  it('keeps basic count between 6 and 8 in every section that has that many controls', () => {
+    for (const [name, specs] of sections()) {
+      const basic = specs.filter((s) => tierOf(s) === 'basic').length;
+      if (specs.length >= 6) {
+        expect(basic, name).toBeGreaterThanOrEqual(6);
+        expect(basic, name).toBeLessThanOrEqual(8);
+      } else {
+        expect(basic, name).toBe(specs.length);
+      }
+    }
+  });
+
+  it('hides advanced controls in Basic and shows them in Advanced; showWhen still hides in both', () => {
+    const specs = LAYER_SPECS['shape']!;
+    const layer = defaultLayer('shape');
+    const pane = createMockPane();
+    saveStudioView('basic');
+    const { specBindings } = bindSection(pane, 'Shape', specs, layer.params);
+    const blade = (n: string) => specBindings.find((b) => b.spec.name === n)!.blades[0];
+    expect(blade('size').hidden).toBe(false);
+    expect(blade('attackMs').hidden).toBe(true); // advanced
+    const viewBinding = pane.folders[0]!.folder.bindings.find((b: any) => b.prop === 'view')!;
+    viewBinding.fire('change', 'advanced');
+    expect(blade('attackMs').hidden).toBe(false);
+    // starInner needs baseShape star: hidden even in Advanced
+    expect(blade('starInner').hidden).toBe(true);
+    expect(isSpecShown(specs.find((s) => s.name === 'starInner')!, { baseShape: 'circle' }, 'advanced')).toBe(false);
+  });
+
+  it('shows every control, with no View toggle, in a section that has no tiered controls', () => {
+    const specs: ParamSpec[] = [
+      { type: 'bool', name: 'a', label: 'A', group: 'G', default: false },
+      { type: 'bool', name: 'b', label: 'B', group: 'G', default: false },
+    ];
+    const pane = createMockPane();
+    saveStudioView('basic');
+    const { specBindings } = bindSection(pane, 'Untiered', specs, {});
+    expect(specBindings.every((b) => b.blades[0].hidden === false)).toBe(true);
+    expect(pane.folders[0]!.folder.bindings.some((b: any) => b.prop === 'view')).toBe(false);
+  });
+
+  it('persists the choice in localStorage and reads it back', () => {
+    const store = new Map<string, string>();
+    stubStorage({ getItem: (k) => store.get(k) ?? null, setItem: (k, v) => void store.set(k, v) });
+    saveStudioView('advanced');
+    expect(store.get(STUDIO_VIEW_KEY)).toBe('advanced');
+    expect(loadStudioView()).toBe('advanced');
+    store.set(STUDIO_VIEW_KEY, 'junk');
+    saveStudioView('basic');
+    expect(loadStudioView()).toBe('basic');
+  });
+
+  it('falls back to this-session memory when storage throws on read and write', () => {
+    const boom = () => { throw new Error('denied'); };
+    stubStorage({ getItem: boom, setItem: boom });
+    expect(() => saveStudioView('advanced')).not.toThrow();
+    expect(loadStudioView()).toBe('advanced');
+    const pane = createMockPane();
+    expect(() => bindSection(pane, 'Tunnel', LAYER_SPECS['tunnel']!, defaultLayer('tunnel').params)).not.toThrow();
+  });
+
+  it('defaults to basic with no storage at all', () => {
+    vi.stubGlobal('localStorage', undefined);
+    expect(loadStudioView()).toBe('basic');
   });
 });

@@ -6,7 +6,7 @@
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
-import { LAYER_SPECS } from '../presets/layerSchemas';
+import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
 import type { Scene } from '../render/scene';
@@ -58,6 +58,36 @@ const FRAME_BUDGET_MS = 16.7;
 export const DELETE_CONFIRM_MS = 3000;
 const DELETE_LABEL = 'Delete';
 const DELETE_ARMED_LABEL = 'Tap again to delete';
+
+/** Studio view choice (Slice 15.4). Stored under one key; every read and write tolerates missing or failing storage. */
+export type StudioView = 'basic' | 'advanced';
+export const STUDIO_VIEW_KEY = 'mv.studio.view';
+const viewSubscribers = new Set<(v: StudioView) => void>();
+let sessionView: StudioView | null = null;
+
+export function loadStudioView(): StudioView {
+  try {
+    const raw = globalThis.localStorage?.getItem(STUDIO_VIEW_KEY);
+    if (raw === 'basic' || raw === 'advanced') return raw;
+  } catch {
+    // storage unavailable: fall through
+  }
+  return sessionView ?? 'basic';
+}
+
+export function saveStudioView(view: StudioView): void {
+  sessionView = view;
+  try {
+    globalThis.localStorage?.setItem(STUDIO_VIEW_KEY, view);
+  } catch {
+    // storage unavailable: the choice lasts for this session only
+  }
+}
+
+/** True when a control shows in `view`: showWhen still decides first, then the tier (untiered = advanced). */
+export function isSpecShown(spec: ParamSpec, values: Record<string, ParamValue>, view: StudioView): boolean {
+  return isSpecVisible(spec, values) && (view === 'advanced' || tierOf(spec) === 'basic');
+}
 
 /** Text for the Delete live region: the armed prompt while armed, empty otherwise (slice 11.4). */
 export function deleteAnnouncement(armed: boolean): string {
@@ -1497,17 +1527,52 @@ export function bindSection(
   }
 
   const specBindings: Array<{ spec: ParamSpec; blades: any[] }> = [];
+  const groupFolders: Array<{ folder: any; members: Array<{ spec: ParamSpec; blades: any[] }> }> = [];
+  const viewHolder: { view: StudioView } = { view: loadStudioView() };
+  // A section with no tiered controls (layers registered elsewhere) has no Basic view: show everything, no toggle.
+  const tiered = specs.some((s) => tierOf(s) === 'basic');
+  const hasAdvanced = tiered && specs.some((s) => tierOf(s) === 'advanced');
+  const viewNow = (): StudioView => (tiered ? viewHolder.view : 'advanced');
 
   const updateVisibility = () => {
     for (const { spec, blades } of specBindings) {
-      const visible = isSpecVisible(spec, holder);
+      const visible = isSpecShown(spec, holder, viewNow());
       for (const b of blades) {
         if (b && typeof b === 'object') {
           b.hidden = !visible;
         }
       }
     }
+    // A group folder with nothing to show hides too.
+    for (const { folder, members } of groupFolders) {
+      const any = members.some((m) => isSpecShown(m.spec, holder, viewNow()));
+      if (folder && typeof folder === 'object') folder.hidden = !any;
+    }
   };
+
+  let viewBinding: any;
+  if (hasAdvanced && typeof sectionFolder.addBinding === 'function') {
+    viewBinding = sectionFolder.addBinding(viewHolder, 'view', {
+      label: 'View',
+      options: { Basic: 'basic', Advanced: 'advanced' },
+    });
+    viewBinding?.on?.('change', () => {
+      saveStudioView(viewHolder.view);
+      for (const notify of [...viewSubscribers]) notify(viewHolder.view);
+    });
+    const onView = (v: StudioView) => {
+      try {
+        if (viewHolder.view !== v) {
+          viewHolder.view = v;
+          viewBinding?.refresh?.();
+        }
+        updateVisibility();
+      } catch {
+        // section was disposed
+      }
+    };
+    viewSubscribers.add(onView);
+  }
 
   const groups = new Map<string, ParamSpec[]>();
   for (const spec of specs) {
@@ -1524,8 +1589,10 @@ export function bindSection(
     const target = groupName && typeof sectionFolder.addFolder === 'function'
       ? sectionFolder.addFolder({ title: groupName, expanded: false })
       : sectionFolder;
+    const members: Array<{ spec: ParamSpec; blades: any[] }> = [];
     if (target && target !== sectionFolder && target !== pane) {
       folders.push(target);
+      groupFolders.push({ folder: target, members });
     }
     for (const spec of groupSpecs) {
       const push = () => {
@@ -1541,7 +1608,9 @@ export function bindSection(
       };
       const binding = bindSpec(target, spec.label, spec, holder, push, onHelperUpdate);
       const blades = Array.isArray(binding) ? binding : [binding];
-      specBindings.push({ spec, blades });
+      const entry = { spec, blades };
+      specBindings.push(entry);
+      members.push(entry);
     }
   }
 

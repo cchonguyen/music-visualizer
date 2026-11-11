@@ -527,17 +527,37 @@ export type LayerType =
   | 'bassPulse'
   | 'waveform';
 
+/** Studio-only view tier (Slice 15.4). Never saved in presets. A spec with no tier counts as advanced. */
+export type ControlTier = 'basic' | 'advanced';
+export type TieredSpec = ParamSpec & { tier?: ControlTier };
+
+export function tierOf(spec: ParamSpec): ControlTier {
+  return (spec as TieredSpec).tier === 'basic' ? 'basic' : 'advanced';
+}
+
+/** Copies of `specs` with `tier: 'basic'` on the named ones; every other spec stays untiered (advanced). */
+export function withTiers(specs: readonly ParamSpec[], basic: readonly string[]): ParamSpec[] {
+  const set = new Set(basic);
+  return specs.map((s) => (set.has(s.name) ? (Object.assign({}, s, { tier: 'basic' }) as ParamSpec) : s));
+}
+
+/** Small sections have nothing to hide: every control is basic. */
+const allBasic = (specs: readonly ParamSpec[]): ParamSpec[] => withTiers(specs, specs.map((s) => s.name));
+
 export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
-  shape: SHAPE_SPECS,
-  tunnel: TUNNEL_SPECS,
-  particles: PARTICLE_SPECS,
-  crown: CROWN_SPECS,
-  rings: RINGS_SPECS,
-  shockwave: SHOCKWAVE_SPECS,
-  bars: BARS_SPECS,
-  bassPulse: BASS_PULSE_SPECS,
-  waveform: WAVEFORM_SPECS,
+  shape: withTiers(SHAPE_SPECS, ['baseShape', 'size', 'rotation', 'effectType', 'thickness', 'colorMode', 'solidColor', 'glow']),
+  tunnel: withTiers(TUNNEL_SPECS, ['ringDensity', 'ringContrast', 'pattern', 'sides', 'twist', 'flightMode', 'hueSpread', 'beatReactivity']),
+  particles: withTiers(PARTICLE_SPECS, ['brightness', 'shape', 'size', 'rotation', 'zoom', 'hueShift', 'mode', 'beatReactivity']),
+  crown: allBasic(CROWN_SPECS),
+  rings: allBasic(RINGS_SPECS),
+  shockwave: allBasic(SHOCKWAVE_SPECS),
+  bars: allBasic(BARS_SPECS),
+  bassPulse: allBasic(BASS_PULSE_SPECS),
+  waveform: allBasic(WAVEFORM_SPECS),
 };
+
+/** Basic controls of the combined Feedback and post section (8). Applied in place below, these specs are not shared. */
+export const FEEDBACK_POST_BASIC: readonly string[] = ['zoom', 'rotate', 'warp', 'decay', 'fade', 'hueShift', 'saturation', 'bloom'];
 
 /** Every built-in layer's settings, keyed by layer type. Used by the loader in slice 4.3. */
 
@@ -616,6 +636,10 @@ export const FEEDBACK_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'hueDrift', label: 'Trail hue drift per frame (rad)', group: 'Colour', default: 0, min: -0.1, max: 0.1, step: 0.001, description: 'Continuously rotates feedback trail hue over successive frames.' },
   { type: 'float', name: 'blur', label: 'Trail blur', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, description: 'Applies spatial diffusion blur across historical feedback frames.' },
 ];
+for (const spec of [...POST_SPECS, ...FEEDBACK_SPECS]) {
+  if (FEEDBACK_POST_BASIC.includes(spec.name)) (spec as TieredSpec).tier = 'basic';
+}
+
 export const FEEDBACK_SCHEMA = FEEDBACK_SPECS;
 
 export const CHLADNI_PLATE_MODE_SPEC = {
