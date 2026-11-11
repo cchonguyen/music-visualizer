@@ -25,7 +25,7 @@ export interface CycleCandidate {
 /** How many seconds before a switch the next preset is chosen, so it can be prepared (Slice 16.3). */
 export const PREPARE_LEAD_SEC = 3;
 
-export const DEFAULT_CYCLE: CycleOptions = { mode: 'off', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false, calmOnly: false };
+export const DEFAULT_CYCLE: CycleOptions = { mode: 'timer', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false, calmOnly: false };
 
 /** Presets that the cycle may show, in their list order. */
 export function eligible(candidates: readonly CycleCandidate[], opts: CycleOptions): string[] {
