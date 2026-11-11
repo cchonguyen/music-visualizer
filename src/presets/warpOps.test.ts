@@ -16,7 +16,7 @@ describe("warp operator schema", () => {
 
   it("recognises operator names", () => {
     expect(isWarpOpType("swirl")).toBe(true);
-    expect(isWarpOpType("curl")).toBe(false);
+    expect(isWarpOpType("polarFold")).toBe(false);
     expect(isWarpOpType(3)).toBe(false);
   });
 
@@ -32,13 +32,25 @@ describe("warp operator schema", () => {
     expect(amount && amount.type === "float" && amount.min).toBeLessThan(0);
   });
 
-  it("lists the eight operators, with the first four in their original positions", () => {
-    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere"]);
+  it("lists the nine operators, with the first four in their original positions", () => {
+    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl"]);
   });
 
-  it("every type shares the same setting names", () => {
+  it("every type has the common settings, and only Curl noise has more", () => {
     const names = (t: (typeof WARP_OP_TYPES)[number]) => warpOpSpecs(t).map((s) => s.name);
-    for (const type of WARP_OP_TYPES) expect(names(type)).toEqual(names("radial"));
+    const common = names("radial");
+    for (const type of WARP_OP_TYPES) {
+      expect(names(type).slice(0, common.length)).toEqual(common);
+      if (type !== "curl") expect(names(type)).toEqual(common);
+    }
+    expect(names("curl").slice(common.length)).toEqual(["octaves", "turbulence", "flow"]);
+  });
+
+  it("curl noise starts with the old Curl mode's settings", () => {
+    const d = defaultsFor(warpOpSpecs("curl"));
+    expect(d.octaves).toBe(2);
+    expect(d.turbulence).toBe(0.45);
+    expect(d.flow).toBe("plumes");
   });
 
   it("tile and mirror starts at 2 tiles, the others at 1", () => {
@@ -49,6 +61,6 @@ describe("warp operator schema", () => {
   });
 
   it("recognises the new operator names", () => {
-    for (const name of ["stretch", "tile", "tunnel", "sphere"]) expect(isWarpOpType(name)).toBe(true);
+    for (const name of ["stretch", "tile", "tunnel", "sphere", "curl"]) expect(isWarpOpType(name)).toBe(true);
   });
 });

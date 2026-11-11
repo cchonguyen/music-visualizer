@@ -1252,6 +1252,7 @@ export class Studio {
     pane.addBinding(typeBox, 'type', { label: 'Operator type', options: warpTypeOptions() }).on('change', (ev) => {
       if (!isWarpOpType(ev.value)) return;
       op.type = ev.value;
+      fillWarpParams(op);
       live();
       onEdit();
       this.bind(id);
@@ -1642,6 +1643,13 @@ export function newWarpOperator(type: WarpOpType): WarpOperator {
   const params: Settings = {};
   for (const spec of warpOpSpecs(type)) params[spec.name] = { value: spec.default };
   return { type, enabled: true, params };
+}
+
+/** After an operator's type changes: adds the settings the new type has and the old one did not (for example Curl noise's flow style). */
+export function fillWarpParams(op: WarpOperator): void {
+  for (const spec of warpOpSpecs(op.type)) {
+    if (!(spec.name in op.params)) op.params[spec.name] = { value: spec.default };
+  }
 }
 
 /** One line for the operator list, for example "2. Swirl (off)". */
