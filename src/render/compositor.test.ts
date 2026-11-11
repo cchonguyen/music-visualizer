@@ -311,6 +311,22 @@ function createTracingGl() {
   return { gl: gl as unknown as WebGL2RenderingContext, uniforms, used };
 }
 
+describe('scene textures are read clamped (Slice 16.7)', () => {
+  it('both blend copies read scene textures only through the clamping helper', () => {
+    for (const src of [compositeSrc, postSrc]) {
+      const withoutHelper = src.replace(/vec3 sceneAt\(sampler2D s, vec2 uv\) \{[\s\S]*?\n\}/, '');
+      expect(withoutHelper).not.toMatch(/texture\(u[AB],/);
+      expect(src).toContain('min(texture(s, uv).rgb, vec3(1.0))');
+    }
+  });
+
+  it('a half-float scene counts for more memory than an 8-bit one, so fewer are kept on a big canvas', () => {
+    expect(sceneBufferBytes(1000, 500, 1, 'rgba16f')).toBe(1000 * 500 * 20);
+    expect(sceneBufferBytes(1000, 500, 1, 'rgba8')).toBe(1000 * 500 * 12);
+    expect(retainLimit(3840, 2160, 1, 'rgba16f')).toBeLessThanOrEqual(retainLimit(3840, 2160, 1, 'rgba8'));
+  });
+});
+
 describe('final pass count (Slice 16.4)', () => {
   function setup(post: Record<string, number>) {
     const t = createTracingGl();

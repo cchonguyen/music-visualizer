@@ -19,7 +19,7 @@
 import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
-import { PingPong } from '../gl/fbo';
+import { PingPong, bytesPerPixel, detectFeedbackFormat, feedbackFormat, type BufferFormat } from '../gl/fbo';
 import { getEffectiveRenderScale, scaledBufferSize } from '../gl/size';
 import { type RenderClock } from './clock';
 import { BrightnessLimiter } from './safety';
@@ -103,18 +103,19 @@ export function aspectBox(
 export const RETAIN_MAX_SCENES = 3;
 /** Memory the kept scenes may hold, estimated from their buffer sizes. */
 export const RETAIN_MAX_BYTES = 256 * 1024 * 1024;
-/** A scene holds two feedback buffers and one snapshot buffer, 4 bytes a pixel. */
-const BUFFERS_PER_SCENE = 3;
+/** A scene holds two feedback buffers (in the feedback format) and one 8-bit snapshot buffer. */
+const FEEDBACK_BUFFERS_PER_SCENE = 2;
+const SNAPSHOT_BYTES_PER_PIXEL = 4;
 
 /** Estimated GPU memory of one initialised scene at this canvas size and render scale. */
-export function sceneBufferBytes(width: number, height: number, renderScale: number): number {
+export function sceneBufferBytes(width: number, height: number, renderScale: number, format: BufferFormat = 'rgba8'): number {
   const b = scaledBufferSize(width, height, renderScale);
-  return b.width * b.height * 4 * BUFFERS_PER_SCENE;
+  return b.width * b.height * (bytesPerPixel(format) * FEEDBACK_BUFFERS_PER_SCENE + SNAPSHOT_BYTES_PER_PIXEL);
 }
 
 /** How many off-screen scenes may be kept: the count cap, reduced so their memory stays under the cap. */
-export function retainLimit(width: number, height: number, renderScale: number): number {
-  const per = sceneBufferBytes(width, height, renderScale);
+export function retainLimit(width: number, height: number, renderScale: number, format: BufferFormat = 'rgba8'): number {
+  const per = sceneBufferBytes(width, height, renderScale, format);
   return Math.max(0, Math.min(RETAIN_MAX_SCENES, Math.floor(RETAIN_MAX_BYTES / Math.max(1, per))));
 }
 
@@ -367,7 +368,7 @@ export class Compositor implements RenderLayer {
   /** Disposes the oldest off-screen scenes beyond what the count and memory caps allow. */
   private trimKept(): void {
     const kept = [...this.ready].filter((n) => (this.weights.get(n) ?? 0) === 0 && (this.targets.get(n) ?? 0) === 0);
-    const limit = retainLimit(this.w, this.h, getEffectiveRenderScale());
+    const limit = retainLimit(this.w, this.h, getEffectiveRenderScale(), this.gl ? feedbackFormat(this.gl) : 'rgba8');
     if (kept.length <= limit) return;
     kept.sort((x, y) => (this.lastUsed.get(x) ?? 0) - (this.lastUsed.get(y) ?? 0));
     for (const name of kept.slice(0, kept.length - limit)) {
@@ -402,6 +403,8 @@ export class Compositor implements RenderLayer {
   init(gl: WebGL2RenderingContext): void {
     // Fresh construction after a context restore: every GL object is rebuilt.
     this.gl = gl;
+    // Choose the feedback buffer format for this context (again after a restore): scenes read it when they init.
+    detectFeedbackFormat(gl);
     this.prog = compileProgram(gl, FULLSCREEN_VERT, compositeSrc, 'composite');
     this.postProg = compileProgram(gl, FULLSCREEN_VERT, postSrc, 'post');
     this.blurProg = compileProgram(gl, FULLSCREEN_VERT, blurSrc, 'blur');

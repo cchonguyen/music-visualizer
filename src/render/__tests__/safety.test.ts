@@ -41,6 +41,7 @@ function createMockGl(): MockGl {
     UNSIGNED_BYTE: 0x1401,
     NEAREST: 0x2600,
     LINEAR: 0x2601,
+    getExtension: vi.fn().mockReturnValue(null),
     checkFramebufferStatus: vi.fn().mockReturnValue(0x8cd5),
     compileShader: vi.fn(),
     shaderSource: vi.fn(),
