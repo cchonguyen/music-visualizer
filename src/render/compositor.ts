@@ -13,7 +13,7 @@
 // - Order: blend -> post chain (+ bloom) -> safety. Safety is always last; no preset can turn it off.
 // - One full-size pass after the scenes (Slice 16.4): with no post effect, composite.frag does blend and safety;
 //   with post effects, post.frag does blend, post and safety together. Bloom adds three half-size passes
-//   (blend, blur, blur) before it. Neither path has a full-size intermediate buffer.
+//   (blend, blur, blur) before it, through the blur chain (Slice 18.6), which can also build quarter and eighth levels. Neither path has a full-size intermediate buffer.
 // - Render scale (Slice 16.5) covers the whole chain: below 100% the final pass and the bloom buffers run at the
 //   scaled size, and one copy pass upscales the result to the canvas. At 100% there is no copy pass.
 import type { AudioFrame } from '../audio/types';
@@ -32,6 +32,7 @@ import type { CameraUniforms, ColorUniforms } from './globalDirector';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import blurSrc from './shaders/blur.frag.glsl?raw';
+import { BlurChain } from './blurChain';
 import copySrc from './shaders/copy.frag.glsl?raw';
 
 /** Post settings with identity values (see post.frag.glsl). */
@@ -139,7 +140,6 @@ export class Compositor implements RenderLayer {
   private readonly pair: [string, number] = ['', 0];
   private readonly pair2: [string, number] = ['', 0];
   private readonly activeNames: string[] = [];
-  private readonly halfTarget: RenderTarget = { kind: 'fbo', framebuffer: null as unknown as WebGLFramebuffer, texture: null as unknown as WebGLTexture, width: 1, height: 1 };
   private readonly scaledTarget: RenderTarget = { kind: 'fbo', framebuffer: null as unknown as WebGLFramebuffer, texture: null as unknown as WebGLTexture, width: 1, height: 1 };
   private calmEl: HTMLInputElement | null | undefined = undefined;
   private gl: WebGL2RenderingContext | null = null;
@@ -148,7 +148,11 @@ export class Compositor implements RenderLayer {
   private blurProg: WebGLProgram | null = null;
   private copyProg: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
-  private half: PingPong | null = null;
+  // Blurred copies of the frame at half, quarter and eighth size, built only when asked for (Slice 18.6).
+  private blurChain: BlurChain | null = null;
+  private readonly blurFn = (src: WebGLTexture, stepX: number, stepY: number, target: RenderTarget): void => {
+    if (this.gl) this.blurPass(this.gl, src, stepX, stepY, target);
+  };
   // Below 100% render scale the final pass draws into `scaled` (its `write` side only) and a copy pass upscales it.
   private scaled: PingPong | null = null;
   private appliedScale = 1;
@@ -456,9 +460,9 @@ export class Compositor implements RenderLayer {
     this.copyProg = compileProgram(gl, FULLSCREEN_VERT, copySrc, 'copy');
     this.locs.clear();
     this.vao = createVao(gl);
-    this.half?.dispose();
+    this.blurChain?.dispose();
     this.scaled?.dispose();
-    this.half = null;
+    this.blurChain = null;
     this.scaled = null;
     this.fitScaleBuffers(gl);
     this.ready.clear();
@@ -492,8 +496,8 @@ export class Compositor implements RenderLayer {
     const sc = scaledBufferSize(this.w, this.h, scale);
     const hw = Math.max(1, sc.width >> 1);
     const hh = Math.max(1, sc.height >> 1);
-    if (this.half) this.half.resize(hw, hh);
-    else this.half = new PingPong(gl, hw, hh);
+    if (this.blurChain) this.blurChain.resize(hw, hh);
+    else this.blurChain = new BlurChain(gl, hw, hh);
     if (sc.width === this.w && sc.height === this.h) {
       this.scaled?.dispose();
       this.scaled = null;
@@ -638,31 +642,28 @@ export class Compositor implements RenderLayer {
 
     const texA = sceneA?.outputTexture() ?? null;
     const texB = sceneB?.outputTexture() ?? null;
-    const half = this.half;
+    const chain = this.blurChain;
     // Below 100% the final pass draws into the scaled buffer; the copy pass after it upscales to the target.
     const scaled = this.scaled;
     const finalDest: RenderTarget = scaled ? this.bufferTarget(this.scaledTarget, scaled.write, scaled.width, scaled.height) : target;
-    if (!this.postActive() || !half || !this.postProg || !this.blurProg) {
+    if (!this.postActive() || !chain || !this.postProg || !this.blurProg) {
       // No post effect: one pass, blend and safety together (the look before E4).
       this.blendPass(gl, texA, texB, wA, wB, cap, 1, finalDest);
     } else {
-      // Bloom (E5) needs a blurred copy of the blended image: blend at half size, then blur it
-      // horizontally and vertically. These are quarter-area passes.
+      // Bloom (E5) needs a blurred copy of the blended image: blend at half size, then the blur chain blurs it
+      // across and down. These are quarter-area passes. Only level 0 is asked for: nothing samples the deeper ones yet.
       let bloomTex: WebGLTexture | null = null;
       if (this.post.bloom > 0) {
-        const halfOut = this.bufferTarget(this.halfTarget, half.write, half.width, half.height);
-        this.blendPass(gl, texA, texB, wA, wB, cap, 0, halfOut);
-        half.swap();
-        this.blurPass(gl, half.read.texture, 1 / half.width, 0, this.bufferTarget(this.halfTarget, half.write, half.width, half.height));
-        half.swap();
-        this.blurPass(gl, half.read.texture, 0, 1 / half.height, this.bufferTarget(this.halfTarget, half.write, half.width, half.height));
-        half.swap();
-        bloomTex = half.read.texture;
+        chain.request(0);
+        this.blendPass(gl, texA, texB, wA, wB, cap, 0, chain.sourceTarget());
+        chain.build(this.blurFn);
+        bloomTex = chain.texture(0);
       }
       // The one full-size pass: blend, post chain and safety, straight into the real target.
       this.finalPass(gl, texA, texB, wA, wB, cap, bloomTex, finalDest);
     }
     if (scaled) this.upscalePass(gl, scaled.write.texture, target);
+    this.blurChain?.endFrame();
 
     // Fades that have finished keep their buffers, up to the cap (oldest first out).
     for (const name of this.ready) {
@@ -804,8 +805,8 @@ export class Compositor implements RenderLayer {
     this.ready.clear();
     this.stale.clear();
     this.drawn.clear();
-    this.half?.dispose();
-    this.half = null;
+    this.blurChain?.dispose();
+    this.blurChain = null;
     this.scaled?.dispose();
     this.scaled = null;
     const gl = this.gl;
