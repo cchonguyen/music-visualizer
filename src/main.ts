@@ -32,7 +32,9 @@ import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
 import { isEditableTarget, setupControls, sourceName, type ControlsState } from './ui/controls';
 import { BenchmarkPanel, DebugPanel } from './ui/debugPanel';
-import { BenchmarkRunner, GpuTimedLayer, benchmarkSeconds } from './render/benchmark';
+import { BenchmarkRunner, GpuTimedLayer, benchmarkSeconds, describeRenderer } from './render/benchmark';
+import { QualityGovernor, TIER_SETTINGS, detectTier } from './render/qualityGovernor';
+import { setAutoScale } from './gl/size';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector } from './render/globalDirector';
@@ -529,11 +531,33 @@ function start(): void {
     showNotice(s === 'lost' ? 'Graphics reset… restarting visuals.' : 'Visuals restarted.', 'info', 3000);
 
   let preparedId: string | null = null;
+  // Automatic resolution scaling (Slice 16.6). Off in benchmark mode, so results are comparable, and with ?autoscale=0.
+  const autoScaleOn = benchSeconds === null && params.get('autoscale') !== '0';
+  const governor = new QualityGovernor(
+    TIER_SETTINGS[
+      detectTier({
+        userAgent: navigator.userAgent,
+        maxTouchPoints: navigator.maxTouchPoints ?? 0,
+        screenShortSide: Math.min(screen.width, screen.height),
+        renderer: (() => {
+          const gl = host.canvas.getContext('webgl2');
+          return gl ? describeRenderer(gl) : '';
+        })(),
+      })
+    ],
+  );
+  if (autoScaleOn) setAutoScale(governor.scale);
   let lastRaf = performance.now();
   host.start((): AudioFrame => {
     const now = performance.now();
     const displayFrameMs = clampDt((now - lastRaf) / 1000) * 1000;
+    // The governor reads the true gap between frames (the clamped value would hide long frames).
+    const rawFrameMs = now - lastRaf;
     lastRaf = now;
+    if (autoScaleOn && !host.stepper.isFrozen) {
+      const next = governor.push(rawFrameMs);
+      if (next !== null) setAutoScale(next);
+    }
 
     const frame = engine.readFrame();
     if (frame.beat && engine.kind === 'test:kick') {
