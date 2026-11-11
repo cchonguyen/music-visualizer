@@ -6,16 +6,18 @@
   "repos": [
     "cchonguyen/claude-harness-hub",
     "cchonguyen/music-visualizer",
-    "cchonguyen/Concert-Tracker"
+    "cchonguyen/Concert-Tracker",
+    "cchonguyen/media-recommendation"
   ],
   "statusOptions": {
     "status:backlog": "Backlog",
     "status:ready": "Ready",
-    "status:in-progress": "In progress",
-    "status:blocked-on-operator": "Needs you",
+    "status:in-progress": "In Progress",
+    "status:blocked-on-operator": "Needs You",
     "status:blocked": "Blocked",
     "done": "Done",
-    "wontdo": "Won't do"
+    "wontdo": "Won't Do"
   },
-  "closedWindowDays": 14
+  "closedWindowDays": 14,
+  "dragWriteBack": false
 }
