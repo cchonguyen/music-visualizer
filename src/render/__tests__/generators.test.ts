@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MoireLayer } from '../layers/moire';
+import { JuliaLayer, juliaIterationCap, juliaIterations, juliaConstant, smoothToward } from '../layers/julia';
+import juliaFragSrc from '../shaders/julia.frag.glsl?raw';
+import { JULIA_SPECS, JULIA_DEFAULTS, LAYER_SPECS } from '../../presets/layerSchemas';
+import { costScore } from '../../presets/cost';
 import { SpectralTerrainLayer, RIDGE_VERTS, TERRAIN_HISTORY_UNIT, TERRAIN_BINS, TERRAIN_RIDGES } from '../layers/spectralTerrain';
 import moireFragSrc from '../shaders/moire.frag.glsl?raw';
 import terrainVertSrc from '../shaders/spectralTerrain.vert.glsl?raw';
@@ -785,5 +789,65 @@ describe('Slice 7.27: Spectral Terrain Option A & Option B (terrainStore + displ
       expect.objectContaining({ name: 'uTerrainDisplace' }),
       0.0,
     );
+  });
+});
+
+describe('Slice 20.3: Julia set layer', () => {
+  it('has valid specs, registered in the layer table and the loader', () => {
+    for (const spec of JULIA_SPECS) expect(() => assertValidSpec(spec)).not.toThrow();
+    expect(LAYER_SPECS.julia).toBeDefined();
+    expect(LAYER_SPECS.julia!.map((s) => s.name)).toEqual(JULIA_SPECS.map((s) => s.name));
+    expect(LAYER_FACTORIES.julia!({ shape: 'spiral' })).toBeInstanceOf(JuliaLayer);
+    const layer = new JuliaLayer();
+    expect(() => applyValues(layer, { zoom: 2, reactivity: 0.2 })).not.toThrow();
+  });
+
+  it('caps iterations by target size: 96, 48, 24', () => {
+    expect(juliaIterationCap(1000, 600)).toBe(96);
+    expect(juliaIterationCap(1920, 1080)).toBe(48);
+    expect(juliaIterationCap(3840, 2160)).toBe(24);
+    expect(juliaIterations(96, 1920, 1080)).toBe(48);
+    expect(juliaIterations(30, 1000, 600)).toBe(30);
+    expect(juliaIterations(1, 1000, 600)).toBe(8);
+  });
+
+  it('smooths slowly: a one-frame jump moves the value only a little', () => {
+    const next = smoothToward(0, 1, 1 / 60, 1);
+    expect(next).toBeGreaterThan(0);
+    expect(next).toBeLessThan(0.02);
+    expect(smoothToward(0.4, 0.4, 0.016, 1)).toBeCloseTo(0.4, 10);
+    expect(smoothToward(0, 1, 0, 1)).toBe(0);
+  });
+
+  it('moves the constant a small bounded amount with mid and bass', () => {
+    const quiet = juliaConstant('classic', 0, 0, 0, 1);
+    const loud = juliaConstant('classic', 0, 1, 1, 1);
+    expect(Math.abs(loud[0] - quiet[0])).toBeLessThan(0.15);
+    expect(Math.abs(loud[1] - quiet[1])).toBeLessThan(0.15);
+    expect(juliaConstant('classic', 0, 1, 1, 0)).toEqual(juliaConstant('classic', 0, 0, 0, 0));
+    expect(juliaConstant('nope', 0, 0.3, 0.3, 0.5)).toEqual(juliaConstant('classic', 0, 0.3, 0.3, 0.5));
+  });
+
+  it('draws with the capped iteration count and the opacity', () => {
+    const gl = createMockGl();
+    const layer = new JuliaLayer({ iterations: 96 });
+    layer.init(gl);
+    layer.draw(createDummyAudioFrame(), dummyClock, { kind: 'canvas', width: 1920, height: 1080 }, { opacity: 0.5 });
+    expect(gl.uniform1i).toHaveBeenCalledWith({ name: 'uMaxIter' }, 48);
+    expect(gl.uniform1f).toHaveBeenCalledWith({ name: 'uLayerOpacity' }, 0.5);
+    expect(gl.drawArrays).toHaveBeenCalled();
+    layer.dispose();
+  });
+
+  it('shader loops to a fixed cap and writes premultiplied alpha', () => {
+    expect(juliaFragSrc).toContain('uMaxIter');
+    expect(juliaFragSrc).toMatch(/for \(int i = 0; i < 96; i\+\+\)/);
+    expect(juliaFragSrc).toContain('fragColor = vec4(col * a, a)');
+  });
+
+  it('counts Julia as a medium-cost layer', () => {
+    const base = { feedback: {}, post: {} };
+    expect(costScore({ ...base, layers: [{ type: 'julia', enabled: true, params: {} } as never] })).toBe(3);
+    expect(JULIA_DEFAULTS.iterations).toBe(48);
   });
 });
