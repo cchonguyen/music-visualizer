@@ -13,6 +13,7 @@ import {
   formatLayerTitle,
   formatLayerLabel,
   bindSection,
+  mergeSettings,
   linkTargets,
   STUDIO_HELPER_IDLE_TEXT,
   renderHelperContent,
@@ -26,6 +27,9 @@ import { Scene } from '../render/scene';
 import type { Preset, LayerEntry } from '../presets/format';
 import type { Vec3Spec } from '../presets/schema';
 import { LAYER_SPECS, POST_SPECS } from '../presets/layerSchemas';
+import { FEEDBACK_POST_LAYOUT, feedbackPostGroupOf, layoutFeedbackPost } from '../presets/schema';
+import { SCHEMAS } from '../presets/builtin';
+import { parsePreset } from '../presets/format';
 import { AdminGateway } from '../presets/adminGateway';
 import {
   ADMIN_BADGE_LABEL,
@@ -2690,5 +2694,86 @@ describe('Slice 11.10: Admin login popup survives the Cloudflare login redirect'
     } finally {
       env.restore();
     }
+  });
+});
+
+describe('Feedback and Post regrouped into Motion, Warp, Trails, Colour (Slice 15.2)', () => {
+  const GROUPS = ['Motion', 'Warp', 'Trails', 'Colour'];
+  const feedbackNames = SCHEMAS.feedback.map((s) => s.name);
+  const postNames = SCHEMAS.post.map((s) => s.name);
+
+  it('every old Feedback and Post key has exactly one new home in the four groups', () => {
+    for (const name of [...feedbackNames, ...postNames]) {
+      const group = feedbackPostGroupOf(name);
+      expect(group, `key "${name}" has no new group`).toBeDefined();
+      expect(GROUPS).toContain(group);
+    }
+    const listed = Object.values(FEEDBACK_POST_LAYOUT).flat();
+    expect(new Set(listed).size).toBe(listed.length);
+  });
+
+  it('maps the old keys the stage notes name to the expected groups', () => {
+    expect(feedbackPostGroupOf('mirror')).toBe('Warp');
+    expect(feedbackPostGroupOf('kaleidoN')).toBe('Warp');
+    for (const k of ['hueDrift', 'hueShift', 'saturation', 'solarize']) expect(feedbackPostGroupOf(k)).toBe('Colour');
+    for (const k of ['decay', 'fade', 'blur']) expect(feedbackPostGroupOf(k)).toBe('Trails');
+    for (const k of ['zoom', 'rotate', 'driftX']) expect(feedbackPostGroupOf(k)).toBe('Motion');
+  });
+
+  it('both kaleidoscopes and both hue controls share one group each, with distinct clear labels', () => {
+    const laid = layoutFeedbackPost(SCHEMAS.feedback, SCHEMAS.post);
+    const find = (n: string) => laid.find((s) => s.name === n)!;
+    expect(find('mirror').uiGroup).toBe(find('kaleidoN').uiGroup);
+    expect(find('hueDrift').uiGroup).toBe(find('hueShift').uiGroup);
+    expect(find('mirror').label).not.toBe(find('kaleidoN').label);
+    expect(find('hueDrift').label).not.toBe(find('hueShift').label);
+  });
+
+  it('layout keeps every spec once, keeps names, defaults and showWhen rules', () => {
+    const laid = layoutFeedbackPost(SCHEMAS.feedback, SCHEMAS.post);
+    const all = [...SCHEMAS.feedback, ...SCHEMAS.post];
+    expect(laid.map((s) => s.name).sort()).toEqual(all.map((s) => s.name).sort());
+    for (const s of laid) {
+      const orig = all.find((o) => o.name === s.name)!;
+      expect(s.default).toEqual(orig.default);
+      expect(s.showWhen).toEqual(orig.showWhen);
+      expect(s.group).toBe(orig.group);
+    }
+    expect(laid.find((s) => s.name === 'kaleidoN')!.showWhen).toEqual({ warpMode: 'polarFold' });
+  });
+
+  it('old presets with the old keys load with no warning and the same values', () => {
+    const raw = {
+      version: 1,
+      name: 'Old',
+      feedback: { zoom: { value: 1.02 }, hueDrift: { value: 0.01 }, kaleidoN: { value: 8 }, warpMode: { value: 'polarFold' } },
+      post: { hueShift: { value: 0.5 }, mirror: { value: 4 }, bloom: { value: 0.3 } },
+      layers: [],
+    };
+    const { preset, warnings } = parsePreset(raw, SCHEMAS);
+    expect(warnings).toEqual([]);
+    expect(preset.feedback.zoom?.value).toBe(1.02);
+    expect(preset.feedback.hueDrift?.value).toBe(0.01);
+    expect(preset.feedback.kaleidoN?.value).toBe(8);
+    expect(preset.post.hueShift?.value).toBe(0.5);
+    expect(preset.post.mirror?.value).toBe(4);
+    expect(preset.post.bloom?.value).toBe(0.3);
+  });
+
+  it('bindSection shows four groups and writes each value back to its original Feedback or Post bag', () => {
+    const pane = createMockPane();
+    const feedback: any = { zoom: { value: 1 }, hueDrift: { value: 0 } };
+    const post: any = { hueShift: { value: 0 }, mirror: { value: 0 } };
+    const names = new Set(SCHEMAS.post.map((s) => s.name));
+    const settings = mergeSettings(feedback, post, names);
+    const { folders } = bindSection(pane, 'Feedback and post', layoutFeedbackPost(SCHEMAS.feedback, SCHEMAS.post), settings);
+    const titles = pane.folders.flatMap((f: any) => f.folder.folders.map((g: any) => g.options.title));
+    expect(titles).toEqual(GROUPS);
+    expect(folders.length).toBe(1 + GROUPS.length);
+    expect(settings.zoom).toBe(feedback.zoom);
+    expect(settings.hueShift).toBe(post.hueShift);
+    (settings as any).bloom = 0.4;
+    expect(post.bloom).toBe(0.4);
+    expect(feedback.bloom).toBeUndefined();
   });
 });

@@ -13,7 +13,7 @@ import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
-import { isSpecVisible, type ParamSpec, type ParamValue } from '../presets/schema';
+import { isSpecVisible, layoutFeedbackPost, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
 import {
   EXPERIENCE_MODES,
@@ -935,8 +935,18 @@ export class Studio {
         if (current) applyValues(current, valuesOf(layerEntry.params));
       });
     }
-    this.bindSection(pane, 'Feedback', SCHEMAS.feedback, preset.feedback, () => session.sceneOf(id).setFeedback(valuesOf(preset.feedback)));
-    this.bindSection(pane, 'Post', SCHEMAS.post, preset.post, () => session.refreshPost(id));
+    // Slice 15.2: Feedback and Post share one section with four groups (Motion, Warp, Trails, Colour).
+    const postNames = new Set(SCHEMAS.post.map((s) => s.name));
+    this.bindSection(
+      pane,
+      'Feedback and post',
+      layoutFeedbackPost(SCHEMAS.feedback, SCHEMAS.post),
+      mergeSettings(preset.feedback, preset.post, postNames),
+      () => {
+        session.sceneOf(id).setFeedback(valuesOf(preset.feedback));
+        session.refreshPost(id);
+      },
+    );
 
     // --- Audio link (slice E2) --------------------------------------------------------
     this.bindLinkEditor(pane, id, preset);
@@ -1442,6 +1452,19 @@ export function buildLayerControls(
  * Bind a list of parameter specs in a section, dynamically updating blade visibility
  * whenever any parameter changes via `isSpecVisible`.
  */
+/**
+ * One settings view over a feedback and a post settings bag. Reads and writes go to the post bag for
+ * names in `postNames` and to the feedback bag for everything else, so keys and saved data are unchanged.
+ */
+export function mergeSettings(feedback: Settings, post: Settings, postNames: ReadonlySet<string>): Settings {
+  const bagOf = (name: string | symbol): Settings => (typeof name === 'string' && postNames.has(name) ? post : feedback);
+  return new Proxy({} as Settings, {
+    get: (_t, name) => (bagOf(name) as any)[name],
+    set: (_t, name, value) => { (bagOf(name) as any)[name] = value; return true; },
+    has: (_t, name) => name in bagOf(name),
+  });
+}
+
 export function bindSection(
   pane: any,
   title: string,
@@ -1488,11 +1511,12 @@ export function bindSection(
 
   const groups = new Map<string, ParamSpec[]>();
   for (const spec of specs) {
-    const list = groups.get(spec.group);
+    const gname = spec.uiGroup ?? spec.group;
+    const list = groups.get(gname);
     if (list) {
       list.push(spec);
     } else {
-      groups.set(spec.group, [spec]);
+      groups.set(gname, [spec]);
     }
   }
 

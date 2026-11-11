@@ -34,6 +34,8 @@ export interface ParamSpecBase {
   intense?: boolean;
   /** Optional declarative visibility rule: blade is visible only when every key in showWhen matches the current layer/section settings. */
   showWhen?: ShowWhenCondition;
+  /** Studio-only section override (Slice 15.2). Never saved; preset keys use `name`. */
+  uiGroup?: string;
 }
 
 type BaseSpec = ParamSpecBase;
@@ -131,6 +133,58 @@ export function isSpecVisible(spec: ParamSpec, values: Record<string, ParamValue
     }
   }
   return true;
+}
+
+/**
+ * Slice 15.2: where each Feedback and Post control lives in the Studio. Preset keys did not change,
+ * so old presets load as before with no warning and the same picture. This table is only the new
+ * home of each key. The two kaleidoscopes stay separate settings (one folds the trail loop in
+ * Polar fold mode, one folds the finished image) but now sit side by side under Warp.
+ */
+export const FEEDBACK_POST_LAYOUT: Readonly<Record<string, readonly string[]>> = {
+  Motion: ["zoom", "rotate", "centreX", "centreY", "driftX", "driftY", "stretchX", "stretchY"],
+  Warp: [
+    "warpMode", "warp", "warpScale", "warpSpeed",
+    "curlOctaves", "curlTurbulence", "curlFlowPattern",
+    "portalRadius", "radialFold", "mandalaTile", "mandalaCounterSpin", "mandalaPattern",
+    "mobiusPoleOffset", "mobiusFlow", "mobiusSwirl", "mobiusWander", "mobiusMode",
+    "kaleidoN", "mirror", "rgbSplit", "chroma",
+  ],
+  Trails: ["decay", "fade", "wrap", "blur", "decayRgb", "sobel"],
+  Colour: [
+    "hueDrift", "hueShift", "saturation", "contrast", "gamma", "brightness",
+    "contourFreq", "contourWidth", "colorSpread", "solarize",
+    "bloom", "bloomThreshold", "vignette", "crtScanlines", "crtBarrel",
+  ],
+};
+
+/** New Studio group for a Feedback or Post key, or undefined when the key is not in the layout. */
+export function feedbackPostGroupOf(name: string): string | undefined {
+  for (const [group, names] of Object.entries(FEEDBACK_POST_LAYOUT)) {
+    if (names.includes(name)) return group;
+  }
+  return undefined;
+}
+
+/**
+ * Orders Feedback and Post specs into the four Studio groups. Listed keys come first in layout
+ * order; any spec not in the layout keeps its own group after them. Returns copies with `uiGroup` set.
+ */
+export function layoutFeedbackPost(...lists: readonly (readonly ParamSpec[])[]): ParamSpec[] {
+  const all = lists.flat();
+  const byName = new Map(all.map((s) => [s.name, s] as const));
+  const out: ParamSpec[] = [];
+  const seen = new Set<string>();
+  for (const [group, names] of Object.entries(FEEDBACK_POST_LAYOUT)) {
+    for (const n of names) {
+      const spec = byName.get(n);
+      if (!spec) continue;
+      out.push({ ...spec, uiGroup: group } as ParamSpec);
+      seen.add(n);
+    }
+  }
+  for (const spec of all) if (!seen.has(spec.name)) out.push(spec);
+  return out;
 }
 
 export interface CoerceResult {
@@ -366,7 +420,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   {
     type: "int",
     name: "kaleidoN",
-    label: "Kaleidoscope folds",
+    label: "Kaleidoscope, trail (Polar fold mode)",
     group: "Warp",
     default: 6,
     min: 4,
@@ -380,7 +434,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   {
     type: "float",
     name: "rgbSplit",
-    label: "RGB split",
+    label: "Trail colour split (RGB)",
     group: "Warp",
     default: 0.0,
     min: 0.0,
@@ -396,7 +450,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   {
     type: "vec3",
     name: "decayRgb",
-    label: "Decay RGB multiplier",
+    label: "Trail length per colour (R, G, B)",
     group: "Trail",
     default: [1.0, 1.0, 1.0],
     min: 0.0,
@@ -407,7 +461,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   {
     type: "float",
     name: "sobel",
-    label: "Sobel edge detect",
+    label: "Edge outline (Sobel)",
     group: "Trail",
     default: 0.0,
     min: 0.0,
