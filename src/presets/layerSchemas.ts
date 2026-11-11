@@ -595,7 +595,7 @@ export const POST_SPECS: readonly ParamSpec[] = [
     warning: 'Intense visual transform. Highly sensitive to small adjustments — use with care.',
   },
   { type: 'float', name: 'bloom', label: 'Bloom amount', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01, description: 'Controls diffuse luminous glow intensity over bright regions.' },
-  { type: 'float', name: 'bloomThreshold', label: 'Bloom threshold', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01, description: 'Sets minimum luminance cut-off required to trigger bloom glow.' },
+  { type: 'float', name: 'bloomThreshold', label: 'Bloom threshold', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Sets minimum luminance cut-off required to trigger bloom glow.' },
 ];
 
 export const FEEDBACK_SPECS: readonly ParamSpec[] = [
@@ -607,9 +607,9 @@ export const FEEDBACK_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'driftY', label: 'Drift Y', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous vertical directional translation drift per frame.' },
   { type: 'float', name: 'stretchX', label: 'Stretch X', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies horizontal aspect ratio coordinate elongation.' },
   { type: 'float', name: 'stretchY', label: 'Stretch Y', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies vertical aspect ratio coordinate elongation.' },
-  { type: 'float', name: 'warp', label: 'Wave warp', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01, description: 'Controls wave distortion displacement depth across the feedback trail.' },
-  { type: 'float', name: 'warpScale', label: 'Wave count', group: 'Warp', default: 1, min: 0.1, max: 4, step: 0.01, description: 'Sets spatial wave oscillation frequency in feedback warp.' },
-  { type: 'float', name: 'warpSpeed', label: 'Wave speed', group: 'Warp', default: 1, min: 0, max: 5, step: 0.01, description: 'Sets temporal oscillation speed of feedback wave deformation.' },
+  { type: 'float', name: 'warp', label: 'Wave warp', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'mobius'] }, description: 'Controls wave distortion displacement depth across the feedback trail.' },
+  { type: 'float', name: 'warpScale', label: 'Wave count', group: 'Warp', default: 1, min: 0.1, max: 4, step: 0.01, showWhen: { warpMode: ['classic', 'curl'] }, description: 'Sets spatial wave oscillation frequency in feedback warp. In Classic mode it needs Wave warp above 0.' },
+  { type: 'float', name: 'warpSpeed', label: 'Wave speed', group: 'Warp', default: 1, min: 0, max: 5, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'rgbSplit'] }, description: 'Sets temporal oscillation speed of feedback wave deformation. In Classic mode it needs Wave warp above 0.' },
   { type: 'float', name: 'decay', label: 'Persistence', group: 'Trail', default: 0.92, min: 0.5, max: 1, step: 0.001, description: 'Controls persistence decay multiplier applied to historical trail frames.' },
   { type: 'float', name: 'fade', label: 'Fade per frame', group: 'Trail', default: 0.004, min: 0, max: 0.02, step: 0.0005, description: 'Applies linear frame-to-frame luminance subtraction.' },
   { type: 'enum', name: 'wrap', label: 'Edges', group: 'Trail', default: 'clamp', options: ['clamp', 'wrap'], description: 'Selects boundary behavior when feedback pixels exceed canvas edges.' },
