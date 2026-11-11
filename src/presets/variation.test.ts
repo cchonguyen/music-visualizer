@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { randomiseSettings, mutateSettings, randomValue, mutateValue } from './variation';
+import { randomiseSettings, mutateSettings, randomValue, mutateValue, seededRng, newLayerSeed, randomiseLayerSettings, MAX_LAYER_SEED } from './variation';
+import { SHAPE_SPECS } from './layerSchemas';
 import type { ParamSpec } from './schema';
 import type { Settings } from './format';
 
@@ -149,6 +150,51 @@ describe('high-intensity effect weighted dampening', () => {
             expect([2, 4, 6]).toContain(v);
           }
           break;
+      }
+    }
+  });
+});
+
+describe('seeded per-layer randomise (Slice 19.7)', () => {
+  it('seededRng repeats for the same seed and differs for another', () => {
+    const a = seededRng(42);
+    const b = seededRng(42);
+    const c = seededRng(43);
+    const runA = [a(), a(), a(), a()];
+    expect(runA).toEqual([b(), b(), b(), b()]);
+    expect(runA).not.toEqual([c(), c(), c(), c()]);
+    for (const v of runA) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+
+  it('newLayerSeed stays in 1..MAX_LAYER_SEED', () => {
+    expect(newLayerSeed(() => 0)).toBe(1);
+    expect(newLayerSeed(() => 0.999999999)).toBe(MAX_LAYER_SEED);
+  });
+
+  const shape: Settings = Object.fromEntries(SHAPE_SPECS.map((s) => [s.name, { value: s.default }]));
+
+  it('the same seed gives the same Shape layer, a different seed gives a different one', () => {
+    const one = randomiseLayerSettings(shape, SHAPE_SPECS, 1234);
+    const again = randomiseLayerSettings(shape, SHAPE_SPECS, 1234);
+    const other = randomiseLayerSettings(shape, SHAPE_SPECS, 4321);
+    expect(one).toEqual(again);
+    expect(one).not.toEqual(other);
+  });
+
+  it('every randomised Shape value stays inside its schema range', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const out = randomiseLayerSettings(shape, SHAPE_SPECS, seed);
+      for (const spec of SHAPE_SPECS) {
+        const v = out[spec.name]!.value;
+        if (spec.type === 'float' || spec.type === 'int') {
+          expect(v as number).toBeGreaterThanOrEqual(spec.min);
+          expect(v as number).toBeLessThanOrEqual(spec.max);
+        } else if (spec.type === 'enum') {
+          expect(spec.options).toContain(v);
+        }
       }
     }
   });

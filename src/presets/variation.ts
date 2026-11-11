@@ -7,6 +7,26 @@ import type { ParamSpec, ParamValue } from './schema';
 /** A random number source in [0, 1). Pass a seeded one in tests. */
 export type Rng = () => number;
 
+/** A small repeatable random source (mulberry32). The same seed always gives the same run of numbers. */
+export function seededRng(seed: number): Rng {
+  let a = (Number.isFinite(seed) ? Math.floor(seed) : 0) >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Largest seed the Studio offers (six digits, so it is easy to read out and type back in). */
+export const MAX_LAYER_SEED = 999999;
+
+/** A fresh seed from 1 to MAX_LAYER_SEED. */
+export function newLayerSeed(rng: Rng = Math.random): number {
+  return 1 + Math.floor(rng() * MAX_LAYER_SEED);
+}
+
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /** Snap a number to the spec's step grid (keeps sliders tidy). */
@@ -111,4 +131,9 @@ export function mutateSettings(settings: Settings, specs: readonly ParamSpec[], 
     out[spec.name] = { ...current, value: mutateValue(spec, current.value, rng, amount) };
   }
   return out;
+}
+
+/** One layer's settings randomised from a seed. The same seed and layer type always give the same result. */
+export function randomiseLayerSettings(settings: Settings, specs: readonly ParamSpec[], seed: number): Settings {
+  return randomiseSettings(settings, specs, seededRng(seed));
 }

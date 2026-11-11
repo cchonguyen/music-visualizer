@@ -12,7 +12,7 @@ import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
-import { mutateSettings, randomiseSettings } from '../presets/variation';
+import { MAX_LAYER_SEED, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
 import { attachSwipeDismiss } from '../ui/controls';
 import { isSpecVisible, layoutFeedbackPost, type ParamSpec, type ParamValue } from '../presets/schema';
@@ -1008,6 +1008,11 @@ export class Studio {
         if (ev.value) this.locked.add(this.selected);
         else this.locked.delete(this.selected);
       });
+      const seedBox = { seed: this.layerSeed };
+      pane.addBinding(seedBox, 'seed', { label: 'Layer seed (0 = new each time)', min: 0, max: MAX_LAYER_SEED, step: 1 }).on('change', (ev) => {
+        this.layerSeed = Math.max(0, Math.min(MAX_LAYER_SEED, Math.round(Number(ev.value) || 0)));
+      });
+      pane.addButton({ title: 'Randomise this layer' }).on('click', () => this.varyLayer());
       buildLayerControls(
         pane,
         layer,
@@ -1415,6 +1420,23 @@ export class Studio {
     for (const folder of this.sectionFolders) {
       folder.expanded = false;
     }
+  }
+
+  /** Seed for "Randomise this layer". 0 picks a new one each click. */
+  private layerSeed = 0;
+
+  /** Randomise only the selected layer from a seed (repeatable), as one undo step. */
+  private varyLayer(): void {
+    const session = this.opts.session;
+    const entry = session.get(this.id);
+    const layer = entry?.preset.layers[this.selected];
+    if (!entry || !layer) return;
+    const seed = this.layerSeed > 0 ? this.layerSeed : newLayerSeed();
+    layer.params = randomiseLayerSettings(layer.params, LAYER_SPECS[layer.type] ?? [], seed);
+    session.commit(this.id, Date.now(), true);
+    session.rebuild(this.id);
+    this.bind(this.id);
+    showToast(`Layer randomised with seed ${seed} (type it in Layer seed to repeat)`);
   }
 
   /** Randomise or mutate every unlocked layer (and feedback/post), as one undo step. */
