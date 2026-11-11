@@ -100,6 +100,11 @@ interface ShockwaveSlot {
   age: number;
 }
 
+/** Per-sample amplitude ceiling (old 2.0, raised 5x in Slice 15.8). Must match AMP_MAX in shape.vert.glsl. */
+export const SHAPE_AMP_MAX = 10.0;
+/** Reactivity schema maximum (old 3.0, raised 5x in Slice 15.8). */
+export const SHAPE_REACTIVITY_MAX = 15.0;
+
 export class ShapeLayer implements RenderLayer {
   /** Accent swap mix from ColourSwap (0 = normal, 1 = swapped). */
   accentSwap = 0;
@@ -319,7 +324,7 @@ export class ShapeLayer implements RenderLayer {
     const reactivity = this.p.reactivity;
     for (let j = 0; j < 256; j++) {
       const binIdx = Math.min(sampleCount - 1, Math.floor((j / 256) * sampleCount));
-      this.raw256[j] = Math.min(2.0, (rawBins[binIdx] ?? 0) * reactivity);
+      this.raw256[j] = Math.min(SHAPE_AMP_MAX, (rawBins[binIdx] ?? 0) * reactivity);
     }
 
     // 3. Asymmetric envelope smoothing & gravity peak caps

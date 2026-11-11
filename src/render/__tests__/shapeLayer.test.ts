@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ShapeLayer } from '../layers/shape';
-import { SHAPE_DEFAULTS } from '../../presets/layerSchemas';
+import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX } from '../layers/shape';
+import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderTarget } from '../layer';
@@ -427,6 +427,44 @@ describe('ShapeLayer', () => {
       layer.init(gl);
       layer.draw(makeMockFrame(), mockClock, mockTarget);
       expect(gl.uniformValues.get('uGlow')).toBeCloseTo(1.25, 2);
+    });
+  });
+
+  describe('Reactivity ceiling (Slice 15.8)', () => {
+    const settle = (energy: number, reactivity: number): number => {
+      const layer = new ShapeLayer({ audioSource: 'energy', reactivity, attackMs: 1 });
+      layer.init(gl);
+      layer.draw(makeMockFrame({ energy }), { timeSec: 100, dtSec: 100, frameIndex: 1 }, mockTarget);
+      return layer.smoothedSamples[0]!;
+    };
+
+    it('old maximum 3.0 draws the same as before (pinned 0.5 * 3.0 = 1.5, unclamped)', () => {
+      expect(settle(0.5, 3.0)).toBeCloseTo(1.5, 3);
+      expect(settle(0.6, 3.0)).toBeCloseTo(1.8, 3);
+    });
+
+    it('old clamp output at 2.0 is still reachable and unchanged for values below it', () => {
+      expect(settle(2.0 / 3.0, 3.0)).toBeCloseTo(2.0, 3);
+    });
+
+    it('no longer clamps to 2.0 above the old ceiling, and clamps at the new ceiling', () => {
+      expect(settle(1.0, 3.0)).toBeCloseTo(3.0, 3);
+      expect(settle(1.0, 6.0)).toBeCloseTo(6.0, 3);
+      expect(settle(1.0, SHAPE_REACTIVITY_MAX)).toBeCloseTo(SHAPE_AMP_MAX, 3);
+    });
+
+    it('schema accepts values above the old maximum of 3.0, about 5x', () => {
+      const spec = SHAPE_SPECS.find((sp) => sp.name === 'reactivity') as { min: number; max: number };
+      expect(spec.max).toBe(SHAPE_REACTIVITY_MAX);
+      expect(spec.max).toBe(15.0);
+      expect(SHAPE_AMP_MAX).toBe(10.0);
+      expect(SHAPE_DEFAULTS.reactivity).toBe(1.0);
+    });
+
+    it('GLSL AMP_MAX constant matches the TypeScript constant', () => {
+      const m = vertSrc.match(/const float AMP_MAX = ([0-9.]+);/);
+      expect(m).not.toBeNull();
+      expect(parseFloat(m![1]!)).toBe(SHAPE_AMP_MAX);
     });
   });
 
