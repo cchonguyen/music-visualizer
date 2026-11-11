@@ -450,13 +450,13 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   {
     type: "vec3",
     name: "decayRgb",
-    label: "Trail length per colour (R, G, B)",
+    label: "Trail colour fade (R, G, B)",
     group: "Trail",
     default: [1.0, 1.0, 1.0],
     min: 0.0,
     max: 2.0,
     step: 0.01,
-    description: "Multiplies per-color-channel decay persistence rates independently.",
+    description: "Multiplies Trail length separately for red, green and blue. 1, 1, 1 means no tint; a lower value makes that colour's trail vanish sooner, so trails shift toward the other colours.",
   },
   {
     type: "float",
