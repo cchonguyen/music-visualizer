@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import worker, {
-  DEFAULT_ADMIN_EMAIL,
-  DEFAULT_CF_ACCESS_AUD,
-  DEFAULT_CF_ACCESS_TEAM_DOMAIN,
+  MAX_BODY_BYTES,
   __resetJwksCacheForTests,
   getCfAuthCookie,
   handleRequest,
@@ -10,6 +8,10 @@ import worker, {
   type Env,
   type FetchLike,
 } from './worker';
+
+const DEFAULT_ADMIN_EMAIL = 'admin@example.test';
+const DEFAULT_CF_ACCESS_TEAM_DOMAIN = 'https://team.cloudflareaccess.test';
+const DEFAULT_CF_ACCESS_AUD = 'test-audience-tag';
 
 const KID = 'test-kid-1';
 const ADMIN_URL = 'https://music-visualizer.charliechonguyen.com';
@@ -85,6 +87,9 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
     ASSETS: {
       fetch: vi.fn(async () => new Response('Static Asset Content', { status: 200 })),
     },
+    ADMIN_EMAIL: DEFAULT_ADMIN_EMAIL,
+    CF_ACCESS_TEAM_DOMAIN: DEFAULT_CF_ACCESS_TEAM_DOMAIN,
+    CF_ACCESS_AUD: DEFAULT_CF_ACCESS_AUD,
     SUPABASE_URL: `${SUPABASE_URL}/`,
     SUPABASE_SERVICE_ROLE_KEY: SERVICE_KEY,
     ...overrides,
@@ -478,7 +483,7 @@ describe('Worker verified identity (src/worker.ts)', () => {
     it('PATCH soft-deletes via ?id=eq.<encoded id> with return=minimal', async () => {
       const fetchFn = createFetchStub();
       const res = await handleRequest(
-        presetRequest('PATCH', '/admin/api/presets?id=a%2Fb%20c', authHeaders(), { deleted_at: 'now' }),
+        presetRequest('PATCH', '/admin/api/presets?id=a%2Fb%20c', authHeaders(), { is_deleted: true }),
         makeEnv(),
         fetchFn,
       );
@@ -609,6 +614,159 @@ describe('Worker verified identity (src/worker.ts)', () => {
         const res = await handleRequest(req, makeEnv(), createFetchStub());
         expect(res.status).toBe(405);
       }
+    });
+
+    it('forwards only allowlisted columns and drops everything else', async () => {
+      const fetchFn = createFetchStub();
+      await handleRequest(
+        presetRequest('POST', '/admin/api/presets', authHeaders(), {
+          id: 'preset-1',
+          name: 'Test',
+          subfolder: 'flagship',
+          preset_data: { a: 1 },
+          sort_order: 3,
+          tags: ['x'],
+          is_deleted: false,
+          role: 'admin',
+          created_at: 'x',
+          extra: { nested: true },
+        }),
+        makeEnv(),
+        fetchFn,
+      );
+      const [, init] = upstreamCalls(fetchFn)[0] as [string, RequestInit];
+      expect(JSON.parse(String(init.body))).toEqual({
+        id: 'preset-1',
+        name: 'Test',
+        subfolder: 'flagship',
+        preset_data: { a: 1 },
+        sort_order: 3,
+        tags: ['x'],
+        is_deleted: false,
+        updated_by: DEFAULT_ADMIN_EMAIL,
+      });
+    });
+
+    it('rejects allowlisted columns of the wrong type with 400', async () => {
+      const bad: Record<string, unknown>[] = [
+        { id: 'p', name: 5 },
+        { id: 'p', subfolder: 'nope' },
+        { id: 'p', preset_data: [1] },
+        { id: 'p', sort_order: 'high' },
+        { id: 'p', tags: [1] },
+        { id: 'p', is_deleted: 'yes' },
+      ];
+      for (const body of bad) {
+        const fetchFn = createFetchStub();
+        const res = await handleRequest(
+          presetRequest('POST', '/admin/api/presets', authHeaders(), body),
+          makeEnv(),
+          fetchFn,
+        );
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe('invalid_field');
+        expect(upstreamCalls(fetchFn)).toHaveLength(0);
+      }
+    });
+
+    it('rejects a body over 256 KB with 413, by Content-Length and by streamed size', async () => {
+      const big = { id: 'p', name: 'x'.repeat(MAX_BODY_BYTES + 10) };
+      const fetchFn = createFetchStub();
+      const res = await handleRequest(
+        presetRequest('POST', '/admin/api/presets', authHeaders(), big),
+        makeEnv(),
+        fetchFn,
+      );
+      expect(res.status).toBe(413);
+
+      const lying = new Request(`${ADMIN_URL}/admin/api/presets`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(big),
+      });
+      lying.headers.delete('Content-Length');
+      expect((await handleRequest(lying, makeEnv(), fetchFn)).status).toBe(413);
+      expect(upstreamCalls(fetchFn)).toHaveLength(0);
+    });
+
+    it('accepts a body just under the cap', async () => {
+      const body = { id: 'p', name: 'x'.repeat(MAX_BODY_BYTES - 100) };
+      const res = await handleRequest(
+        presetRequest('POST', '/admin/api/presets', authHeaders(), body),
+        makeEnv(),
+        createFetchStub(),
+      );
+      expect(res.status).toBe(201);
+    });
+
+    it('fails closed with 503 when ADMIN_EMAIL, team domain or audience is missing', async () => {
+      for (const missing of ['ADMIN_EMAIL', 'CF_ACCESS_TEAM_DOMAIN', 'CF_ACCESS_AUD'] as const) {
+        const fetchFn = createFetchStub();
+        const res = await handleRequest(
+          presetRequest('POST', '/admin/api/presets', authHeaders()),
+          makeEnv({ [missing]: undefined }),
+          fetchFn,
+        );
+        expect(res.status).toBe(503);
+        expect((await res.json()).reason).toBe('admin_config_missing');
+        expect(upstreamCalls(fetchFn)).toHaveLength(0);
+      }
+      const identity = await handleRequest(
+        identityRequest({ 'cf-access-jwt-assertion': token }),
+        makeEnv({ ADMIN_EMAIL: '  ' }),
+        createFetchStub(),
+      );
+      expect(identity.status).toBe(503);
+    });
+  });
+
+  describe('security headers', () => {
+    it('adds CSP, nosniff, referrer and frame protection to JSON responses', async () => {
+      const res = await handleRequest(identityRequest(), makeEnv(), createFetchStub());
+      expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+      expect(res.headers.get('Referrer-Policy')).toBe('no-referrer');
+      expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+      const csp = res.headers.get('Content-Security-Policy') ?? '';
+      expect(csp).toContain("frame-ancestors 'none'");
+      expect(csp).toContain("script-src 'none'");
+    });
+
+    it('lets the /admin handshake script run through a matching nonce, with no unsafe-inline', async () => {
+      const token = await signValid();
+      const res = await handleRequest(
+        new Request(`${ADMIN_URL}/admin`, { headers: { 'cf-access-jwt-assertion': token } }),
+        makeEnv(),
+        createFetchStub(),
+      );
+      expect(res.status).toBe(200);
+      const csp = res.headers.get('Content-Security-Policy') ?? '';
+      const nonce = /script-src 'nonce-([^']+)'/.exec(csp)?.[1];
+      expect(nonce).toBeTruthy();
+      expect(csp).not.toContain('unsafe-inline');
+      expect(csp).toContain("frame-ancestors 'none'");
+      const html = await res.text();
+      expect(html).toContain(`<script nonce="${nonce}">`);
+      expect(html.match(/<script/g)).toHaveLength(1);
+      expect(html).not.toMatch(/<style|style="|onclick=/);
+    });
+
+    it('uses a fresh nonce per response', async () => {
+      const nonceOf = async (): Promise<string | undefined> => {
+        const token = await signValid();
+        const res = await handleRequest(
+          new Request(`${ADMIN_URL}/admin`, { headers: { 'cf-access-jwt-assertion': token } }),
+          makeEnv(),
+          createFetchStub(),
+        );
+        return /nonce-([^']+)'/.exec(res.headers.get('Content-Security-Policy') ?? '')?.[1];
+      };
+      expect(await nonceOf()).not.toBe(await nonceOf());
+    });
+
+    it('leaves static asset pass-through responses untouched', async () => {
+      const res = await handleRequest(new Request(`${ADMIN_URL}/admin/other`), makeEnv(), createFetchStub());
+      expect(await res.text()).toBe('Static Asset Content');
+      expect(res.headers.get('Content-Security-Policy')).toBeNull();
     });
   });
 });
