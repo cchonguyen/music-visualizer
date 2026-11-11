@@ -562,7 +562,7 @@ export const FEEDBACK_DEFAULTS = {
 } as const;
 // Post chain (slice E4) and bloom (E5). Shown only, after the feedback trail. Defaults = no effect.
 export const POST_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'hueShift', label: 'Hue shift (rad)', group: 'Colour', default: 0, min: -3.14, max: 3.14, step: 0.01, description: 'Applies a global hue rotation offset to the rendered composition.' },
+  { type: 'float', name: 'hueShift', label: 'Hue shift, whole image (rad)', group: 'Colour', default: 0, min: -3.14, max: 3.14, step: 0.01, description: 'Applies a global hue rotation offset to the rendered composition.' },
   { type: 'float', name: 'saturation', label: 'Saturation', group: 'Colour', default: 1, min: 0, max: 2, step: 0.01, description: 'Scales color chroma saturation intensity.' },
   { type: 'float', name: 'contrast', label: 'Contrast', group: 'Colour', default: 1, min: 0, max: 2, step: 0.01, description: 'Adjusts contrast distinction between dark and light tones.' },
   { type: 'float', name: 'gamma', label: 'Gamma', group: 'Colour', default: 1, min: 0.5, max: 2, step: 0.01, description: 'Applies non-linear power curve luminance correction.' },
@@ -571,7 +571,7 @@ export const POST_SPECS: readonly ParamSpec[] = [
   {
     type: 'int',
     name: 'mirror',
-    label: 'Kaleidoscope folds (0 = off)',
+    label: 'Kaleidoscope, whole image (0 = off)',
     group: 'Shape',
     default: 0,
     min: 0,
@@ -584,7 +584,7 @@ export const POST_SPECS: readonly ParamSpec[] = [
   {
     type: 'float',
     name: 'chroma',
-    label: 'Red/blue split',
+    label: 'Red/blue edge split',
     group: 'Shape',
     default: 0,
     min: 0,
@@ -595,25 +595,25 @@ export const POST_SPECS: readonly ParamSpec[] = [
     warning: 'Intense visual transform. Highly sensitive to small adjustments — use with care.',
   },
   { type: 'float', name: 'bloom', label: 'Bloom amount', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01, description: 'Controls diffuse luminous glow intensity over bright regions.' },
-  { type: 'float', name: 'bloomThreshold', label: 'Bloom threshold', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Sets minimum luminance cut-off required to trigger bloom glow.' },
+  { type: 'float', name: 'bloomThreshold', label: 'Bloom brightness cut-off', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Sets minimum luminance cut-off required to trigger bloom glow.' },
 ];
 
 export const FEEDBACK_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'zoom', label: 'Zoom', group: 'Motion', default: 1, min: 0.85, max: 1.15, step: 0.001, description: 'Scales canvas coordinate magnification applied per feedback frame.' },
-  { type: 'float', name: 'rotate', label: 'Rotate (rad/frame)', group: 'Motion', default: 0, min: -0.04, max: 0.04, step: 0.0005, description: 'Applies rotational velocity to feedback coordinate space per frame.' },
-  { type: 'float', name: 'centreX', label: 'Centre X', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005, description: 'Shifts horizontal coordinate origin for feedback transforms.' },
-  { type: 'float', name: 'centreY', label: 'Centre Y', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005, description: 'Shifts vertical coordinate origin for feedback transforms.' },
-  { type: 'float', name: 'driftX', label: 'Drift X', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous horizontal directional translation drift per frame.' },
-  { type: 'float', name: 'driftY', label: 'Drift Y', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous vertical directional translation drift per frame.' },
-  { type: 'float', name: 'stretchX', label: 'Stretch X', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies horizontal aspect ratio coordinate elongation.' },
-  { type: 'float', name: 'stretchY', label: 'Stretch Y', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies vertical aspect ratio coordinate elongation.' },
-  { type: 'float', name: 'warp', label: 'Wave warp', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'mobius'] }, description: 'Controls wave distortion displacement depth across the feedback trail.' },
+  { type: 'float', name: 'rotate', label: 'Spin per frame (rad)', group: 'Motion', default: 0, min: -0.04, max: 0.04, step: 0.0005, description: 'Applies rotational velocity to feedback coordinate space per frame.' },
+  { type: 'float', name: 'centreX', label: 'Pivot X (centre of zoom and spin)', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005, description: 'Shifts horizontal coordinate origin for feedback transforms.' },
+  { type: 'float', name: 'centreY', label: 'Pivot Y (centre of zoom and spin)', group: 'Motion', default: 0, min: -0.28, max: 0.28, step: 0.005, description: 'Shifts vertical coordinate origin for feedback transforms.' },
+  { type: 'float', name: 'driftX', label: 'Slide sideways', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous horizontal directional translation drift per frame.' },
+  { type: 'float', name: 'driftY', label: 'Slide up and down', group: 'Motion', default: 0, min: -0.005, max: 0.005, step: 0.0001, description: 'Applies continuous vertical directional translation drift per frame.' },
+  { type: 'float', name: 'stretchX', label: 'Stretch wide', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies horizontal aspect ratio coordinate elongation.' },
+  { type: 'float', name: 'stretchY', label: 'Stretch tall', group: 'Motion', default: 1, min: 0.80, max: 1.40, step: 0.005, description: 'Applies vertical aspect ratio coordinate elongation.' },
+  { type: 'float', name: 'warp', label: 'Wave warp amount', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'mobius'] }, description: 'Controls wave distortion displacement depth across the feedback trail.' },
   { type: 'float', name: 'warpScale', label: 'Wave count', group: 'Warp', default: 1, min: 0.1, max: 4, step: 0.01, showWhen: { warpMode: ['classic', 'curl'] }, description: 'Sets spatial wave oscillation frequency in feedback warp. In Classic mode it needs Wave warp above 0.' },
   { type: 'float', name: 'warpSpeed', label: 'Wave speed', group: 'Warp', default: 1, min: 0, max: 5, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'rgbSplit'] }, description: 'Sets temporal oscillation speed of feedback wave deformation. In Classic mode it needs Wave warp above 0.' },
-  { type: 'float', name: 'decay', label: 'Persistence', group: 'Trail', default: 0.92, min: 0.5, max: 1, step: 0.001, description: 'Controls persistence decay multiplier applied to historical trail frames.' },
-  { type: 'float', name: 'fade', label: 'Fade per frame', group: 'Trail', default: 0.004, min: 0, max: 0.02, step: 0.0005, description: 'Applies linear frame-to-frame luminance subtraction.' },
-  { type: 'enum', name: 'wrap', label: 'Edges', group: 'Trail', default: 'clamp', options: ['clamp', 'wrap'], description: 'Selects boundary behavior when feedback pixels exceed canvas edges.' },
-  { type: 'float', name: 'hueDrift', label: 'Hue drift (rad/frame)', group: 'Colour', default: 0, min: -0.1, max: 0.1, step: 0.001, description: 'Continuously rotates feedback trail hue over successive frames.' },
+  { type: 'float', name: 'decay', label: 'Trail length (persistence)', group: 'Trail', default: 0.92, min: 0.5, max: 1, step: 0.001, description: 'Controls persistence decay multiplier applied to historical trail frames.' },
+  { type: 'float', name: 'fade', label: 'Trail fade per frame', group: 'Trail', default: 0.004, min: 0, max: 0.02, step: 0.0005, description: 'Applies linear frame-to-frame luminance subtraction.' },
+  { type: 'enum', name: 'wrap', label: 'Trail edges (clamp or wrap)', group: 'Trail', default: 'clamp', options: ['clamp', 'wrap'], description: 'Selects boundary behavior when feedback pixels exceed canvas edges.' },
+  { type: 'float', name: 'hueDrift', label: 'Trail hue drift per frame (rad)', group: 'Colour', default: 0, min: -0.1, max: 0.1, step: 0.001, description: 'Continuously rotates feedback trail hue over successive frames.' },
   { type: 'float', name: 'blur', label: 'Trail blur', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, description: 'Applies spatial diffusion blur across historical feedback frames.' },
 ];
 export const FEEDBACK_SCHEMA = FEEDBACK_SPECS;
