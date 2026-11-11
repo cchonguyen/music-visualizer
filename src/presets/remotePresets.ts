@@ -28,6 +28,9 @@ export interface CachedSystemPresets {
   presets: RemotePresetRecord[];
 }
 
+/** Named columns for public reads. Never `*`: `updated_by` is hidden from public roles in the database. */
+export const REMOTE_PRESET_SELECT_COLUMNS = 'id,name,subfolder,preset_data,sort_order,tags,updated_at';
+
 export const CACHED_SYSTEM_PRESETS_KEY = 'mv.cachedSystemPresets';
 export const CACHED_SYSTEM_PRESETS_VERSION = 1;
 
@@ -158,7 +161,7 @@ export async function fetchRemotePresets(
   }
 
   const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
-  const url = `${baseUrl}/rest/v1/system_presets?select=id,name,subfolder,preset_data,sort_order,tags,updated_at&is_deleted=eq.false&order=sort_order.asc,updated_at.desc`;
+  const url = `${baseUrl}/rest/v1/system_presets?select=${REMOTE_PRESET_SELECT_COLUMNS}&is_deleted=eq.false&order=sort_order.asc,updated_at.desc`;
 
   try {
     const response = await fetchFn(url, {
@@ -269,7 +272,7 @@ export async function upsertRemotePreset(
         apikey: config.anonKey,
         Authorization: `Bearer ${authToken}`,
         'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=representation',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
       },
       body: JSON.stringify(payload),
     });
