@@ -123,6 +123,7 @@ export class ParticleLayer implements RenderLayer {
   private uMode: WebGLUniformLocation | null = null;
   private uSubTwist: WebGLUniformLocation | null = null;
   private uCount: WebGLUniformLocation | null = null;
+  private uFlash: WebGLUniformLocation | null = null;
   private uSpawnArea: WebGLUniformLocation | null = null;
   private uTwinkleRate: WebGLUniformLocation | null = null;
   private uTwinkleDepth: WebGLUniformLocation | null = null;
@@ -206,6 +207,7 @@ export class ParticleLayer implements RenderLayer {
     this.uMode = gl.getUniformLocation(this.program, 'uMode');
     this.uSubTwist = gl.getUniformLocation(this.program, 'uSubTwist');
     this.uCount = gl.getUniformLocation(this.program, 'uCount');
+    this.uFlash = gl.getUniformLocation(this.program, 'uFlash');
     this.uSpawnArea = gl.getUniformLocation(this.program, 'uSpawnArea');
     this.uTwinkleRate = gl.getUniformLocation(this.program, 'uTwinkleRate');
     this.uTwinkleDepth = gl.getUniformLocation(this.program, 'uTwinkleDepth');
@@ -346,6 +348,7 @@ export class ParticleLayer implements RenderLayer {
     gl.uniform1f(this.uSubTwist, (this.calm ? 0 : (frame.norm?.sub ?? 0)) * 5.0);
     const count = effectiveParticleCount(this.p.count ?? PARTICLE_DEFAULTS.count, getEffectiveRenderScale());
     gl.uniform1f(this.uCount, count);
+    gl.uniform1f(this.uFlash, this.flash);
     gl.uniform1i(this.uSpawnArea, Math.max(0, SPAWN_AREAS.indexOf(this.p.spawnArea ?? 'centre')));
     gl.uniform1f(this.uTwinkleRate, this.p.twinkleRate ?? PARTICLE_DEFAULTS.twinkleRate);
     gl.uniform1f(this.uTwinkleDepth, this.p.twinkleDepth ?? PARTICLE_DEFAULTS.twinkleDepth);
@@ -431,6 +434,7 @@ export class ParticleLayer implements RenderLayer {
     this.uMode = null;
     this.uSubTwist = null;
     this.uCount = null;
+    this.uFlash = null;
     this.uSpawnArea = null;
     this.uTwinkleRate = null;
     this.uTwinkleDepth = null;

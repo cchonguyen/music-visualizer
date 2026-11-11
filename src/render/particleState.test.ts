@@ -7,6 +7,10 @@ import {
   MIN_PARTICLES,
   MAX_PARTICLES,
   effectiveParticleCount,
+  starAnchor,
+  starDepth,
+  starPosition,
+  starSize,
   radialSpeedFor,
   radiusFor,
   SPAWN_RADIUS,
@@ -186,5 +190,52 @@ describe('effectiveParticleCount (Slice 19.5)', () => {
     expect(effectiveParticleCount(99999, 1)).toBe(MAX_PARTICLES);
     expect(effectiveParticleCount(NaN, 1)).toBe(600);
     expect(effectiveParticleCount(600, NaN)).toBe(600);
+  });
+});
+
+describe('starfield (Slice 19.6)', () => {
+  it('depth runs from far (1) to near (0.04) and never reaches zero', () => {
+    expect(starDepth(0)).toBe(1);
+    expect(starDepth(1)).toBeCloseTo(0.04);
+    expect(starDepth(2)).toBeCloseTo(0.04);
+    expect(starDepth(0.5)).toBeCloseTo(0.5);
+  });
+
+  it('each star moves away from the centre as it gets nearer', () => {
+    for (let i = 0; i < 50; i++) {
+      let prev = -1;
+      for (const life of [0, 0.2, 0.4, 0.6, 0.8, 0.95]) {
+        const p = starPosition(i, life, 16 / 9);
+        const r = Math.hypot(p.x, p.y);
+        expect(r).toBeGreaterThan(prev);
+        prev = r;
+      }
+    }
+  });
+
+  it('stars start close to the centre and spread across all four screen quadrants', () => {
+    const quadrants = new Set<string>();
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const p = starAnchor(i, 16 / 9);
+      expect(Math.abs(p.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(p.x)).toBeLessThanOrEqual(16 / 9 + 1e-9);
+      quadrants.add(`${p.x >= 0}${p.y >= 0}`);
+    }
+    expect(quadrants.size).toBe(4);
+  });
+
+  it('stars at mid life cover the wide screen, not just a circle in the middle', () => {
+    let wide = 0;
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const p = starPosition(i, 0.7, 16 / 9);
+      if (Math.abs(p.x) > 1.2) wide++;
+    }
+    expect(wide).toBeGreaterThan(50);
+  });
+
+  it('nearer stars are bigger', () => {
+    expect(starSize(0)).toBeCloseTo(0.4);
+    expect(starSize(1)).toBeCloseTo(2.0);
+    expect(starSize(0.7)).toBeGreaterThan(starSize(0.3));
   });
 });

@@ -96,3 +96,29 @@ export function highFlash(prev: number, triggered: boolean, dtSec: number): numb
   const value = releaseEnvelope(prev, 0, dtSec, 0, RELEASE_TAU_SEC);
   return Math.min(1, Math.max(0, value));
 }
+
+// Starfield mode (Slice 19.6). The vertex shader repeats these formulas.
+
+/** Depth of a star at a life value: 1 far away, 0.04 right at the viewer. */
+export function starDepth(life: number): number {
+  return Math.max(0.04, 1 - Math.min(1, Math.max(0, life)));
+}
+
+/** Fixed screen direction of a star, in screen-height units before the perspective divide. */
+export function starAnchor(index: number, aspect: number): { x: number; y: number } {
+  const a = hash01(index, SALT_ANGLE) * 2 * Math.PI;
+  const rr = 0.15 + 0.85 * Math.sqrt(hash01(index, 7));
+  return { x: Math.cos(a) * rr * aspect, y: Math.sin(a) * rr };
+}
+
+/** Screen position of a star at a life value: the anchor scaled by 0.25 / depth (perspective divide). */
+export function starPosition(index: number, life: number, aspect: number): { x: number; y: number } {
+  const anchor = starAnchor(index, aspect);
+  const k = 0.25 / starDepth(life);
+  return { x: anchor.x * k, y: anchor.y * k };
+}
+
+/** Size multiplier: stars grow from 0.4 far away to 2.0 up close. */
+export function starSize(life: number): number {
+  return 0.4 + 1.6 * Math.min(1, Math.max(0, life));
+}
