@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { randomiseSettings, mutateSettings, randomValue, mutateValue, seededRng, newLayerSeed, randomiseLayerSettings, MAX_LAYER_SEED } from './variation';
+import { randomiseSettings, mutateSettings, randomValue, mutateValue, seededRng, newLayerSeed, randomiseLayerSettings, MAX_LAYER_SEED, applyMashup, mashupPresets } from './variation';
 import { SHAPE_SPECS } from './layerSchemas';
 import type { ParamSpec } from './schema';
-import type { Settings } from './format';
+import type { Settings, Preset } from './format';
 
 // A tiny seeded generator, so the tests are repeatable.
 function seeded(seed: number) {
@@ -197,5 +197,65 @@ describe('seeded per-layer randomise (Slice 19.7)', () => {
         }
       }
     }
+  });
+});
+
+describe('mashup (Slice 20.10)', () => {
+  const make = (name: string, layerType: string, decay: number, extra: Partial<Preset> = {}): Preset => ({
+    version: 1,
+    name,
+    tags: [name],
+    theme: 'geometric',
+    transition: { style: 'crossfade', seconds: 1 },
+    feedback: { decay: { value: decay } },
+    layers: [{ type: layerType, enabled: true, opacity: 1, blend: 'add', params: { size: { value: 1 } } }],
+    post: { bloom: { value: decay } },
+    ...extra,
+  }) as Preset;
+
+  const a = make('A', 'shape', 0.9);
+  const b = make('B', 'particles', 0.5, {
+    warp: [{ type: 'flow', enabled: true, params: { amount: { value: 0.4 } } }],
+    reactions: [],
+    reactionStyle: 'punchy',
+    mood: 'calm',
+  } as Partial<Preset>);
+
+  it('keeps the first preset\'s layers and takes the second one\'s Feedback, Post, warp and reaction style', () => {
+    const m = mashupPresets(a, b);
+    expect(m.layers.map((l) => l.type)).toEqual(['shape']);
+    expect(m.feedback.decay!.value).toBe(0.5);
+    expect(m.post.bloom!.value).toBe(0.5);
+    expect(m.warp?.map((w) => w.type)).toEqual(['flow']);
+    expect(m.reactionStyle).toBe('punchy');
+    expect(m.name).toBe('A');
+    expect(m.theme).toBe('geometric');
+    expect(m.mood).toBe('calm');
+  });
+
+  it('changes neither input and shares nothing with them', () => {
+    const beforeA = JSON.stringify(a);
+    const beforeB = JSON.stringify(b);
+    const m = mashupPresets(a, b);
+    expect(JSON.stringify(a)).toBe(beforeA);
+    expect(JSON.stringify(b)).toBe(beforeB);
+    m.feedback.decay!.value = 0.1;
+    m.warp![0]!.params.amount!.value = 0.9;
+    expect(b.feedback.decay!.value).toBe(0.5);
+    expect(b.warp![0]!.params.amount!.value).toBe(0.4);
+  });
+
+  it('removes the target\'s old warp stack and reactions when the source has none', () => {
+    const target = make('T', 'shape', 0.8, { warp: [{ type: 'radial', enabled: true, params: {} }], reactionStyle: 'wild' } as Partial<Preset>);
+    applyMashup(target, a);
+    expect(target.warp).toBeUndefined();
+    expect(target.reactionStyle).toBeUndefined();
+    expect(target.feedback.decay!.value).toBe(0.9);
+    expect(target.layers).toHaveLength(1);
+  });
+
+  it('mashing a preset with itself gives the same look', () => {
+    const m = mashupPresets(b, b);
+    expect(JSON.stringify(m)).toBe(JSON.stringify(b));
   });
 });

@@ -1,7 +1,7 @@
 // Randomise and mutate (slice S4). Every value stays inside its schema range, so a random
 // preset cannot leave the safe ranges. Only numbers are mutated; bools, enums and colours
 // are left alone by mutate (they are either chosen or kept, never nudged).
-import type { Settings } from './format';
+import type { Preset, Settings } from './format';
 import type { ParamSpec, ParamValue } from './schema';
 
 /** A random number source in [0, 1). Pass a seeded one in tests. */
@@ -136,4 +136,37 @@ export function mutateSettings(settings: Settings, specs: readonly ParamSpec[], 
 /** One layer's settings randomised from a seed. The same seed and layer type always give the same result. */
 export function randomiseLayerSettings(settings: Settings, specs: readonly ParamSpec[], seed: number): Settings {
   return randomiseSettings(settings, specs, seededRng(seed));
+}
+
+/**
+ * Mashup (Slice 20.10): puts another preset's look on `target`, in place. The look is the Feedback and Post
+ * settings plus the parts that act on them: the warp operator stack, the reactions and the reaction style. The
+ * target keeps its layers, its name, its tags, its theme and its transition. The source is never changed, and
+ * nothing is shared between the two afterwards (the look is copied).
+ */
+export function applyMashup(target: Preset, lookFrom: Preset): void {
+  const look = structuredClone({
+    feedback: lookFrom.feedback,
+    post: lookFrom.post,
+    warp: lookFrom.warp,
+    reactions: lookFrom.reactions,
+    reactionStyle: lookFrom.reactionStyle,
+    mood: lookFrom.mood,
+  });
+  target.feedback = look.feedback;
+  target.post = look.post;
+  if (look.warp) target.warp = look.warp;
+  else delete target.warp;
+  if (look.reactions) target.reactions = look.reactions;
+  else delete target.reactions;
+  if (look.reactionStyle) target.reactionStyle = look.reactionStyle;
+  else delete target.reactionStyle;
+  if (look.mood) target.mood = look.mood;
+}
+
+/** A new preset made of `layersFrom`'s layers with `lookFrom`'s Feedback and Post look. Neither input is changed. */
+export function mashupPresets(layersFrom: Preset, lookFrom: Preset): Preset {
+  const out = structuredClone(layersFrom);
+  applyMashup(out, lookFrom);
+  return out;
 }

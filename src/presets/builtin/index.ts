@@ -51,6 +51,10 @@ import preset23 from './23-gradient-storm.json';
 import preset24 from './24-mirror-tunnel.json';
 import preset25 from './25-deep-field.json';
 import preset26 from './26-scope-bloom.json';
+import preset27 from './27-ink-flow.json';
+import preset28 from './28-julia-drift.json';
+import preset29 from './29-orbit-hall.json';
+import preset30 from './30-corridor-glide.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -138,6 +142,11 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   // Starfield and oscilloscope showcase (25–26, Stage 19).
   '25-deep-field': 'showcase',
   '26-scope-bloom': 'showcase',
+  // Generator showcase (27–30, Stage 20): flow-field warp, Julia set and fold, orbit, architecture.
+  '27-ink-flow': 'showcase',
+  '28-julia-drift': 'showcase',
+  '29-orbit-hall': 'showcase',
+  '30-corridor-glide': 'showcase',
 
   // Flagship (01–12)
   '01-curl-fluid-warp': 'flagship',
@@ -267,6 +276,14 @@ export const SHOWCASE_PRESETS_25_26: readonly BuiltinPresetEntry[] = [
   { id: '26-scope-bloom', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset26, SCHEMAS) },
 ];
 
+/** Stage 20 generator showcase presets 27–30. */
+export const SHOWCASE_PRESETS_27_30: readonly BuiltinPresetEntry[] = [
+  { id: '27-ink-flow', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset27, SCHEMAS) },
+  { id: '28-julia-drift', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset28, SCHEMAS) },
+  { id: '29-orbit-hall', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset29, SCHEMAS) },
+  { id: '30-corridor-glide', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset30, SCHEMAS) },
+];
+
 export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...BUILTIN_PRESETS,
   ...FLAGSHIP_PRESETS,
@@ -276,6 +293,7 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...SHOWCASE_PRESETS_13_20,
   ...SHOWCASE_PRESETS_21_24,
   ...SHOWCASE_PRESETS_25_26,
+  ...SHOWCASE_PRESETS_27_30,
 ];
 
 /**
@@ -309,6 +327,10 @@ export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood
   '24-mirror-tunnel': { theme: 'hypnotic', mood: 'driving' },
   '25-deep-field': { theme: 'sparkle', mood: 'dreamy' },
   '26-scope-bloom': { theme: 'waveform', mood: 'driving' },
+  '27-ink-flow': { theme: 'fluid', mood: 'calm' },
+  '28-julia-drift': { theme: 'fractal', mood: 'dreamy' },
+  '29-orbit-hall': { theme: 'orbit', mood: 'dreamy' },
+  '30-corridor-glide': { theme: 'architecture', mood: 'driving' },
   'crown': { theme: 'geometric', mood: 'driving' },
   'flight': { theme: 'hypnotic', mood: 'driving' },
   'bars': { theme: 'waveform', mood: 'driving' },
