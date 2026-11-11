@@ -205,6 +205,17 @@ function parseSettings(raw: unknown, specs: readonly ParamSpec[], where: string,
 }
 
 /**
+ * Slice 15.3: before, a warp amount of 0 in Curl and Mobius drew at full strength (1.0).
+ * Now 0 means no warp in every mode, so stored zeros in those two modes become 1.0 to keep the same picture.
+ */
+function migrateWarpZero(feedback: Settings): void {
+  const mode = feedback.warpMode?.value;
+  if (mode !== "curl" && mode !== "mobius") return;
+  const warp = feedback.warp;
+  if (warp && warp.value === 0) warp.value = 1;
+}
+
+/**
  * Turns any JSON value into a valid Preset.
  * Throws PresetFormatError only if the file cannot be repaired.
  * Everything else (out-of-range numbers, unknown keys, unknown layer types) is fixed and listed in `warnings`.
@@ -284,12 +295,15 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     }
   }
 
+  const feedback = parseSettings(raw.feedback, registry.feedback, "feedback", warnings, REMOVED_FEEDBACK_SETTINGS);
+  migrateWarpZero(feedback);
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
     tags,
     transition,
-    feedback: parseSettings(raw.feedback, registry.feedback, "feedback", warnings, REMOVED_FEEDBACK_SETTINGS),
+    feedback,
     layers,
     post: parseSettings(raw.post, registry.post, "post", warnings),
     ...(directorProfile ? { directorProfile } : {}),

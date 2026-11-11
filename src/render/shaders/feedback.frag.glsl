@@ -219,7 +219,7 @@ void main() {
       vel = vel * 0.5 - radial * 0.75 + tang * 0.65;
     }
 
-    float warpAmt = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
+    float warpAmt = max(uWarpAmp, 0.0); // 0 means no warp (Slice 15.3)
     p += vel * (warpAmt * 0.032 * tick);
     p.x /= uAspect;
   } else if (uWarpMode == 2) {
@@ -286,7 +286,7 @@ void main() {
     vec2 zeta = cDiv(za, zb);
     vec2 w = cLog(zeta);
 
-    float warpAmt = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
+    float warpAmt = max(uWarpAmp, 0.0); // 0 means no warp (Slice 15.3)
     w += vec2(flowFactor, swirlFactor) * (0.115 * centerBoost * warpAmt * tick);
 
     vec2 expW = cExp(w);

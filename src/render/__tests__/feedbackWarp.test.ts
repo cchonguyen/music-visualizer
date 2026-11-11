@@ -627,4 +627,12 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(feedbackSrc).toContain('uDrift * tick');
     });
   });
+  describe('Warp amount zero means none (Slice 15.3)', () => {
+    it('curl and mobius no longer treat zero as full strength', () => {
+      expect(feedbackSrc).not.toContain('uWarp > 0.0 ? uWarp : 1.0');
+      const lines = feedbackSrc.split('\n').filter((l) => l.includes('float warpAmt'));
+      expect(lines).toHaveLength(2);
+      for (const l of lines) expect(l).toContain('max(uWarpAmp, 0.0)');
+    });
+  });
 });

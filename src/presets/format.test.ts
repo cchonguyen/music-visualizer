@@ -136,3 +136,33 @@ describe("parsePreset: round trip", () => {
     expect(first.tags).toEqual(["calm"]);
   });
 });
+
+describe("parsePreset: warp zero migration (Slice 15.3)", () => {
+  const warpMode: ParamSpec = { type: "enum", name: "warpMode", label: "Mode", group: "Warp", default: "classic", options: ["classic", "curl", "polarFold", "mobius", "rgbSplit"] } as ParamSpec;
+  const warp: ParamSpec = { type: "float", name: "warp", label: "Warp", group: "Warp", default: 0, min: 0, max: 1, step: 0.01 };
+  const warpRegistry: SchemaRegistry = { feedback: [warpMode, warp], post: [], layers: {} };
+  const load = (feedback: Record<string, unknown>) =>
+    parsePreset({ ...minimal, feedback }, warpRegistry).preset.feedback;
+
+  it("moves a stored zero to 1 in curl and mobius", () => {
+    expect(load({ warpMode: "curl", warp: 0 }).warp?.value).toBe(1);
+    expect(load({ warpMode: "mobius", warp: 0 }).warp?.value).toBe(1);
+  });
+
+  it("moves a missing warp (default 0) to 1 in curl and mobius", () => {
+    expect(load({ warpMode: "curl" }).warp?.value).toBe(1);
+    expect(load({ warpMode: "mobius" }).warp?.value).toBe(1);
+  });
+
+  it("keeps zero in classic, polarFold and rgbSplit", () => {
+    for (const mode of ["classic", "polarFold", "rgbSplit"]) {
+      expect(load({ warpMode: mode, warp: 0 }).warp?.value).toBe(0);
+    }
+  });
+
+  it("keeps nonzero warp in every mode", () => {
+    for (const mode of ["classic", "curl", "polarFold", "mobius", "rgbSplit"]) {
+      expect(load({ warpMode: mode, warp: 0.35 }).warp?.value).toBe(0.35);
+    }
+  });
+});
