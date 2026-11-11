@@ -64,7 +64,7 @@ test('checkPullRequest passes for a slice commit with a matching verdict', () =>
   fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [x] **Slice 1.1: First**\n');
   fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
   commitWithTrailers(dir, 'Finish Slice 1.1');
-  assert.deepEqual(checkPullRequest({ base: 'main', head: 'feature', cwd: dir }), { problems: [], warnings: [] });
+  assert.deepEqual(checkPullRequest({ base: 'main', head: 'feature', cwd: dir }), { problems: [], warnings: [], notes: [] });
 });
 
 test('checkPullRequest warns, not fails, when the PR adds no slice', () => {
@@ -89,6 +89,7 @@ test('checkPullRequest passes with one warning when the PR has no slice line but
 test('checkPullRequest fails when the head commit has no Referee trailer', () => {
   const dir = makeRepo();
   fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [x] **Slice 1.1: First**\n');
+  fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
   sh(dir, ['add', '-A']);
   sh(dir, ['commit', '-q', '-m', 'Hand edit']);
   const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
@@ -97,6 +98,7 @@ test('checkPullRequest fails when the head commit has no Referee trailer', () =>
 
 test('checkPullRequest fails when the commit changed after its verdict', () => {
   const dir = makeRepo();
+  fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
   fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [x] **Slice 1.1: First**\n');
   commitWithTrailers(dir, 'Finish Slice 1.1', { tree: 'b'.repeat(40) });
   const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
@@ -156,4 +158,44 @@ test('commitsMissingTrailer skips an anchor-style .spec commit and reports a src
   const missing = commitsMissingTrailer({ before, after, cwd: dir });
   assert.equal(missing.length, 1);
   assert.match(missing[0], /Hand edit src/);
+});
+
+const WF = '.github/workflows/harness-labels.yml';
+const TPL = '.harness/templates/workflows/harness-labels.yml';
+function writeEngine(dir, workflowText) {
+  fs.mkdirSync(path.join(dir, '.harness', 'templates', 'workflows'), { recursive: true });
+  fs.mkdirSync(path.join(dir, '.github', 'workflows'), { recursive: true });
+  fs.writeFileSync(path.join(dir, TPL), 'name: labels\n');
+  fs.writeFileSync(path.join(dir, WF), workflowText);
+}
+function commitPlain(dir) {
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'Sync']);
+}
+
+test('checkPullRequest passes an engine-only PR with a template-copy workflow and no trailer', () => {
+  const dir = makeRepo();
+  writeEngine(dir, 'name: labels\n');
+  commitPlain(dir);
+  const r = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.deepEqual(r.problems, []);
+  assert.deepEqual(r.notes, ['Engine sync PR: no slice or Referee trailer needed.']);
+});
+
+test('checkPullRequest still fails an engine PR that also changes a source file without a trailer', () => {
+  const dir = makeRepo();
+  writeEngine(dir, 'name: labels\n');
+  fs.mkdirSync(path.join(dir, 'src'));
+  fs.writeFileSync(path.join(dir, 'src', 'app.ts'), 'export {};\n');
+  commitPlain(dir);
+  const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
+test('checkPullRequest treats a workflow that differs from its template as a real file', () => {
+  const dir = makeRepo();
+  writeEngine(dir, 'name: changed\n');
+  commitPlain(dir);
+  const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
 });

@@ -37,9 +37,24 @@ export function addedSliceLines(diffText) {
     .filter((line) => SLICE_LINE.test(line));
 }
 
+// Mirrors pr-scope-check isTemplateCopy: a workflow identical to its hub template is sync-delivered.
+function isTemplateCopyAt(file, head, cwd) {
+  if (!/^\.github\/workflows\/[^/]+\.yml$/.test(file)) return false;
+  const show = (p) => { try { return git(['show', `${head}:${p}`], cwd); } catch { return null; } };
+  const template = show(`.harness/templates/workflows/${file.split('/').pop()}`);
+  return template !== null && template === show(file);
+}
+
 export function checkPullRequest({ base, head, cwd = process.cwd() }) {
   const problems = [];
   const warnings = [];
+  const notes = [];
+  const changedFiles = git(['diff', '--name-only', `${base}...${head}`], cwd).split('\n').filter(Boolean);
+  if (changedFiles.length > 0 && changedFiles.every((f) =>
+    isBookkeepingCommit({ subject: '', files: [f] }) || isTemplateCopyAt(f, head, cwd))) {
+    notes.push('Engine sync PR: no slice or Referee trailer needed.');
+    return { problems, warnings, notes };
+  }
   const progressDiff = git(['diff', '-U0', `${base}...${head}`, '--', '.spec/PROGRESS.md'], cwd);
   if (addedSliceLines(progressDiff).length === 0) {
     warnings.push('Not in a slice: this PR adds no `- [x] **Slice N` line to .spec/PROGRESS.md. Attach it to a slice by adding one, or finish a slice with finish-slice.mjs. The PR is allowed to merge without one.');
@@ -55,7 +70,7 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
       problems.push(`Stale verdict: Referee-Tree ${tree} does not match the head commit tree ${actual}. The commit changed after it was verified.`);
     }
   }
-  return { problems, warnings };
+  return { problems, warnings, notes };
 }
 
 const SPEC_FILE = /^\.spec\//;
@@ -87,10 +102,11 @@ export function commitsMissingTrailer({ before, after, cwd = process.cwd() }) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [mode, first, second] = process.argv.slice(2);
   if (mode === 'pr' && first && second) {
-    const { problems, warnings } = checkPullRequest({ base: first, head: second });
+    const { problems, warnings, notes = [] } = checkPullRequest({ base: first, head: second });
     for (const w of warnings) console.log(`::warning::${w}`);
+    for (const n of notes) console.log(`✓ Harness slice gate: ${n}`);
     if (problems.length === 0) {
-      console.log('✓ Harness slice gate: slice present and head commit verified.');
+      if (notes.length === 0) console.log('✓ Harness slice gate: slice present and head commit verified.');
     } else {
       console.log('✗ Harness slice gate failed:');
       for (const p of problems) console.log(`  - ${p}`);

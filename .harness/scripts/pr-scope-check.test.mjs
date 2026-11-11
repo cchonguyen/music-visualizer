@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy } from './pr-scope-check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -588,4 +588,25 @@ test('a hub-sync PR that also changes a non-engine file is still flagged outside
     hubSync: true,
   });
   assert.ok(r.problems.some((p) => p.includes("Outside the slice's Target files: src/other.js")));
+});
+
+test('isTemplateCopy is true only for a workflow identical to its hub template', () => {
+  const WF = '.github/workflows/harness-labels.yml';
+  const TPL = '.harness/templates/workflows/harness-labels.yml';
+  const files = (m) => (p) => (p in m ? m[p] : null);
+  assert.equal(isTemplateCopy(WF, files({ [WF]: 'a', [TPL]: 'a' })), true);
+  assert.equal(isTemplateCopy(WF, files({ [WF]: 'a', [TPL]: 'b' })), false);
+  assert.equal(isTemplateCopy(WF, files({ [WF]: 'a' })), false);
+  assert.equal(isTemplateCopy('src/app.ts', files({ 'src/app.ts': 'a', '.harness/templates/workflows/app.ts': 'a' })), false);
+  assert.equal(isTemplateCopy(WF, null), false);
+});
+
+test('analyze: template-copy workflow is not a tripwire; a differing workflow is', () => {
+  const WF = '.github/workflows/harness-labels.yml';
+  const TPL = '.harness/templates/workflows/harness-labels.yml';
+  const run = (text) => analyze({ changed: [WF], readHead: (p) => ({ [WF]: text, [TPL]: 'a' })[p] ?? null });
+  const same = run('a');
+  assert.equal(same.tripwireFired, false);
+  assert.ok(same.notes.some((n) => n.includes('Sync-delivered harness file')));
+  assert.equal(run('b').tripwireFired, true);
 });
