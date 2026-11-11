@@ -18,6 +18,7 @@ import {
   type ColorMood,
 } from '../render/globalDirector';
 import { INTENSITY_OPTIONS, isIntensity, type Intensity } from '../render/safety';
+import { getActiveSession, type PresetSession } from '../presets/session';
 
 export const EXPERIENCE_LABELS: Record<string, string> = {
   cinematic: 'Cinematic',
@@ -459,6 +460,34 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       expImportInput.value = '';
     }
   });
+
+  // Whole-library export and import (slice 21.9). Works without opening the Studio, beside the look export button.
+  const libraryRow = document.createElement('div');
+  libraryRow.className = 'library-actions';
+  const libraryExportBtn = document.createElement('button');
+  libraryExportBtn.type = 'button';
+  libraryExportBtn.textContent = 'Export library';
+  libraryExportBtn.addEventListener('click', () => {
+    const session = getActiveSession();
+    if (!session) {
+      showNotice('Your presets are still loading. Try again in a moment.');
+      return;
+    }
+    exportLibraryFile(session);
+  });
+  const libraryImportBtn = document.createElement('button');
+  libraryImportBtn.type = 'button';
+  libraryImportBtn.textContent = 'Import library…';
+  libraryImportBtn.addEventListener('click', () => {
+    const session = getActiveSession();
+    if (!session) {
+      showNotice('Your presets are still loading. Try again in a moment.');
+      return;
+    }
+    importLibraryFromPicker(session);
+  });
+  libraryRow.append(libraryExportBtn, libraryImportBtn);
+  (expExportBtn?.parentElement ?? controls).appendChild(libraryRow);
 
   getGlobalDirector().subscribeExperienceChange((mode) => {
     syncExperienceUI(mode);
@@ -944,6 +973,42 @@ export const PRESET_GROUPS: readonly PresetGroup[] = ['flagship', 'textures', 'c
 
 export function filterPresetsByGroup<T extends { group?: PresetGroup }>(presets: readonly T[], group: PresetGroup): T[] {
   return presets.filter((p) => p.group === group);
+}
+
+/** Name of a whole-library export file, e.g. music-visualizer-library-2026-11-11.json (slice 21.9). */
+export function libraryFileName(now: Date = new Date()): string {
+  return `music-visualizer-library-${now.toISOString().slice(0, 10)}.json`;
+}
+
+/** Downloads the whole user library as one JSON file (presets, folders, favourites, tags). */
+export function exportLibraryFile(session: PresetSession): void {
+  const text = session.exportLibrary();
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = libraryFileName();
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('Library exported');
+}
+
+/** Picks a library file and merges it into this browser. Reports the result in a toast. */
+export function importLibraryFromPicker(session: PresetSession, onDone?: () => void): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const res = session.importLibrary(await file.text());
+      showToast(`Library imported: ${res.presetsAdded} new preset(s), ${res.presetsSkipped} already here`);
+      onDone?.();
+    } catch (err) {
+      showToast((err as Error).message);
+    }
+  });
+  input.click();
 }
 
 export function presetGroupLabel(group: PresetGroup): string {

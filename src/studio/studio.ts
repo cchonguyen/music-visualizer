@@ -14,7 +14,7 @@ import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX,
 import type { Scene } from '../render/scene';
 import { MAX_LAYER_SEED, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
-import { attachSwipeDismiss } from '../ui/controls';
+import { attachSwipeDismiss, exportLibraryFile, importLibraryFromPicker } from '../ui/controls';
 import { isSpecVisible, layoutFeedbackPost, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
 import {
@@ -942,6 +942,14 @@ export class Studio {
     }
     tile(pane.addButton({ title: 'Export .json' })).on('click', () => this.exportFile(id));
     tile(pane.addButton({ title: 'Import .json…' })).on('click', () => this.importFile());
+    // Whole library (slice 21.9): every user preset, folder, favourite and tag in one file.
+    tile(pane.addButton({ title: 'Export library' })).on('click', () => exportLibraryFile(session));
+    tile(pane.addButton({ title: 'Import library…' })).on('click', () =>
+      importLibraryFromPicker(session, () => {
+        this.refreshPresetDropdown();
+        this.bind(id);
+      }),
+    );
     const undo = tile(pane.addButton({ title: 'Undo' }));
     undo.disabled = !session.canUndo(id);
     undo.on('click', () => this.run(() => {
