@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX } from '../layers/shape';
+import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames } from '../layers/shape';
 import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
@@ -504,6 +504,40 @@ describe('ShapeLayer', () => {
       const spec = SHAPE_SPECS.find((s) => s.name === 'audioSource') as unknown as { options: string[] };
       expect(spec.options).toContain('scope');
       expect(vertSrc).toContain('vAudioAmp = abs(audioAmp);');
+    });
+  });
+
+  describe('Per-element delay (Slice 19.2)', () => {
+    it('defaults to no delay so existing presets are unchanged', () => {
+      expect(SHAPE_DEFAULTS.elementDelay).toBe(0);
+      const layer = new ShapeLayer({ audioSource: 'energy', attackMs: 5 });
+      layer.init(gl);
+      layer.draw(makeMockFrame({ energy: 0.5 }), mockClock, mockTarget);
+      expect(Array.from(layer.delayedSamples)).toEqual(Array.from(layer.smoothedSamples));
+    });
+
+    it('lag grows from zero at the first element to the full window at the last', () => {
+      expect(elementLagFrames(1, 0)).toBe(0);
+      expect(elementLagFrames(1, 255)).toBe(SHAPE_HISTORY_FRAMES - 1);
+      expect(elementLagFrames(0.5, 255)).toBe(Math.round((SHAPE_HISTORY_FRAMES - 1) / 2));
+      expect(elementLagFrames(0, 255)).toBe(0);
+    });
+
+    it('later elements see an older frame after a sudden jump', () => {
+      const layer = new ShapeLayer({ audioSource: 'energy', attackMs: 1, releaseMs: 20, elementDelay: 1 });
+      layer.init(gl);
+      const quiet = makeMockFrame({ energy: 0 });
+      for (let k = 0; k < 40; k++) layer.draw(quiet, mockClock, mockTarget);
+      layer.draw(makeMockFrame({ energy: 1 }), { timeSec: 1, dtSec: 0.1, frameIndex: 1 }, mockTarget);
+      expect(layer.delayedSamples[0]).toBeGreaterThan(0.5);
+      expect(layer.delayedSamples[255]).toBeLessThan(0.01);
+    });
+
+    it('is a schema option in the Audio & Style group', () => {
+      const spec = SHAPE_SPECS.find((s) => s.name === 'elementDelay') as unknown as { min: number; max: number; group: string };
+      expect(spec.min).toBe(0);
+      expect(spec.max).toBe(1);
+      expect(spec.group).toBe('Audio & Style');
     });
   });
 
