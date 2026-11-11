@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer } from './ci-gate.mjs';
+import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer, isBookkeepingCommit } from './ci-gate.mjs';
 
 const TREE = 'a'.repeat(40);
 
@@ -130,4 +130,30 @@ test('push mode exits 2, not 1, when git cannot scan the range', () => {
   const res = spawnSync(process.execPath, [path.join(import.meta.dirname, 'ci-gate.mjs'), 'push', 'f'.repeat(40), sh(dir, ['rev-parse', 'HEAD'])], { cwd: dir, encoding: 'utf8' });
   assert.equal(res.status, 2);
   assert.match(res.stdout, /could not run/);
+});
+
+test('isBookkeepingCommit skips spec-only, engine-only, mixed, sync and empty commits', () => {
+  assert.equal(isBookkeepingCommit({ subject: 'anchor', files: ['.spec/PROGRESS.md', '.spec/plans/a.md'] }), true);
+  assert.equal(isBookkeepingCommit({ subject: 'x', files: ['.harness/scripts/a.mjs', '.claude/b', '.harness-version', 'AGENTS.md', 'plugins/harness/c'] }), true);
+  assert.equal(isBookkeepingCommit({ subject: 'x', files: ['.spec/PROGRESS.md', '.harness/a.mjs'] }), true);
+  assert.equal(isBookkeepingCommit({ subject: 'x', files: ['.spec/PROGRESS.md', 'src/a.js'] }), false);
+  assert.equal(isBookkeepingCommit({ subject: 'x', files: ['src/a.js'] }), false);
+  assert.equal(isBookkeepingCommit({ subject: 'chore(harness): sync v2', files: ['src/a.js'] }), true);
+  assert.equal(isBookkeepingCommit({ subject: 'Sync harness engine to v3', files: ['src/a.js'] }), true);
+  assert.equal(isBookkeepingCommit({ subject: 'x', files: [] }), true);
+});
+
+test('commitsMissingTrailer skips an anchor-style .spec commit and reports a src commit', () => {
+  const dir = makeRepo();
+  const before = sh(dir, ['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [ ] **Slice 1.1: First**\nanchor\n');
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'anchor progress']);
+  fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'Hand edit src']);
+  const after = sh(dir, ['rev-parse', 'HEAD']);
+  const missing = commitsMissingTrailer({ before, after, cwd: dir });
+  assert.equal(missing.length, 1);
+  assert.match(missing[0], /Hand edit src/);
 });

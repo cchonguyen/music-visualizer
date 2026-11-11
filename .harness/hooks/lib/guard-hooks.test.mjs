@@ -121,13 +121,18 @@ test('AGENTS.md: text outside the harness block is editable, the block is locked
   assert.match(inside.stderr, /AGENTS\.md is hub-owned/);
 });
 
-test('the colour tag of an active slice is frozen', () => {
+test('the colour tag of an active slice may change (colour lock removed)', () => {
   const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('src/', 'GREEN', 'UI / VISUAL') } });
-  const recolour = runHook(GUARD, dir, edit(dir, '.spec/PROGRESS.md', { old_string: '[GREEN]', new_string: '[RED]' }));
-  assert.equal(recolour.status, 2);
-  assert.match(recolour.stderr, /COLOUR LOCK/);
-  const retext = runHook(GUARD, dir, edit(dir, '.spec/PROGRESS.md', { old_string: 'guard', new_string: 'guard two' }));
-  assert.equal(retext.status, 0);
+  assert.equal(runHook(GUARD, dir, edit(dir, '.spec/PROGRESS.md', { old_string: '[GREEN]', new_string: '[RED]' })).status, 0);
+});
+
+test('an edit outside the active slice Target files warns and is allowed (scope lock warn)', () => {
+  const dir = makeRepo({ files: { '.spec/PROGRESS.md': SLICE('src/app.js'), 'src/other.js': 'a\n' } });
+  const r = runHook(GUARD, dir, { ...edit(dir, 'src/other.js'), agent_type: 'gf-coder' });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARN: SCOPE LOCK/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8');
+  assert.match(events, /"kind":"scope_lock_warn"/);
 });
 
 test('a file in another attached repo is judged by that repo, not the session repo', () => {
@@ -218,25 +223,9 @@ test('session-start resets session telemetry and post-tool-scrub tracks mutating
   assert.equal(updated.currentSlice, '3.3');
 });
 
-test('pre-tool-guard blocks silent architect-opus unless SCOUT.md authorizes Level 3', () => {
+test('pre-tool-guard no longer locks architect-opus dispatch (upshift lock removed)', () => {
   const dir = makeRepo();
-
-  // 1. Silent dispatch without SCOUT.md is blocked (exit 2)
-  const rBlocked = runHook(GUARD, dir, {
-    tool_name: 'Agent',
-    tool_input: { subagent_type: 'architect-opus' }
-  });
-  assert.equal(rBlocked.status, 2);
-  assert.match(rBlocked.stderr, /UPSHIFT LOCK VIOLATION/);
-
-  // 2. Dispatch with Level 3 in SCOUT.md is allowed (exit 0)
-  fs.mkdirSync(path.join(dir, '.spec'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.spec', 'SCOUT.md'), '# Scout Sizing\n- Level: 3 (Opus Deep Synthesis)\n');
-  const rAllowed = runHook(GUARD, dir, {
-    tool_name: 'Agent',
-    tool_input: { subagent_type: 'architect-opus' }
-  });
-  assert.equal(rAllowed.status, 0);
+  assert.equal(runHook(GUARD, dir, { tool_name: 'Agent', tool_input: { subagent_type: 'architect-opus' } }).status, 0);
 });
 
 test('main-thread Bash outside the allow-list is refused; the same command from a subagent is not', () => {

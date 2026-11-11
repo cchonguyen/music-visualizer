@@ -1,0 +1,24 @@
+# Harness issue commands (spoke template). Copy to .github/workflows/harness-issue-commands.yml in a spoke.
+# Acts only on owner comments on issues (not pull requests). Replies with one short comment.
+name: Harness issue commands
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  command:
+    if: github.event.comment.author_association == 'OWNER' && !github.event.issue.pull_request && startsWith(github.event.comment.body, '/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .harness/scripts/issue-commands.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

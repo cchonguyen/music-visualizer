@@ -11,7 +11,8 @@ import { updateTelemetry, writeJsonAtomic, telemetryFile } from './telemetry-sto
 export { writeJsonAtomic, updateTelemetry };
 
 // Matches both `- [ ] **Slice N** [IN_PROGRESS]` and `- [IN_PROGRESS] **Slice N**` (the PROGRESS.md format).
-const ACTIVE_TASK = /^\s*-\s*(\[[^\]]*\]\s*)?.*\[IN_PROGRESS\]/;
+// Marker counts only right after the bold title or at line end (same rule as slice-parser); the legacy `- [IN_PROGRESS] **Slice N**` form is kept.
+const ACTIVE_TASK = /^\s*-\s*(?:\[IN_PROGRESS\]\s*\*\*|\[[^\]]*\][^*]*\*\*[^*]+\*\*(?: \[IN_PROGRESS\]|.* \[IN_PROGRESS\]\s*$))/;
 const SOURCE_WRITE_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
 
 export function telemetryPath(root) {

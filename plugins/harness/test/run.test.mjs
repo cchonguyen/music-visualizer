@@ -109,6 +109,16 @@ test('harness agents own their PROGRESS.md pick-up, unblock and handoff steps', 
   assert.match(coder, /plus `\.spec\/PROGRESS\.md` for the pick-up, unblock, handoff and close steps/);
 });
 
+test('agents carry the slice-issue rules', () => {
+  const coder = fs.readFileSync(new URL('../agents/gf-coder.md', import.meta.url), 'utf8');
+  assert.match(coder, /Issue: #N/);
+  assert.match(coder, /Never change issue labels/);
+  const arch = fs.readFileSync(new URL('../agents/el-architect.md', import.meta.url), 'utf8');
+  assert.match(arch, /one GitHub Issue per slice/);
+  assert.match(arch, /`Issue: #N`/);
+  assert.match(arch, /gate-change/);
+});
+
 test('gf-coder close step mirrors /wrap: gate and decision record come before marking [x], and nothing is committed', () => {
   const coder = fs.readFileSync(new URL('../agents/gf-coder.md', import.meta.url), 'utf8');
   const gate = coder.indexOf('Run the gate: `bash bin/verify-slice.sh`');

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { finishSlice, parseActiveTargets, bootstrapException, autoVerify, CI_VERIFIED_REASON } from './finish-slice.mjs';
+import { finishSlice, restampSlice, parseActiveTargets, bootstrapException, autoVerify, CI_VERIFIED_REASON } from './finish-slice.mjs';
 import { startSlice, startFromScope } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 import { appendCall, readCalls } from './lib/telemetry.mjs';
@@ -116,7 +116,7 @@ test('finishSlice updates PROGRESS.md, commits with Referee trailers, and verify
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('finishSlice throws when a file outside Target files is modified (scope enforcement)', () => {
+test('finishSlice warns and records Scope-Widened when a file outside Target files is modified', () => {
   const dir = makeRepo();
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
@@ -138,10 +138,11 @@ test('finishSlice throws when a file outside Target files is modified (scope enf
   fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
   fs.writeFileSync(path.join(dir, 'unrelated.txt'), 'sneaky edit');
 
-  assert.throws(
-    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
-    /Scope check failed: unrelated\.txt/
-  );
+  finishSlice(dir, 'feat: finish slice 1', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Scope-Widened: unrelated\.txt$/m);
+  assert.match(body, /^Referee-Verdict: VERIFIED$/m);
+  assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: dir, encoding: 'utf8' }).trim(), '');
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -207,11 +208,10 @@ test('finishSlice enforces scope neutrality from HEAD to prevent working-copy ta
   fs.writeFileSync(path.join(dir, 'test.txt'), 'updated');
   fs.writeFileSync(path.join(dir, 'widened.txt'), 'unauthorized edit');
 
-  // Must reject despite working-copy PROGRESS.md claiming widened.txt is in scope
-  assert.throws(
-    () => finishSlice(dir, 'feat: attempt widened slice', { skipChecks: true }),
-    /Scope check failed: widened\.txt modified outside Target files for Slice 1/
-  );
+  // Scope comes from HEAD, so widened.txt is out of scope: it is committed but listed in Scope-Widened
+  finishSlice(dir, 'feat: attempt widened slice', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Scope-Widened: widened\.txt$/m);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -440,14 +440,15 @@ test('finishSlice logs that the dispatch gate is disabled when no subagent dispa
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('finishSlice refuses when the main thread wrote a source file for the slice', () => {
+test('finishSlice warns and stamps Main-Thread-Writes when the main thread wrote a source file', () => {
   const dir = makeFinishableRepo();
   seedDispatch(dir);
   appendCall(dir, { ts: new Date().toISOString(), tool: 'Edit', agentType: '', role: 'coordinator', filePath: 'test.txt', slice: '1' });
-  assert.throws(
-    () => finishSlice(dir, 'feat: finish slice 1', { skipChecks: true }),
-    /main thread wrote 1 source file\(s\) for slice 1: test\.txt/
-  );
+  const res = finishSlice(dir, 'feat: finish slice 1', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  assert.equal(res.success, true);
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Main-Thread-Writes: 1 \(test\.txt\)$/m);
+  assert.match(body, /^Telemetry-Main-Source-Writes: 1$/m);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -552,5 +553,49 @@ test('finishSlice keeps the commit when auto-verify is skipped or fails', () => 
   assert.equal(result.success, true);
   const subject = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: dir, encoding: 'utf8' }).trim();
   assert.equal(subject, 'feat: finish slice 1');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('finishSlice writes - [x] before **Slice when the active line has no checkbox', () => {
+  const dir = makeScopeRepo('- **Slice 7** `[GREEN]`: No box — Target files: test.txt [IN_PROGRESS]\n');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
+  finishSlice(dir, 'feat: finish slice 7', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  const text = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
+  assert.match(text, /^- \[x\] \*\*Slice 7\*\*/m);
+  assert.doesNotMatch(text, /\[IN_PROGRESS\]/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('--restamp re-stamps HEAD after an unstamped commit, and verifyHeadTrust passes', () => {
+  const dir = makeScopeRepo('- [ ] **Slice 5: Normal** Target files: test.txt\n');
+  startSlice(dir, '5');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
+  finishSlice(dir, 'feat: finish Slice 5', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  // An unstamped commit on top (like a merge of main) invalidates the stamp
+  fs.writeFileSync(path.join(dir, 'other.txt'), 'from main');
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-q', '-m', 'merge main'], { cwd: dir, stdio: 'ignore' });
+  const referee = path.join(dir, '.harness', 'scripts', 'referee.mjs');
+  assert.equal(verifyHeadTrust(dir, referee).trusted, false);
+
+  const res = restampSlice(dir, { skipChecks: true });
+  assert.equal(res.sliceId, '5');
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Referee-Verdict: VERIFIED$/m);
+  assert.equal(verifyHeadTrust(dir, referee).trusted, true);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('--restamp refuses and adds no commit when tests fail', () => {
+  const dir = makeScopeRepo('- [ ] **Slice 5: Normal** Target files: test.txt\n');
+  startSlice(dir, '5');
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
+  finishSlice(dir, 'feat: finish Slice 5', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: { test: 'exit 1' } }));
+  execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+  execFileSync('git', ['commit', '-q', '-m', 'add failing test'], { cwd: dir, stdio: 'ignore' });
+  const before = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' });
+  assert.throws(() => restampSlice(dir), /Verification tests failed/);
+  assert.equal(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }), before);
   fs.rmSync(dir, { recursive: true, force: true });
 });
