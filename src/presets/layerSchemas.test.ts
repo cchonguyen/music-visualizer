@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertValidSpec, defaultsFor, isSpecVisible, type ParamSpec } from "./schema";
+import { assertValidSpec, coerceValue, defaultsFor, isSpecVisible, type ParamSpec } from "./schema";
 import {
   BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHAPE_DEFAULTS, SHAPE_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
@@ -272,5 +272,32 @@ describe("Feedback and Post dependent control visibility (Slice 15.1)", () => {
     for (const spec of [...FEEDBACK_SPECS, ...POST_SPECS]) {
       for (const key of Object.keys(spec.showWhen ?? {})) expect(names.has(key), `${spec.name} -> ${key}`).toBe(true);
     }
+  });
+});
+
+describe("Trail fade and warp speed ceilings (Slice 15.9)", () => {
+  const byName = (n: string) => FEEDBACK_SPECS.find((s) => s.name === n)!;
+
+  it("pins the new maxima and leaves defaults and minimums alone", () => {
+    const fade = byName('fade') as any;
+    const speed = byName('warpSpeed') as any;
+    expect(fade.max).toBe(0.1);
+    expect(fade.min).toBe(0);
+    expect(fade.default).toBe(0.004);
+    expect(speed.max).toBe(15);
+    expect(speed.min).toBe(0);
+    expect(speed.default).toBe(1);
+  });
+
+  it("accepts values in the old range unchanged", () => {
+    for (const v of [0, 0.004, 0.01, 0.02]) expect(coerceValue(byName('fade'), v)).toEqual({ value: v });
+    for (const v of [0, 1, 2.5, 5]) expect(coerceValue(byName('warpSpeed'), v)).toEqual({ value: v });
+  });
+
+  it("accepts the new range and clamps above the new maxima", () => {
+    expect(coerceValue(byName('fade'), 0.1)).toEqual({ value: 0.1 });
+    expect(coerceValue(byName('warpSpeed'), 15)).toEqual({ value: 15 });
+    expect(coerceValue(byName('fade'), 0.5).value).toBe(0.1);
+    expect(coerceValue(byName('warpSpeed'), 40).value).toBe(15);
   });
 });
