@@ -257,7 +257,9 @@ describe('toRgbStr & Rich Swatch Toast (Slice 8.2)', () => {
         swatch: [[0, 0.17, 0.21], [0, 1, 0.67]],
       });
 
-      expect(toastEl.getAttribute('aria-label')).toBe('Mode: Calm · Still Anchor · Bioluminescent');
+      expect(toastEl.getAttribute('role')).toBe('status');
+      expect(toastEl.getAttribute('aria-live')).toBe('polite');
+      expect(toastEl.getAttribute('aria-label')).toBeNull();
       const content = toastEl.children[0] as MockDomElement;
       expect(content.className).toBe('toast-content');
 
@@ -333,7 +335,12 @@ describe('Experience mode definitions & triggerExperienceToast (Slice 8.2)', () 
 
     try {
       triggerExperienceToast('calm');
-      expect(toastEl.getAttribute('aria-label')).toBe('Mode: Calm · Still Anchor · Bioluminescent');
+      expect(toastEl.getAttribute('role')).toBe('status');
+      expect(toastEl.getAttribute('aria-live')).toBe('polite');
+      expect(toastEl.getAttribute('aria-label')).toBeNull();
+      const content = toastEl.children[0]!;
+      expect(content.children.find((c) => c.className === 'toast-title')?.textContent).toBe('Mode: Calm');
+      expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Still Anchor · Bioluminescent');
     } finally {
       (globalThis as any).document = originalDoc;
     }
@@ -665,7 +672,13 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     expect(director.getExperienceMode()).toBe('calm');
     expect(domElements['experience-label']?.textContent).toBe('Experience: Calm');
     expect(calmBtn?.classList.contains('active')).toBe(true);
-    expect(domElements['toast']?.getAttribute('aria-label')).toBe('Mode: Calm · Still Anchor · Bioluminescent');
+    const toastEl = domElements['toast']!;
+    expect(toastEl.getAttribute('role')).toBe('status');
+    expect(toastEl.getAttribute('aria-live')).toBe('polite');
+    expect(toastEl.getAttribute('aria-label')).toBeNull();
+    const content = toastEl.children[0]!;
+    expect(content.children.find((c) => c.className === 'toast-title')?.textContent).toBe('Mode: Calm');
+    expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Still Anchor · Bioluminescent');
   });
 
   it('cycles Experience mode on M keydown', () => {
@@ -679,7 +692,13 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
 
     expect(director.getExperienceMode()).toBe('calm');
     expect(domElements['experience-label']?.textContent).toBe('Experience: Calm');
-    expect(domElements['toast']?.getAttribute('aria-label')).toBe('Mode: Calm · Still Anchor · Bioluminescent');
+    const toastEl = domElements['toast']!;
+    expect(toastEl.getAttribute('role')).toBe('status');
+    expect(toastEl.getAttribute('aria-live')).toBe('polite');
+    expect(toastEl.getAttribute('aria-label')).toBeNull();
+    const content = toastEl.children[0]!;
+    expect(content.children.find((c) => c.className === 'toast-title')?.textContent).toBe('Mode: Calm');
+    expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Still Anchor · Bioluminescent');
   });
 
   it('ignores shortcuts when typing in a text field or form input', () => {

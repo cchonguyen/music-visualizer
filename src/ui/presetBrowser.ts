@@ -172,14 +172,23 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
     fav.type = 'button';
     fav.className = 'preset-card-fav';
     const on = isFavourite(entry);
+    // Stable name; the on/off state is carried by aria-pressed (Slice 21.11).
     fav.setAttribute('aria-pressed', String(on));
-    fav.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} ${entry.name} ${on ? 'from' : 'to'} favourites`);
+    fav.setAttribute('aria-label', `Favourite ${entry.name}`);
     fav.textContent = on ? '★' : '☆';
     fav.addEventListener('click', () => {
       const next = !isFavourite(entry);
       entry.tags = withFavourite(entry.tags, next);
       handlers.onFavouriteChange?.(entry.id, next);
       render();
+      // render() replaces the card, so keep keyboard focus on the new favourite button.
+      const cards = list.querySelectorAll<HTMLElement>('.preset-card');
+      for (const card of cards) {
+        if (card.dataset.presetId === entry.id) {
+          card.querySelector<HTMLButtonElement>('.preset-card-fav')?.focus();
+          break;
+        }
+      }
     });
 
     card.append(thumb, pick, meta, fav);

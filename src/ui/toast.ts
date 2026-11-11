@@ -20,9 +20,14 @@ export function showToast(text: string, options?: ToastOptions): void {
   const el = document.getElementById('toast');
   if (!el) return;
 
+  // The live region is announced from its text content. aria-label is not read by screen readers on a
+  // live region, so it is never set here (Slice 21.11).
+  el.setAttribute('role', 'status');
+  el.setAttribute('aria-live', 'polite');
+  el.removeAttribute('aria-label');
+
   if (!options?.detail && !options?.swatch) {
     el.textContent = text;
-    el.removeAttribute('aria-label');
   } else {
     el.replaceChildren();
     const content = document.createElement('div');
@@ -54,7 +59,6 @@ export function showToast(text: string, options?: ToastOptions): void {
     }
 
     el.appendChild(content);
-    el.setAttribute('aria-label', options.detail ? `${text} · ${options.detail}` : text);
   }
 
   el.classList.add('shown');
