@@ -14,10 +14,15 @@ import { updateTelemetry } from './lib/telemetry-store.mjs';
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
-/** Runs bin/verify-slice.sh when the operator's verify secret is on this machine. Never throws. */
+export const CI_VERIFIED_REASON = 'CI-verified: the "verify" check on the pull request (.github/workflows/harness-verify.yml) is the verifier';
+
+/**
+ * Runs bin/verify-slice.sh as an optional manual step when the operator's verify secret is on this machine.
+ * Without a secret, finish-slice does not need one: CI is the verifier. Never throws.
+ */
 export function autoVerify(root) {
   const secret = process.env.HARNESS_VERIFY_SECRET || readVerifySecret();
-  if (!secret) return { ran: false, reason: 'no verify secret on this machine, so Verified is left to verify-slice.sh on the operator machine' };
+  if (!secret) return { ran: false, verifier: 'ci', reason: CI_VERIFIED_REASON };
   const script = path.join(root, 'bin', 'verify-slice.sh');
   if (!fs.existsSync(script)) return { ran: false, reason: 'bin/verify-slice.sh not found' };
   try {
@@ -117,6 +122,30 @@ export function bootstrapException(sliceId, reason) {
   const text = typeof reason === 'string' ? reason.trim() : '';
   if (!BOOTSTRAP_SLICES.has(sliceId) || !text) return { allowed: false, reason: '' };
   return { allowed: true, reason: text };
+}
+
+/**
+ * Finds the most recent anchor commit for the slice. If that anchor was a scope bypass
+ * (start-slice.mjs --from-scope), returns its Spec-Bypass trailers; otherwise null.
+ */
+export function findSpecBypass(root, sliceId) {
+  let out = '';
+  try {
+    out = execFileSync('git', ['log', '-n', '500', '--format=%H%x1f%s%x1f%B%x1e'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    });
+  } catch {
+    return null;
+  }
+  const prefix = `docs(spec): anchor Slice ${sliceId} `;
+  for (const record of out.split('\x1e')) {
+    const [sha, subject = '', body = ''] = record.replace(/^\n+/, '').split('\x1f');
+    if (!subject.startsWith(prefix)) continue;
+    const doc = body.match(/^Spec-Bypass: (.+)$/m)?.[1]?.trim();
+    const reason = body.match(/^Spec-Bypass-Reason: (.+)$/m)?.[1]?.trim();
+    return doc && reason ? { doc, reason, anchor: sha } : null;
+  }
+  return null;
 }
 
 export function finishSlice(root, commitMsg, options = {}) {
@@ -234,42 +263,24 @@ export function finishSlice(root, commitMsg, options = {}) {
     throw new Error(`Telemetry gate failed: main thread wrote ${mainWrites.length} source file(s) for slice ${sliceId}: ${files}.`);
   }
 
+  // Scope-bypass anchors carry Spec-Bypass trailers; copy them onto the finish commit (read-only lookup).
+  const specBypass = findSpecBypass(root, sliceId);
+
   // 4. Update PROGRESS.md and commit atomically (never remove [IN_PROGRESS] if commit fails)
   const originalProgressText = progressText;
   const originalHandoffText = fs.existsSync(handoffPath) ? fs.readFileSync(handoffPath, 'utf8') : '';
   let committed = false;
 
   try {
-    // Find next pending slice to promote (Single-Commit Auto-Advance)
-    let nextIdx = -1;
-    let nextSlice = null;
-    for (let i = activeIdx + 1; i < lines.length; i++) {
-      const p = parseSliceLine(lines[i]);
-      if (p.id && p.status === '[PENDING]') {
-        nextIdx = i;
-        nextSlice = p;
-        break;
-      }
-    }
-
     // Mark current slice [x]
     lines[activeIdx] = activeLine.replace(/\[IN_PROGRESS\]\s*/g, '').replace(/-\s*\[\s*\]/, '- [x]').trim();
 
-    // Auto-advance: promote next slice to [IN_PROGRESS] within the exact same file write & commit
-    if (nextIdx !== -1) {
-      const nextLine = lines[nextIdx];
-      if (/\[PENDING\]/i.test(nextLine)) {
-        lines[nextIdx] = nextLine.replace(/\[PENDING\]/i, '[IN_PROGRESS]');
-      } else {
-        lines[nextIdx] = nextLine.replace(/(\*\*[^*]+\*\*)/, '$1 [IN_PROGRESS]');
-      }
-    }
-
+    // Owner decision 2026-11-06: no auto-advance; the next slice is started explicitly.
     atomicWriteFileSync(progressPath, lines.join('\n'), 'utf8');
 
     // 5. Update SESSION_HANDOFF.md
-    const nextSliceId = nextSlice ? nextSlice.id : null;
-    const nextActiveStr = nextSliceId ? `Slice ${nextSliceId}` : 'none';
+    const nextSliceId = null;
+    const nextActiveStr = 'none';
     if (originalHandoffText) {
       const handoffText = originalHandoffText;
       const updatedHandoff = handoffText
@@ -335,6 +346,9 @@ export function finishSlice(root, commitMsg, options = {}) {
     if (engineHash) {
       trailers.push('--trailer', `Referee-Engine: ${engineHash}`);
     }
+    if (specBypass) {
+      trailers.push('--trailer', `Spec-Bypass: ${specBypass.doc}`, '--trailer', `Spec-Bypass-Reason: ${specBypass.reason}`);
+    }
 
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
     committed = true;
@@ -391,7 +405,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         console.log(`✗ Verify failed, commit kept: ${res.verification.reason}`);
       }
     } else if (res.verification) {
-      console.log(`Verify skipped: ${res.verification.reason}`);
+      console.log(`Verify: ${res.verification.reason}`);
     }
     if (res.lull.isLull) {
       console.log(res.lull.recommendation);

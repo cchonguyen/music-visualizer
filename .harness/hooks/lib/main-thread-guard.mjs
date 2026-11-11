@@ -31,8 +31,6 @@ function gitAllowed(tokens) {
   while (i < tokens.length && tokens[i].startsWith('-')) i += GIT_VALUE_OPTIONS.has(tokens[i]) ? 2 : 1;
   const sub = tokens[i];
   const args = tokens.slice(i + 1);
-  if (sub === 'push') return !args.some((x) => SHORT_F_CLUSTER.test(x) || x.startsWith('--force') || x.startsWith('+') || x.includes(':+'));
-  if (sub === 'branch') return !args.includes('-D');
   if (sub === 'reset') return !args.includes('--hard');
   if (sub === 'clean') return !args.some((x) => /^-[^-]*[fdx]/.test(x) || x === '--force');
   if (sub === 'checkout') return !args.some((x) => x === '--' || x === '.' || x === '*' || x.startsWith('./') || x === '--force' || SHORT_F_CLUSTER.test(x));

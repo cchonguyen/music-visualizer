@@ -204,7 +204,8 @@ export function analyze({
   const doneInPr = (diff.get('.spec/PROGRESS.md')?.added ?? []).filter((l) => DONE_SLICE.test(l));
   // A finish-slice commit promotes the next pending slice to [IN_PROGRESS]. When this PR changes none of that
   // slice's Target files, the marker is only the next slice's placeholder, so the PR's done slices are checked.
-  const activeTargetsTouched = (line) => parseActiveTargets(line).some((t) =>
+  // .spec/ targets do not count: every slice PR changes .spec/PROGRESS.md, so they would make a placeholder look touched.
+  const activeTargetsTouched = (line) => parseActiveTargets(line).filter((t) => !t.startsWith('.spec/')).some((t) =>
     changed.some((file) => file === t || file.startsWith(t.endsWith('/') ? t : `${t}/`)));
   let sliceLines = [];
   if (active.length > 1) {

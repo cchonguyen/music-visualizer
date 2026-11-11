@@ -125,13 +125,16 @@ export function appendCall(root, call) {
 
 const normPath = (f) => String(f || '').replace(/\\/g, '/').replace(/^\.\//, '');
 
+const GF_CODER_TYPE = /(^|:)gf-coder$/;
+
 /**
- * Subagent dispatches (Agent or Task) recorded for the slice. A main-thread dispatch carries no
+ * Coder dispatches (Agent or Task) recorded for the slice. A main-thread dispatch carries no
  * agent_type in its PostToolUse payload, so it is identified by dispatchedType (the subagent_type it was sent to).
+ * Only gf-coder dispatches count; verifier, navigator and architect dispatches are excluded.
  */
 export function dispatchesFor(calls, sliceId) {
   return (calls || []).filter((c) =>
-    (c.tool === 'Agent' || c.tool === 'Task') && c.slice === sliceId && Boolean(c.agentType || c.dispatchedType)
+    (c.tool === 'Agent' || c.tool === 'Task') && c.slice === sliceId && GF_CODER_TYPE.test(String(c.agentType || c.dispatchedType || ''))
   );
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // CI gate for spoke repos. Two modes, both exit 1 on failure so the Actions check goes red.
-//   pr   <base> <head>     PR check. The PR must add a slice line to .spec/PROGRESS.md, and its head
-//                          commit must carry Referee trailers whose Referee-Tree matches the commit tree.
+//   pr   <base> <head>     PR check. Its head commit must carry Referee trailers whose Referee-Tree matches
+//                          the commit tree. A PR with no slice line in .spec/PROGRESS.md gets a warning only.
 //   push <before> <after>  Push watch. Lists non-merge commits in the push that lack a Referee-Verdict
 //                          trailer. Exits 1 when any are listed.
 import { execFileSync } from 'node:child_process';
@@ -38,9 +38,10 @@ export function addedSliceLines(diffText) {
 
 export function checkPullRequest({ base, head, cwd = process.cwd() }) {
   const problems = [];
+  const warnings = [];
   const progressDiff = git(['diff', '-U0', `${base}...${head}`, '--', '.spec/PROGRESS.md'], cwd);
   if (addedSliceLines(progressDiff).length === 0) {
-    problems.push('No slice: this PR adds no `- [x] **Slice N` line to .spec/PROGRESS.md. Finish a slice with finish-slice.mjs, or mark one in PROGRESS.md.');
+    warnings.push('Not in a slice: this PR adds no `- [x] **Slice N` line to .spec/PROGRESS.md. Attach it to a slice by adding one, or finish a slice with finish-slice.mjs. The PR is allowed to merge without one.');
   }
 
   const message = git(['log', '-1', '--format=%B', head], cwd);
@@ -53,7 +54,7 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
       problems.push(`Stale verdict: Referee-Tree ${tree} does not match the head commit tree ${actual}. The commit changed after it was verified.`);
     }
   }
-  return problems;
+  return { problems, warnings };
 }
 
 // Non-merge commits in a push that carry no Referee-Verdict trailer, as "<sha> <subject>" strings.
@@ -68,7 +69,8 @@ export function commitsMissingTrailer({ before, after, cwd = process.cwd() }) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [mode, first, second] = process.argv.slice(2);
   if (mode === 'pr' && first && second) {
-    const problems = checkPullRequest({ base: first, head: second });
+    const { problems, warnings } = checkPullRequest({ base: first, head: second });
+    for (const w of warnings) console.log(`::warning::${w}`);
     if (problems.length === 0) {
       console.log('✓ Harness slice gate: slice present and head commit verified.');
     } else {

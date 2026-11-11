@@ -37,7 +37,7 @@ function probeFastPathBudget() {
   });
   const enforced = r.allowed === false;
   return check('fast-path-budget', 'fail', enforced,
-    enforced ? 'coordinator source-read budget enforced' : 'coordinator source-read budget NOT enforced');
+    enforced ? 'coordinator source-read budget soft: warns and logs' : 'coordinator source-read budget NOT firing');
 }
 
 function probeGfCoder(root) {

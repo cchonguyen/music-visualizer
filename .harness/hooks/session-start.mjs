@@ -6,6 +6,8 @@ import { branchOwnerOf, mainRedState, MAIN_RED_TAG, whereWeLeftOff } from './lib
 import { statePath, writeState } from './lib/doctor-state.mjs';
 import { currentHead, runProbes } from '../scripts/doctor.mjs';
 import { readBatchEvents } from '../scripts/status-batch.mjs';
+import { appendEvent } from '../scripts/lib/event-log.mjs';
+import { REPO_PLUGIN_MANIFEST, readManifestVersion, installedManifestPath, checkPluginVersion, mismatchBanner } from './lib/session-banner.mjs';
 
 const root = resolveRoot();
 const handoffPath = path.join(root, '.spec', 'SESSION_HANDOFF.md');
@@ -67,6 +69,39 @@ if (fs.existsSync(handoffPath)) {
   if (resume) contextMsg += `\n${resume}`;
   if (owner) contextMsg += `\n\nBranch Owner: ${owner}.`;
 }
+
+// Plugin-version check: a warning banner only. Never blocks and never changes the exit code.
+const sessionId = event.session_id || 'default';
+let installedPluginVersion = null;
+try {
+  const installedFile = installedManifestPath(process.env.CLAUDE_PLUGIN_ROOT);
+  installedPluginVersion = installedFile ? readManifestVersion(installedFile) : null;
+  const check = checkPluginVersion({
+    installed: installedPluginVersion,
+    repo: readManifestVersion(path.join(root, REPO_PLUGIN_MANIFEST))
+  });
+  if (check.mismatch) {
+    const banner = mismatchBanner(check);
+    contextMsg = `${banner}\n${contextMsg}`;
+    process.stderr.write(`${banner}\n`);
+    appendEvent(root, {
+      session: sessionId,
+      kind: 'plugin_version_mismatch',
+      source: 'session-start.mjs',
+      slice: null,
+      detail: { installed: check.installed, repo: check.repo }
+    });
+  }
+} catch {}
+
+// Heartbeat: one event per session start (appendEvent never throws).
+appendEvent(root, {
+  session: sessionId,
+  kind: 'heartbeat',
+  source: 'session-start.mjs',
+  slice: null,
+  detail: { harness: version, plugin: installedPluginVersion, node: process.version }
+});
 
 console.log(JSON.stringify({
   hookSpecificOutput: {

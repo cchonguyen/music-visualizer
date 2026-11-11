@@ -17,3 +17,7 @@ Your mission is to coordinate work with minimal context bloat. Do NOT explore ra
 
 ### 3. Context Atlas (Read On-Demand Only)
 - The full sector table and coordinates live in `.spec/ATLAS.md`. Open only the coordinates a slice's `Coords:` field names. Do not copy the table here.
+
+### 4. Deployment & Merge Protocol (Mandatory)
+- **Zero Local Deploys:** Never run `npm run deploy` or `wrangler deploy` locally from a worktree. Production deployments happen exclusively via GitHub Actions when a PR merges into `main`.
+- **Merge Gate:** Before merging any PR (`gh pr merge`), always run `git fetch origin main && git rebase origin/main`, verify `git merge-base --is-ancestor origin/main HEAD` passes, and re-run quiet verification commands.

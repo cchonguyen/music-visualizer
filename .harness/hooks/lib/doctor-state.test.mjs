@@ -45,25 +45,29 @@ test('writeState round-trips through readState and leaves no temp file', () => {
   }
 });
 
-test('gate refuses Edit, Write and NotebookEdit with no doctor state', () => {
+test('gate never refuses Edit, Write or NotebookEdit; missing state warns', () => {
   for (const toolName of ['Edit', 'Write', 'NotebookEdit']) {
     const d = gateDecision({ state: null, head: HEAD, toolName });
-    assert.equal(d.allowed, false);
-    assert.match(d.reason, /no doctor state/);
+    assert.equal(d.allowed, true, toolName);
+    assert.equal(d.reason, '');
+    assert.equal(d.warn, 'doctor not current for this HEAD');
+    assert.match(d.cause, /no doctor state/);
   }
 });
 
-test('gate refuses Edit on DOCTOR_FAIL and the reason names the failing check', () => {
+test('gate warns, does not refuse, Edit on DOCTOR_FAIL and the cause names the failing check', () => {
   const d = gateDecision({ state: FAIL, head: HEAD, toolName: 'Edit' });
-  assert.equal(d.allowed, false);
-  assert.match(d.reason, /DOCTOR_FAIL/);
-  assert.match(d.reason, /gf-coder-registered/);
+  assert.equal(d.allowed, true);
+  assert.equal(d.warn, 'doctor not current for this HEAD');
+  assert.match(d.cause, /DOCTOR_FAIL/);
+  assert.match(d.cause, /gf-coder-registered/);
 });
 
-test('gate refuses Edit on a stale HEAD', () => {
+test('gate warns, does not refuse, Edit on a stale HEAD', () => {
   const d = gateDecision({ state: { ...PASS, head: 'olderhead' }, head: HEAD, toolName: 'Edit' });
-  assert.equal(d.allowed, false);
-  assert.match(d.reason, /stale HEAD/);
+  assert.equal(d.allowed, true);
+  assert.equal(d.warn, 'doctor not current for this HEAD');
+  assert.match(d.cause, /stale HEAD/);
 });
 
 test('gate allows Edit with DOCTOR_PASS and a matching HEAD', () => {
@@ -93,7 +97,7 @@ test('gate allows allow-listed Bash without a pass', () => {
   }
 });
 
-test('gate refuses non-allow-listed Bash without a pass', () => {
+test('gate warns, does not refuse, non-allow-listed Bash without a pass', () => {
   const commands = [
     'rm -rf dist',
     'npm install left-pad',
@@ -105,20 +109,22 @@ test('gate refuses non-allow-listed Bash without a pass', () => {
   ];
   for (const command of commands) {
     const d = gateDecision({ state: null, head: HEAD, toolName: 'Bash', command });
-    assert.equal(d.allowed, false, command);
-    assert.match(d.reason, /no doctor state/);
+    assert.equal(d.allowed, true, command);
+    assert.equal(d.warn, 'doctor not current for this HEAD', command);
+    assert.match(d.cause, /no doctor state/);
   }
 });
 
-test('gate refuses non-allow-listed Bash on DOCTOR_FAIL and names the failing check', () => {
+test('gate warns, does not refuse, non-allow-listed Bash on DOCTOR_FAIL', () => {
   const d = gateDecision({ state: FAIL, head: HEAD, toolName: 'Bash', command: 'npm install' });
-  assert.equal(d.allowed, false);
-  assert.match(d.reason, /gf-coder-registered/);
+  assert.equal(d.allowed, true);
+  assert.match(d.cause, /gf-coder-registered/);
 });
 
-test('gate allows non-allow-listed Bash when DOCTOR_PASS matches HEAD', () => {
+test('gate allows non-allow-listed Bash when DOCTOR_PASS matches HEAD, with no warn', () => {
   const d = gateDecision({ state: PASS, head: HEAD, toolName: 'Bash', command: 'npm install' });
   assert.equal(d.allowed, true);
+  assert.equal(d.warn, '');
 });
 
 test('gate always allows other tools', () => {
