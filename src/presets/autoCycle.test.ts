@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { AutoCycler, DEFAULT_CYCLE, PREPARE_LEAD_SEC, eligible, type CycleOptions } from './autoCycle';
+import { maxCostForTier } from './cost';
 
 const opts = (over: Partial<CycleOptions>): CycleOptions => ({ ...DEFAULT_CYCLE, ...over });
 
@@ -12,6 +13,32 @@ describe('eligible', () => {
   it('keeps only favourites when asked', () => {
     const ids = eligible([{ id: 'a', tags: ['favourite'] }, { id: 'b', tags: [] }], opts({ favouritesOnly: true }));
     expect(ids).toEqual(['a']);
+  });
+
+  it('phone tier skips Heavy presets and keeps Light and Medium', () => {
+    const candidates = [
+      { id: 'l', tags: [], cost: 'light' as const },
+      { id: 'm', tags: [], cost: 'medium' as const },
+      { id: 'h', tags: [], cost: 'heavy' as const },
+    ];
+    expect(eligible(candidates, opts({ maxCost: maxCostForTier('phone') }))).toEqual(['l', 'm']);
+  });
+
+  it('desktop tier keeps Heavy presets in the cycle', () => {
+    const candidates = [
+      { id: 'l', tags: [], cost: 'light' as const },
+      { id: 'h', tags: [], cost: 'heavy' as const },
+    ];
+    expect(eligible(candidates, opts({ maxCost: maxCostForTier('desktop') }))).toEqual(['l', 'h']);
+  });
+
+  it('phone tier still cycles when skipping Heavy would leave fewer than 2 presets', () => {
+    const candidates = [
+      { id: 'l', tags: [], cost: 'light' as const },
+      { id: 'h1', tags: [], cost: 'heavy' as const },
+      { id: 'h2', tags: [], cost: 'heavy' as const },
+    ];
+    expect(eligible(candidates, opts({ maxCost: maxCostForTier('phone') }))).toEqual(['l', 'h1', 'h2']);
   });
 });
 
