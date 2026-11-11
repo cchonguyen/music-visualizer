@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "name": "Scope Bloom",
+  "tags": ["built-in", "flagship", "oscilloscope"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": { "decay": 0.9 },
+  "layers": [
+    {
+      "type": "shape",
+      "blend": "add",
+      "params": {
+        "baseShape": "centerLine",
+        "size": 0.9,
+        "effectType": "waveform",
+        "audioSource": "scope",
+        "symmetry": "wrap",
+        "extrudeDirection": "outward",
+        "sampleCount": 256,
+        "effectLength": 0.5,
+        "reactivity": 1.6,
+        "attackMs": 5,
+        "thickness": 2.5,
+        "colorMode": "frequencyGradient",
+        "glow": 0.9
+      }
+    },
+    {
+      "type": "shape",
+      "opacity": 0.7,
+      "blend": "add",
+      "params": {
+        "baseShape": "circle",
+        "size": 0.3,
+        "basePulse": 0.25,
+        "effectType": "dots",
+        "audioSource": "scope",
+        "symmetry": "wrap",
+        "extrudeDirection": "outward",
+        "sampleCount": 128,
+        "effectLength": 0.25,
+        "reactivity": 1.4,
+        "attackMs": 5,
+        "thickness": 1.2,
+        "colorMode": "palette",
+        "glow": 0.8
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.7,
+    "bloomThreshold": 0.4,
+    "vignette": 0.4
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "Deep Field",
+  "tags": ["built-in", "flagship", "starfield"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": { "decay": 0.8 },
+  "layers": [
+    {
+      "type": "particles",
+      "opacity": 0.55,
+      "blend": "add",
+      "params": { "mode": "field", "count": 1200, "shape": "dot", "size": 1.6, "brightness": 0.9, "twinkleRate": 0.8, "twinkleDepth": 0.5 }
+    },
+    {
+      "type": "particles",
+      "opacity": 0.9,
+      "blend": "add",
+      "params": { "mode": "field", "count": 700, "shape": "streak", "size": 2.2, "brightness": 1.2, "twinkleRate": 1.2, "twinkleDepth": 0.4, "hueShift": 0.08 }
+    }
+  ],
+  "post": {
+    "bloom": 0.45,
+    "bloomThreshold": 0.5,
+    "vignette": 0.5
+  }
+}
