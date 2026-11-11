@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "name": "Inhale Exhale",
+  "tags": ["built-in", "flagship", "warp"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": { "decay": 0.94, "zoom": 1.004 },
+  "warp": [
+    {
+      "type": "radial",
+      "params": {
+        "amount": { "value": 0.12, "link": { "source": "lfoSine", "amount": 0.9, "smooth": 0.3, "rate": 0.12 } },
+        "scale": 1,
+        "speed": 0
+      }
+    },
+    { "type": "sphere", "params": { "amount": { "value": 0.1, "link": { "source": "kickEnv", "amount": 0.5, "smooth": 0.25 } }, "scale": 1.2 } }
+  ],
+  "layers": [
+    { "type": "particles", "opacity": 0.5, "blend": "add", "params": { "shape": "dot", "brightness": 0.9, "size": 2.2 } },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "circle",
+        "effectType": "waveform",
+        "sampleCount": 96,
+        "effectLength": 0.3,
+        "thickness": 2.4,
+        "audioSource": "waveform",
+        "colorMode": "amplitudeHot",
+        "glow": 0.7
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.7,
+    "bloomThreshold": 0.45,
+    "bloomSize": 1.2,
+    "bloomTintAmount": 0.35,
+    "bloomTintHue": -0.9,
+    "colourMap": 0.55,
+    "colourMapBy": "brightness",
+    "colourMapGradient": "ocean",
+    "colourMapGradient2": "aurora",
+    "colourMapMix": { "value": 0, "morph": { "to": 1, "rate": 0.04 } },
+    "vignette": 0.45,
+    "vignetteShape": "oval"
+  }
+}
