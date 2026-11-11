@@ -33,6 +33,7 @@ import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import blurSrc from './shaders/blur.frag.glsl?raw';
 import { BlurChain, bloomPlan, type BloomPlan } from './blurChain';
+import { ColourMapTextures, GRADIENT_DEFAULT_A, GRADIENT_DEFAULT_B, colourMapIndexNumber, gradientNameOr } from './colourMap';
 import copySrc from './shaders/copy.frag.glsl?raw';
 
 /** Post settings with identity values (see post.frag.glsl). */
@@ -151,6 +152,13 @@ export class Compositor implements RenderLayer {
   private vao: WebGLVertexArrayObject | null = null;
   // Blurred copies of the frame at half, quarter and eighth size, built only when asked for (Slice 18.6).
   private blurChain: BlurChain | null = null;
+  // Colour map (Slice 18.8): amount and mix are numbers, the rest are names read from the post settings.
+  private mapAmt = 0;
+  private mapMix = 0;
+  private mapBy = 0;
+  private mapA = GRADIENT_DEFAULT_A;
+  private mapB = GRADIENT_DEFAULT_B;
+  private colourTextures: ColourMapTextures | null = null;
   private readonly plan: BloomPlan = { level: 0, spread: 1, weights: [1, 0, 0] };
   private beatEnv = 0;
   private readonly blurFn = (src: WebGLTexture, stepX: number, stepY: number, target: RenderTarget): void => {
@@ -269,6 +277,13 @@ export class Compositor implements RenderLayer {
       const v = values[key];
       post[key] = typeof v === 'number' ? v : POST_IDENTITY[key];
     }
+    const amt = values.colourMap;
+    const mix = values.colourMapMix;
+    this.mapAmt = typeof amt === 'number' && Number.isFinite(amt) ? Math.min(1, Math.max(0, amt)) : 0;
+    this.mapMix = typeof mix === 'number' && Number.isFinite(mix) ? Math.min(1, Math.max(0, mix)) : 0;
+    this.mapBy = colourMapIndexNumber(values.colourMapBy);
+    this.mapA = gradientNameOr(values.colourMapGradient, GRADIENT_DEFAULT_A);
+    this.mapB = gradientNameOr(values.colourMapGradient2, GRADIENT_DEFAULT_B);
   }
 
   /** Global Director camera and color uniforms (Sector 483, Slice 7.31). */
@@ -309,7 +324,8 @@ export class Compositor implements RenderLayer {
       p.mirror >= 2 ||
       p.vignette > 0 ||
       p.chroma > 0 ||
-      p.bloom > 0
+      p.bloom > 0 ||
+      this.mapAmt > 0
     );
     return postActive || this.hasDirectorEffect();
   }
@@ -467,6 +483,7 @@ export class Compositor implements RenderLayer {
     this.scaled?.dispose();
     this.blurChain = null;
     this.scaled = null;
+    this.colourTextures = null; // belonged to the old context, rebuilt on demand
     this.fitScaleBuffers(gl);
     this.ready.clear();
     this.stale.clear();
@@ -772,6 +789,19 @@ export class Compositor implements RenderLayer {
     gl.bindTexture(gl.TEXTURE_2D, chain?.texture(2) ?? bloom);
     gl.uniform1i(this.u(prog, 'uA'), 0);
     gl.uniform1i(this.u(prog, 'uB'), 1);
+    // Colour map gradients (units 5 and 6). Only read when the map is on.
+    if (this.mapAmt > 0) {
+      const tex = (this.colourTextures ??= new ColourMapTextures(gl));
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, tex.texture(this.mapA));
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_2D, tex.texture(this.mapMix > 0 ? this.mapB : this.mapA));
+    }
+    gl.uniform1i(this.loc(prog, 'uMapA'), 5);
+    gl.uniform1i(this.loc(prog, 'uMapB'), 6);
+    gl.uniform1f(this.loc(prog, 'uMapAmt'), this.mapAmt);
+    gl.uniform1f(this.loc(prog, 'uMapMix'), this.mapMix);
+    gl.uniform1i(this.loc(prog, 'uMapBy'), this.mapBy);
     gl.uniform1i(this.u(prog, 'uBloom'), 2);
     gl.uniform1i(this.loc(prog, 'uBloom1'), 3);
     gl.uniform1i(this.loc(prog, 'uBloom2'), 4);
@@ -826,6 +856,8 @@ export class Compositor implements RenderLayer {
     this.drawn.clear();
     this.blurChain?.dispose();
     this.blurChain = null;
+    this.colourTextures?.dispose();
+    this.colourTextures = null;
     this.scaled?.dispose();
     this.scaled = null;
     const gl = this.gl;

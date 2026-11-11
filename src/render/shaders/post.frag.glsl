@@ -28,6 +28,13 @@ uniform float uBloomTintAmt; // 0 = glow keeps the picture colours
 uniform float uBloomTintHue; // radians
 uniform float uBloomPulse;   // how much the glow swells on a kick
 uniform float uBeat;         // kick envelope, 0..1
+
+// Colour map (Slice 18.8)
+uniform sampler2D uMapA;    // first gradient, 256 x 1
+uniform sampler2D uMapB;    // second gradient
+uniform float uMapAmt;      // 0 = off
+uniform float uMapMix;      // 0 = first gradient, 1 = second
+uniform int uMapBy;         // 0 brightness, 1 distance from centre, 2 angle around centre
 uniform float uHue;       // radians
 uniform float uSat;       // 0 = grey, 1 = unchanged
 uniform float uContrast;  // 1 = unchanged
@@ -189,6 +196,23 @@ void main() {
     vec3 tinted = mix(c, c * tint * 2.2, uColorIntensity);
     float Ytint = dot(tinted, vec3(0.2126, 0.7152, 0.0722));
     c = tinted * (Y / max(1e-4, Ytint));
+  }
+
+  if (uMapAmt > 0.0) {
+    float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float t = clamp(lum, 0.0, 1.0);
+    if (uMapBy == 1) {
+      t = clamp(length(vUv - 0.5) * 1.41421356, 0.0, 1.0);
+    } else if (uMapBy == 2) {
+      // A triangle wave around the circle, so the gradient has no seam where the angle wraps.
+      vec2 dv = vUv - 0.5;
+      t = abs(fract(atan(dv.y, dv.x) / 6.28318531 + 0.5) * 2.0 - 1.0);
+    }
+    vec3 mapped = texture(uMapA, vec2(t, 0.5)).rgb;
+    if (uMapMix > 0.0) mapped = mix(mapped, texture(uMapB, vec2(t, 0.5)).rgb, uMapMix);
+    // Brightness reads replace the colour. Distance and angle keep the picture's light and dark.
+    if (uMapBy != 0) mapped *= clamp(lum * 1.6, 0.0, 1.0);
+    c = mix(c, mapped, uMapAmt);
   }
 
   if (uBloomAmt > 0.0) {

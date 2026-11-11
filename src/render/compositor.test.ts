@@ -623,3 +623,55 @@ describe('bloom options on the blur chain (Slice 18.7)', () => {
     expect(postSrc.indexOf('uBloomPulse * uBeat')).toBeLessThan(postSrc.indexOf('applySafety(c)'));
   });
 });
+
+describe('colour map (Slice 18.8)', () => {
+  function frameWith(post: Record<string, number | string>) {
+    const t = createTracingGl();
+    const comp = new Compositor([new Scene('a', [spyLayer()])]);
+    comp.init(t.gl);
+    comp.resize(64, 36, 1);
+    comp.setPost(post);
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 3; i++) comp.draw(FRAME, clock(0.1), TARGET);
+    const g = t.gl as unknown as Record<string, { mock: { calls: unknown[][] }; mockClear: () => void }>;
+    g.uniform1i!.mockClear();
+    t.uniforms.length = 0;
+    const textures = (g.texImage2D!.mock.calls as unknown[][]).filter((c) => c[3] === 256).length;
+    comp.draw(FRAME, clock(0.1), TARGET);
+    const last = (name: string) => t.uniforms.filter((u) => u.name === name).pop()?.value;
+    const ints = (name: string) => g.uniform1i!.mock.calls.filter((c) => (c[0] as { name: string } | null)?.name === name).pop()?.[1];
+    return { comp, last, ints, textures };
+  }
+
+  it('is off by default: no gradient textures are made and the pass is not needed', () => {
+    const { comp, last, textures } = frameWith({});
+    expect(comp.hasPost()).toBe(false);
+    expect(textures).toBe(0);
+    expect(last('uMapAmt')).toBeUndefined();
+  });
+
+  it('turns the post pass on and passes the amount, the mix and what it reads by', () => {
+    const { comp, last, ints } = frameWith({ colourMap: 0.8, colourMapMix: 0.3, colourMapBy: 'angle', colourMapGradient: 'ice', colourMapGradient2: 'ember' });
+    expect(comp.hasPost()).toBe(true);
+    expect(last('uMapAmt')).toBe(0.8);
+    expect(last('uMapMix')).toBe(0.3);
+    expect(ints('uMapBy')).toBe(2);
+  });
+
+  it('builds a texture for each gradient in use only once', () => {
+    const { textures } = frameWith({ colourMap: 1, colourMapMix: 0.5, colourMapGradient: 'ice', colourMapGradient2: 'ember' });
+    expect(textures).toBe(2);
+  });
+
+  it('unknown names from an old or edited preset fall back and do not crash', () => {
+    const { last } = frameWith({ colourMap: 1, colourMapGradient: 'nope', colourMapBy: 'sideways' });
+    expect(last('uMapAmt')).toBe(1);
+  });
+
+  it('the map is applied before bloom, vignette and the safety rules', () => {
+    const at = postSrc.indexOf('texture(uMapA');
+    expect(at).toBeGreaterThan(0);
+    expect(at).toBeLessThan(postSrc.indexOf('uBloomAmt > 0.0'));
+    expect(at).toBeLessThan(postSrc.indexOf('applySafety(c)'));
+  });
+});

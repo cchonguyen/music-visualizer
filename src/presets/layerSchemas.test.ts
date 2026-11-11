@@ -267,6 +267,17 @@ describe("Feedback and Post dependent control visibility (Slice 15.1)", () => {
     expect(byName(POST_SPECS, 'bloomPulse').default).toBe(0);
   });
 
+  it("the colour map is off by default and its options show only while it is on (Slice 18.8)", () => {
+    expect(byName(POST_SPECS, 'colourMap').default).toBe(0);
+    expect(byName(POST_SPECS, 'colourMap').showWhen).toBeUndefined();
+    for (const name of ['colourMapBy', 'colourMapGradient', 'colourMapGradient2', 'colourMapMix']) {
+      const spec = byName(POST_SPECS, name);
+      expect(isSpecVisible(spec, { colourMap: 0 })).toBe(false);
+      expect(isSpecVisible(spec, { colourMap: 0.5 })).toBe(true);
+    }
+    expect(byName(POST_SPECS, 'colourMapMix').default).toBe(0);
+  });
+
   it("Wave warp, count and speed follow the warp modes that read them", () => {
     const visible = (n: string, mode: string) => isSpecVisible(byName(FEEDBACK_SPECS, n), { warpMode: mode });
     for (const mode of ['classic', 'curl', 'mobius']) expect(visible('warp', mode)).toBe(true);

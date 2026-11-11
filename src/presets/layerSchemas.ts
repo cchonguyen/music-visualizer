@@ -2,6 +2,7 @@
 // so a number in the layer code is never a hidden constant. Defaults equal the values
 // the layers used before 4.2, so the look is unchanged until a preset changes them.
 // Ranges are proposals; the owner confirms them in the Studio (S1).
+import { COLOUR_MAP_INDEXES, GRADIENT_DEFAULT_A, GRADIENT_DEFAULT_B, GRADIENT_NAMES } from '../render/colourMap';
 import type { ParamSpec } from './schema';
 
 export interface TunnelParams {
@@ -620,6 +621,11 @@ export const POST_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'bloomTintAmount', label: 'Bloom tint amount', group: 'Glow', default: 0, min: 0, max: 1, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Mixes the glow toward a single colour. 0 keeps the glow in the picture colours.' },
   { type: 'float', name: 'bloomTintHue', label: 'Bloom tint colour (hue, rad)', group: 'Glow', default: 0, min: -3.14, max: 3.14, step: 0.01, showWhen: { bloom: { above: 0 }, bloomTintAmount: { above: 0 } }, description: 'Picks the colour the glow is tinted toward.' },
   { type: 'float', name: 'bloomPulse', label: 'Bloom beat pulse', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Makes the glow swell on each kick, then ease back.' },
+  { type: 'float', name: 'colourMap', label: 'Colour map amount', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, description: 'Recolours the finished picture through a gradient. 0 leaves the colours alone.' },
+  { type: 'enum', name: 'colourMapBy', label: 'Colour map reads by', group: 'Colour', default: 'brightness', options: COLOUR_MAP_INDEXES, showWhen: { colourMap: { above: 0 } }, description: 'Picks what chooses the colour: how bright a spot is, how far it is from the centre, or its angle around the centre.' },
+  { type: 'enum', name: 'colourMapGradient', label: 'Colour map gradient', group: 'Colour', default: GRADIENT_DEFAULT_A, options: GRADIENT_NAMES, showWhen: { colourMap: { above: 0 } }, description: 'The first gradient.' },
+  { type: 'enum', name: 'colourMapGradient2', label: 'Colour map second gradient', group: 'Colour', default: GRADIENT_DEFAULT_B, options: GRADIENT_NAMES, showWhen: { colourMap: { above: 0 } }, description: 'The gradient the mix moves toward.' },
+  { type: 'float', name: 'colourMapMix', label: 'Colour map mix (0 first, 1 second)', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, showWhen: { colourMap: { above: 0 } }, description: 'Blends from the first gradient to the second. Morph it, link it to the music or react it to a trigger to change gradients over time.' },
 ];
 
 export const FEEDBACK_SPECS: readonly ParamSpec[] = [
