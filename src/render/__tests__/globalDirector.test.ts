@@ -31,6 +31,7 @@ import {
   type ExperienceBundleAsset,
   type VisualizerAsset,
 } from '../../presets/format';
+import { clampDt, MAX_DT_SEC } from '../clock';
 import { eligible, DEFAULT_CYCLE } from '../../presets/autoCycle';
 
 function createMemoryStorage(): Storage {
@@ -1107,6 +1108,29 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
 
       const polymorphicList: VisualizerAsset[] = [result.preset, paletteAsset, bundleAsset];
       expect(polymorphicList).toHaveLength(3);
+    });
+  });
+  describe('Slice 14.7: time step clamp', () => {
+    it('a 5 s frame gap, clamped as main.ts does, advances no more than the clamp limit', () => {
+      const big = new GlobalDirector();
+      const limit = new GlobalDirector();
+      big.advance(clampDt(5));
+      limit.advance(MAX_DT_SEC);
+      expect(big.getGradAngle()).toBeCloseTo(limit.getGradAngle(), 12);
+      expect(big.getGradAngle()).toBeCloseTo(MAX_DT_SEC * 0.025, 12);
+    });
+
+    it('a normal 1/60 s step is unchanged', () => {
+      const d = new GlobalDirector();
+      d.advance(clampDt(1 / 60));
+      expect(d.getGradAngle()).toBeCloseTo((1 / 60) * 0.025, 12);
+    });
+
+    it('negative and NaN steps do nothing once clamped', () => {
+      const d = new GlobalDirector();
+      d.advance(clampDt(-1));
+      d.advance(clampDt(NaN));
+      expect(d.getGradAngle()).toBe(0);
     });
   });
 });

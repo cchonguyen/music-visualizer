@@ -35,6 +35,7 @@ import { DebugPanel } from './ui/debugPanel';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector } from './render/globalDirector';
+import { clampDt } from './render/clock';
 import { adminGateway, AdminGateway } from './presets/adminGateway';
 import {
   ADMIN_AUTH_CHANNEL,
@@ -503,7 +504,7 @@ function start(): void {
   let lastRaf = performance.now();
   host.start((): AudioFrame => {
     const now = performance.now();
-    const displayFrameMs = now - lastRaf;
+    const displayFrameMs = clampDt((now - lastRaf) / 1000) * 1000;
     lastRaf = now;
 
     const frame = engine.readFrame();
