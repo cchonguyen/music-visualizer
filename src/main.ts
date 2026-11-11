@@ -528,6 +528,7 @@ function start(): void {
   host.onContextChange = (s) =>
     showNotice(s === 'lost' ? 'Graphics reset… restarting visuals.' : 'Visuals restarted.', 'info', 3000);
 
+  let preparedId: string | null = null;
   let lastRaf = performance.now();
   host.start((): AudioFrame => {
     const now = performance.now();
@@ -616,6 +617,15 @@ function start(): void {
       const cycleOpts: CycleOptions = { ...cycle, calmOnly: state.calm };
       const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags })), cycleOpts);
       const strongBeat = frame.beat && frame.beatStrength >= 0.8;
+      // A few seconds before a switch, compile the next preset while it is still hidden (Slice 16.3).
+      const upcoming = cycler.upcoming(shownId, pool, cycleOpts);
+      if (upcoming && upcoming !== preparedId && compositor) {
+        preparedId = upcoming;
+        session.sceneOf(upcoming);
+        compositor.prepare(upcoming);
+      } else if (!upcoming) {
+        preparedId = null;
+      }
       const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycleOpts);
       if (pick) switchShown(pick);
     }

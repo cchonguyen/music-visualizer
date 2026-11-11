@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './autoCycle';
+import { AutoCycler, DEFAULT_CYCLE, PREPARE_LEAD_SEC, eligible, type CycleOptions } from './autoCycle';
 
 const opts = (over: Partial<CycleOptions>): CycleOptions => ({ ...DEFAULT_CYCLE, ...over });
 
@@ -60,5 +60,66 @@ describe('AutoCycler', () => {
 
   it('needs at least two presets', () => {
     expect(new AutoCycler().next(100, true, 'a', ['a'], opts({ mode: 'timer', intervalSec: 1 }))).toBeNull();
+  });
+});
+
+describe('AutoCycler.upcoming (Slice 16.3)', () => {
+  const pool = ['a', 'b', 'c'];
+
+  it('is null while the cycle is off or the pool is too small', () => {
+    expect(new AutoCycler().upcoming('a', pool, opts({ mode: 'off' }))).toBeNull();
+    expect(new AutoCycler().upcoming('a', ['a'], opts({ mode: 'timer', intervalSec: 1 }))).toBeNull();
+  });
+
+  it('names the next preset only inside the lead window before a timer switch', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'timer', intervalSec: 20 });
+    expect(PREPARE_LEAD_SEC).toBe(3);
+    c.next(16, false, 'a', pool, o);
+    expect(c.upcoming('a', pool, o)).toBeNull();
+    c.next(1.5, false, 'a', pool, o);
+    expect(c.upcoming('a', pool, o)).toBe('b');
+  });
+
+  it('beat mode names the next preset when the minimum gap is nearly over', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'beat', minGapSec: 8 });
+    c.next(4, false, 'a', pool, o);
+    expect(c.upcoming('a', pool, o)).toBeNull();
+    c.next(1.5, false, 'a', pool, o);
+    expect(c.upcoming('a', pool, o)).toBe('b');
+  });
+
+  it('next switches to the announced preset, even when shuffled', () => {
+    const picks = [0.9, 0.0];
+    const c = new AutoCycler(() => picks.shift() ?? 0);
+    const o = opts({ mode: 'timer', intervalSec: 5, shuffle: true });
+    c.next(3, false, 'a', pool, o);
+    const announced = c.upcoming('a', pool, o);
+    expect(announced).toBe('c');
+    expect(c.upcoming('a', pool, o)).toBe('c');
+    expect(c.next(3, false, 'a', pool, o)).toBe('c');
+  });
+
+  it('forgets the announcement after a switch and on reset', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'timer', intervalSec: 5 });
+    c.next(3, false, 'a', pool, o);
+    expect(c.upcoming('a', pool, o)).toBe('b');
+    expect(c.next(3, false, 'a', pool, o)).toBe('b');
+    expect(c.upcoming('b', pool, o)).toBeNull();
+    c.next(3, false, 'b', pool, o);
+    expect(c.upcoming('b', pool, o)).toBe('c');
+    c.reset();
+    expect(c.upcoming('b', pool, o)).toBeNull();
+  });
+
+  it('drops an announcement that left the pool or became the current preset', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'timer', intervalSec: 5 });
+    c.next(3, false, 'a', pool, o);
+    expect(c.upcoming('a', pool, o)).toBe('b');
+    expect(c.upcoming('a', ['a', 'c'], o)).toBe('c');
+    expect(c.upcoming('c', ['a', 'c'], o)).toBe('a');
   });
 });

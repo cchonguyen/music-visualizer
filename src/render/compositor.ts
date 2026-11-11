@@ -5,7 +5,10 @@
 // Rules:
 // - Each scene draws into its own feedback buffers (Scene). The compositor samples each scene's finished texture.
 // - Crossfades blend whole scenes, never individual layers (muddied trails).
-// - A scene is initialised the first time it gets weight, and disposed when its weight returns to 0.
+// - A scene is initialised the first time it gets weight (or earlier, with prepare()). When its weight
+//   returns to 0 it is kept, up to a small count and memory cap, so coming back compiles and allocates
+//   nothing; the oldest kept scenes are disposed first (Slice 16.3).
+// - A fade does not start in the frame a scene is being initialised: the switch waits until it is ready.
 // - At most two scenes can be active at once (the shader has two inputs).
 // - Order: blend -> post chain (+ bloom) -> safety. Safety is always last; no preset can turn it off.
 // - With no post effect set, the post passes are skipped and the output is the old single pass.
@@ -13,6 +16,7 @@ import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { PingPong } from '../gl/fbo';
+import { getRenderScale, scaledBufferSize } from '../gl/size';
 import { type RenderClock } from './clock';
 import { BrightnessLimiter } from './safety';
 import { RELEASE_TAU_SEC, releaseEnvelope } from './releaseEnvelope';
@@ -90,6 +94,25 @@ export function aspectBox(
   };
 }
 
+/** Most scenes kept initialised while off screen. */
+export const RETAIN_MAX_SCENES = 3;
+/** Memory the kept scenes may hold, estimated from their buffer sizes. */
+export const RETAIN_MAX_BYTES = 256 * 1024 * 1024;
+/** A scene holds two feedback buffers and one snapshot buffer, 4 bytes a pixel. */
+const BUFFERS_PER_SCENE = 3;
+
+/** Estimated GPU memory of one initialised scene at this canvas size and render scale. */
+export function sceneBufferBytes(width: number, height: number, renderScale: number): number {
+  const b = scaledBufferSize(width, height, renderScale);
+  return b.width * b.height * 4 * BUFFERS_PER_SCENE;
+}
+
+/** How many off-screen scenes may be kept: the count cap, reduced so their memory stays under the cap. */
+export function retainLimit(width: number, height: number, renderScale: number): number {
+  const per = sceneBufferBytes(width, height, renderScale);
+  return Math.max(0, Math.min(RETAIN_MAX_SCENES, Math.floor(RETAIN_MAX_BYTES / Math.max(1, per))));
+}
+
 export class Compositor implements RenderLayer {
   private scenes = new Map<string, Scene>();
   // `weights` is what is drawn now; `targets` is what the last key press asked for.
@@ -97,6 +120,13 @@ export class Compositor implements RenderLayer {
   private weights = new Map<string, number>();
   private targets = new Map<string, number>();
   private ready = new Set<string>();
+  // Kept scenes that have drawn since they were initialised: their buffers hold an old image, cleared on return.
+  private stale = new Set<string>();
+  // Scenes drawn while they were on screen. When one reaches weight 0 it moves to `stale`.
+  private drawn = new Set<string>();
+  // When each scene was last on screen or prepared (a counter, not a time). The smallest is dropped first.
+  private lastUsed = new Map<string, number>();
+  private useTick = 0;
   private gl: WebGL2RenderingContext | null = null;
   private prog: WebGLProgram | null = null;
   private postProg: WebGLProgram | null = null;
@@ -140,6 +170,8 @@ export class Compositor implements RenderLayer {
     if (old && this.ready.has(scene.name)) {
       old.dispose();
       this.ready.delete(scene.name);
+      this.stale.delete(scene.name);
+      this.drawn.delete(scene.name);
     }
     this.scenes.set(scene.name, scene);
   }
@@ -153,6 +185,9 @@ export class Compositor implements RenderLayer {
       this.scenes.get(name)?.dispose();
       this.ready.delete(name);
     }
+    this.stale.delete(name);
+    this.drawn.delete(name);
+    this.lastUsed.delete(name);
     this.scenes.delete(name);
     this.weights.delete(name);
     this.targets.delete(name);
@@ -280,6 +315,62 @@ export class Compositor implements RenderLayer {
   }
 
   /**
+   * Initialises a scene ahead of its fade, so its shaders compile and its buffers are allocated while it is
+   * still hidden (Slice 16.3). Returns true if the scene is ready. Does nothing before init() or for an unknown name.
+   */
+  prepare(name: string): boolean {
+    const gl = this.gl;
+    const scene = this.scenes.get(name);
+    if (!gl || !scene) return false;
+    if (!this.ready.has(name)) this.initScene(gl, name, scene);
+    this.lastUsed.set(name, ++this.useTick);
+    return true;
+  }
+
+  /** True if the scene is initialised (on screen, prepared, or kept). */
+  isReady(name: string): boolean {
+    return this.ready.has(name);
+  }
+
+  private initScene(gl: WebGL2RenderingContext, name: string, scene: Scene): void {
+    scene.init(gl);
+    scene.resize(this.w, this.h, this.dpr);
+    this.ready.add(name);
+    this.stale.delete(name);
+    this.drawn.delete(name);
+  }
+
+  /**
+   * Makes a scene that should now be shown usable. A kept scene gets its old image cleared; a scene that is not
+   * initialised is initialised. Returns true when it had to be initialised (the expensive case).
+   */
+  private bringUp(gl: WebGL2RenderingContext, name: string): boolean {
+    const scene = this.scenes.get(name);
+    if (!scene) return false;
+    this.lastUsed.set(name, ++this.useTick);
+    if (!this.ready.has(name)) {
+      this.initScene(gl, name, scene);
+      return true;
+    }
+    if (this.stale.delete(name)) scene.clearBuffers();
+    return false;
+  }
+
+  /** Disposes the oldest off-screen scenes beyond what the count and memory caps allow. */
+  private trimKept(): void {
+    const kept = [...this.ready].filter((n) => (this.weights.get(n) ?? 0) === 0 && (this.targets.get(n) ?? 0) === 0);
+    const limit = retainLimit(this.w, this.h, getRenderScale());
+    if (kept.length <= limit) return;
+    kept.sort((x, y) => (this.lastUsed.get(x) ?? 0) - (this.lastUsed.get(y) ?? 0));
+    for (const name of kept.slice(0, kept.length - limit)) {
+      this.scenes.get(name)?.dispose();
+      this.ready.delete(name);
+      this.stale.delete(name);
+      this.drawn.delete(name);
+    }
+  }
+
+  /**
    * Ease each scene's weight toward its target. A scene that is still fading out and a new one
    * fading in can overlap briefly; if that would make three scenes visible (the shader has two
    * inputs), the weakest fading-out scene is snapped to 0 so the cap holds.
@@ -313,6 +404,8 @@ export class Compositor implements RenderLayer {
     this.full = new PingPong(gl, this.w, this.h);
     this.half = new PingPong(gl, Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
     this.ready.clear();
+    this.stale.clear();
+    this.drawn.clear();
     this.limiter.reset();
     this.lastNow = null;
   }
@@ -355,11 +448,7 @@ export class Compositor implements RenderLayer {
         const outScene = this.scenes.get(outName);
         const inScene = this.scenes.get(inName);
 
-        if (inScene && !this.ready.has(inName)) {
-          inScene.init(gl);
-          inScene.resize(this.w, this.h, this.dpr);
-          this.ready.add(inName);
-        }
+        if (inScene) this.bringUp(gl, inName);
 
         if (outScene && inScene && this.ready.has(outName)) {
           inScene.seedFromTexture(outScene.outputTexture());
@@ -369,6 +458,8 @@ export class Compositor implements RenderLayer {
         this.weights.set(outName, 0);
         outScene?.dispose();
         this.ready.delete(outName);
+        this.stale.delete(outName);
+        this.drawn.delete(outName);
 
         // Incoming scene takes over immediately
         this.weights.set(inName, incomingEntry[1]);
@@ -381,11 +472,7 @@ export class Compositor implements RenderLayer {
       } else if (!outgoingEntry && incomingEntry) {
         const inName = incomingEntry[0];
         const inScene = this.scenes.get(inName);
-        if (inScene && !this.ready.has(inName)) {
-          inScene.init(gl);
-          inScene.resize(this.w, this.h, this.dpr);
-          this.ready.add(inName);
-        }
+        if (inScene) this.bringUp(gl, inName);
         this.weights.set(inName, incomingEntry[1]);
         inScene?.setForegroundOpacity(1.0);
       }
@@ -402,24 +489,29 @@ export class Compositor implements RenderLayer {
     } else {
       this.morphing = false;
       this.morphScene = null;
+      // A scene that is about to fade in is made ready first. If that took a compile, the fade starts
+      // next frame, so the compile hitch is not counted into the first step of the fade.
+      let initialising = false;
+      for (const [name, t] of this.targets) {
+        if (t > 0 && this.bringUp(gl, name)) initialising = true;
+      }
       // Bring scenes up and down with their weights (eased toward the key-press targets).
-      this.easeWeights(clock.dtSec);
+      if (!initialising) this.easeWeights(clock.dtSec);
     }
     const active: string[] = [];
     for (const [name, weight] of this.weights) {
       if (weight > 0) {
-        if (!this.ready.has(name)) {
-          const scene = this.scenes.get(name)!;
-          scene.init(gl);
-          scene.resize(this.w, this.h, this.dpr);
-          this.ready.add(name);
-        }
+        if (!this.ready.has(name)) this.bringUp(gl, name);
+        this.lastUsed.set(name, ++this.useTick);
         active.push(name);
       }
     }
 
-    // Each active scene renders its own buffers.
-    for (const name of active) this.scenes.get(name)!.draw(frame, clock);
+    // Each active scene renders its own buffers. It is now stale for whenever it comes back after being kept.
+    for (const name of active) {
+      this.scenes.get(name)!.draw(frame, clock);
+      this.drawn.add(name);
+    }
 
     // Estimated brightness target: loudness-driven, with a dim floor (the limiter enforces the floor).
     const isCalm =
@@ -466,13 +558,11 @@ export class Compositor implements RenderLayer {
       this.blendPass(gl, full.read.texture, null, 1, 0, cap, 1, target);
     }
 
-    // Fades that have finished free their buffers.
-    for (const name of [...this.ready]) {
-      if ((this.weights.get(name) ?? 0) === 0) {
-        this.scenes.get(name)!.dispose();
-        this.ready.delete(name);
-      }
+    // Fades that have finished keep their buffers, up to the cap (oldest first out).
+    for (const name of this.ready) {
+      if ((this.weights.get(name) ?? 0) === 0 && this.drawn.delete(name)) this.stale.add(name);
     }
+    this.trimKept();
   }
 
   private bufferTarget(pass: { framebuffer: WebGLFramebuffer; texture: WebGLTexture }, size: { width: number; height: number }): RenderTarget {
@@ -574,6 +664,8 @@ export class Compositor implements RenderLayer {
     this.morphScene = null;
     for (const name of this.ready) this.scenes.get(name)?.dispose();
     this.ready.clear();
+    this.stale.clear();
+    this.drawn.clear();
     this.full?.dispose();
     this.half?.dispose();
     this.full = null;
