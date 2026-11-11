@@ -27,6 +27,7 @@ uniform float uEffectLength;   // 0.05..1.5
 uniform float uThickness;      // 0.5..10.0
 uniform int uPeakCaps;         // 0 or 1
 uniform float uTime;
+uniform float uTravel;         // 0..1 phase the audio pattern has slid along the path (0 = still)
 uniform int uIsRibbon;         // 1: ribbon (TRIANGLE_STRIP), 0: discrete quads
 
 uniform sampler2D uAudioTex;
@@ -264,13 +265,17 @@ void main() {
   }
 
   // Symmetry mapping to audio coordinate uAudio
-  float uAudio = u;
+  float uSym = u;
+  if (abs(uTravel) > 0.00001) {
+    uSym = fract(u + uTravel);
+  }
+  float uAudio = uSym;
   if (uSymmetry == 1) { // mirror: 0 -> 1 -> 0
-    uAudio = 1.0 - abs(2.0 * u - 1.0);
+    uAudio = 1.0 - abs(2.0 * uSym - 1.0);
   } else if (uSymmetry == 2) { // repeat2
-    uAudio = fract(2.0 * u);
+    uAudio = fract(2.0 * uSym);
   } else if (uSymmetry == 3) { // repeat4
-    uAudio = 1.0 - abs(2.0 * fract(2.0 * u) - 1.0);
+    uAudio = 1.0 - abs(2.0 * fract(2.0 * uSym) - 1.0);
   }
   uAudio = clamp(uAudio, 0.0, 1.0);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames } from '../layers/shape';
+import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames, applyCopyMotion } from '../layers/shape';
 import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
@@ -538,6 +538,51 @@ describe('ShapeLayer', () => {
       expect(spec.min).toBe(0);
       expect(spec.max).toBe(1);
       expect(spec.group).toBe('Audio & Style');
+    });
+  });
+
+  describe('Shape motion over time (Slice 19.3)', () => {
+    it('defaults are all off so existing presets are unchanged', () => {
+      expect(SHAPE_DEFAULTS.pathTravel).toBe(0);
+      expect(SHAPE_DEFAULTS.scaleWobble).toBe(0);
+      expect(SHAPE_DEFAULTS.copyRotation).toBe(0);
+      const t = new Float32Array([1, 0.5, 1, 1, 1.5, 0.25, 1, 1]);
+      const before = Array.from(t);
+      applyCopyMotion(t, 2, 0, 1.3, 0);
+      expect(Array.from(t)).toEqual(before);
+    });
+
+    it('rotates each extra copy by one more step and leaves the first copy alone', () => {
+      const t = new Float32Array([1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1]);
+      applyCopyMotion(t, 3, 0, 0, 90);
+      expect(t[1]).toBeCloseTo(0);
+      expect(t[5]).toBeCloseTo(Math.PI / 2);
+      expect(t[9]).toBeCloseTo(Math.PI);
+    });
+
+    it('wobbles scale around 1 within the set amount', () => {
+      for (let k = 0; k < 50; k++) {
+        const t = new Float32Array([1, 0, 1, 1]);
+        applyCopyMotion(t, 1, 0.3, k * 0.37, 0);
+        expect(t[0]).toBeGreaterThanOrEqual(0.7 - 1e-6);
+        expect(t[0]).toBeLessThanOrEqual(1.3 + 1e-6);
+      }
+    });
+
+    it('slides the travel phase over time and sends it to the shader', () => {
+      const layer = new ShapeLayer({ pathTravel: 1, audioSource: 'energy' });
+      layer.init(gl);
+      layer.draw(makeMockFrame(), { timeSec: 1, dtSec: 0.25, frameIndex: 1 }, mockTarget);
+      expect(gl.uniformValues.get('uTravel')).toBeCloseTo(0.25);
+      const still = new ShapeLayer({ audioSource: 'energy' });
+      still.init(gl);
+      still.draw(makeMockFrame(), { timeSec: 1, dtSec: 0.25, frameIndex: 1 }, mockTarget);
+      expect(gl.uniformValues.get('uTravel')).toBe(0);
+    });
+
+    it('vertex shader only shifts the path lookup when travel is non-zero', () => {
+      expect(vertSrc).toContain('uniform float uTravel;');
+      expect(vertSrc).toContain('abs(uTravel) > 0.00001');
     });
   });
 
