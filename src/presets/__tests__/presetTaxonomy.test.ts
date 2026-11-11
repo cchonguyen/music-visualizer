@@ -7,6 +7,9 @@ import {
   type SystemSubfolder,
   SCHEMAS,
 } from '../builtin';
+import { PRESET_THEMES, PRESET_MOODS } from '../format';
+import { PRESET_TAXONOMY } from '../builtin';
+import { presetCost } from '../cost';
 import {
   PresetSession,
   type SceneHost,
@@ -268,5 +271,41 @@ describe('Stage 19 showcase presets 25 and 26 (Slice 19.11)', () => {
       expect(l.params.audioSource!.value).toBe('scope');
     }
     expect(preset.post.bloom!.value as number).toBeGreaterThan(0);
+  });
+});
+
+describe('Slice 20.7: every built-in preset has a theme, a mood and a cost level', () => {
+  it('tags every preset with a known theme and mood', () => {
+    for (const entry of ALL_PRESETS) {
+      expect(PRESET_THEMES, `${entry.id} theme`).toContain(entry.preset.theme);
+      expect(PRESET_MOODS, `${entry.id} mood`).toContain(entry.preset.mood);
+    }
+  });
+
+  it('has a cost level for every preset', () => {
+    for (const entry of ALL_PRESETS) {
+      expect(['light', 'medium', 'heavy'], entry.id).toContain(presetCost(entry.preset).level);
+    }
+  });
+
+  it('keeps no table row for a preset that does not exist', () => {
+    const ids = new Set(ALL_PRESETS.map((e) => e.id));
+    for (const id of Object.keys(PRESET_TAXONOMY)) expect(ids.has(id), id).toBe(true);
+    expect(Object.keys(PRESET_TAXONOMY).length).toBe(ALL_PRESETS.length);
+  });
+
+  it('spreads the set across several themes and moods', () => {
+    const themes = new Set(ALL_PRESETS.map((e) => e.preset.theme));
+    const moods = new Set(ALL_PRESETS.map((e) => e.preset.mood));
+    expect(themes.size).toBeGreaterThanOrEqual(6);
+    expect(moods.size).toBeGreaterThanOrEqual(5);
+  });
+
+  it('the built-in list reaches the session with the theme and mood intact', () => {
+    const session = new PresetSession(fakeHost(), SCHEMAS, memoryStorage());
+    for (const entry of ALL_PRESETS) session.addBuiltin(entry.id, entry.preset);
+    const first = ALL_PRESETS[0]!;
+    expect(session.get(first.id)!.preset.theme).toBe(first.preset.theme);
+    expect(session.get(first.id)!.preset.mood).toBe(first.preset.mood);
   });
 });
