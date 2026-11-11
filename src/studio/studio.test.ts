@@ -2275,6 +2275,9 @@ describe('Studio Expand All and Collapse All buttons', () => {
       sceneOf: vi.fn().mockReturnValue({ layers: [{}], setFeedback: vi.fn() }),
       commit: vi.fn(),
       refreshPost: vi.fn(),
+      isSolo: () => false,
+      isMuted: () => false,
+      monitorOf: () => undefined,
     };
 
     const studio = new Studio(container as any, {
@@ -2964,5 +2967,56 @@ describe('Basic and Advanced views (Slice 15.4)', () => {
   it('defaults to basic with no storage at all', () => {
     vi.stubGlobal('localStorage', undefined);
     expect(loadStudioView()).toBe('basic');
+  });
+});
+
+describe('Studio duplicate, solo and mute controls (Slice 15.6)', () => {
+  async function setup() {
+    const { PresetSession } = await import('../presets/session');
+    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const host = {
+      setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
+      setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
+    };
+    const session = new PresetSession(host as any, SCHEMAS, undefined as any);
+    for (const b of BUILTIN_PRESETS) session.addBuiltin(b.id, b.preset);
+    session.show('flight');
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+    let pane: any = null;
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory: () => (pane = createMockPane()),
+    });
+    studio.bind('flight');
+    const current = () => pane;
+    return { session, studio, current };
+  }
+
+  it('Duplicate layer button copies the selected layer directly after it', async () => {
+    const { session, current } = await setup();
+    const layers = session.get('flight')!.preset.layers;
+    const before = layers.length;
+    const first = JSON.stringify(layers[0]);
+    current().buttons.find((b: any) => b.title === 'Duplicate layer').fire('click');
+    expect(layers).toHaveLength(before + 1);
+    expect(JSON.stringify(layers[1])).toBe(first);
+    expect(layers[1]).not.toBe(layers[0]);
+  });
+
+  it('Solo and Mute controls change what the preview renders without touching the preset', async () => {
+    const { session, current } = await setup();
+    const saved = JSON.stringify(session.get('flight')!.preset);
+    const total = session.sceneOf('flight').layers.length;
+    current().bindings.find((b: any) => b.options?.label === 'Mute (preview only)').fire('change', true);
+    expect(session.sceneOf('flight').layers).toHaveLength(total - 1);
+    current().bindings.find((b: any) => b.options?.label === 'Mute (preview only)').fire('change', false);
+    current().bindings.find((b: any) => b.options?.label === 'Solo (preview only)').fire('change', true);
+    expect(session.sceneOf('flight').layers).toHaveLength(1);
+    expect(JSON.stringify(session.get('flight')!.preset)).toBe(saved);
+    expect(session.exportJson('flight')).not.toMatch(/solo|mute/i);
   });
 });

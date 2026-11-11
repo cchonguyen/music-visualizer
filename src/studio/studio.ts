@@ -5,6 +5,7 @@
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
+import { isLayerRendered } from '../presets/session';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
@@ -979,10 +980,25 @@ export class Studio {
         id,
         (spec) => renderHelperContent(this.helperBar, spec),
       );
+      const mon = { solo: session.isSolo(id, this.selected), mute: session.isMuted(id, this.selected) };
+      pane.addBinding(mon, 'solo', { label: 'Solo (preview only)' }).on('change', (ev) => {
+        session.setSolo(id, this.selected, Boolean(ev.value));
+        this.bind(id);
+      });
+      pane.addBinding(mon, 'mute', { label: 'Mute (preview only)' }).on('change', (ev) => {
+        session.setMute(id, this.selected, Boolean(ev.value));
+        this.bind(id);
+      });
+      pane.addButton({ title: 'Duplicate layer' }).on('click', () => {
+        this.selected = session.duplicateLayer(id, this.selected);
+        this.locked.clear();
+        this.bind(id);
+      });
       pane.addButton({ title: 'Move layer up' }).on('click', () => this.move(-1));
       pane.addButton({ title: 'Move layer down' }).on('click', () => this.move(1));
       pane.addButton({ title: 'Remove layer' }).on('click', () => {
         preset.layers.splice(this.selected, 1);
+        session.shiftMonitorAfterRemove(id, this.selected);
         this.structure();
       });
     }
@@ -1020,7 +1036,7 @@ export class Studio {
     let live = 0;
     for (let i = 0; i < preset.layers.length; i++) {
       const layerEntry = preset.layers[i]!;
-      if (!layerEntry.enabled) continue;
+      if (!isLayerRendered(layerEntry, i, session.monitorOf(id))) continue;
       const k = live++;
       const title = layerEntry.type === 'shape'
         ? formatLayerTitle(layerEntry, i)
@@ -1244,6 +1260,7 @@ export class Studio {
     const target = this.selected + delta;
     if (target < 0 || target >= layers.length) return;
     [layers[this.selected], layers[target]] = [layers[target]!, layers[this.selected]!];
+    this.opts.session.swapMonitor(this.id, this.selected, target);
     this.selected = target;
     this.structure();
   }

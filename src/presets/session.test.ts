@@ -4,6 +4,7 @@ import {
   USER_PRESETS_KEY,
   USER_PRESET_FOLDERS_KEY,
   SYSTEM_TAG_OVERRIDES_KEY,
+  layerId,
   type SceneHost,
   type RemotePresetWriter,
 } from './session';
@@ -889,5 +890,83 @@ describe('system preset remote writes (Slice 11.9)', () => {
     await flush();
     expect(s.get('crown')).toBeDefined();
     expect(s.get('flight')).toBeUndefined();
+  });
+});
+
+describe('duplicate, solo and mute layer (Slice 15.6)', () => {
+  const layerCount = (id: string) => session.get(id)!.preset.layers.length;
+
+  it('duplicate inserts an equal-settings copy with a new id directly after the original', () => {
+    session.show('flight');
+    const layers = session.get('flight')!.preset.layers;
+    const before = layers.length;
+    const original = layers[1]!;
+    const originalJson = JSON.stringify(original);
+    const at = session.duplicateLayer('flight', 1);
+    expect(at).toBe(2);
+    expect(layerCount('flight')).toBe(before + 1);
+    const copy = layers[2]!;
+    expect(copy).not.toBe(original);
+    expect(copy.type).toBe(original.type);
+    expect(JSON.stringify(copy)).toBe(originalJson);
+    expect(layerId(copy)).not.toBe(layerId(original));
+    // A deep copy: editing the copy leaves the original alone.
+    const firstKey = Object.keys(copy.params)[0];
+    if (firstKey) (copy.params[firstKey] as { value: unknown }).value = 12345;
+    expect(JSON.stringify(original)).toBe(originalJson);
+    expect(session.sceneOf('flight').layers).toHaveLength(before + 1);
+  });
+
+  it('solo with several layers renders only the soloed ones', () => {
+    session.show('flight');
+    session.setSolo('flight', 0, true);
+    expect(session.sceneOf('flight').layers).toHaveLength(1);
+    session.setSolo('flight', 2, true);
+    expect(session.sceneOf('flight').layers).toHaveLength(2);
+    session.setSolo('flight', 0, false);
+    session.setSolo('flight', 2, false);
+    expect(session.sceneOf('flight').layers).toHaveLength(3);
+  });
+
+  it('mute skips the layer and unmute restores it', () => {
+    session.show('flight');
+    session.setMute('flight', 1, true);
+    expect(session.sceneOf('flight').layers).toHaveLength(2);
+    expect(session.isMuted('flight', 1)).toBe(true);
+    session.setMute('flight', 1, false);
+    expect(session.sceneOf('flight').layers).toHaveLength(3);
+  });
+
+  it('mute wins over solo on the same layer', () => {
+    session.show('flight');
+    session.setSolo('flight', 0, true);
+    session.setMute('flight', 0, true);
+    expect(session.sceneOf('flight').layers).toHaveLength(0);
+  });
+
+  it('solo and mute never appear in serialised output or change the saved bytes', () => {
+    const plain = session.exportJson('flight');
+    const plainWorking = JSON.stringify(session.get('flight')!.preset);
+    session.show('flight');
+    session.setSolo('flight', 0, true);
+    session.setMute('flight', 1, true);
+    expect(session.exportJson('flight')).toBe(plain);
+    expect(JSON.stringify(session.get('flight')!.preset)).toBe(plainWorking);
+    expect(session.isDirty('flight')).toBe(false);
+    expect(plain).not.toMatch(/solo|mute/i);
+    const id = session.saveAs('flight', 'Copy');
+    expect(session.exportJson(id)).toBe(plain.replace(/"name":\s*"[^"]*"/, (m) => m.replace(/"[^"]*"$/, '"Copy"')));
+  });
+
+  it('marks follow their layers when a layer is duplicated, removed or swapped', () => {
+    session.show('flight');
+    session.setMute('flight', 2, true);
+    session.duplicateLayer('flight', 0);
+    expect(session.isMuted('flight', 3)).toBe(true);
+    expect(session.isMuted('flight', 2)).toBe(false);
+    session.swapMonitor('flight', 3, 1);
+    expect(session.isMuted('flight', 1)).toBe(true);
+    session.shiftMonitorAfterRemove('flight', 0);
+    expect(session.isMuted('flight', 0)).toBe(true);
   });
 });
