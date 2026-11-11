@@ -7,6 +7,7 @@
 
 import type { AudioFrame, BandLevels } from "../audio/types";
 import { isEditableTarget } from "./controls";
+import { formatTable, reportToJson, type BenchmarkReport } from "../render/benchmark";
 
 /** Shape of one latency estimate, matching src/audio/latency.ts. */
 export interface PanelLatency {
@@ -143,4 +144,65 @@ export class DebugPanel {
     if (e.key !== "d" && e.key !== "D") return;
     this.toggle();
   };
+}
+
+/**
+ * Benchmark mode overlay (Slice 16.1): shows progress while the run is going, then the results
+ * table and a Copy JSON button. Mounted only when the `?benchmark` URL flag is on.
+ */
+export class BenchmarkPanel {
+  private readonly root: HTMLDivElement;
+  private readonly text: HTMLPreElement;
+  private readonly copyBtn: HTMLButtonElement;
+  private json = "";
+
+  constructor(parent: HTMLElement = document.body) {
+    this.root = document.createElement("div");
+    this.root.style.cssText =
+      "position:fixed;top:8px;right:8px;z-index:10000;max-width:92vw;max-height:90vh;overflow:auto;" +
+      "font:12px/1.5 ui-monospace,Menlo,monospace;color:#cfe8ff;background:rgba(8,12,20,.92);" +
+      "border:1px solid #2a3548;border-radius:6px;padding:8px 10px;";
+    this.text = document.createElement("pre");
+    this.text.style.cssText = "margin:0;white-space:pre;";
+    this.copyBtn = document.createElement("button");
+    this.copyBtn.type = "button";
+    this.copyBtn.textContent = "Copy results as JSON";
+    this.copyBtn.hidden = true;
+    this.copyBtn.style.cssText = "margin-top:8px;font:inherit;padding:4px 8px;cursor:pointer;";
+    this.copyBtn.addEventListener("click", () => {
+      void this.copy();
+    });
+    this.root.append(this.text, this.copyBtn);
+    parent.append(this.root);
+  }
+
+  showProgress(current: number, total: number, name: string): void {
+    this.text.textContent = `Benchmark running: preset ${current} of ${total}\n${name}\nLeave this tab in front and do not resize the window.`;
+  }
+
+  showResults(report: BenchmarkReport): void {
+    this.json = reportToJson(report);
+    const env = report.environment;
+    this.text.textContent =
+      `Benchmark done (${report.secondsPerPreset} s per preset)\n` +
+      `${env.renderer}\n${env.canvasWidth}x${env.canvasHeight} px, pixel ratio ${env.devicePixelRatio}, ` +
+      `GPU timer ${env.gpuTimer ? "yes" : "no"}\ntimes in ms\n\n` +
+      formatTable(report);
+    this.copyBtn.hidden = false;
+  }
+
+  private async copy(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.json);
+      this.copyBtn.textContent = "Copied";
+    } catch {
+      // Clipboard blocked: show the JSON so it can be selected by hand.
+      this.text.textContent = this.json;
+      this.copyBtn.textContent = "Select the text above and copy it";
+    }
+  }
+
+  dispose(): void {
+    this.root.remove();
+  }
 }

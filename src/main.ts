@@ -31,7 +31,8 @@ import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
 import { isEditableTarget, setupControls, sourceName, type ControlsState } from './ui/controls';
-import { DebugPanel } from './ui/debugPanel';
+import { BenchmarkPanel, DebugPanel } from './ui/debugPanel';
+import { BenchmarkRunner, GpuTimedLayer, benchmarkSeconds } from './render/benchmark';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice } from './ui/notices';
 import { getGlobalDirector } from './render/globalDirector';
@@ -186,6 +187,8 @@ function start(): void {
   const params = new URLSearchParams(location.search);
   let compositor: Compositor | null = null;
   let session: PresetSession | null = null;
+  const benchSeconds = benchmarkSeconds(params);
+  let benchLayer: GpuTimedLayer | null = null;
   const linkRunner = new LinkRunner();
   const director = getGlobalDirector();
   // Auto-cycle (T2): off by default. Keys: C timer, B beat, X shuffle.
@@ -229,7 +232,13 @@ function start(): void {
     // keys 0 / 1 / 2 keep their old meaning (Crown / Flight / Bars).
     const comp = new Compositor([]);
     compositor = comp;
-    host.addLayer(comp);
+    // Benchmark mode (?benchmark): the compositor is drawn through a GPU-timing wrapper.
+    if (benchSeconds !== null) {
+      benchLayer = new GpuTimedLayer(comp);
+      host.addLayer(benchLayer);
+    } else {
+      host.addLayer(comp);
+    }
     session = new PresetSession(comp, SCHEMAS, safeStorage(), {
       adminGateway,
       remoteWriter: {
@@ -376,6 +385,24 @@ function start(): void {
   };
   const controls = setupControls(engine, state);
   const panel = new DebugPanel();
+
+  // Benchmark mode (Slice 16.1): runs every preset on the kick test signal, with auto-cycle off.
+  let bench: BenchmarkRunner | null = null;
+  let benchPanel: BenchmarkPanel | null = null;
+  let benchReported = false;
+  if (benchSeconds !== null && session && switchShown) {
+    const liveSession = session;
+    const show = switchShown;
+    engine.useTestSignal('kick');
+    bench = new BenchmarkRunner(
+      liveSession.list().map((e) => ({ id: e.id, name: e.preset.name })),
+      benchSeconds,
+      show,
+    );
+    benchPanel = new BenchmarkPanel();
+    if (benchLayer) benchLayer.onGpu = (ms) => bench?.onGpu(ms);
+    bench.start();
+  }
 
   const isCalmFriendlyPreset = (preset?: Preset | null): boolean => {
     if (!preset) return false;
@@ -525,6 +552,25 @@ function start(): void {
           : null,
     });
     controls.tick();
+    if (bench && benchPanel && !benchReported) {
+      if (bench.done) {
+        benchReported = true;
+        benchPanel.showResults(
+          bench.report({
+            userAgent: navigator.userAgent,
+            renderer: benchLayer?.renderer ?? 'unknown',
+            devicePixelRatio: window.devicePixelRatio || 1,
+            canvasWidth: canvas.width,
+            canvasHeight: canvas.height,
+            gpuTimer: Boolean(benchLayer?.timer),
+          }),
+        );
+      } else {
+        bench.onFrame({ intervalMs: displayFrameMs, cpuMs: frameMs });
+        const pos = bench.position;
+        benchPanel.showProgress(pos.current, pos.total, bench.currentName);
+      }
+    }
     // One shared sway per frame (tunnel, particles, crown read it). Calm turns it off.
     advanceSway(displayFrameMs / 1000, frame.norm.mid, state.calm);
     // P5: crown heights once per frame (particles launch from them). Visual gain is applied inside.
@@ -565,7 +611,7 @@ function start(): void {
     // affects only this frame's drawing, never the analysis state.
     if (state.calm) frame.env.sub *= CALM_SCALE;
     // Auto-cycle (T2): pick the next preset when the timer or a strong beat says so.
-    if (session && switchShown && cycle.mode !== 'off') {
+    if (session && switchShown && cycle.mode !== 'off' && !bench) {
       const shownId = session.shownId ?? 'crown';
       const cycleOpts: CycleOptions = { ...cycle, calmOnly: state.calm };
       const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags })), cycleOpts);
