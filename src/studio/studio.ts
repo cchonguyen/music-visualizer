@@ -210,6 +210,71 @@ export function attachSpecHelper(
   }
 }
 
+/** True when `value` differs from the spec default (arrays compare per item, text case-insensitively). */
+export function isChangedFromDefault(spec: ParamSpec, value: unknown): boolean {
+  const def = (spec as any).default as unknown;
+  if (Array.isArray(def)) {
+    return !Array.isArray(value) || def.length !== value.length || def.some((d, i) => d !== (value as unknown[])[i]);
+  }
+  if (typeof def === 'string' && typeof value === 'string') return def.toLowerCase() !== value.toLowerCase();
+  return value !== def;
+}
+
+/**
+ * Add a per-control reset button and a "changed" marker to the blade rows of one control (Slice 15.5).
+ * Reset writes the spec default (never the current value) into the holder and then calls `onChange`,
+ * the same callback a normal edit uses, so the preview and saved state update the same way.
+ */
+export function attachResetControl(
+  blades: any[],
+  spec: ParamSpec,
+  holder: Record<string, any>,
+  key: string,
+  onChange: () => void,
+): { update: () => void; reset: () => void } {
+  const rows = blades.filter((b) => b && typeof b === 'object');
+  const first: HTMLElement | undefined = rows[0]?.element;
+  const doc = first?.ownerDocument || (typeof document !== 'undefined' ? document : null);
+  const update = () => {
+    const changed = isChangedFromDefault(spec, holder[key]);
+    for (const b of rows) {
+      const el: HTMLElement | undefined = b.element;
+      if (!el?.classList) continue;
+      if (changed) el.classList.add('studio-changed');
+      else el.classList.remove('studio-changed');
+    }
+    const btn = (first as any)?.__resetBtn as HTMLElement | undefined;
+    if (btn) btn.hidden = !changed;
+  };
+  const reset = () => {
+    const def = (spec as any).default as unknown;
+    if (!isChangedFromDefault(spec, holder[key])) return;
+    if (Array.isArray(def) && Array.isArray(holder[key])) {
+      // Edit the vec3 in place: the three bindings point at its items.
+      def.forEach((d, i) => { (holder[key] as unknown[])[i] = d; });
+    } else {
+      holder[key] = Array.isArray(def) ? [...def] : def;
+    }
+    for (const b of rows) b.refresh?.();
+    update();
+    onChange();
+  };
+  if (first && doc) {
+    const btn = doc.createElement('button');
+    btn.type = 'button';
+    btn.className = 'studio-reset';
+    btn.title = 'Reset to default';
+    btn.setAttribute('aria-label', `Reset ${spec.label} to default`);
+    btn.textContent = '\u21BA';
+    btn.addEventListener('click', (ev: Event) => { ev.stopPropagation?.(); reset(); });
+    first.appendChild(btn);
+    (first as any).__resetBtn = btn;
+  }
+  for (const b of rows) b.on?.('change', update);
+  update();
+  return { update, reset };
+}
+
 export const SYSTEM_OPTGROUP_LABELS = {
   showcase: 'System: Stage 9 Showcase (13–20)',
   flagship: 'System: Flagship Generative (01–12)',
@@ -1458,6 +1523,7 @@ export function buildLayerControls(
     step: OPACITY_SPEC.step,
   }).on('change', onLayerConfigChange);
   attachSpecHelper(opacityBinding, OPACITY_SPEC, onHelperUpdate);
+  attachResetControl([opacityBinding], OPACITY_SPEC, entry as any, opacityKey, onLayerConfigChange);
 
   const blendKey = (BLEND_SPEC as any).key ?? BLEND_SPEC.name;
   const blendBinding = pane.addBinding(entry as unknown as Record<string, unknown>, blendKey, {
@@ -1465,6 +1531,7 @@ export function buildLayerControls(
     options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
   }).on('change', onLayerConfigChange);
   attachSpecHelper(blendBinding, BLEND_SPEC, onHelperUpdate);
+  attachResetControl([blendBinding], BLEND_SPEC, entry as any, blendKey, onLayerConfigChange);
 
   if (entry.trails === undefined) {
     entry.trails = TRAILS_SPEC.default;
@@ -1474,6 +1541,7 @@ export function buildLayerControls(
     label: TRAILS_SPEC.label,
   }).on('change', onLayerConfigChange);
   attachSpecHelper(trailsBinding, TRAILS_SPEC, onHelperUpdate);
+  attachResetControl([trailsBinding], TRAILS_SPEC, entry as any, trailsKey, onLayerConfigChange);
 
   return { opacityBinding, blendBinding, trailsBinding };
 }
@@ -1691,6 +1759,7 @@ export function bindSpec(
       attachSpecHelper(b, spec, onHelperUpdate);
     }
   }
+  attachResetControl(blades, spec, holder, key, onChange);
 
   return result;
 }
