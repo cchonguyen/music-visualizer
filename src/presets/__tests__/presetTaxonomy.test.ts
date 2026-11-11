@@ -219,7 +219,8 @@ describe('Stage 18 showcase presets 21 to 24 (Slice 18.10)', () => {
 
   it('every earlier preset is untouched: none has a warp stack, a colour map or a new bloom option', () => {
     for (const p of ALL_PRESETS) {
-      if (NEW_IDS.includes(p.id)) continue;
+      // The four flagships below were tuned in slice 20.8 on purpose, so they are exempt here.
+      if (NEW_IDS.includes(p.id) || ['01-curl-fluid-warp', '02-kaleidoscopic-mandala', '03-solarized-contour-rings', '04-mobius-dual-vortex'].includes(p.id)) continue;
       expect(p.preset.warp, p.id).toBeUndefined();
       expect(p.preset.post.colourMap!.value, p.id).toBe(0);
       expect(p.preset.post.bloomSize!.value, p.id).toBe(0);

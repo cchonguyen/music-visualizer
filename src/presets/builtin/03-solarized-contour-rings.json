@@ -132,6 +132,13 @@
       "value": 0.22
     }
   },
+  "warp": [
+    { "type": "ripple", "enabled": true, "params": { "amount": 0.1, "scale": 1.2, "speed": 0.25 } }
+  ],
+  "reactions": [
+    { "trigger": { "type": "beat" }, "response": "kick", "target": { "group": "feedback", "name": "contourFreq" }, "amount": 0.05, "ease": 0.3 },
+    { "trigger": { "type": "everyNSeconds", "n": 10 }, "response": "drift", "target": { "group": "post", "name": "colourMapMix" }, "amount": 0.5, "ease": 7 }
+  ],
   "layers": [
     {
       "type": "shape",
@@ -410,6 +417,21 @@
     },
     "crtBarrel": {
       "value": 0
+    },
+    "colourMap": {
+      "value": 0.45
+    },
+    "colourMapBy": {
+      "value": "brightness"
+    },
+    "colourMapGradient": {
+      "value": "heat"
+    },
+    "colourMapGradient2": {
+      "value": "ice"
+    },
+    "colourMapMix": {
+      "value": 0.25
     }
   },
   "directorProfile": {

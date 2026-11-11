@@ -15,6 +15,13 @@
     "decayRgb": [0.95, 0.91, 0.96],
     "hueDrift": 0.018
   },
+  "warp": [
+    { "type": "flow", "params": { "amount": 0.16, "scale": 1.4, "speed": 0.3 } }
+  ],
+  "reactions": [
+    { "trigger": { "type": "beat" }, "response": "kick", "target": { "group": "feedback", "name": "zoom" }, "amount": 0.06, "ease": 0.4 },
+    { "trigger": { "type": "everyNSeconds", "n": 8 }, "response": "drift", "target": { "group": "post", "name": "colourMapMix" }, "amount": 0.5, "ease": 6 }
+  ],
   "layers": [
     {
       "type": "shape",
@@ -42,5 +49,11 @@
       }
     }
   ],
-  "post": {}
+  "post": {
+    "colourMap": 0.35,
+    "colourMapBy": "distance",
+    "colourMapGradient": "aurora",
+    "colourMapGradient2": "ocean",
+    "colourMapMix": 0.3
+  }
 }

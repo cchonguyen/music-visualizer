@@ -14,6 +14,14 @@
     "decay": 0.90,
     "decayRgb": [0.92, 0.91, 0.96]
   },
+  "warp": [
+    { "type": "swirl", "params": { "amount": 0.14, "scale": 1, "speed": 0.2 } }
+  ],
+  "reactions": [
+    { "trigger": { "type": "beat" }, "response": "kick", "target": { "group": "feedback", "name": "zoom" }, "amount": 0.07, "ease": 0.35 },
+    { "trigger": { "type": "everyNBeats", "n": 8 }, "response": "flip", "target": { "group": "feedback", "name": "rotate" }, "amount": 0, "ease": 0.5 },
+    { "trigger": { "type": "loudJump" }, "response": "kick", "target": { "group": "post", "name": "colourMapMix" }, "amount": 0.7, "ease": 1.2 }
+  ],
   "layers": [
     {
       "type": "particles",
@@ -76,5 +84,11 @@
       }
     }
   ],
-  "post": {}
+  "post": {
+    "colourMap": 0.35,
+    "colourMapBy": "angle",
+    "colourMapGradient": "ember",
+    "colourMapGradient2": "neon",
+    "colourMapMix": 0.2
+  }
 }
