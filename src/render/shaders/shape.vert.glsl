@@ -274,9 +274,10 @@ void main() {
   }
   uAudio = clamp(uAudio, 0.0, 1.0);
 
-  // Sample audio amplitude and peak hold
-  float audioAmp = texture(uAudioTex, vec2(uAudio, 0.5)).r;
-  float peakHold = texture(uPeakTex, vec2(uAudio, 0.5)).r;
+  // Sample audio amplitude and peak hold (ceiling matches SHAPE_AMP_MAX in shape.ts)
+  const float AMP_MAX = 10.0;
+  float audioAmp = min(texture(uAudioTex, vec2(uAudio, 0.5)).r, AMP_MAX);
+  float peakHold = min(texture(uPeakTex, vec2(uAudio, 0.5)).r, AMP_MAX);
 
   // Apply instance audio delay attenuation
   float delayScale = uInstTransform[propIdx].w;

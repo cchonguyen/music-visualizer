@@ -415,7 +415,7 @@ export interface ShapeParams {
 
   // Category 5 — Audio & Style Tuning ("Audio & Style")
   audioSource: ShapeAudioSource;
-  reactivity: number;     // 0..3.0
+  reactivity: number;     // 0..15.0 (old ceiling 3.0, raised 5x in Slice 15.8)
   attackMs: number;       // 5..200
   releaseMs: number;      // 20..600
   colorMode: ShapeColorMode;
@@ -508,7 +508,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
 
   // Category 5 — Audio & Style Tuning ("Audio & Style")
   { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy'], description: 'Selects audio signal spectrum or waveform driving reactive modulation.' },
-  { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 3.0, step: 0.05, description: 'Scales overall dynamic sensitivity to audio input peaks.' },
+  { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 15.0, step: 0.05, description: 'Scales overall dynamic sensitivity to audio input peaks.' },
   { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5, description: 'Sets smoothing attack response time in milliseconds for transient swells.' },
   { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10, description: 'Sets smoothing decay release time in milliseconds for sustained tails.' },
   { type: 'enum', name: 'colorMode', label: 'Color mode', group: 'Audio & Style', default: SHAPE_DEFAULTS.colorMode, options: ['solid', 'palette', 'frequencyGradient', 'amplitudeHot'], description: 'Configures shader color mapping and palette gradient distribution.' },
