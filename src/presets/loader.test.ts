@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { buildScene, createLayersFromPreset, hasCrownLayer, LAYER_FACTORIES } from './loader';
+import { applyLinkedPreset, buildScene, createLayersFromPreset, hasCrownLayer, LAYER_FACTORIES } from './loader';
+import { LinkRunner } from './links';
+import { previewPreset } from './session';
+import type { AudioFrame } from '../audio/types';
+import type { Preset } from './format';
 import { BUILTIN_PRESETS } from './builtin';
 import { parsePreset, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
@@ -249,5 +253,41 @@ describe('legacyShapeMigration', () => {
     const layers = createLayersFromPreset(preset, { migrateLegacy: true });
     expect(layers).toHaveLength(1);
     expect(layers[0]).toBeInstanceOf(ShapeLayer);
+  });
+});
+
+describe('applyLinkedPreset with a muted layer', () => {
+  const tunnel = (ringDensity: number) => ({
+    type: 'tunnel',
+    enabled: true,
+    opacity: 1,
+    blend: 'max' as const,
+    params: { ringDensity: { value: ringDensity } },
+  });
+  const preset = {
+    version: PRESET_VERSION,
+    name: 'mute-test',
+    tags: [],
+    transition: { style: 'cut', seconds: 0 },
+    feedback: {},
+    post: {},
+    layers: [tunnel(0.5), tunnel(1.5)],
+  } as unknown as Preset;
+  const inputs = { frame: {} as AudioFrame, timeSec: 0, sectionContrast: 0 };
+
+  it('maps link values to the previewed layers, not the raw preset layers', () => {
+    const state = { solo: new Set<number>(), mute: new Set<number>([0]) };
+    const shownPreset = previewPreset(preset, state);
+    const scene = buildScene('mute-test', shownPreset);
+    expect(scene.layers).toHaveLength(1);
+    applyLinkedPreset(shownPreset, scene, new LinkRunner(), 'mute-test', inputs, 0.016);
+    expect((scene.layers[0] as unknown as { p: { ringDensity: number } }).p.ringDensity).toBe(1.5);
+  });
+
+  it('raw preset would feed the muted layer values to the surviving layer', () => {
+    const state = { solo: new Set<number>(), mute: new Set<number>([0]) };
+    const scene = buildScene('mute-test', previewPreset(preset, state));
+    applyLinkedPreset(preset, scene, new LinkRunner(), 'mute-test', inputs, 0.016);
+    expect((scene.layers[0] as unknown as { p: { ringDensity: number } }).p.ringDensity).toBe(0.5);
   });
 });

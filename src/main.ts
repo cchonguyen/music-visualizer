@@ -579,7 +579,7 @@ function start(): void {
       const entry = session.get(shown);
       if (entry) crownOn = hasCrownLayer(entry.preset);
       if (entry && hasLinks(entry.preset)) {
-        const post = applyLinkedPreset(entry.preset, session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec);
+        const post = applyLinkedPreset(session.previewOf(shown), session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec);
         compositor?.setPost(post);
       }
     }
