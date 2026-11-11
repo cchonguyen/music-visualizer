@@ -29,6 +29,34 @@ export function calmFactor(calm: boolean): number {
   return calm ? 0.5 : 1.0;
 }
 
+/**
+ * Viewer intensity setting (slice 21.3). Full is exactly today's limits. Reduced and Calm
+ * only tighten them: a lower rise rate, fewer reversals allowed per second, and a lower
+ * peak cap. No setting may exceed the Full values (enforced in safety.test.ts).
+ */
+export type Intensity = 'full' | 'reduced' | 'calm';
+
+export interface IntensityLimits {
+  /** Max cap rise per second (Full: RISE_PER_SEC). */
+  risePerSec: number;
+  /** Reversals per second allowed before damping engages (Full: MAX_REVERSALS_PER_SEC). */
+  maxReversalsPerSec: number;
+  /** Hard ceiling on the cap; 1.0 means no extra ceiling (Full). */
+  ceiling: number;
+}
+
+export const INTENSITY_LIMITS: Readonly<Record<Intensity, IntensityLimits>> = {
+  full: { risePerSec: RISE_PER_SEC, maxReversalsPerSec: MAX_REVERSALS_PER_SEC, ceiling: 1.0 },
+  reduced: { risePerSec: 0.2, maxReversalsPerSec: 3, ceiling: 0.9 },
+  calm: { risePerSec: 0.15, maxReversalsPerSec: 2, ceiling: 0.75 },
+};
+
+export const INTENSITY_OPTIONS: readonly Intensity[] = ['full', 'reduced', 'calm'];
+
+export function isIntensity(value: unknown): value is Intensity {
+  return typeof value === 'string' && (INTENSITY_OPTIONS as readonly string[]).includes(value);
+}
+
 export class BrightnessLimiter {
   private cap = CAP_FLOOR;
   private clock = 0;
@@ -36,7 +64,21 @@ export class BrightnessLimiter {
   private lastDirection = 0; // -1 = falling, 1 = rising, 0 = none
   private reversalTimes: number[] = [];
   private _reversalDamp = 0;
+  private _intensity: Intensity = 'full';
+  private limits: IntensityLimits = INTENSITY_LIMITS.full;
   public calm = false;
+
+  /** Current viewer intensity. Survives reset(), since it is a user setting. */
+  get intensity(): Intensity {
+    return this._intensity;
+  }
+
+  /** Switch intensity. Unknown values fall back to Full, the widest allowed profile. */
+  setIntensity(intensity: Intensity): void {
+    const next = isIntensity(intensity) ? intensity : 'full';
+    this._intensity = next;
+    this.limits = INTENSITY_LIMITS[next];
+  }
 
   /** Calm factor for compositor uniform state: 1.0 normal, 0.5 when Calm mode is enabled. */
   get calmFactor(): number {
@@ -94,8 +136,9 @@ export class BrightnessLimiter {
 
       // Increase damping when reversals exceed 3 per second
       const count = this.reversalTimes.length;
-      if (count > MAX_REVERSALS_PER_SEC) {
-        this._reversalDamp = Math.min(1.0, (count - MAX_REVERSALS_PER_SEC) * 0.25);
+      const maxReversals = this.limits.maxReversalsPerSec;
+      if (count > maxReversals) {
+        this._reversalDamp = Math.min(1.0, (count - maxReversals) * 0.25);
       } else {
         this._reversalDamp = 0;
       }
@@ -104,7 +147,7 @@ export class BrightnessLimiter {
     // Bidirectional luminance slew clamping:
     // Increased damping reduces slew rates and caps peak luminance.
     const dampMult = 1.0 - 0.5 * this._reversalDamp;
-    const effRise = RISE_PER_SEC * dampMult;
+    const effRise = this.limits.risePerSec * dampMult;
     const effFall = FALL_PER_SEC * dampMult;
 
     if (t > this.cap) {
@@ -120,6 +163,8 @@ export class BrightnessLimiter {
     if (this._reversalDamp > 0) {
       this.cap = Math.min(this.cap, 1.0 - 0.3 * this._reversalDamp);
     }
+    // Intensity ceiling (Full: 1.0, so no change). Ceilings are never below CAP_FLOOR.
+    this.cap = Math.min(this.cap, this.limits.ceiling);
 
     return this.cap;
   }

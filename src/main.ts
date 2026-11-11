@@ -395,10 +395,27 @@ function start(): void {
   // The Studio button only works with the preset session (not the single-layer debug URLs).
   if (!session) document.getElementById('studio-open')!.hidden = true;
 
-  const state: ControlsState = {
-    calm: director.isCalm() || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    fileName: '',
+  // Reduced motion (slice 21.3): read at start and followed live. While it is on, Calm and
+  // Reduced intensity apply. Turning it off undoes only what it turned on, so a viewer's own
+  // Calm or intensity choice is kept.
+  const reduceQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const state: ControlsState = { calm: director.isCalm(), fileName: '', intensity: 'full' };
+  let reduceSetCalm = false;
+  let reduceSetIntensity = false;
+  const applyReducedMotion = (reduce: boolean): void => {
+    if (reduce) {
+      if (!state.calm) { state.calm = true; reduceSetCalm = true; }
+      if (state.intensity === 'full') { state.intensity = 'reduced'; reduceSetIntensity = true; }
+    } else {
+      if (reduceSetCalm) { state.calm = false; reduceSetCalm = false; }
+      if (reduceSetIntensity) {
+        if (state.intensity === 'reduced') state.intensity = 'full';
+        reduceSetIntensity = false;
+      }
+    }
   };
+  applyReducedMotion(reduceQuery?.matches === true);
+  reduceQuery?.addEventListener('change', (e) => applyReducedMotion(e.matches));
   const controls = setupControls(engine, state);
   const panel = new DebugPanel();
 
@@ -643,6 +660,8 @@ function start(): void {
     director.advance(dtSec, frame, contrast);
     if (compositor) {
       compositor.calm = state.calm;
+      // Intensity only tightens the brightness limiter (slice 21.3).
+      compositor.brightnessLimiter.setIntensity(state.intensity ?? 'full');
       compositor.setDirectorState(director.getCameraUniforms(camScratch), director.getColorUniforms(colourScratch));
     }
 
