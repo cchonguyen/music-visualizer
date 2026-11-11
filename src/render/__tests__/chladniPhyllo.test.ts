@@ -318,7 +318,7 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
       const uniforms = (gl as any)._uniformValues;
       expect(uniforms.get('uMode')).toBe(1);
       expect(uniforms.get('uSubTwist')).toBeCloseTo(frame.norm.sub * 5.0, 4);
-      expect(uniforms.get('uFlowSpeed')).toBe(1.1);
+      expect(uniforms.get('uCount')).toBe(600);
       expect(uniforms.get('uSeedShape')).toBe(1); // 1 = petal
       expect(uniforms.get('uPetalStretch')).toBe(1.75);
       expect(uniforms.get('uDivergenceAngle')).toBeCloseTo(2.3999632, 5);
@@ -612,7 +612,7 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
       expect(particlesVertSrc).toContain('uMode == 1');
       expect(particlesVertSrc).toContain('2.3999632');
       expect(particlesVertSrc).toContain('uSubTwist');
-      expect(particlesVertSrc).toContain('uFlowSpeed');
+      expect(particlesVertSrc).toContain('uCount');
       expect(particlesVertSrc).toContain('uFlowPhase');
       expect(particlesVertSrc).toContain('uTwistPhase');
       expect(particlesVertSrc).toContain('uDivergenceAngle');
@@ -624,7 +624,7 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
     it('particles shaders incorporate coherent arm wave, softened twinkle, and proportional stencil alpha (Slice 7.33)', () => {
       expect(particlesVertSrc).toContain('armWave');
       expect(particlesVertSrc).toContain('mix(0.72, 1.15, armWave)');
-      expect(particlesVertSrc).toContain('mix(0.45, 1.0, tw * tw)');
+      expect(particlesVertSrc).toContain('1.0 - uTwinkleDepth * (1.0 - tw * tw)');
 
       expect(particlesFragSrc).toContain('smoothstep(0.15, 0.85, vMix)');
       expect(particlesFragSrc).toContain('clamp(max(out_colour.r, max(out_colour.g, out_colour.b)), 0.0, 1.0)');

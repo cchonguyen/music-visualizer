@@ -27,7 +27,6 @@ uniform float uWarpSpeed;   // scene wave speed
 uniform float uTime;        // scene time in seconds
 uniform int uMode;          // 0 = radial (default), 1 = phyllotaxis
 uniform float uSubTwist;    // sub-bass twist for phyllotaxis
-uniform float uFlowSpeed;   // wave flow speed
 uniform float uFlowPhase;
 uniform float uTwistPhase;
 uniform float uDivergenceAngle; // divergence angle (e.g. 2.3999632 golden angle)
@@ -38,6 +37,10 @@ uniform float uBeatReactivity;
 uniform sampler2D uTerrainTex;
 uniform float uTerrainDisplace;
 uniform float uTerrainWriteRow;
+uniform float uCount;       // live particle count (the instance count drawn)
+uniform int uSpawnArea;     // 0 = centre (default), 1 = ring, 2 = full screen, 3 = edges
+uniform float uTwinkleRate; // multiplies the twinkle speed (1 = as before)
+uniform float uTwinkleDepth;// 0..1: how far a twinkle dims a particle (0.55 = as before)
 
 // Particles spawn at the inner rim of the tunnel (r = 0.16), so their origin moves
 // with the rim: shifted by sway * (1 - 0.16). The tunnel hole and the emitter stay together.
@@ -60,8 +63,8 @@ void main() {
   if (uMode == 1) {
     // Phyllotaxis spiral bloom (Slice 7.14, Slice 7.29)
     // Continuous outward index: seeds continuously birth at the center and bloom outward
-    float uIdx = mod(id + uFlowPhase * 24.0, 600.0);
-    float normR = sqrt(uIdx / 600.0);
+    float uIdx = mod(id + uFlowPhase * 24.0, uCount);
+    float normR = sqrt(uIdx / uCount);
 
     // Travelling kick ripple wave
     float kickWave = sin(normR * 12.0 - uFlowPhase * 4.0) * uKickEnv;
@@ -132,24 +135,40 @@ void main() {
   // Life comes from the phase accumulator, so motion never jumps when energy changes.
   float life = fract(uPhase * speed + seed);
 
-  // Spawn (C3): every particle starts at the crown bar tips, r = 0.16.
+  // Spawn (C3): the centre area starts every particle at the crown bar tips, r = 0.16.
   // Radius follows tunnel depth: depth = 1/r is linear in life, so r = 1 / mix(1/0.16, 1/uFar, life).
-  float depthNear = 1.0 / INNER_RIM;
+  // The ring area starts them further out, on a ring around the centre.
+  float spawnRim = (uSpawnArea == 1) ? 0.4 : INNER_RIM;
+  float depthNear = 1.0 / spawnRim;
   float depthFar = 1.0 / uFar;
   float radius = (1.0 / mix(depthNear, depthFar, life)) * 2.1;
   // The swirl adds a small angular turn over the life, so trails bend gently.
   float angle = angleBase + swirlDir * uSwirl * life;
   vec2 dir = vec2(cos(angle), sin(angle));
-  vec2 pos = dir * radius;
+  vec2 pos;
+  vec2 vel;
+  if (uSpawnArea == 2) {
+    // Full screen: each particle sits at its own spot and drifts slowly outward.
+    vec2 anchor = vec2((hash01(id, 7.0) * 2.0 - 1.0) * uAspect, hash01(id, 8.0) * 2.0 - 1.0);
+    pos = anchor + dir * life * 0.25;
+    vel = dir * 0.25;
+  } else if (uSpawnArea == 3) {
+    // Edges: start on the screen border and drift in towards the centre.
+    vec2 onEdge = dir / max(abs(dir.x) / uAspect, abs(dir.y));
+    pos = onEdge * (1.0 - 0.75 * life);
+    vel = -onEdge * 0.75;
+  } else {
+    pos = dir * radius;
+    // Motion direction = d(pos)/d(life): the radial part plus the swirl part.
+    // dr/dlife = (depthNear - depthFar) * r^2: the same flow speed as the tunnel rings.
+    float dRadius = (depthNear - depthFar) * radius * radius;
+    vel = dRadius * dir + radius * swirlDir * uSwirl * vec2(-dir.y, dir.x);
+  }
   // Morph (follow scene): the scene's wave warp moves each particle sideways as it travels.
   float wave = uFollow * uWarp * 0.06 * sin(uTime * uWarpSpeed + life * TAU * uWarpScale + seed * TAU);
   pos += vec2(-dir.y, dir.x) * wave;
 
-  // Motion direction = d(pos)/d(life): the radial part plus the swirl part.
-  // The streak lies along this vector, so it points where the particle is going.
-  // dr/dlife = (depthNear - depthFar) * r^2: the same flow speed as the tunnel rings.
-  float dRadius = (depthNear - depthFar) * radius * radius;
-  vec2 vel = dRadius * dir + radius * swirlDir * uSwirl * vec2(-dir.y, dir.x);
+  // The streak lies along the motion vector, so it points where the particle is going.
   vec2 axis = normalize(vel);
   vec2 perp = vec2(-axis.y, axis.x);
 
@@ -177,10 +196,10 @@ void main() {
   vFade = smoothstep(0.0, 0.08, life) * (1.0 - smoothstep(0.85, 1.0, life));
 
   // Twinkle: softened so flow-field and radial particles stay smoothly visible as they drift
-  float twRate = mix(6.0, 14.0, hash01(id, 4.0));
+  float twRate = mix(6.0, 14.0, hash01(id, 4.0)) * uTwinkleRate;
   float twPhase = hash01(id, 5.0) * TAU;
   float tw = 0.5 + 0.5 * sin(uTwinkleTime * twRate + twPhase);
-  vTwinkle = mix(0.45, 1.0, tw * tw);
+  vTwinkle = 1.0 - uTwinkleDepth * (1.0 - tw * tw);
 
   // Aspect correction: x is scaled by 1/aspect so streaks keep their true shape.
   // Transform (4.7): rotate, then zoom. Done on the height-normalised point, before the

@@ -23,7 +23,7 @@ describe("layer schemas", () => {
       texture: false, textureGain: 1, flightMode: 'dropReverse', reverseOnBreakdown: true, hueSpread: 0.55, wallTexture: 0.55,
       zoomPunch: 0, swirlPulse: 0.35, horizonDrift: 0.4, beatReactivity: 0.5,
     });
-    expect(PARTICLE_DEFAULTS).toEqual({ brightness: 1.0, calmSparkleScale: 0.3, flashSparkleScale: 0.2, swirlGain: 1, shape: 'streak', rotation: 0, zoom: 1, hueShift: 0, hueDrift: 0, texture: true, textureGain: 1, size: 2, followScene: false, beatReactivity: 1.0 });
+    expect(PARTICLE_DEFAULTS).toEqual({ brightness: 1.0, calmSparkleScale: 0.3, flashSparkleScale: 0.2, swirlGain: 1, shape: 'streak', rotation: 0, zoom: 1, hueShift: 0, hueDrift: 0, texture: true, textureGain: 1, size: 2, followScene: false, beatReactivity: 1.0, count: 600, spawnArea: 'centre', twinkleRate: 1, twinkleDepth: 0.55 });
     expect(CROWN_DEFAULTS.rimFactor).toBe(1 - 0.16);
     expect(RINGS_DEFAULTS).toEqual({ maxRings: 6, maxRingsCalm: 3, strokeBase: 0.0035, strokeNormGain: 0.01, sides: 0, style: 'outline', texture: true, textureGain: 1 });
     expect(SHOCKWAVE_DEFAULTS).toEqual({ ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35, style: 'ring', texture: true, textureGain: 1 });
