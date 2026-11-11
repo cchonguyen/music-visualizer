@@ -3131,3 +3131,119 @@ describe('reaction editor helpers (Slice 17.6)', () => {
     expect(triggerOf('everyNBeats', 500)).toEqual({ type: 'everyNBeats', n: 64 });
   });
 });
+
+describe('Studio warp operator editor (Slice 18.4)', () => {
+  async function setup() {
+    const { PresetSession } = await import('../presets/session');
+    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const host = {
+      setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
+      setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
+    };
+    const session = new PresetSession(host as any, SCHEMAS, undefined as any);
+    for (const b of BUILTIN_PRESETS) session.addBuiltin(b.id, b.preset);
+    session.show('flight');
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+    let pane: any = null;
+    const studio = new Studio(container as any, { session, switchTo: vi.fn(), paneFactory: () => (pane = createMockPane()) });
+    studio.bind('flight');
+    const preset = () => session.get('flight')!.preset;
+    const binding = (label: string) => pane.bindings.find((b: any) => b.options?.label === label);
+    return { session, preset, binding, pane: () => pane, button: (title: string) => pane.buttons.find((b: any) => b.title === title) };
+  }
+
+  it('built-in presets have no operators, and the editor shows only the type picker and Add', async () => {
+    const { preset, binding, button } = await setup();
+    expect(preset().warp).toBeUndefined();
+    expect(button('Add warp operator')).toBeDefined();
+    expect(binding('New warp operator')).toBeDefined();
+    expect(binding('Operator type')).toBeUndefined();
+    expect(button('Remove warp operator')).toBeUndefined();
+  });
+
+  it('Add warp operator adds the chosen type with default settings and shows its controls', async () => {
+    const { session, preset, binding, button, pane } = await setup();
+    binding('New warp operator').fire('change', 'swirl');
+    button('Add warp operator').fire('click');
+    expect(preset().warp).toHaveLength(1);
+    expect(preset().warp![0]!.type).toBe('swirl');
+    expect(preset().warp![0]!.enabled).toBe(true);
+    expect(session.sceneOf('flight').getWarpOps()).toHaveLength(1);
+    for (const label of ['Warp operator', 'Operator type', 'Operator on']) expect(binding(label), label).toBeDefined();
+    const section = pane().folders.find((f: any) => String(f.options?.title).startsWith('Warp operator 1: Swirl'));
+    expect(section).toBeDefined();
+    const labels = JSON.stringify(section.folder.folders.map((f: any) => f.folder.bindings.map((b: any) => b.options?.label)));
+    for (const label of ['Amount', 'Scale', 'Speed', 'Centre X', 'Centre Y']) expect(labels).toContain(label);
+  });
+
+  it('the type, on switch and settings write to the preset and reach the scene', async () => {
+    const { session, preset, binding, button } = await setup();
+    button('Add warp operator').fire('click');
+    binding('Operator type').fire('change', 'ripple');
+    expect(preset().warp![0]!.type).toBe('ripple');
+    expect(session.sceneOf('flight').getWarpOps()[0]!.type).toBe('ripple');
+    binding('Operator on').target.enabled = false;
+    binding('Operator on').fire('change', false);
+    expect(session.sceneOf('flight').getWarpOps()[0]!.enabled).toBe(false);
+    expect(session.isDirty('flight')).toBe(true);
+  });
+
+  it('stops offering Add at four operators', async () => {
+    const { preset, button } = await setup();
+    for (let i = 0; i < 4; i++) button('Add warp operator').fire('click');
+    expect(preset().warp).toHaveLength(4);
+    expect(button('Add warp operator')).toBeUndefined();
+  });
+
+  it('Remove warp operator deletes it, and the warp field disappears when the list is empty', async () => {
+    const { session, preset, button } = await setup();
+    button('Add warp operator').fire('click');
+    button('Remove warp operator').fire('click');
+    expect(preset().warp).toBeUndefined();
+    expect('warp' in preset()).toBe(false);
+    expect(session.sceneOf('flight').getWarpOps()).toEqual([]);
+  });
+
+  it('operators survive saving as JSON and loading again', async () => {
+    const { session, binding, button } = await setup();
+    binding('New warp operator').fire('change', 'tunnel');
+    button('Add warp operator').fire('click');
+    const parsed = parsePreset(JSON.parse(session.exportJson('flight')), SCHEMAS).preset;
+    expect(parsed.warp).toHaveLength(1);
+    expect(parsed.warp![0]!.type).toBe('tunnel');
+  });
+
+  it('operator settings can be picked in the audio link editor', async () => {
+    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const { newWarpOperator } = await import('./studio');
+    const preset = JSON.parse(JSON.stringify(BUILTIN_PRESETS[0]!.preset)) as Preset;
+    expect(linkTargets(preset).some((t) => t.key.startsWith('W'))).toBe(false);
+    preset.warp = [newWarpOperator('radial')];
+    const keys = linkTargets(preset).map((t) => t.key);
+    expect(keys).toContain('W0.amount');
+    expect(keys).toContain('W0.speed');
+  });
+});
+
+describe('warp editor helpers (Slice 18.4)', () => {
+  it('lists every operator type with a readable label', async () => {
+    const { warpTypeOptions } = await import('./studio');
+    const options = warpTypeOptions();
+    expect(Object.keys(options)).toHaveLength(8);
+    expect(options['Radial']).toBe('radial');
+    expect(options['Tile and mirror']).toBe('tile');
+  });
+
+  it('a new operator has default settings and is on; the list line shows when it is off', async () => {
+    const { newWarpOperator, describeWarpOperator } = await import('./studio');
+    const op = newWarpOperator('tile');
+    expect(op.enabled).toBe(true);
+    expect(op.params.scale!.value).toBe(2);
+    expect(op.params.amount!.value).toBe(0.3);
+    expect(describeWarpOperator(op, 1)).toBe('2. Tile and mirror');
+    expect(describeWarpOperator({ ...op, enabled: false }, 0)).toBe('1. Tile and mirror (off)');
+  });
+});

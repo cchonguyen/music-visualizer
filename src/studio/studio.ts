@@ -6,10 +6,11 @@
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
 import { isLayerRendered } from '../presets/session';
-import { LAYER_FACTORIES, applyPresetToScene, applyValues, valuesOf } from '../presets/loader';
+import { LAYER_FACTORIES, applyPresetToScene, applyValues, readWarpOps, valuesOf } from '../presets/loader';
+import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { mutateSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
@@ -380,6 +381,9 @@ export class Studio {
   private locked = new Set<number>();
   private monitor = { ms: 0 };
   private linkTarget = '';
+  /** Which warp operator is open in the warp editor, and which type "Add" creates (Slice 18.4). */
+  private warpIndex = 0;
+  private warpAddType: WarpOpType = 'radial';
   /** Which reaction is open in the reaction editor (Slice 17.6). */
   private reactionIndex = 0;
   private linkMonitor = { value: 0 };
@@ -1093,6 +1097,9 @@ export class Studio {
       },
     );
 
+    // --- Warp field operators (Slice 18.4) ----------------------------------------------
+    this.bindWarpEditor(pane, id, preset);
+
     // --- Audio link (slice E2) --------------------------------------------------------
     this.bindLinkEditor(pane, id, preset);
     this.bindMorphEditor(pane, id, preset);
@@ -1199,6 +1206,66 @@ export class Studio {
     pane.addButton({ title: 'Remove audio link' }).on('click', () => {
       session.commit(id);
       delete (setting as Setting).link;
+      this.bind(id);
+    });
+  }
+
+  /**
+   * Warp field (Slice 18.4): a stack of up to four operators that bend the picture. One operator is open at a time:
+   * its type, an on/off switch, and its settings (amount, scale, speed, centre). Edits show on the next frame.
+   */
+  private bindWarpEditor(pane: Pane, id: string, preset: Preset): void {
+    const session = this.opts.session;
+    const live = () => session.sceneOf(id).setWarpOps(readWarpOps(preset));
+    pane.addBlade({ view: 'separator' });
+    const list = preset.warp ?? [];
+    if (this.warpIndex >= list.length) this.warpIndex = Math.max(0, list.length - 1);
+    if (list.length > 0) {
+      const pick = { index: String(this.warpIndex) };
+      pane.addBinding(pick, 'index', {
+        label: 'Warp operator',
+        options: Object.fromEntries(list.map((op, i) => [describeWarpOperator(op, i), String(i)])),
+      }).on('change', (ev) => {
+        this.warpIndex = Number(ev.value);
+        this.bind(id);
+      });
+    }
+    if (list.length < WARP_OP_MAX) {
+      const typeBox = { type: this.warpAddType as string };
+      pane.addBinding(typeBox, 'type', { label: 'New warp operator', options: warpTypeOptions() }).on('change', (ev) => {
+        if (isWarpOpType(ev.value)) this.warpAddType = ev.value;
+      });
+      pane.addButton({ title: 'Add warp operator' }).on('click', () => {
+        session.commit(id);
+        const ops = (preset.warp ??= []);
+        ops.push(newWarpOperator(this.warpAddType));
+        this.warpIndex = ops.length - 1;
+        live();
+        this.bind(id);
+      });
+    }
+    const op = list[this.warpIndex];
+    if (!op) return;
+
+    const onEdit = () => session.commit(id);
+    const typeBox = { type: op.type as string };
+    pane.addBinding(typeBox, 'type', { label: 'Operator type', options: warpTypeOptions() }).on('change', (ev) => {
+      if (!isWarpOpType(ev.value)) return;
+      op.type = ev.value;
+      live();
+      onEdit();
+      this.bind(id);
+    });
+    pane.addBinding(op as unknown as Record<string, unknown>, 'enabled', { label: 'Operator on' }).on('change', () => {
+      live();
+      onEdit();
+    });
+    this.bindSection(pane, `Warp operator ${this.warpIndex + 1}: ${WARP_OP_LABELS[op.type]}`, warpOpSpecs(op.type), op.params, live);
+    pane.addButton({ title: 'Remove warp operator' }).on('click', () => {
+      session.commit(id);
+      list.splice(this.warpIndex, 1);
+      if (list.length === 0) delete preset.warp;
+      live();
       this.bind(id);
     });
   }
@@ -1563,6 +1630,25 @@ export function formatLayerLabel(layer: LayerEntry, index: number): string {
   return `${index + 1}. ${layer.type}${off}`;
 }
 
+// --- Warp field (Slice 18.4) -------------------------------------------------------------
+
+/** Operator type choices, labelled for people. */
+export function warpTypeOptions(): Record<string, string> {
+  return Object.fromEntries(WARP_OP_TYPES.map((t) => [WARP_OP_LABELS[t], t]));
+}
+
+/** A new operator with every setting at its default, switched on. */
+export function newWarpOperator(type: WarpOpType): WarpOperator {
+  const params: Settings = {};
+  for (const spec of warpOpSpecs(type)) params[spec.name] = { value: spec.default };
+  return { type, enabled: true, params };
+}
+
+/** One line for the operator list, for example "2. Swirl (off)". */
+export function describeWarpOperator(op: WarpOperator, index: number): string {
+  return `${index + 1}. ${WARP_OP_LABELS[op.type]}${op.enabled ? '' : ' (off)'}`;
+}
+
 // --- Reactions (Slice 17.6) --------------------------------------------------------------
 
 /** The style box value that means "no style of its own; follow the global setting". */
@@ -1673,6 +1759,14 @@ export function linkTargets(preset: Preset): { key: string; label: string; setti
         meterKey: k >= 0 ? `L${k}.${spec.name}` : '',
         spec,
       });
+    }
+  });
+  (preset.warp ?? []).forEach((op, i) => {
+    for (const spec of warpOpSpecs(op.type)) {
+      if (spec.type !== 'float') continue;
+      const setting = op.params[spec.name];
+      if (!setting) continue;
+      out.push({ key: `W${i}.${spec.name}`, label: `Warp ${i + 1}. ${WARP_OP_LABELS[op.type]} · ${spec.label}`, setting, meterKey: '', spec });
     }
   });
   for (const spec of FEEDBACK_NUMBERS) {
