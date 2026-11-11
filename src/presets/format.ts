@@ -4,6 +4,7 @@ import { AUDIO_SOURCES, REMOVED_FEEDBACK_SETTINGS, type AudioSource, coerceValue
 import type { GlobalDirectorSettings } from "../render/globalDirector";
 import { parseReactions, type Reaction } from "./reactions";
 import { parseReactionStyle, type ReactionStyle } from "./reactionStyles";
+import { WARP_OP_MAX, isWarpOpType, warpOpSpecs, type WarpOpType } from "./warpOps";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
 export const PRESET_VERSION = 1 as const;
@@ -60,6 +61,13 @@ export interface LayerEntry {
   params: Settings;
 }
 
+/** Slice 18.1: one warp field operator. Its settings (amount, scale, speed, centre) can have links and morphs. */
+export interface WarpOperator {
+  type: WarpOpType;
+  enabled: boolean;
+  params: Settings;
+}
+
 export interface Preset {
   version: typeof PRESET_VERSION;
   name: string;
@@ -68,6 +76,8 @@ export interface Preset {
   feedback: Settings;
   layers: LayerEntry[];
   post: Settings;
+  /** Slice 18.1: warp field operators, at most 4, applied in order. Missing means none (the picture is unchanged). */
+  warp?: WarpOperator[];
   /** Slice 17.3: triggers that move Feedback and Post controls (kick, step, flip, drift, pick). Missing means none. */
   reactions?: Reaction[];
   /** Slice 17.5: this preset's reaction style. Missing means use the global setting (Off unless the viewer changes it). */
@@ -214,6 +224,34 @@ function parseSettings(raw: unknown, specs: readonly ParamSpec[], where: string,
   return out;
 }
 
+/** Reads the warp operator stack. Bad entries are skipped and extras beyond the limit are dropped, with warnings. */
+function parseWarp(raw: unknown, warnings: string[]): WarpOperator[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    warnings.push("warp: expected a list, ignored");
+    return [];
+  }
+  const ops: WarpOperator[] = [];
+  let warnedExtra = false;
+  raw.forEach((entry, index) => {
+    if (ops.length >= WARP_OP_MAX) {
+      if (!warnedExtra) warnings.push(`warp: only ${WARP_OP_MAX} operators are allowed, extras dropped`);
+      warnedExtra = true;
+      return;
+    }
+    if (!isRecord(entry) || !isWarpOpType(entry.type)) {
+      warnings.push(`warp[${index}]: unknown operator type "${isRecord(entry) ? String(entry.type) : String(entry)}", skipped`);
+      return;
+    }
+    ops.push({
+      type: entry.type,
+      enabled: entry.enabled !== false,
+      params: parseSettings(entry.params, warpOpSpecs(entry.type), `warp[${index}] (${entry.type}).params`, warnings),
+    });
+  });
+  return ops;
+}
+
 /**
  * Slice 15.3: before, a warp amount of 0 in Curl and Mobius drew at full strength (1.0).
  * Now 0 means no warp in every mode, so stored zeros in those two modes become 1.0 to keep the same picture.
@@ -318,6 +356,8 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
   if (raw.reactionStyle !== undefined && !reactionStyle) warnings.push(`reactionStyle: unknown style "${String(raw.reactionStyle)}", ignored`);
   const reactions = parseReactions(raw.reactions, { feedback: registry.feedback, post: registry.post }, warnings);
 
+  const warp = parseWarp(raw.warp, warnings);
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
@@ -326,6 +366,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     feedback,
     layers,
     post: parseSettings(raw.post, registry.post, "post", warnings),
+    ...(warp.length > 0 ? { warp } : {}),
     ...(reactions.length > 0 ? { reactions } : {}),
     ...(reactionStyle ? { reactionStyle } : {}),
     ...(directorProfile ? { directorProfile } : {}),

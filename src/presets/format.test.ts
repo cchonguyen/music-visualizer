@@ -221,3 +221,57 @@ describe("parsePreset: reactions (Slice 17.3)", () => {
     expect(second.reactions).toEqual(first.reactions);
   });
 });
+
+describe("parsePreset: warp operator stack (Slice 18.1)", () => {
+  it("a preset without warp has no warp key, so old presets parse the same", () => {
+    const { preset, warnings } = parsePreset(minimal, registry);
+    expect(preset).not.toHaveProperty("warp");
+    expect(warnings).toEqual([]);
+  });
+
+  it("fills defaults for an operator and keeps its link and morph", () => {
+    const { preset, warnings } = parsePreset({
+      ...minimal,
+      warp: [{ type: "swirl", params: { amount: { value: 0.5, link: { source: "bass", amount: 0.5, smooth: 0.2 }, morph: { to: 0.9, rate: 0.1 } } } }],
+    }, registry);
+    expect(warnings).toEqual([]);
+    expect(preset.warp).toHaveLength(1);
+    const op = preset.warp![0]!;
+    expect(op.type).toBe("swirl");
+    expect(op.enabled).toBe(true);
+    expect(op.params.amount!.value).toBe(0.5);
+    expect(op.params.amount!.link?.source).toBe("bass");
+    expect(op.params.amount!.morph?.to).toBe(0.9);
+    expect(op.params.scale!.value).toBe(1);
+  });
+
+  it("clamps operator values and skips unknown operator types", () => {
+    const { preset, warnings } = parsePreset({
+      ...minimal,
+      warp: [{ type: "radial", params: { amount: 5 } }, { type: "nope" }, "junk"],
+    }, registry);
+    expect(preset.warp).toHaveLength(1);
+    expect(preset.warp![0]!.params.amount!.value).toBe(1);
+    expect(warnings.join("\n")).toMatch(/clamped/);
+    expect(warnings.join("\n")).toMatch(/warp\[1\]: unknown operator type "nope"/);
+    expect(warnings.join("\n")).toMatch(/warp\[2\]/);
+  });
+
+  it("keeps at most four operators", () => {
+    const six = Array.from({ length: 6 }, () => ({ type: "ripple" }));
+    const { preset, warnings } = parsePreset({ ...minimal, warp: six }, registry);
+    expect(preset.warp).toHaveLength(4);
+    expect(warnings.filter((w) => w.includes("only 4 operators"))).toHaveLength(1);
+  });
+
+  it("ignores a warp value that is not a list", () => {
+    const { preset, warnings } = parsePreset({ ...minimal, warp: {} }, registry);
+    expect(preset).not.toHaveProperty("warp");
+    expect(warnings).toContain("warp: expected a list, ignored");
+  });
+
+  it("disabled operators stay disabled", () => {
+    const { preset } = parsePreset({ ...minimal, warp: [{ type: "stripes", enabled: false }] }, registry);
+    expect(preset.warp![0]!.enabled).toBe(false);
+  });
+});
