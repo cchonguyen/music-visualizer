@@ -3020,3 +3020,114 @@ describe('Studio duplicate, solo and mute controls (Slice 15.6)', () => {
     expect(session.exportJson('flight')).not.toMatch(/solo|mute/i);
   });
 });
+
+describe('Studio reaction editor (Slice 17.6)', () => {
+  async function setup() {
+    const { PresetSession } = await import('../presets/session');
+    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const host = {
+      setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
+      setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
+    };
+    const session = new PresetSession(host as any, SCHEMAS, undefined as any);
+    for (const b of BUILTIN_PRESETS) session.addBuiltin(b.id, b.preset);
+    session.show('flight');
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+    let pane: any = null;
+    const studio = new Studio(container as any, { session, switchTo: vi.fn(), paneFactory: () => (pane = createMockPane()) });
+    studio.bind('flight');
+    const preset = () => session.get('flight')!.preset;
+    const binding = (label: string) => pane.bindings.find((b: any) => b.options?.label === label);
+    return { session, preset, binding, button: (title: string) => pane.buttons.find((b: any) => b.title === title) };
+  }
+
+  it('built-in presets start with no reactions and no style of their own, and the editor shows only the style and Add', async () => {
+    const { preset, binding, button } = await setup();
+    expect(preset().reactions).toBeUndefined();
+    expect(preset().reactionStyle).toBeUndefined();
+    expect(binding('Reaction style').target.style).toBe('global');
+    expect(button('Add reaction')).toBeDefined();
+    expect(binding('When')).toBeUndefined();
+    expect(button('Remove reaction')).toBeUndefined();
+  });
+
+  it('Add reaction creates a beat kick on zoom and shows its controls', async () => {
+    const { preset, binding, button } = await setup();
+    button('Add reaction').fire('click');
+    expect(preset().reactions).toEqual([{ trigger: { type: 'beat' }, response: 'kick', target: { group: 'feedback', name: 'zoom' }, amount: 0.1, ease: 0.35 }]);
+    for (const label of ['Reaction', 'When', 'What happens', 'Which control', 'Amount (share of range)', 'Ease time (s)']) {
+      expect(binding(label), label).toBeDefined();
+    }
+    expect(binding('Which control').options.options['Feedback · Zoom']).toBe('feedback.zoom');
+  });
+
+  it('the trigger, response and control choices write to the preset and mark it changed', async () => {
+    const { session, preset, binding, button } = await setup();
+    button('Add reaction').fire('click');
+    session.commit('flight');
+    binding('When').fire('change', 'everyNBeats');
+    expect(preset().reactions![0]!.trigger).toEqual({ type: 'everyNBeats', n: 4 });
+    expect(binding('Every how many beats')).toBeDefined();
+    binding('What happens').target.response = 'flip';
+    binding('What happens').fire('change', 'flip');
+    expect(preset().reactions![0]!.response).toBe('flip');
+    binding('Which control').fire('change', 'post.hueShift');
+    expect(preset().reactions![0]!.target).toEqual({ group: 'post', name: 'hueShift' });
+    expect(session.isDirty('flight')).toBe(true);
+  });
+
+  it('a style choice is stored on the preset, and Use the global setting removes it', async () => {
+    const { preset, binding } = await setup();
+    binding('Reaction style').fire('change', 'punchy');
+    expect(preset().reactionStyle).toBe('punchy');
+    binding('Reaction style').fire('change', 'global');
+    expect(preset().reactionStyle).toBeUndefined();
+    expect('reactionStyle' in preset()).toBe(false);
+  });
+
+  it('Remove reaction deletes it, and the reactions field disappears when the list is empty', async () => {
+    const { preset, button } = await setup();
+    button('Add reaction').fire('click');
+    expect(preset().reactions).toHaveLength(1);
+    button('Remove reaction').fire('click');
+    expect(preset().reactions).toBeUndefined();
+  });
+
+  it('reactions and style survive saving as JSON and loading again', async () => {
+    const { session, button, binding } = await setup();
+    button('Add reaction').fire('click');
+    binding('Reaction style').fire('change', 'wild');
+    const parsed = parsePreset(JSON.parse(session.exportJson('flight')), SCHEMAS).preset;
+    expect(parsed.reactionStyle).toBe('wild');
+    expect(parsed.reactions).toHaveLength(1);
+  });
+});
+
+describe('reaction editor helpers (Slice 17.6)', () => {
+  it('lists Feedback and Post number controls, and skips the ones the current mode hides', async () => {
+    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const { reactionTargets, parseReactionTargetKey, reactionTargetKey } = await import('./studio');
+    const preset = JSON.parse(JSON.stringify(BUILTIN_PRESETS[0]!.preset)) as Preset;
+    const keys = reactionTargets(preset).map((t) => t.key);
+    expect(keys).toContain('feedback.zoom');
+    expect(keys).toContain('feedback.rotate');
+    expect(keys).toContain('post.hueShift');
+    expect(keys).not.toContain('feedback.wrap'); // not a number
+    expect(parseReactionTargetKey('post.hueShift')).toEqual({ group: 'post', name: 'hueShift' });
+    expect(parseReactionTargetKey('layer.x')).toBeNull();
+    expect(parseReactionTargetKey('nodot')).toBeNull();
+    expect(reactionTargetKey({ group: 'feedback', name: 'zoom' })).toBe('feedback.zoom');
+  });
+
+  it('describes a reaction in one line, and sets N only for the triggers that need it', async () => {
+    const { describeReaction, newReaction, triggerOf } = await import('./studio');
+    const r = { ...newReaction({ group: 'feedback', name: 'rotate' }), trigger: { type: 'everyNBeats' as const, n: 8 }, response: 'flip' as const };
+    expect(describeReaction(r)).toBe('Every 8 beats: Flip, Feedback · Spin per frame (rad)');
+    expect(triggerOf('beat', 9)).toEqual({ type: 'beat' });
+    expect(triggerOf('everyNSeconds', 2)).toEqual({ type: 'everyNSeconds', n: 2 });
+    expect(triggerOf('everyNBeats', 500)).toEqual({ type: 'everyNBeats', n: 64 });
+  });
+});
