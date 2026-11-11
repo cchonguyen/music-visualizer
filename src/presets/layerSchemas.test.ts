@@ -82,7 +82,7 @@ describe("layer schemas", () => {
   });
 
   it("SHAPE_SPECS covers all 5 orthogonal categories and validates correctly", () => {
-    expect(SHAPE_SPECS.length).toBe(38);
+    expect(SHAPE_SPECS.length).toBe(41);
     SHAPE_SPECS.forEach(assertValidSpec);
 
     const groups = new Set(SHAPE_SPECS.map(s => s.group));
@@ -111,6 +111,7 @@ describe("layer schemas", () => {
     const propSpecs = SHAPE_SPECS.filter(s => s.group === 'Propagation');
     expect(propSpecs.map(s => s.name)).toEqual([
       'propMode', 'propCount', 'propSpacing', 'propSpeed', 'propDirection', 'propSelfSpin', 'propDelay',
+      'pathTravel', 'scaleWobble', 'copyRotation',
     ]);
 
     // Category 5: Audio & Style

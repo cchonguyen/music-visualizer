@@ -414,6 +414,9 @@ export interface ShapeParams {
   propDirection: ShapePropDirection;
   propSelfSpin: number;   // -2.0..2.0
   propDelay: number;      // 0..1.0
+  pathTravel: number;     // -2..2 (path laps per second the pattern slides; 0 = still)
+  scaleWobble: number;    // 0..0.5 (breathing size change; 0 = off)
+  copyRotation: number;   // -90..90 (degrees added per extra copy; 0 = off)
 
   // Category 5 — Audio & Style Tuning ("Audio & Style")
   audioSource: ShapeAudioSource;
@@ -460,6 +463,9 @@ export const SHAPE_DEFAULTS: ShapeParams = {
   propDirection: 'outward',
   propSelfSpin: 0.0,
   propDelay: 0.25,
+  pathTravel: 0,
+  scaleWobble: 0,
+  copyRotation: 0,
 
   audioSource: 'spectrum',
   reactivity: 1.0,
@@ -509,6 +515,9 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'propDirection', label: 'Propagation direction', group: 'Propagation', default: SHAPE_DEFAULTS.propDirection, options: ['outward', 'inward', 'cw', 'ccw', 'alternating'], showWhen: { propMode: ['concentric', 'shockwave', 'stream', 'orbit', 'polar'] }, description: 'Chooses directional travel vector for propagating instances.' },
   { type: 'float', name: 'propSelfSpin', label: 'Instance self spin', group: 'Propagation', default: SHAPE_DEFAULTS.propSelfSpin, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['orbit', 'polar'] }, description: 'Applies rotational velocity to individual propagating instances.' },
   { type: 'float', name: 'propDelay', label: 'Audio delay', group: 'Propagation', default: SHAPE_DEFAULTS.propDelay, min: 0, max: 1.0, step: 0.05, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] }, description: 'Staggers audio reaction timing across successive propagated instances.' },
+  { type: 'float', name: 'pathTravel', label: 'Travel along path', group: 'Propagation', default: SHAPE_DEFAULTS.pathTravel, min: -2, max: 2, step: 0.05, description: 'Slides the audio pattern along the shape path, in laps per second. 0 keeps it still.' },
+  { type: 'float', name: 'scaleWobble', label: 'Scale wobble', group: 'Propagation', default: SHAPE_DEFAULTS.scaleWobble, min: 0, max: 0.5, step: 0.01, description: 'Makes the shape and each copy breathe in size over time. 0 is off.' },
+  { type: 'float', name: 'copyRotation', label: 'Rotation per copy', group: 'Propagation', default: SHAPE_DEFAULTS.copyRotation, min: -90, max: 90, step: 1, showWhen: { propMode: ['concentric', 'shockwave', 'stream', 'orbit', 'polar'] }, description: 'Turns each extra copy by this many degrees more than the one before. 0 is off.' },
 
   // Category 5 — Audio & Style Tuning ("Audio & Style")
   { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy', 'scope'], description: 'Selects audio signal driving reactive modulation. Scope is a signed oscilloscope trace: silence draws a flat line and the signal swings both ways.' },

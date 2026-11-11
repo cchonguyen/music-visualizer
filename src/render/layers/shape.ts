@@ -105,6 +105,25 @@ export const SHAPE_AMP_MAX = 10.0;
 /** Reactivity schema maximum (old 3.0, raised 5x in Slice 15.8). */
 export const SHAPE_REACTIVITY_MAX = 15.0;
 
+/** Radians per second of the scale wobble. */
+export const WOBBLE_RATE = 4.0;
+
+/** Scale wobble and per-copy rotation on the first `count` instance transforms. Both 0 leaves them unchanged. */
+export function applyCopyMotion(
+  transforms: Float32Array,
+  count: number,
+  wobble: number,
+  phase: number,
+  copyRotationDeg: number,
+): void {
+  if (wobble === 0 && copyRotationDeg === 0) return;
+  const rot = (copyRotationDeg * Math.PI) / 180;
+  for (let m = 0; m < count; m++) {
+    transforms[m * 4]! *= 1 + wobble * Math.sin(phase + m * 0.9);
+    transforms[m * 4 + 1]! += m * rot;
+  }
+}
+
 /** Frames of smoothed audio kept for per-element delay. */
 export const SHAPE_HISTORY_FRAMES = 32;
 
@@ -142,6 +161,7 @@ export class ShapeLayer implements RenderLayer {
   private uRes: WebGLUniformLocation | null = null;
   private uAspect: WebGLUniformLocation | null = null;
   private uTime: WebGLUniformLocation | null = null;
+  private uTravel: WebGLUniformLocation | null = null;
   private uKickEnergy: WebGLUniformLocation | null = null;
   private uBaseShape: WebGLUniformLocation | null = null;
   private uEdgeMode: WebGLUniformLocation | null = null;
@@ -195,6 +215,8 @@ export class ShapeLayer implements RenderLayer {
   private spinPhase = 0;
   private propPhase = 0;
   private propSelfSpinPhase = 0;
+  private travelPhase = 0;
+  private wobblePhase = 0;
   private readonly shockwaveSlots: ShockwaveSlot[] = [
     { active: false, age: 0 },
     { active: false, age: 0 },
@@ -211,6 +233,7 @@ export class ShapeLayer implements RenderLayer {
     this.uRes = gl.getUniformLocation(this.program, 'uRes');
     this.uAspect = gl.getUniformLocation(this.program, 'uAspect');
     this.uTime = gl.getUniformLocation(this.program, 'uTime');
+    this.uTravel = gl.getUniformLocation(this.program, 'uTravel');
     this.uKickEnergy = gl.getUniformLocation(this.program, 'uKickEnergy');
     this.uBaseShape = gl.getUniformLocation(this.program, 'uBaseShape');
     this.uEdgeMode = gl.getUniformLocation(this.program, 'uEdgeMode');
@@ -284,6 +307,8 @@ export class ShapeLayer implements RenderLayer {
     this.spinPhase += this.p.spinSpeed * dt;
     this.propPhase += 0.35 * this.p.propSpeed * (1.0 + 0.4 * frame.env.sub) * dt;
     this.propSelfSpinPhase += this.p.propSelfSpin * dt;
+    this.travelPhase = (this.travelPhase + this.p.pathTravel * dt) % 1.0;
+    this.wobblePhase += WOBBLE_RATE * dt;
 
     // 2. Extract audio samples based on audioSource
     const rawBins = new Float32Array(sampleCount);
@@ -571,6 +596,8 @@ export class ShapeLayer implements RenderLayer {
       }
     }
 
+    applyCopyMotion(this.instTransform, activePropCount, this.p.scaleWobble, this.wobblePhase, this.p.copyRotation);
+
     // 5. Palette and color configuration
     const palette: Palette = getPalette(getCurrentPalette());
     const blendedAccent = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
@@ -584,6 +611,7 @@ export class ShapeLayer implements RenderLayer {
     gl.uniform2f(this.uRes, target.width, target.height);
     gl.uniform1f(this.uAspect, aspect);
     gl.uniform1f(this.uTime, clock.timeSec);
+    gl.uniform1f(this.uTravel, this.travelPhase);
     gl.uniform1f(this.uKickEnergy, frame.kickEnv ?? 0);
 
     gl.uniform1i(this.uBaseShape, BASE_SHAPE_MAP[this.p.baseShape] ?? 2);
