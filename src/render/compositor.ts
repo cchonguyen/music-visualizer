@@ -13,7 +13,7 @@
 // - Order: blend -> post chain (+ bloom) -> safety. Safety is always last; no preset can turn it off.
 // - One full-size pass after the scenes (Slice 16.4): with no post effect, composite.frag does blend and safety;
 //   with post effects, post.frag does blend, post and safety together. Bloom adds three half-size passes
-//   (blend, blur, blur) before it. Neither path has a full-size intermediate buffer.
+//   (blend, blur, blur) before it, through the blur chain (Slice 18.6), which can also build quarter and eighth levels. Neither path has a full-size intermediate buffer.
 // - Render scale (Slice 16.5) covers the whole chain: below 100% the final pass and the bloom buffers run at the
 //   scaled size, and one copy pass upscales the result to the canvas. At 100% there is no copy pass.
 import type { AudioFrame } from '../audio/types';

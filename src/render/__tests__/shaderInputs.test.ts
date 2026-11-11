@@ -3,6 +3,7 @@ import { Scene } from '../scene';
 import feedbackSrc from '../shaders/feedback.frag.glsl?raw';
 import postSrc from '../shaders/post.frag.glsl?raw';
 import compositorSrc from '../compositor.ts?raw';
+import blurChainSrc from '../blurChain.ts?raw';
 import sceneSrc from '../scene.ts?raw';
 
 const DEAD = ['uKick', 'uSub', 'uMobiusPolePolarity', 'uCrtScanlines', 'uCrtBarrel'];
@@ -51,8 +52,11 @@ describe('Slice 14.8: RGB split survives blur', () => {
 
 describe('Slice 14.8: bloom blur steps use matching texel sizes', () => {
   it('uses one half-resolution texel per axis', () => {
-    expect(compositorSrc).toContain('1 / half.width, 0,');
-    expect(compositorSrc).toContain('0, 1 / half.height,');
+    // The blur passes moved from the compositor into the blur chain (Slice 18.6); each level steps one of its own texels.
+    expect(blurChainSrc).toContain('1 / pp.width, 0,');
+    expect(blurChainSrc).toContain('0, 1 / pp.height,');
+    expect(blurChainSrc).not.toContain('2 / pp.width');
+    expect(blurChainSrc).not.toContain('2 / pp.height');
     expect(compositorSrc).not.toContain('2 / full.width');
     expect(compositorSrc).not.toContain('2 / half.height');
   });
