@@ -8,6 +8,7 @@ import { getProgramCache } from '../gl/programCache';
 import { MoireLayer } from './layers/moire';
 import { SpectralTerrainLayer } from './layers/spectralTerrain';
 import { createVao } from '../gl/vao';
+import { WarpField, activeWarpOpCount, type ResolvedWarpOp } from './warpField';
 import { clampDt, type RenderClock } from './clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
@@ -62,7 +63,7 @@ const UNIFORMS = [
   'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin', 'uMandalaKickFlare',
   'uContourFreq', 'uContourWidth', 'uColorSpread',
   'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl', 'uMobiusMode',
-  'uHigh',
+  'uHigh', 'uField', 'uWarpFieldOn',
 ] as const;
 
 export type BlendMode = 'max' | 'alpha' | 'add' | 'screen';
@@ -126,6 +127,9 @@ export class Scene {
   private appliedScale: number | null = null;
   /** Feedback settings (slice E1/E3). Set from the preset; defaults keep the old look. */
   private fb: Record<string, ParamValue> = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS };
+  /** Warp field operators (Slice 18.2). Empty means no field pass and no lookup in the feedback shader. */
+  private warpOps: readonly ResolvedWarpOp[] = [];
+  private warpField: WarpField | null = null;
   private poleOrbitPhase = 0.0;
   private screenDriftPhase = 0.0;
   private lastPoleA: [number, number] = [-0.48, 0.0];
@@ -195,6 +199,15 @@ export class Scene {
   /** Sets the trail motion and colour settings. Read on the next frame. */
   setFeedback(values: Record<string, ParamValue>): void {
     this.fb = { ...FEEDBACK_DEFAULTS, ...FEEDBACK_WARP_DEFAULTS, ...values };
+  }
+
+  /** Sets the warp field operator stack (Slice 18.2), settings already resolved to values. Read on the next frame. */
+  setWarpOps(ops: readonly ResolvedWarpOp[]): void {
+    this.warpOps = ops;
+  }
+
+  getWarpOps(): readonly ResolvedWarpOp[] {
+    return this.warpOps;
   }
 
   /** Sets foreground layer opacity multiplier (0..1) for morph transitions. */
@@ -276,6 +289,7 @@ export class Scene {
     this.prog = cache.acquire(FULLSCREEN_VERT, feedbackSrc, 'feedback');
     this.blitProg = cache.acquire(FULLSCREEN_VERT, BLIT_FRAG, 'blit');
     this.blitSrcLoc = gl.getUniformLocation(this.blitProg, 'uSrc');
+    this.warpField = null; // belonged to the old context, rebuilt on demand
     this.uni.clear();
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
@@ -354,12 +368,28 @@ export class Scene {
     target.width = pp.width;
     target.height = pp.height;
 
+    // 0) Warp field: drawn first, only when an operator is active (Slice 18.2).
+    let fieldOn = false;
+    if (this.warpOps.length > 0 && activeWarpOpCount(this.warpOps) > 0 && this.vao) {
+      if (!this.warpField) this.warpField = new WarpField(gl, this.vao, getEffectiveRenderScale());
+      this.warpField.setRenderScale(getEffectiveRenderScale());
+      const fieldDt = clampDt(clock.dtSec) > 0 ? clampDt(clock.dtSec) : 1 / 60;
+      fieldOn = this.warpField.update(this.warpOps, clock.timeSec, fieldDt, pp.width / Math.max(pp.height, 1));
+    }
+
     // 1A) Decay last frame into the write target (blending off: this is a copy).
     bindTarget(gl, target);
     gl.disable(gl.BLEND);
     gl.useProgram(this.prog);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
+    if (fieldOn && this.warpField) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.warpField.texture);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+    gl.uniform1i(this.loc('uField'), 1);
+    gl.uniform1f(this.loc('uWarpFieldOn'), fieldOn ? 1 : 0);
     // Feedback rates are per 1/60 s; the shader scales them by uDt so refresh rate does not change the look (Slice 14.6).
     const stepDt = clampDt(clock.dtSec) > 0 ? clampDt(clock.dtSec) : 1 / 60;
     this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame, terrainBiasDriftY, stepDt);
@@ -620,6 +650,8 @@ export class Scene {
   private releasePrograms(): void {
     const gl = this.gl;
     if (!gl) return;
+    this.warpField?.dispose();
+    this.warpField = null;
     const cache = getProgramCache(gl);
     if (this.prog) cache.release(this.prog);
     if (this.blitProg) cache.release(this.blitProg);

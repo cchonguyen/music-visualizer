@@ -17,6 +17,8 @@ import { ChladniSandLayer } from '../render/layers/chladniSand';
 import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
+import type { ResolvedWarpOp } from '../render/warpField';
+import { warpOpSpecs } from './warpOps';
 import { LinkRunner, type LinkInputs } from './links';
 import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
@@ -124,6 +126,7 @@ export function buildScene(name: string, preset: Preset): Scene {
   }
   const scene = new Scene(name, layers, configs);
   scene.setFeedback(readFeedbackSettings(preset));
+  scene.setWarpOps(readWarpOps(preset));
   return scene;
 }
 
@@ -171,6 +174,7 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */
 export function applyPresetToScene(preset: Preset, scene: Scene, _gl?: WebGL2RenderingContext): void {
   scene.setFeedback(readFeedbackSettings(preset));
+  scene.setWarpOps(readWarpOps(preset));
   const live = preset.layers.filter((l) => l.enabled);
   live.forEach((entry, k) => {
     const layer = scene.layers[k];
@@ -181,6 +185,11 @@ export function applyPresetToScene(preset: Preset, scene: Scene, _gl?: WebGL2Ren
       trails: entry.trails ?? true,
     });
   });
+}
+
+/** The preset's warp operator stack with plain values (Slice 18.2). Empty when the preset has none. */
+export function readWarpOps(preset: Preset): ResolvedWarpOp[] {
+  return (preset.warp ?? []).map((op) => ({ type: op.type, enabled: op.enabled, values: valuesOf(op.params) }));
 }
 
 /**
@@ -199,7 +208,7 @@ export function hasReactions(preset: Preset): boolean {
 
 /** True when any setting of the preset has an audio link. */
 export function hasLinks(preset: Preset): boolean {
-  const all = [...preset.layers.flatMap((l) => Object.values(l.params)), ...Object.values(preset.feedback), ...Object.values(preset.post)];
+  const all = [...preset.layers.flatMap((l) => Object.values(l.params)), ...Object.values(preset.feedback), ...Object.values(preset.post), ...(preset.warp ?? []).flatMap((op) => Object.values(op.params))];
   return all.some((setting) => setting.link !== undefined);
 }
 
@@ -211,6 +220,13 @@ export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunn
   // Reactions move Feedback and Post only. They are applied after the audio link and before the range clamp.
   reactions?.update(inputs.frame, inputs.timeSec, dtSec, inputs.sectionContrast);
   scene.setFeedback(runner.resolve(`${scope}F`, preset.feedback, FEEDBACK_SPECS, inputs, dtSec, reactions ? { engine: reactions, group: 'feedback' } : undefined));
+  if (preset.warp && preset.warp.length > 0) {
+    scene.setWarpOps(preset.warp.map((op, i) => ({
+      type: op.type,
+      enabled: op.enabled,
+      values: runner.resolve(`${scope}W${i}`, op.params, warpOpSpecs(op.type), inputs, dtSec),
+    })));
+  }
   const live = preset.layers.filter((l) => l.enabled);
   live.forEach((entry, k) => {
     const layer = scene.layers[k];
