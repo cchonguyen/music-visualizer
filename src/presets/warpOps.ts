@@ -3,8 +3,11 @@
 // can target them the same way they target Feedback and Post settings.
 import type { NumberSpec, ParamSpec } from "./schema";
 
-/** First batch of operators. Later slices add more names to this list. */
-export const WARP_OP_TYPES = ["radial", "swirl", "ripple", "stripes"] as const;
+/**
+ * Operators. The position in this list is the number the warp field shader switches on, so new names are
+ * only ever added at the end.
+ */
+export const WARP_OP_TYPES = ["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere"] as const;
 export type WarpOpType = (typeof WARP_OP_TYPES)[number];
 
 /** Most operators a preset can stack. */
@@ -15,6 +18,10 @@ export const WARP_OP_LABELS: Readonly<Record<WarpOpType, string>> = {
   swirl: "Swirl",
   ripple: "Ripple",
   stripes: "Stripes",
+  stretch: "Stretch and squish",
+  tile: "Tile and mirror",
+  tunnel: "Tunnel perspective",
+  sphere: "Sphere bulge",
 };
 
 function num(name: string, label: string, def: number, min: number, max: number, step: number): NumberSpec {
@@ -35,10 +42,14 @@ function commonSpecs(): ParamSpec[] {
   ];
 }
 
-/** The settings list for one operator type. Same list for every type in this batch. */
+/** Tile and mirror reads Scale as the number of tiles across, so it starts at 2 rather than 1. */
+const SCALE_DEFAULTS: Partial<Record<WarpOpType, number>> = { tile: 2 };
+
+/** The settings list for one operator type. Same names for every type, so a stack can switch type and keep its values. */
 export function warpOpSpecs(type: WarpOpType): readonly ParamSpec[] {
-  void type;
-  return commonSpecs();
+  const scaleDefault = SCALE_DEFAULTS[type];
+  if (scaleDefault === undefined) return commonSpecs();
+  return commonSpecs().map((spec) => (spec.name === "scale" && spec.type === "float" ? { ...spec, default: scaleDefault } : spec));
 }
 
 export function isWarpOpType(value: unknown): value is WarpOpType {
