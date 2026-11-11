@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { WarpField, curlExtras, warpFieldSize, activeWarpOpCount, isActiveWarpOp, WARP_FIELD_WIDTH, WARP_FIELD_HEIGHT, type ResolvedWarpOp } from './warpField';
+import { WarpField, curlExtras, foldIterations, warpFieldSize, activeWarpOpCount, isActiveWarpOp, WARP_FIELD_WIDTH, WARP_FIELD_HEIGHT, type ResolvedWarpOp } from './warpField';
 import warpFieldSrc from './shaders/warpField.frag.glsl?raw';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { WARP_OP_TYPES } from '../presets/warpOps';
@@ -116,6 +116,25 @@ describe('curl noise operator (Slice 18.5)', () => {
     const extras = gl.uniform3fv.mock.calls[0]![1] as Float32Array;
     expect(Array.from(extras.slice(0, 6))).toEqual([0, 0, 0, 3, 0.5, 2]);
     expect(gl.uniform1f).toHaveBeenCalledWith({ name: 'uHigh' }, 0.8);
+  });
+});
+
+describe('fractal fold operator (Slice 20.2)', () => {
+  it('reads iterations from the setting and caps them by render scale', () => {
+    expect(foldIterations({}, 1)).toBe(4);
+    expect(foldIterations({ iterations: 6 }, 1)).toBe(6);
+    expect(foldIterations({ iterations: 6 }, 0.7)).toBe(4);
+    expect(foldIterations({ iterations: 6 }, 0.4)).toBe(3);
+    expect(foldIterations({ iterations: 99 }, 1)).toBe(6);
+    expect(foldIterations({ iterations: 0 }, 1)).toBe(3);
+  });
+
+  it('sends the capped iteration count to the field pass', () => {
+    const gl = mockGl();
+    const field = new WarpField(gl, {} as WebGLVertexArrayObject, 0.7);
+    expect(field.update([op('fold', 0.5, true, { iterations: 6 })], 1, 1 / 60, 1)).toBe(true);
+    const extras = gl.uniform3fv.mock.calls[0]![1] as Float32Array;
+    expect(extras[0]).toBe(4);
   });
 });
 

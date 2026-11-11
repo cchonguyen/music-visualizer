@@ -5,12 +5,12 @@ precision highp float;
 // four operators. The feedback pass reads it with one lookup. Output rg holds the displacement in uv units,
 // stored as 0.5 + d / (2 * RANGE) so it works in 8-bit buffers as well as half-float ones.
 uniform int uOpCount;
-uniform int uOpType[4];      // 0 radial, 1 swirl, 2 ripple, 3 stripes, 4 stretch, 5 tile, 6 tunnel, 7 sphere, 8 curl, 9 flow
+uniform int uOpType[4];      // 0 radial, 1 swirl, 2 ripple, 3 stripes, 4 stretch, 5 tile, 6 tunnel, 7 sphere, 8 curl, 9 flow, 10 fold
 uniform float uOpAmount[4];  // signed, -1..1
 uniform float uOpScale[4];
 uniform float uOpSpeed[4];
 uniform vec2 uOpCentre[4];   // in uv, 0,0 = screen middle
-uniform vec3 uOpExtra[4];    // curl noise only: octaves, turbulence, flow style (0 plumes, 1 eddies, 2 outflow, 3 inflow)
+uniform vec3 uOpExtra[4];    // curl noise: octaves, turbulence, flow style (0 plumes, 1 eddies, 2 outflow, 3 inflow). fold: iterations in x
 uniform float uHigh;         // treble level, 0..1, adds turbulence to curl noise
 uniform float uTime;
 uniform float uDt;           // clamped time step, seconds
@@ -126,6 +126,22 @@ vec2 flowOperator(vec2 q, float scale, float t) {
   return mix(v1, v2, 0.6) * 0.5;
 }
 
+// Fractal fold (Slice 20.2). Kaleidoscopic iterated folding: fold the lookup point into a corner, turn it a little
+// and scale it up, 3 to 6 times (the count is capped by render scale on the CPU side). The result is divided by
+// the total scale so the point lands near where it started, and the picture is pulled toward its folded self.
+vec2 foldOperator(vec2 q, float scale, float t, float iterations) {
+  vec2 p = q * (scale * 2.0);
+  float total = 1.0;
+  for (int i = 0; i < 6; i++) {
+    if (float(i) >= iterations) break;
+    p = abs(p) - vec2(0.45 + 0.1 * sin(t * 0.7 + float(i)), 0.3 + 0.1 * cos(t * 0.5 + float(i) * 1.7));
+    p = rot2(0.4 + 0.15 * sin(t * 0.3)) * p;
+    p *= 1.25;
+    total *= 1.25;
+  }
+  return p / (scale * 2.0 * total) - q;
+}
+
 // Displacement (in aspect-corrected space) the operator adds to the sample position at q.
 vec2 operatorAt(int type, vec2 q, float amount, float scale, float speed, vec3 extra) {
   float r = length(q);
@@ -169,6 +185,9 @@ vec2 operatorAt(int type, vec2 q, float amount, float scale, float speed, vec3 e
   } else if (type == 9) {
     // Flow field: slow ink-like drift with self-advection.
     return flowOperator(q, scale, t) * amount;
+  } else if (type == 10) {
+    // Fractal fold: kaleidoscopic iterated folding of the lookup point.
+    return foldOperator(q, scale, t, extra.x) * amount;
   }
   return vec2(0.0);
 }

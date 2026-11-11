@@ -32,18 +32,27 @@ describe("warp operator schema", () => {
     expect(amount && amount.type === "float" && amount.min).toBeLessThan(0);
   });
 
-  it("lists the ten operators, with the first four in their original positions", () => {
-    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl", "flow"]);
+  it("lists the eleven operators, with the first four in their original positions", () => {
+    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl", "flow", "fold"]);
   });
 
-  it("every type has the common settings, and only Curl noise has more", () => {
+  it("every type has the common settings, and only Curl noise and Fractal fold have more", () => {
     const names = (t: (typeof WARP_OP_TYPES)[number]) => warpOpSpecs(t).map((s) => s.name);
     const common = names("radial");
     for (const type of WARP_OP_TYPES) {
       expect(names(type).slice(0, common.length)).toEqual(common);
-      if (type !== "curl") expect(names(type)).toEqual(common);
+      if (type !== "curl" && type !== "fold") expect(names(type)).toEqual(common);
     }
     expect(names("curl").slice(common.length)).toEqual(["octaves", "turbulence", "flow"]);
+  });
+
+  it("fractal fold adds an iterations setting from 3 to 6", () => {
+    const names = warpOpSpecs("fold").map((s) => s.name);
+    expect(names.slice(-1)).toEqual(["iterations"]);
+    const spec = warpOpSpecs("fold").find((s) => s.name === "iterations");
+    expect(spec && spec.type === "int" && [spec.min, spec.max]).toEqual([3, 6]);
+    expect(defaultsFor(warpOpSpecs("fold")).iterations).toBe(4);
+    expect(WARP_OP_LABELS.fold).toBeTruthy();
   });
 
   it("flow field has the common settings and a label", () => {
