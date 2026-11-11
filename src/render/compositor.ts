@@ -33,8 +33,18 @@ import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import blurSrc from './shaders/blur.frag.glsl?raw';
 import { BlurChain, bloomPlan, type BloomPlan } from './blurChain';
+import { VIGNETTE_BLENDS, VIGNETTE_SHAPES } from '../presets/layerSchemas';
 import { ColourMapTextures, GRADIENT_DEFAULT_A, GRADIENT_DEFAULT_B, colourMapIndexNumber, gradientNameOr } from './colourMap';
 import copySrc from './shaders/copy.frag.glsl?raw';
+
+/** Reads "#rrggbb" into `out` (0..1 each). Anything else gives black. */
+export function parseHexColour(hex: string, out: [number, number, number]): [number, number, number] {
+  const ok = /^#[0-9a-fA-F]{6}$/.test(hex);
+  out[0] = ok ? parseInt(hex.slice(1, 3), 16) / 255 : 0;
+  out[1] = ok ? parseInt(hex.slice(3, 5), 16) / 255 : 0;
+  out[2] = ok ? parseInt(hex.slice(5, 7), 16) / 255 : 0;
+  return out;
+}
 
 /** Post settings with identity values (see post.frag.glsl). */
 export const POST_IDENTITY = {
@@ -159,6 +169,13 @@ export class Compositor implements RenderLayer {
   private mapA = GRADIENT_DEFAULT_A;
   private mapB = GRADIENT_DEFAULT_B;
   private colourTextures: ColourMapTextures | null = null;
+  // Vignette options (Slice 18.9). The defaults are the classic dark oval vignette.
+  private vigShape = 0;
+  private vigBlend = 0;
+  private vigSoft = 0.4;
+  private vigColourHex = '#000000';
+  private readonly vigColour: [number, number, number] = [0, 0, 0];
+  private vigGradient: string | null = null; // null = one colour
   private readonly plan: BloomPlan = { level: 0, spread: 1, weights: [1, 0, 0] };
   private beatEnv = 0;
   private readonly blurFn = (src: WebGLTexture, stepX: number, stepY: number, target: RenderTarget): void => {
@@ -284,6 +301,17 @@ export class Compositor implements RenderLayer {
     this.mapBy = colourMapIndexNumber(values.colourMapBy);
     this.mapA = gradientNameOr(values.colourMapGradient, GRADIENT_DEFAULT_A);
     this.mapB = gradientNameOr(values.colourMapGradient2, GRADIENT_DEFAULT_B);
+    this.vigShape = Math.max(0, (VIGNETTE_SHAPES as readonly string[]).indexOf(String(values.vignetteShape ?? 'oval')));
+    this.vigBlend = Math.max(0, (VIGNETTE_BLENDS as readonly string[]).indexOf(String(values.vignetteBlend ?? 'darken')));
+    const soft = values.vignetteSoftness;
+    this.vigSoft = typeof soft === 'number' && Number.isFinite(soft) ? Math.min(1, Math.max(0.02, soft)) : 0.4;
+    const hex = typeof values.vignetteColour === 'string' ? values.vignetteColour : '#000000';
+    if (hex !== this.vigColourHex) {
+      this.vigColourHex = hex;
+      parseHexColour(hex, this.vigColour);
+    }
+    const grad = values.vignetteGradient;
+    this.vigGradient = typeof grad === 'string' && grad !== 'none' ? gradientNameOr(grad, GRADIENT_DEFAULT_A) : null;
   }
 
   /** Global Director camera and color uniforms (Sector 483, Slice 7.31). */
@@ -797,6 +825,20 @@ export class Compositor implements RenderLayer {
       gl.activeTexture(gl.TEXTURE6);
       gl.bindTexture(gl.TEXTURE_2D, tex.texture(this.mapMix > 0 ? this.mapB : this.mapA));
     }
+    // Vignette gradient (unit 7), only when the vignette is on and uses one.
+    const useVigGrad = p.vignette > 0 && this.vigGradient !== null;
+    if (useVigGrad) {
+      const tex = (this.colourTextures ??= new ColourMapTextures(gl));
+      gl.activeTexture(gl.TEXTURE7);
+      gl.bindTexture(gl.TEXTURE_2D, tex.texture(this.vigGradient!));
+    }
+    gl.uniform1i(this.loc(prog, 'uVigGrad'), 7);
+    gl.uniform1f(this.loc(prog, 'uVigUseGrad'), useVigGrad ? 1 : 0);
+    gl.uniform1i(this.loc(prog, 'uVigShape'), this.vigShape);
+    gl.uniform1i(this.loc(prog, 'uVigBlend'), this.vigBlend);
+    gl.uniform1f(this.loc(prog, 'uVigSoft'), this.vigSoft);
+    gl.uniform3f(this.loc(prog, 'uVigColour'), this.vigColour[0], this.vigColour[1], this.vigColour[2]);
+    gl.uniform1f(this.loc(prog, 'uAspect'), this.w / Math.max(this.h, 1));
     gl.uniform1i(this.loc(prog, 'uMapA'), 5);
     gl.uniform1i(this.loc(prog, 'uMapB'), 6);
     gl.uniform1f(this.loc(prog, 'uMapAmt'), this.mapAmt);

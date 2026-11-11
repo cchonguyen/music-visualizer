@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Compositor, RETAIN_MAX_BYTES, RETAIN_MAX_SCENES, aspectBox, retainLimit, sceneBufferBytes } from './compositor';
+import { Compositor, parseHexColour, RETAIN_MAX_BYTES, RETAIN_MAX_SCENES, aspectBox, retainLimit, sceneBufferBytes } from './compositor';
 import { Scene } from './scene';
 import type { AudioFrame } from '../audio/types';
 import type { RenderLayer, RenderTarget } from './layer';
@@ -673,5 +673,75 @@ describe('colour map (Slice 18.8)', () => {
     expect(at).toBeGreaterThan(0);
     expect(at).toBeLessThan(postSrc.indexOf('uBloomAmt > 0.0'));
     expect(at).toBeLessThan(postSrc.indexOf('applySafety(c)'));
+  });
+});
+
+describe('vignette options (Slice 18.9)', () => {
+  function frameWith(post: Record<string, number | string>) {
+    const t = createTracingGl();
+    const comp = new Compositor([new Scene('a', [spyLayer()])]);
+    comp.init(t.gl);
+    comp.resize(64, 36, 1);
+    comp.setPost(post);
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 3; i++) comp.draw(FRAME, clock(0.1), TARGET);
+    const g = t.gl as unknown as Record<string, { mock: { calls: unknown[][] }; mockClear: () => void }>;
+    g.uniform1i!.mockClear();
+    g.uniform3f!.mockClear();
+    t.uniforms.length = 0;
+    comp.draw(FRAME, clock(0.1), TARGET);
+    const last = (name: string) => t.uniforms.filter((u) => u.name === name).pop()?.value;
+    const named = (fn: string, name: string) => g[fn]!.mock.calls.filter((c) => (c[0] as { name: string } | null)?.name === name).pop();
+    return { comp, last, ints: (n: string) => named('uniform1i', n)?.[1], colour: () => named('uniform3f', 'uVigColour')?.slice(1) };
+  }
+
+  it('the defaults are the classic vignette: oval, darken, black, no gradient, softness 0.4', () => {
+    const { last, ints, colour } = frameWith({ vignette: 0.5 });
+    expect(last('uVignette')).toBe(0.5);
+    expect(ints('uVigShape')).toBe(0);
+    expect(ints('uVigBlend')).toBe(0);
+    expect(last('uVigSoft')).toBe(0.4);
+    expect(last('uVigUseGrad')).toBe(0);
+    expect(colour()).toEqual([0, 0, 0]);
+  });
+
+  it('the shader fade with softness 0.4 is the old smoothstep from 0.35 to 0.75', () => {
+    expect(0.55 - 0.4 * 0.5).toBeCloseTo(0.35, 9);
+    expect(0.55 + 0.4 * 0.5).toBeCloseTo(0.75, 9);
+    expect(postSrc).toContain('smoothstep(0.55 - uVigSoft * 0.5, 0.55 + uVigSoft * 0.5, d)');
+  });
+
+  it('passes shape, blend, softness, colour and the aspect to the shader', () => {
+    const { last, ints, colour } = frameWith({ vignette: 0.5, vignetteShape: 'box', vignetteBlend: 'add', vignetteSoftness: 0.7, vignetteColour: '#ff8000' });
+    expect(ints('uVigShape')).toBe(2);
+    expect(ints('uVigBlend')).toBe(2);
+    expect(last('uVigSoft')).toBe(0.7);
+    expect(colour()![0]).toBe(1);
+    expect(colour()![1]).toBeCloseTo(128 / 255, 6);
+    expect(last('uAspect')).toBeCloseTo(64 / 36, 6);
+  });
+
+  it('uses the gradient texture only when one is chosen and the vignette is on', () => {
+    expect(frameWith({ vignette: 0.5, vignetteGradient: 'sunset' }).last('uVigUseGrad')).toBe(1);
+    expect(frameWith({ vignette: 0.5, vignetteGradient: 'none' }).last('uVigUseGrad')).toBe(0);
+    expect(frameWith({ vignette: 0, vignetteGradient: 'sunset', saturation: 1.2 }).last('uVigUseGrad')).toBe(0);
+  });
+
+  it('unknown shape, blend and colour values fall back to the classic ones', () => {
+    const { ints, colour } = frameWith({ vignette: 0.5, vignetteShape: 'star', vignetteBlend: 'melt', vignetteColour: 'red' });
+    expect(ints('uVigShape')).toBe(0);
+    expect(ints('uVigBlend')).toBe(0);
+    expect(colour()).toEqual([0, 0, 0]);
+  });
+
+  it('parseHexColour reads #rrggbb and gives black for anything else', () => {
+    const out: [number, number, number] = [9, 9, 9];
+    expect(parseHexColour('#00ff00', out)).toEqual([0, 1, 0]);
+    expect(parseHexColour('nope', out)).toEqual([0, 0, 0]);
+  });
+
+  it('the vignette is applied before the clamp and the safety rules', () => {
+    expect(postSrc.indexOf('uVigBlend == 0')).toBeGreaterThan(0);
+    expect(postSrc.indexOf('uVigBlend == 0')).toBeLessThan(postSrc.indexOf('applySafety(c)'));
   });
 });
