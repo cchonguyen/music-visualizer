@@ -19,7 +19,8 @@ import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
-import { applyLinkedPreset, hasCrownLayer, hasLinks } from './presets/loader';
+import { applyLinkedPreset, hasCrownLayer, hasLinks, restoreBasePreset } from './presets/loader';
+import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
 import { LinkRunner, ReactionBank } from './presets/links';
 import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
@@ -197,6 +198,8 @@ function start(): void {
   let benchLayer: GpuTimedLayer | null = null;
   const linkRunner = new LinkRunner();
   const reactionBank = new ReactionBank();
+  // Presets whose scene currently holds reacted values, so they can be put back when reactions stop.
+  const reactedIds = new Set<string>();
   const director = getGlobalDirector();
   // Auto-cycle (T2): off by default. Keys: C timer, B beat, X shuffle.
   const cycle: CycleOptions = { ...DEFAULT_CYCLE };
@@ -672,7 +675,13 @@ function start(): void {
     if (session && shown) {
       const entry = session.get(shown);
       if (entry) crownOn = hasCrownLayer(entry.preset);
-      const reactions = entry ? reactionBank.engineFor(shown, entry.preset.reactions) : null;
+      // A preset's own reaction style wins over the global one (Off by default, so old presets look the same).
+      const styleReactions = entry ? reactionsForStyle(effectiveReactionStyle(entry.preset.reactionStyle, getReactionStyle())) : undefined;
+      const reactions = entry ? reactionBank.engineFor(shown, entry.preset.reactions, styleReactions) : null;
+      if (reactions) reactedIds.add(shown);
+      if (entry && !reactions && !hasLinks(entry.preset) && reactedIds.delete(shown)) {
+        compositor?.setPost(restoreBasePreset(session.previewOf(shown), session.sceneOf(shown)));
+      }
       if (entry && (hasLinks(entry.preset) || reactions)) {
         const post = applyLinkedPreset(session.previewOf(shown), session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec, reactions);
         compositor?.setPost(post);

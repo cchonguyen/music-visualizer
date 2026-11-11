@@ -183,6 +183,15 @@ export function applyPresetToScene(preset: Preset, scene: Scene, _gl?: WebGL2Ren
   });
 }
 
+/**
+ * Puts a scene back to the preset's plain values and returns the plain Post values. Used when reactions stop
+ * (the style was turned Off) so the scene does not keep the last reacted values.
+ */
+export function restoreBasePreset(preset: Preset, scene: Scene): Record<string, ParamValue> {
+  applyPresetToScene(preset, scene);
+  return valuesOf(preset.post);
+}
+
 /** True when the preset has reactions (Slice 17.4). */
 export function hasReactions(preset: Preset): boolean {
   return (preset.reactions?.length ?? 0) > 0;

@@ -27,7 +27,8 @@ export interface Reaction {
   /**
    * kick: jump by `amount`, then ease back to the base value.
    * step: alternate between the base value and base + `amount`, easing to each, and hold.
-   * flip: reverse the sign of the value (centred controls such as rotation), easing through zero.
+   * flip: reverse the sign of the value, including any kick or step offsets on the same control, easing through
+   *       zero. Meant for centred controls such as rotation (a flip of a control that cannot go negative is clamped).
    * drift: slow seeded wander within +-`amount`, a new target every `ease` seconds. Ignores the trigger.
    * pick: on each trigger, ease to a seeded random offset within +-`amount`, and hold.
    */
@@ -324,7 +325,7 @@ export class ReactionEngine {
   }
 
   /**
-   * The value of one control after reactions: base × flip + offset × (max − min), clamped to the range.
+   * The value of one control after reactions: (base + offset × (max − min)) × flip, clamped to the range.
    * Returns `value` untouched when nothing targets that control.
    */
   apply(group: ReactionGroup, name: string, value: number, spec: { min: number; max: number }): number {
@@ -340,7 +341,7 @@ export class ReactionEngine {
       hit = true;
     }
     if (!hit) return value;
-    return clamp(value * mul + add * (spec.max - spec.min), spec.min, spec.max);
+    return clamp((value + add * (spec.max - spec.min)) * mul, spec.min, spec.max);
   }
 
   /** True when at least one reaction targets this control (lets callers skip work for the rest). */
