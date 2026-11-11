@@ -6,6 +6,7 @@ import type { AudioFrame } from '../audio/types';
 import { AUDIO_SOURCES, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, type AudioLink, type AudioSource, type Settings } from './format';
 import type { ParamSpec, ParamValue } from './schema';
 import { morphValue } from './morph';
+import { ReactionEngine, type Reaction, type ReactionGroup } from './reactions';
 
 export interface LinkInputs {
   frame: AudioFrame;
@@ -94,6 +95,53 @@ export function sourceValue(source: AudioSource, inputs: LinkInputs, rateHz: num
   }
 }
 
+/** Which reaction engine to apply, and which group of controls the settings being resolved belong to. */
+export interface ReactionTarget {
+  engine: ReactionEngine;
+  group: ReactionGroup;
+}
+
+function sameReactions(a: readonly Reaction[], b: readonly Reaction[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (x.trigger.type !== y.trigger.type || x.trigger.n !== y.trigger.n) return false;
+    if (x.response !== y.response || x.amount !== y.amount || x.ease !== y.ease || x.seed !== y.seed) return false;
+    if (x.target.group !== y.target.group || x.target.name !== y.target.name) return false;
+  }
+  return true;
+}
+
+function seedOf(scope: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < scope.length; i += 1) h = Math.imul(h ^ scope.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/**
+ * One reaction engine per preset scope. An engine is rebuilt (and starts from rest) when the preset's reactions
+ * change, which is checked field by field each frame so nothing is allocated while they stay the same.
+ * The seed comes from the scope, so the same preset always reacts the same way.
+ */
+export class ReactionBank {
+  private entries = new Map<string, { engine: ReactionEngine; snapshot: Reaction[] }>();
+
+  /** The engine for this preset, or null when it has no reactions. */
+  engineFor(scope: string, reactions: readonly Reaction[] | undefined): ReactionEngine | null {
+    if (!reactions || reactions.length === 0) {
+      this.entries.delete(scope);
+      return null;
+    }
+    const known = this.entries.get(scope);
+    if (known && sameReactions(known.snapshot, reactions)) return known.engine;
+    const snapshot = reactions.map((r) => ({ ...r, trigger: { ...r.trigger }, target: { ...r.target } }));
+    const engine = new ReactionEngine(snapshot, seedOf(scope));
+    this.entries.set(scope, { engine, snapshot });
+    return engine;
+  }
+}
+
 /** Keeps the smoothed state of every link. One runner per preset is enough. */
 export class LinkRunner {
   private state = new Map<string, number>();
@@ -101,8 +149,10 @@ export class LinkRunner {
   /**
    * Resolves one group of settings (a layer, or feedback). `scope` must be unique per group,
    * for example "L0" for the first layer. Settings without a link come back unchanged.
+   * Order for a number setting: base value, morph, audio link, reaction, clamp to the setting's range.
+   * `reactions` is passed only for Feedback and Post (Stage 17); the safety limiter still runs last in the compositor.
    */
-  resolve(scope: string, settings: Settings, specs: readonly ParamSpec[], inputs: LinkInputs, dtSec: number): Record<string, ParamValue> {
+  resolve(scope: string, settings: Settings, specs: readonly ParamSpec[], inputs: LinkInputs, dtSec: number, reactions?: ReactionTarget): Record<string, ParamValue> {
     const out: Record<string, ParamValue> = {};
     for (const spec of specs) {
       const setting = settings[spec.name];
@@ -114,7 +164,8 @@ export class LinkRunner {
         continue;
       }
       const morph = setting.morph;
-      if (!link && !morph) {
+      const reacts = reactions !== undefined && reactions.engine.targets(reactions.group, spec.name);
+      if (!link && !morph && !reacts) {
         out[spec.name] = base;
         continue;
       }
@@ -123,11 +174,17 @@ export class LinkRunner {
       if (!link) {
         // Morph only: no smoothing. Clamp to the range and round for ints.
         let value = Math.min(spec.max, Math.max(spec.min, typeof start === 'number' ? start : spec.default));
+        if (reacts) value = reactions.engine.apply(reactions.group, spec.name, value, spec);
         if (spec.type === 'int') value = Math.round(value);
         out[spec.name] = value;
         continue;
       }
-      out[spec.name] = this.linked(`${scope}.${spec.name}`, start, link, spec, inputs, dtSec);
+      let value = this.linked(`${scope}.${spec.name}`, start, link, spec, inputs, dtSec);
+      if (reacts) {
+        value = reactions.engine.apply(reactions.group, spec.name, value, spec);
+        if (spec.type === 'int') value = Math.round(value);
+      }
+      out[spec.name] = value;
     }
     return out;
   }
