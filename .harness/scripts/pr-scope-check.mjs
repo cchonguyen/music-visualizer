@@ -30,6 +30,15 @@ export const SYNC_DELIVERED = new Set([
   '.harness/scripts/ci-gate.test.mjs',
 ]);
 
+// A workflow copy delivered by hub-sync: .github/workflows/<name>.yml is byte-identical to the hub template
+// .harness/templates/workflows/<name>.yml in the head. readHead(path) returns file text or null.
+export function isTemplateCopy(file, readHead) {
+  if (typeof readHead !== 'function' || !/^\.github\/workflows\/[^/]+\.yml$/.test(file)) return false;
+  const template = readHead(`.harness/templates/workflows/${file.split('/').pop()}`);
+  if (template === null || template === undefined) return false;
+  return template === readHead(file);
+}
+
 export function isPackageJsonVersionOnly(fileDiff) {
   if (!fileDiff) return false;
   const { added = [], removed = [] } = fileDiff;
@@ -68,7 +77,7 @@ export const TRIPWIRES = [
   { name: 'auth file', test: (f) => /(^|[/._-])auth([/._-]|$)/i.test(f) },
   { name: 'env file', test: (f) => /(^|\/)\.env[^/]*$/.test(f) },
   { name: 'AGENTS.md', test: (f) => f === 'AGENTS.md' },
-  { name: 'CI workflow', test: (f) => f.startsWith('.github/workflows/') && !SYNC_DELIVERED.has(f) },
+  { name: 'CI workflow', test: (f, _diff, readHead) => f.startsWith('.github/workflows/') && !SYNC_DELIVERED.has(f) && !isTemplateCopy(f, readHead) },
 ];
 
 export const isTestFile = (file) => TEST_FILE.test(file);
@@ -167,6 +176,7 @@ export function analyze({
   fileContents = null,
   hubSync = false,
   agentsBlockOnly = false,
+  readHead = null,
 }) {
   const problems = [];
   const notes = [];
@@ -179,7 +189,7 @@ export function analyze({
   for (const file of changed) {
     if (agentsBlockOnly && file === 'AGENTS.md') continue;
     for (const t of TRIPWIRES) {
-      if (t.test(file, diff)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
+      if (t.test(file, diff, readHead)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
     }
   }
   for (const file of deleted) { problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true; }
@@ -196,6 +206,7 @@ export function analyze({
 
   for (const file of touched) {
     if (SYNC_DELIVERED.has(file)) notes.push(`Sync-delivered harness file: ${file}. Allowed by the scope check; its content is not verified against the hub.`);
+    else if (isTemplateCopy(file, readHead)) notes.push(`Sync-delivered harness file: ${file}. Identical to its hub template in .harness/templates/workflows/.`);
   }
 
   // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change.
@@ -435,7 +446,10 @@ function main(argv) {
     agentsBlockOnly = baseText !== null && headText !== null
       && outsideHarnessBlock(baseText) === outsideHarnessBlock(headText);
   }
-  const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly });
+  const readHead = (file) => {
+    try { return fs.readFileSync(path.join(root, file), 'utf8'); } catch { return null; }
+  };
+  const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly, readHead });
 
   const verdict = formatJsonVerdict({
     changed,

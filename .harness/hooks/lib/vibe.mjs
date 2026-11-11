@@ -12,7 +12,8 @@ export const resolveRoot = () => {
   try { return gitIn(process.cwd(), ['rev-parse', '--show-toplevel']); } catch { return process.cwd(); }
 };
 
-export const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
+// Marker counts only right after the bold title or at line end (same rule as slice-parser).
+export const ACTIVE_TASK = /^\s*-\s*\[.\][^*]*\*\*[^*]+\*\*(?: \[IN_PROGRESS\]|.* \[IN_PROGRESS\]\s*$)/;
 export const VIBE_EXCLUDES = ['.spec/', '.claude/', '.harness/'];
 
 export const activeLines = (root) => {

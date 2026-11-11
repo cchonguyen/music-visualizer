@@ -36,6 +36,16 @@
 - **Exploration Hint:** When you cannot locate the relevant code within 2 searches, delegate exploration to the `discovery` subagent (Haiku) or built-in Explore agent rather than reading large numbers of unfamiliar files into main context.
 - **Zero Manual Script Burden:** Execute `.harness/scripts/*.mjs` via `node` directly on the user's behalf.
 
+## Slice Issues
+- `/spec` opens one GitHub Issue per slice with labels `slice`, `status:backlog` and the repo's project label (`project:<repo>`). It then writes `Issue: #N` on the slice line.
+- Every slice pull request body includes `Closes #N`.
+- With nothing in progress, look for open issues labelled `status:ready` first (oldest first). Then use the `.spec/PROGRESS.md` backlog.
+- Never set status labels by hand. Workflows set them from pull request events.
+- To block a slice or ask the operator something, comment `/block <reason>` or `/needs-me <question>` on the issue. The other commands are `/ready`, `/backlog`, `/unblock` and `/wontdo`.
+- Mark a slice that touches a gate with the `gate-change` label.
+- Use the GitHub MCP tools (`issue_write`, `add_issue_comment`) for issues. Never use `gh`.
+- A slice already in `.spec/PROGRESS.md` with no `Issue: #N` gets its issue before work starts. The status label follows the pull request, so the board shows it.
+
 ## Web-First Execution
 - Run all scripts, tests, and git operations yourself in the Cloud container. Never ask the operator to run something you can run.
 - When blocked, tell apart the two kinds of help and use the step-by-step `Needed from you:` format for both:

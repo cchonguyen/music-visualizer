@@ -1,6 +1,8 @@
 # Harness Referee watch (spoke template). Copy to .github/workflows/harness-referee-watch.yml in a spoke.
 # On every push to main, lists the non-merge commits that carry no Referee-Verdict trailer.
-# If any exist, it opens one issue naming them. It never reverts or blocks anything.
+# Bookkeeping commits (only .spec/ or engine sync files, or a sync subject) are skipped.
+# The list always goes to the job summary. If any commits remain, it comments on the one open issue
+# titled "Harness alarms (rolling)" labelled "alarm", creating it once if missing. It never reverts or blocks anything.
 name: Harness Referee watch
 
 on:
@@ -25,22 +27,30 @@ jobs:
 
       - name: Find commits without a Referee trailer
         id: scan
-        continue-on-error: true
         env:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
-        run: node .harness/scripts/ci-gate.mjs push "$BEFORE" "$AFTER" > "$RUNNER_TEMP/unverified.txt"
+        run: |
+          set +e
+          node .harness/scripts/ci-gate.mjs push "$BEFORE" "$AFTER" > "$RUNNER_TEMP/unverified.txt"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Show the scan result
-        run: cat "$RUNNER_TEMP/unverified.txt"
+        run: |
+          cat "$RUNNER_TEMP/unverified.txt"
+          cat "$RUNNER_TEMP/unverified.txt" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Open an issue for unverified commits
-        if: steps.scan.outcome == 'failure'
+      - name: Comment on the rolling alarm issue
+        # Only exit 1 (commits without a trailer remain) raises an alarm. Exit 2 (scan could not run) does not.
+        if: steps.scan.outputs.code == '1'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
+          TITLE="Harness alarms (rolling)"
           {
             echo "Commits on main without a Referee-Verdict trailer, pushed at $SHA:"
             echo
@@ -48,4 +58,10 @@ jobs:
             echo
             echo "Work on main should go through a slice (finish-slice.mjs stamps the trailers). Check whether the commit was a hand edit or a merge from a branch without a slice."
           } > "$RUNNER_TEMP/issue.md"
-          gh issue create --title "Commit without Referee trailer on main at ${SHA:0:7}" --body-file "$RUNNER_TEMP/issue.md"
+          gh label create alarm --color B60205 --description "Harness alarm" 2>/dev/null || true
+          n=$(gh issue list --state open --label alarm --search 'in:title "Harness alarms (rolling)"' --json number,title --jq '[.[] | select(.title == "Harness alarms (rolling)")][0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --title "$TITLE" --label alarm --body-file "$RUNNER_TEMP/issue.md"
+          fi

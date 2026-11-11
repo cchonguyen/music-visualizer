@@ -1,0 +1,21 @@
+{
+  "labels": [
+    { "name": "status:backlog", "color": "c5def5", "description": "Not started and not yet scheduled" },
+    { "name": "status:ready", "color": "bfdadc", "description": "Scoped and ready to be picked up" },
+    { "name": "status:in-progress", "color": "5319e7", "description": "Being worked on now" },
+    { "name": "status:blocked-on-operator", "color": "d93f0b", "description": "Waiting on Charlie: a decision, input or an approval" },
+    { "name": "status:blocked", "color": "b60205", "description": "Blocked by something other than the operator, such as a failing check or another slice" },
+    { "name": "needs-input", "color": "fbca04", "description": "Needs an answer before work can continue" },
+    { "name": "gate-change", "color": "e99695", "description": "Changes the harness slice gate or its rules" },
+    { "name": "slice", "color": "0e8a16", "description": "A unit of planned work tracked in PROGRESS.md" },
+    { "name": "idea", "color": "1d76db", "description": "A suggestion that is not yet a plan" },
+    { "name": "plan", "color": "0052cc", "description": "A plan listing slices for approval" },
+    { "name": "alarm", "color": "e11d21", "description": "Something is broken and needs attention, such as a red main" }
+  ],
+  "projects": {
+    "claude-harness-hub": "project:hub",
+    "music-visualizer": "project:music-visualizer",
+    "Concert-Tracker": "project:concert-tracker"
+  },
+  "projectColor": "6f42c1"
+}
