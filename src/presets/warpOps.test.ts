@@ -31,4 +31,24 @@ describe("warp operator schema", () => {
     const amount = warpOpSpecs("radial").find((s) => s.name === "amount");
     expect(amount && amount.type === "float" && amount.min).toBeLessThan(0);
   });
+
+  it("lists the eight operators, with the first four in their original positions", () => {
+    expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere"]);
+  });
+
+  it("every type shares the same setting names", () => {
+    const names = (t: (typeof WARP_OP_TYPES)[number]) => warpOpSpecs(t).map((s) => s.name);
+    for (const type of WARP_OP_TYPES) expect(names(type)).toEqual(names("radial"));
+  });
+
+  it("tile and mirror starts at 2 tiles, the others at 1", () => {
+    const scaleDefault = (t: (typeof WARP_OP_TYPES)[number]) => defaultsFor(warpOpSpecs(t)).scale;
+    expect(scaleDefault("tile")).toBe(2);
+    expect(scaleDefault("sphere")).toBe(1);
+    expect(scaleDefault("radial")).toBe(1);
+  });
+
+  it("recognises the new operator names", () => {
+    for (const name of ["stretch", "tile", "tunnel", "sphere"]) expect(isWarpOpType(name)).toBe(true);
+  });
 });

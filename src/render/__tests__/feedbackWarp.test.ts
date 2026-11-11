@@ -10,6 +10,8 @@ import type { RenderClock } from '../clock';
 import type { Preset } from '../../presets/format';
 import { SpectralTerrainLayer } from '../layers/spectralTerrain';
 import { clearTerrainState } from '../terrainStore';
+import warpFieldSrc from '../shaders/warpField.frag.glsl?raw';
+import { WARP_OP_TYPES } from '../../presets/warpOps';
 
 function createMockGl(): WebGL2RenderingContext {
   const gl = {
@@ -637,5 +639,32 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(lines).toHaveLength(2);
       for (const l of lines) expect(l).toContain('max(uWarpAmp, 0.0)');
     });
+  });
+});
+
+describe('Warp field operators (Slice 18.3)', () => {
+  it('the field shader has a branch for every operator type, in list order', () => {
+    for (let i = 0; i < WARP_OP_TYPES.length; i++) expect(warpFieldSrc).toContain(`type == ${i}`);
+    expect(warpFieldSrc).toContain('// 0 radial, 1 swirl, 2 ripple, 3 stripes, 4 stretch, 5 tile, 6 tunnel, 7 sphere');
+  });
+
+  it('the field shader compiles via compileProgram with mock WebGL', () => {
+    const gl = createMockGl();
+    expect(compileProgram(gl, FULLSCREEN_VERT, warpFieldSrc, 'warpField:test')).toBeDefined();
+    expect(gl.linkProgram).toHaveBeenCalledTimes(1);
+  });
+
+  it('a scene with all four new operators draws one field pass and turns the lookup on', () => {
+    const gl = createMockGl();
+    Object.assign(gl, { uniform1iv: vi.fn(), uniform1fv: vi.fn(), uniform2fv: vi.fn() });
+    const scene = new Scene('ops', []);
+    scene.init(gl);
+    const values = { amount: 0.5, scale: 1, speed: 0.2, centreX: 0, centreY: 0 };
+    scene.setWarpOps((['stretch', 'tile', 'tunnel', 'sphere'] as const).map((type) => ({ type, enabled: true, values })));
+    scene.draw(makeMockFrame(), mockClock);
+    const types = (gl.uniform1iv as unknown as { mock: { calls: [unknown, Int32Array][] } }).mock.calls[0]![1];
+    expect(Array.from(types)).toEqual([4, 5, 6, 7]);
+    const on = (gl.uniform1f as unknown as { mock: { calls: [unknown, number][] } }).mock.calls.filter(([loc]) => (loc as { name: string })?.name === 'uWarpFieldOn');
+    expect(on[on.length - 1]![1]).toBe(1);
   });
 });
