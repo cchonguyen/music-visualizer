@@ -20,7 +20,7 @@ describe('built-in presets', () => {
   it('all load with no warnings', () => {
     for (const b of BUILTIN_PRESETS) expect(b.warnings).toEqual([]);
     expect(BUILTIN_PRESETS.slice(0, 3).map((b) => b.id)).toEqual(['crown', 'flight', 'bars']);
-    expect(BUILTIN_PRESETS).toHaveLength(23);
+    expect(BUILTIN_PRESETS).toHaveLength(6);
   });
 
   it('their tunnel and particle JSON values equal the schema defaults (so the look is unchanged)', () => {
@@ -60,7 +60,8 @@ describe('buildScene', () => {
   });
 
   it('every registered layer type has a factory and a schema', () => {
-    expect(Object.keys(LAYER_FACTORIES).sort()).toEqual(Object.keys(LAYER_SPECS).sort());
+    // reactionDiffusion is retired (Slice 15.10): schema kept for old presets, no factory.
+    expect(Object.keys(LAYER_FACTORIES).sort()).toEqual(Object.keys(LAYER_SPECS).filter((k) => k !== 'reactionDiffusion').sort());
   });
 
   it('registers shape as the FIRST factory in LAYER_FACTORIES', () => {

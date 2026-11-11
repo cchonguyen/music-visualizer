@@ -19,7 +19,7 @@ import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
-import { applyLinkedPreset, hasCrownLayer, hasLinks, restoreBasePreset } from './presets/loader';
+import { applyLinkedPreset, hasCrownLayer, hasLinks, presetHasRetiredLayer, restoreBasePreset } from './presets/loader';
 import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
 import { LinkRunner, ReactionBank } from './presets/links';
 import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
@@ -273,10 +273,16 @@ function start(): void {
     const order = () => liveSession.list().map((e) => e.id);
     const remembered = readStoredPresetId();
     let currentId = remembered && liveSession.get(remembered) ? remembered : 'crown';
+    let retiredNoticeShown = false;
     const switchTo = (id: string, announce = false) => {
       currentId = id;
       cycler.reset();
       liveSession.show(id);
+      // Old presets may still hold a retired ReactionDiffusion layer. It is skipped; say so once per session.
+      if (!retiredNoticeShown && presetHasRetiredLayer(liveSession.get(id)?.preset)) {
+        retiredNoticeShown = true;
+        showNotice('ReactionDiffusion has been retired. Its layer is skipped in this preset.', 'info', 6000);
+      }
       crownOn = hasCrownLayer(liveSession.get(id)?.preset);
       director.notifyPresetChanged(liveSession.get(id)?.preset);
       storePresetId(id);

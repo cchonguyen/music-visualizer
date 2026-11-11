@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
   ALL_PRESETS,
+  REVIEW_PRESETS,
   SYSTEM_PRESET_CATEGORIES,
   SYSTEM_SUBFOLDER_LABELS,
   getSystemSubfolder,
   type SystemSubfolder,
   SCHEMAS,
 } from '../builtin';
-import { PRESET_THEMES, PRESET_MOODS } from '../format';
+import { PRESET_THEMES, PRESET_MOODS, parsePreset } from '../format';
+import { LAYER_FACTORIES, buildScene, presetHasRetiredLayer } from '../loader';
 import { PRESET_TAXONOMY } from '../builtin';
 import { presetCost } from '../cost';
 import {
@@ -66,7 +68,6 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     '09-chladni-cymatic-sand',
     '10-phyllotaxis-spiral-bloom',
     '11-ferrofluid-magnetic-crown',
-    '12-reaction-diffusion-coral',
   ];
 
   const EXPECTED_CLASSICS_IDS = [
@@ -74,24 +75,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     'flight',
     'bars',
     'starter-vortex',
-    'starter-honeycomb',
-    'starter-pentagon-pulse',
-    'starter-checker-warp',
-    'starter-stripe-drift',
-    'starter-kaleido',
-    'starter-soft-smoke',
-    'starter-circle-wave',
-    'starter-ember',
-    'starter-quiet-tunnel',
-    'tex-glass-tunnel',
-    'tex-sub-bloom',
-    'tex-silk-rings',
-    'tex-static-rain',
-    'tex-prism-bars',
-    'tex-pulse-skin',
-    'tex-grain-crown',
     'tex-ripple-field',
-    'tex-neon-weave',
     'tex-dust-wave',
   ];
 
@@ -105,8 +89,8 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
 
   it('categorizes all 45+ built-in presets accurately into their subfolders', () => {
     expect(EXPECTED_SHOWCASE_IDS).toHaveLength(14);
-    expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(12);
-    expect(EXPECTED_CLASSICS_IDS).toHaveLength(23);
+    expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(11);
+    expect(EXPECTED_CLASSICS_IDS).toHaveLength(6);
 
     // Verify showcase subfolder assignments
     for (const id of EXPECTED_SHOWCASE_IDS) {
@@ -128,7 +112,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   });
 
   it('ensures every built-in preset in ALL_PRESETS belongs to exactly one subfolder', () => {
-    expect(ALL_PRESETS.length).toBeGreaterThanOrEqual(41);
+    expect(ALL_PRESETS.length).toBe(31);
     const validSubfolders: SystemSubfolder[] = ['showcase', 'flagship', 'classics'];
 
     const seenIds = new Set<string>();
@@ -289,9 +273,10 @@ describe('Slice 20.7: every built-in preset has a theme, a mood and a cost level
   });
 
   it('keeps no table row for a preset that does not exist', () => {
-    const ids = new Set(ALL_PRESETS.map((e) => e.id));
+    // Review presets (Slice 15.10) keep their rows so they are tagged if restored to the default list.
+    const ids = new Set([...ALL_PRESETS, ...REVIEW_PRESETS].map((e) => e.id));
     for (const id of Object.keys(PRESET_TAXONOMY)) expect(ids.has(id), id).toBe(true);
-    expect(Object.keys(PRESET_TAXONOMY).length).toBe(ALL_PRESETS.length);
+    expect(Object.keys(PRESET_TAXONOMY).length).toBe(ids.size);
   });
 
   it('spreads the set across several themes and moods', () => {
@@ -307,5 +292,43 @@ describe('Slice 20.7: every built-in preset has a theme, a mood and a cost level
     const first = ALL_PRESETS[0]!;
     expect(session.get(first.id)!.preset.theme).toBe(first.preset.theme);
     expect(session.get(first.id)!.preset.mood).toBe(first.preset.mood);
+  });
+
+  it('moves retired and near-duplicate presets out of the default list into the review folder', () => {
+    const REVIEW_IDS = [
+      '12-reaction-diffusion-coral',
+      'starter-honeycomb', 'starter-pentagon-pulse', 'starter-checker-warp', 'starter-stripe-drift',
+      'starter-kaleido', 'starter-soft-smoke', 'starter-circle-wave', 'starter-ember', 'starter-quiet-tunnel',
+      'tex-glass-tunnel', 'tex-sub-bloom', 'tex-silk-rings', 'tex-static-rain',
+      'tex-prism-bars', 'tex-pulse-skin', 'tex-grain-crown', 'tex-neon-weave',
+    ];
+    expect(REVIEW_PRESETS.map((e) => e.id)).toEqual(REVIEW_IDS);
+    const defaultIds = new Set(ALL_PRESETS.map((e) => e.id));
+    for (const id of REVIEW_IDS) {
+      expect(defaultIds.has(id)).toBe(false);
+      expect(getSystemSubfolder(id)).toBeUndefined();
+    }
+  });
+
+  it('keeps ReactionDiffusion out of the add-layer list', () => {
+    expect(Object.keys(LAYER_FACTORIES)).not.toContain('reactionDiffusion');
+  });
+
+  it('skips a ReactionDiffusion layer in an old preset without crashing', () => {
+    const old = parsePreset(
+      {
+        version: 1,
+        name: 'Old RD',
+        layers: [
+          { type: 'reactionDiffusion', enabled: true, params: {} },
+          { type: 'rings', enabled: true, params: {} },
+        ],
+      },
+      SCHEMAS,
+    ).preset;
+    expect(old.layers.map((l) => l.type)).toEqual(['reactionDiffusion', 'rings']);
+    expect(presetHasRetiredLayer(old)).toBe(true);
+    const scene = buildScene('old', old);
+    expect(scene.layers).toHaveLength(1);
   });
 });
