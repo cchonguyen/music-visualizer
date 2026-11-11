@@ -290,9 +290,6 @@ export class SpectralTerrainLayer implements RenderLayer {
     // Enable blending for occlusion skirts and lines
     gl.enable(gl.BLEND);
 
-    // Detect if invoked from legacy Slice 7.13 unit test asserting gl.LINE_STRIP
-    const isLegacyTest = (new Error().stack ?? '').includes('generators.test.ts');
-
     // Draw 64 perspective ridges from back to front (z = 0..63)
     for (let z = 0; z < TERRAIN_RIDGES; z++) {
       gl.uniform1i(this.uRidgeIndex, z);
@@ -309,28 +306,20 @@ export class SpectralTerrainLayer implements RenderLayer {
       gl.blendEquation(gl.FUNC_ADD);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 
-      if (isLegacyTest) {
-        // Legacy unit test fallback: LINE_STRIP (128 vertices)
-        gl.bindVertexArray(this.lineVao);
-        gl.drawArrays(gl.LINE_STRIP, 0, TERRAIN_BINS);
-      } else {
-        // Quad strip ribbon: 2 vertices per bin offset vertically by lineThickness (256 vertices)
-        gl.bindVertexArray(this.skirtVao);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
-      }
+      // Quad strip ribbon: 2 vertices per bin offset vertically by lineThickness (256 vertices)
+      gl.bindVertexArray(this.skirtVao);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, TERRAIN_BINS * 2);
     }
 
     // 3. Draw 3D front-to-back longitudinal perspective lines connecting the 64 rows
-    if (!isLegacyTest) {
-      const gridCols = Math.min(MAX_GRID_COLS, Math.max(0, this.p.gridCols ?? SPECTRAL_TERRAIN_DEFAULTS.gridCols));
-      if (gridCols > 0) {
-        gl.uniform1i(this.uIsSkirtPass, 2);
-        gl.blendEquation(gl.FUNC_ADD);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-        gl.bindVertexArray(this.lineVao);
-        for (let c = 0; c < gridCols; c++) {
-          gl.drawArrays(gl.LINE_STRIP, TERRAIN_BINS + c * TERRAIN_RIDGES, TERRAIN_RIDGES);
-        }
+    const gridCols = Math.min(MAX_GRID_COLS, Math.max(0, this.p.gridCols ?? SPECTRAL_TERRAIN_DEFAULTS.gridCols));
+    if (gridCols > 0) {
+      gl.uniform1i(this.uIsSkirtPass, 2);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      gl.bindVertexArray(this.lineVao);
+      for (let c = 0; c < gridCols; c++) {
+        gl.drawArrays(gl.LINE_STRIP, TERRAIN_BINS + c * TERRAIN_RIDGES, TERRAIN_RIDGES);
       }
     }
 
