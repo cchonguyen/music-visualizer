@@ -71,6 +71,14 @@ function makeFlags(): BandFlags {
 export class FrameBuilder {
   private readonly sampleRate: number;
   private readonly fftSize: number;
+  // Short-window analyser used only for onset timing (Slice 17.1). 0 means there is none.
+  private readonly fastFftSize: number;
+  private readonly fastSubStartBin: number;
+  private readonly fastSubEndBin: number;
+  private readonly fastSpectrum: Float32Array;
+  private readonly fastPrevSpectrum: Float32Array;
+  private readonly fastDetector: OnsetDetector;
+  private hasFastPrev = false;
 
   // Band bin ranges, all as [startBin, endBin) in the half-spectrum.
   private readonly subStartBin: number;
@@ -117,9 +125,16 @@ export class FrameBuilder {
   private prevTime: number | null = null;
   private kickEnv = 0;
 
-  constructor(sampleRate: number, fftSize: number) {
+  constructor(sampleRate: number, fftSize: number, fastFftSize = 0) {
     this.sampleRate = sampleRate;
     this.fftSize = fftSize;
+    this.fastFftSize = fastFftSize;
+    const fastBins = Math.max(0, Math.floor(fastFftSize / 2));
+    this.fastSpectrum = new Float32Array(fastBins);
+    this.fastPrevSpectrum = new Float32Array(fastBins);
+    this.fastSubStartBin = binForFrequency(SUB_LO_HZ, sampleRate, fastFftSize);
+    this.fastSubEndBin = endBinExclusive(SUB_HI_HZ, sampleRate, fastFftSize);
+    this.fastDetector = new OnsetDetector();
 
     this.subStartBin = binForFrequency(SUB_LO_HZ, sampleRate, fftSize);
     this.subEndBin = endBinExclusive(SUB_HI_HZ, sampleRate, fftSize);
@@ -179,6 +194,8 @@ export class FrameBuilder {
       spectrum: this.spectrum,
       smoothedSpectrum: this.smoothedSpectrum,
       sampleRate: this.sampleRate,
+      onset: false,
+      onsetStrength: 0,
     };
     // Splitting the waveform into three bands runs 10 filter passes over the whole buffer, so it is done on
     // first read each frame instead of on every build (Slice 16.9). The filters keep no state between frames,
@@ -207,6 +224,7 @@ export class FrameBuilder {
     timeSec: number,
     byteSpectrum: Uint8Array,
     floatWaveform: Float32Array,
+    fastByteSpectrum?: Uint8Array,
   ): AudioFrame {
     // Clamp dt so a hidden tab (huge gap) or a seek-back (negative gap) cannot
     // fling the envelope followers.
@@ -314,6 +332,8 @@ export class FrameBuilder {
     }
     frame.kickEnv = this.kickEnv;
 
+    this.stepFastOnset(timeSec, fastByteSpectrum, isKick, subOnset.strength);
+
     this.smoothSpectrum(dtSec);
 
     // Save this spectrum for the next frame's flux calculation.
@@ -340,6 +360,13 @@ export class FrameBuilder {
     this.midDetector.reset();
     this.highDetector.reset();
 
+    this.fastDetector.reset();
+    this.fastSpectrum.fill(0);
+    this.fastPrevSpectrum.fill(0);
+    this.hasFastPrev = false;
+    this.frame.onset = false;
+    this.frame.onsetStrength = 0;
+
     this.kickEnv = 0;
     this.frame.kickEnv = 0;
     this.frame.kickPulse = false;
@@ -351,6 +378,39 @@ export class FrameBuilder {
 
     this.frameIndex = 0;
     this.prevTime = null;
+  }
+
+  /**
+   * Short-window onset: the same flux and adaptive threshold as the kick, run on a small FFT so the rise is
+   * seen sooner than in the 8192-point window. Without a short spectrum it mirrors the normal kick.
+   */
+  private stepFastOnset(
+    timeSec: number,
+    fastByte: Uint8Array | undefined,
+    isKick: boolean,
+    kickStrength: number,
+  ): void {
+    const frame = this.frame;
+    if (this.fastFftSize <= 0 || !fastByte) {
+      frame.onset = isKick;
+      frame.onsetStrength = isKick ? kickStrength : 0;
+      return;
+    }
+    this.fastSpectrum.fill(0);
+    byteSpectrumToUnit(fastByte, this.fastSpectrum);
+    let level = 0;
+    for (let i = this.fastSubStartBin; i < this.fastSubEndBin; i += 1) level += this.fastSpectrum[i] ?? 0;
+    const count = this.fastSubEndBin - this.fastSubStartBin;
+    level = count > 0 ? level / count : 0;
+    const flux = this.hasFastPrev
+      ? spectralFlux(this.fastPrevSpectrum, this.fastSpectrum, this.fastSubStartBin, this.fastSubEndBin - 1)
+      : 0;
+    const result = this.fastDetector.step(flux, timeSec);
+    const fired = result.beat && level > 0.08;
+    frame.onset = fired;
+    frame.onsetStrength = fired ? result.strength : 0;
+    this.fastPrevSpectrum.set(this.fastSpectrum);
+    this.hasFastPrev = true;
   }
 
   private copyWaveform(input: Float32Array): void {
