@@ -3,6 +3,10 @@ import { MoireLayer } from '../layers/moire';
 import { JuliaLayer, juliaIterationCap, juliaIterations, juliaConstant, smoothToward } from '../layers/julia';
 import juliaFragSrc from '../shaders/julia.frag.glsl?raw';
 import { JULIA_SPECS, JULIA_DEFAULTS, LAYER_SPECS } from '../../presets/layerSchemas';
+import { OrbitLayer, orbitCounts, ORBIT_BANDS } from '../layers/orbit';
+import orbitVertSrc from '../shaders/orbit.vert.glsl?raw';
+import orbitFragSrc from '../shaders/orbit.frag.glsl?raw';
+import { ORBIT_SPECS, ORBIT_SHAPES } from '../../presets/layerSchemas';
 import { costScore } from '../../presets/cost';
 import { SpectralTerrainLayer, RIDGE_VERTS, TERRAIN_HISTORY_UNIT, TERRAIN_BINS, TERRAIN_RIDGES } from '../layers/spectralTerrain';
 import moireFragSrc from '../shaders/moire.frag.glsl?raw';
@@ -38,6 +42,7 @@ function createMockGl(): WebGL2RenderingContext {
     SRC_ALPHA: 0x0302,
     ONE_MINUS_SRC_ALPHA: 0x0303,
     BLEND: 0x0be2,
+    POINTS: 0,
     TRIANGLES: 4,
     TRIANGLE_STRIP: 5,
     LINE_STRIP: 3,
@@ -849,5 +854,64 @@ describe('Slice 20.3: Julia set layer', () => {
     const base = { feedback: {}, post: {} };
     expect(costScore({ ...base, layers: [{ type: 'julia', enabled: true, params: {} } as never] })).toBe(3);
     expect(JULIA_DEFAULTS.iterations).toBe(48);
+  });
+});
+
+describe('Slice 20.4: Orbit layer', () => {
+  it('has valid specs, registered in the layer table and the loader', () => {
+    for (const spec of ORBIT_SPECS) expect(() => assertValidSpec(spec)).not.toThrow();
+    expect(LAYER_SPECS.orbit!.map((s) => s.name)).toEqual(ORBIT_SPECS.map((s) => s.name));
+    expect(LAYER_FACTORIES.orbit!({ orbits: 4 })).toBeInstanceOf(OrbitLayer);
+    expect(() => applyValues(new OrbitLayer(), { tilt: 1, shape: 'ring' })).not.toThrow();
+  });
+
+  it('fills every orbit evenly and keeps within 1 to 5 orbits', () => {
+    expect(orbitCounts(32, 3)).toEqual({ orbits: 3, perOrbit: 11, total: 33 });
+    expect(orbitCounts(6, 5)).toEqual({ orbits: 5, perOrbit: 2, total: 10 });
+    expect(orbitCounts(10, 0).orbits).toBe(1);
+    expect(orbitCounts(10, 9).orbits).toBe(5);
+    expect(orbitCounts(0, 2).perOrbit).toBe(1);
+  });
+
+  it('draws one point per body with the shape number and capped depth settings', () => {
+    const gl = createMockGl();
+    const layer = new OrbitLayer({ count: 32, orbits: 4, shape: 'diamond' });
+    layer.init(gl);
+    layer.draw(createDummyAudioFrame(), dummyClock, dummyTarget);
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.POINTS, 0, 32);
+    expect(gl.uniform1i).toHaveBeenCalledWith({ name: 'uShape' }, ORBIT_SHAPES.indexOf('diamond'));
+    const bands = (gl.uniform1fv as ReturnType<typeof vi.fn>).mock.calls.find((c) => (c[0] as { name: string }).name === 'uBands');
+    expect((bands![1] as Float32Array).length).toBe(ORBIT_BANDS);
+    layer.dispose();
+  });
+
+  it('orbit phase only moves forward and keeps moving in silence', () => {
+    const gl = createMockGl();
+    const layer = new OrbitLayer();
+    layer.init(gl);
+    const frame = createDummyAudioFrame();
+    (frame as { energy: number }).energy = 0;
+    const phases: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      layer.draw(frame, { ...dummyClock, dtSec: 0.016 }, dummyTarget);
+    }
+    for (const c of (gl.uniform1f as ReturnType<typeof vi.fn>).mock.calls) {
+      if ((c[0] as { name: string }).name === 'uPhase') phases.push(c[1] as number);
+    }
+    expect(phases.length).toBe(3);
+    expect(phases[1]!).toBeGreaterThan(phases[0]!);
+    expect(phases[2]!).toBeGreaterThan(phases[1]!);
+  });
+
+  it('shaders size points by depth and only the size reacts to the music', () => {
+    expect(orbitVertSrc).toContain('gl_PointSize');
+    expect(orbitVertSrc).toContain('gl_VertexID');
+    expect(orbitVertSrc).toContain('uBands');
+    expect(orbitFragSrc).toContain('fragColor = vec4(col * a, a)');
+    expect(orbitFragSrc).not.toMatch(/uKick|uBands/);
+  });
+
+  it('counts Orbit as a cost-2 layer', () => {
+    expect(costScore({ feedback: {}, post: {}, layers: [{ type: 'orbit', enabled: true, params: {} } as never] })).toBe(2);
   });
 });
