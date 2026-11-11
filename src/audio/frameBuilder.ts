@@ -13,6 +13,7 @@ import { BandSplitter } from "./bandWaveforms";
 import { Envelope } from "./envelope";
 import { RollingNormalizer } from "./normalize";
 import { OnsetDetector, spectralFlux } from "./onset";
+import { TempoTracker } from "./tempo";
 import type { AudioFrame, BandFlags, BandLevels, BandWaveforms } from "./types";
 
 export const SIGNAL_EPS = 0.02;
@@ -79,6 +80,7 @@ export class FrameBuilder {
   private readonly fastPrevSpectrum: Float32Array;
   private readonly fastDetector: OnsetDetector;
   private hasFastPrev = false;
+  private readonly tempo = new TempoTracker();
 
   // Band bin ranges, all as [startBin, endBin) in the half-spectrum.
   private readonly subStartBin: number;
@@ -196,6 +198,12 @@ export class FrameBuilder {
       sampleRate: this.sampleRate,
       onset: false,
       onsetStrength: 0,
+      bpm: 0,
+      tempoConfidence: 0,
+      beatCount: 0,
+      beatTick: false,
+      beatPhase: 0,
+      barPhase: 0,
     };
     // Splitting the waveform into three bands runs 10 filter passes over the whole buffer, so it is done on
     // first read each frame instead of on every build (Slice 16.9). The filters keep no state between frames,
@@ -333,6 +341,13 @@ export class FrameBuilder {
     frame.kickEnv = this.kickEnv;
 
     this.stepFastOnset(timeSec, fastByteSpectrum, isKick, subOnset.strength);
+    const tempo = this.tempo.step(timeSec, frame.onset === true, frame.onsetStrength ?? 0);
+    frame.bpm = tempo.bpm;
+    frame.tempoConfidence = tempo.confidence;
+    frame.beatCount = tempo.beatCount;
+    frame.beatTick = tempo.beatTick;
+    frame.beatPhase = tempo.beatPhase;
+    frame.barPhase = tempo.barPhase;
 
     this.smoothSpectrum(dtSec);
 
@@ -366,6 +381,13 @@ export class FrameBuilder {
     this.hasFastPrev = false;
     this.frame.onset = false;
     this.frame.onsetStrength = 0;
+    this.tempo.reset();
+    this.frame.bpm = 0;
+    this.frame.tempoConfidence = 0;
+    this.frame.beatCount = 0;
+    this.frame.beatTick = false;
+    this.frame.beatPhase = 0;
+    this.frame.barPhase = 0;
 
     this.kickEnv = 0;
     this.frame.kickEnv = 0;

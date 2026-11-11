@@ -488,3 +488,28 @@ describe("FrameBuilder short-window onset (Slice 17.1)", () => {
     expect(frame.onsetStrength).toBe(0);
   });
 });
+
+describe("FrameBuilder tempo fields (Slice 17.2)", () => {
+  it("finds the tempo and counts beats from a steady kick, and reset clears them", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    let last = builder.build(0, emptySpectrum(), silentWaveform);
+    let ticks = 0;
+    // 120 BPM: a kick every 30 frames for 12 seconds.
+    for (let i = 1; i < 720; i += 1) {
+      last = builder.build(i * STEP_SEC, i % 30 === 0 ? kickSpectrum() : emptySpectrum(), silentWaveform);
+      if (last.beatTick) ticks += 1;
+    }
+    expect(last.bpm).toBeGreaterThan(115);
+    expect(last.bpm).toBeLessThan(125);
+    expect(last.tempoConfidence).toBeGreaterThanOrEqual(0.5);
+    expect(last.beatCount).toBe(ticks);
+    expect(ticks).toBeGreaterThanOrEqual(22);
+    expect(last.barPhase).toBeGreaterThanOrEqual(0);
+    expect(last.barPhase).toBeLessThanOrEqual(1);
+
+    builder.reset();
+    const first = builder.build(0, emptySpectrum(), silentWaveform);
+    expect(first.beatCount).toBe(0);
+    expect(first.bpm).toBe(0);
+  });
+});

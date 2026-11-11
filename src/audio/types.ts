@@ -54,4 +54,11 @@ export interface AudioFrame {
   // than `beat`. Optional so older frame mocks stay valid; read it as `frame.onset ?? frame.beat`.
   onset?: boolean;
   onsetStrength?: number; // 0..1, strength of the short-window onset
+  // Tempo tracker (Slice 17.2). Optional for the same reason as onset.
+  bpm?: number; // estimated tempo, 0 until known
+  tempoConfidence?: number; // 0..1; below ~0.5 the beat count just counts detected onsets
+  beatCount?: number; // beats so far (grid beats when tempo is confident, detected onsets otherwise)
+  beatTick?: boolean; // true only on the frame beatCount went up
+  beatPhase?: number; // 0..1 through the current beat
+  barPhase?: number; // 0..1 through the current 4-beat bar
 }
