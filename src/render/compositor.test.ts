@@ -511,3 +511,57 @@ describe('no per-frame lookups or rebuilds (Slice 16.8)', () => {
     expect((comp as unknown as { activeNames: string[] }).activeNames).toBe(before);
   });
 });
+
+describe('lighter crossfade (Slice 16.11)', () => {
+  function crossfade(light: boolean) {
+    const r = rig(['a', 'b']);
+    r.comp.setLightFade(light);
+    r.comp.setFadeSeconds(4);
+    r.comp.setWeights({ a: 1 });
+    for (let i = 0; i < 80; i++) r.frame(0.1);
+    r.comp.setWeights({ b: 1 });
+    r.frame(0.1); // gate frame: b is set up
+    return r;
+  }
+
+  it('is off by default', () => {
+    expect(new Compositor([]).isLightFade()).toBe(false);
+  });
+
+  it('keeps redrawing the outgoing scene while two scenes blend when it is off', () => {
+    const { layers, frame } = crossfade(false);
+    const before = layers.get('a')!.draw.mock.calls.length;
+    frame(0.1);
+    frame(0.1);
+    expect(layers.get('a')!.draw.mock.calls.length).toBe(before + 2);
+  });
+
+  it('does not redraw the outgoing scene during the blend when it is on, but still draws the incoming one', () => {
+    const { layers, frame } = crossfade(true);
+    const aBefore = layers.get('a')!.draw.mock.calls.length;
+    const bBefore = layers.get('b')!.draw.mock.calls.length;
+    frame(0.1);
+    frame(0.1);
+    expect(layers.get('a')!.draw.mock.calls.length).toBe(aBefore);
+    expect(layers.get('b')!.draw.mock.calls.length).toBe(bBefore + 2);
+  });
+
+  it('caps the fade length, so the outgoing scene is gone within about a second', () => {
+    const light = crossfade(true);
+    for (let i = 0; i < 12; i++) light.frame(0.1);
+    expect(light.comp.getWeight('a')).toBeLessThan(0.2);
+    const full = crossfade(false);
+    for (let i = 0; i < 12; i++) full.frame(0.1);
+    expect(full.comp.getWeight('a')).toBeGreaterThan(0.5);
+  });
+
+  it('a lone scene is always drawn', () => {
+    const r = rig(['a']);
+    r.comp.setLightFade(true);
+    r.comp.setWeights({ a: 1 });
+    r.frame(0.1);
+    const first = r.layers.get('a')!.draw.mock.calls.length;
+    for (let i = 0; i < 4; i++) r.frame(0.1);
+    expect(r.layers.get('a')!.draw.mock.calls.length).toBe(first + 4);
+  });
+});
