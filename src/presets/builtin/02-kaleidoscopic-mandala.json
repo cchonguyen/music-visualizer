@@ -17,6 +17,14 @@
     "fade": 0.005,
     "decayRgb": [0.92, 0.90, 0.96]
   },
+  "warp": [
+    { "type": "swirl", "params": { "amount": 0.12, "scale": 1, "speed": 0.15 } }
+  ],
+  "reactions": [
+    { "trigger": { "type": "strongBeat" }, "response": "kick", "target": { "group": "feedback", "name": "zoom" }, "amount": 0.08, "ease": 0.3 },
+    { "trigger": { "type": "everyNBeats", "n": 16 }, "response": "flip", "target": { "group": "feedback", "name": "rotate" }, "amount": 0, "ease": 0.8 },
+    { "trigger": { "type": "section" }, "response": "pick", "target": { "group": "post", "name": "colourMapMix" }, "amount": 0.6, "ease": 2 }
+  ],
   "layers": [
     {
       "type": "shape",
@@ -55,5 +63,11 @@
       }
     }
   ],
-  "post": {}
+  "post": {
+    "colourMap": 0.4,
+    "colourMapBy": "angle",
+    "colourMapGradient": "neon",
+    "colourMapGradient2": "sunset",
+    "colourMapMix": 0.3
+  }
 }
