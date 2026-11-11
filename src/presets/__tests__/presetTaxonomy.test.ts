@@ -47,6 +47,8 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     '22-ripple-pool',
     '23-gradient-storm',
     '24-mirror-tunnel',
+    '25-deep-field',
+    '26-scope-bloom',
   ];
 
   const EXPECTED_FLAGSHIP_IDS = [
@@ -99,7 +101,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   });
 
   it('categorizes all 45+ built-in presets accurately into their subfolders', () => {
-    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(12);
+    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(14);
     expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(12);
     expect(EXPECTED_CLASSICS_IDS).toHaveLength(23);
 
@@ -236,5 +238,35 @@ describe('Stage 18 showcase presets 21 to 24 (Slice 18.10)', () => {
       expect(p.preset.post.bloomSize!.value, p.id).toBe(0);
       expect(p.preset.post.bloomPulse!.value, p.id).toBe(0);
     }
+  });
+});
+
+describe('Stage 19 showcase presets 25 and 26 (Slice 19.11)', () => {
+  const entry = (id: string) => ALL_PRESETS.find((p) => p.id === id)!;
+
+  it('both load with no warnings', () => {
+    for (const id of ['25-deep-field', '26-scope-bloom']) {
+      expect(entry(id), id).toBeDefined();
+      expect(entry(id).warnings, id).toEqual([]);
+    }
+  });
+
+  it('Deep Field is built from starfield particle layers', () => {
+    const layers = entry('25-deep-field').preset.layers;
+    expect(layers.length).toBeGreaterThan(0);
+    for (const l of layers) {
+      expect(l.type).toBe('particles');
+      expect(l.params.mode!.value).toBe('field');
+    }
+  });
+
+  it('Scope Bloom uses the signed scope source with additive blending and bloom', () => {
+    const { preset } = entry('26-scope-bloom');
+    for (const l of preset.layers) {
+      expect(l.type).toBe('shape');
+      expect(l.blend).toBe('add');
+      expect(l.params.audioSource!.value).toBe('scope');
+    }
+    expect(preset.post.bloom!.value as number).toBeGreaterThan(0);
   });
 });

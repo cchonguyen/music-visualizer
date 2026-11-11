@@ -49,6 +49,8 @@ import preset21 from './21-inhale-exhale.json';
 import preset22 from './22-ripple-pool.json';
 import preset23 from './23-gradient-storm.json';
 import preset24 from './24-mirror-tunnel.json';
+import preset25 from './25-deep-field.json';
+import preset26 from './26-scope-bloom.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -133,6 +135,9 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   '22-ripple-pool': 'showcase',
   '23-gradient-storm': 'showcase',
   '24-mirror-tunnel': 'showcase',
+  // Starfield and oscilloscope showcase (25–26, Stage 19).
+  '25-deep-field': 'showcase',
+  '26-scope-bloom': 'showcase',
 
   // Flagship (01–12)
   '01-curl-fluid-warp': 'flagship',
@@ -271,6 +276,12 @@ export const SHOWCASE_PRESETS_21_24: readonly BuiltinPresetEntry[] = [
   { id: '24-mirror-tunnel', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset24, SCHEMAS) },
 ];
 
+/** Stage 19 showcase presets 25–26: the starfield particle mode and the signed oscilloscope trace. */
+export const SHOWCASE_PRESETS_25_26: readonly BuiltinPresetEntry[] = [
+  { id: '25-deep-field', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset25, SCHEMAS) },
+  { id: '26-scope-bloom', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset26, SCHEMAS) },
+];
+
 export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...BUILTIN_PRESETS,
   ...FLAGSHIP_PRESETS,
@@ -280,6 +291,7 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...FLAGSHIP_PRESETS_12,
   ...SHOWCASE_PRESETS_13_20,
   ...SHOWCASE_PRESETS_21_24,
+  ...SHOWCASE_PRESETS_25_26,
 ];
 
 export function getPresetsByGroup(group: PresetGroup): readonly BuiltinPresetEntry[] {
