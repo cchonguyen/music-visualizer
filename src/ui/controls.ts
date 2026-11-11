@@ -107,6 +107,40 @@ export function sourceName(kind: SourceKind, fileName = ''): string {
   return SOURCE_NAMES[kind] ?? kind;
 }
 
+export interface SourcePickerEnv {
+  /** True when the browser can capture tab/system audio (getDisplayMedia). */
+  displayCapture: boolean;
+  /** True on touch-first devices (phones, tablets). */
+  coarsePointer: boolean;
+}
+
+/**
+ * Phone-first source picker. File and microphone are always offered.
+ * Tab/system audio is offered only where the browser can capture it, and test signals are desktop-only.
+ */
+export function visibleSourceCards(env: SourcePickerEnv): { display: boolean; test: boolean } {
+  return {
+    display: env.displayCapture && !env.coarsePointer,
+    test: !env.coarsePointer,
+  };
+}
+
+/** Hides the source cards that the current device cannot use. */
+export function applySourcePickerVisibility(): void {
+  const coarsePointer =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: coarse)').matches;
+  const show = visibleSourceCards({
+    displayCapture: Boolean(navigator.mediaDevices?.getDisplayMedia),
+    coarsePointer,
+  });
+  const displayCard = document.getElementById('source-card-display');
+  const testCard = document.getElementById('source-card-test');
+  if (displayCard) displayCard.style.display = show.display ? '' : 'none';
+  if (testCard) testCard.style.display = show.test ? '' : 'none';
+}
+
 /** The controls bar is removed from the focus order while it is faded for idleness (slice 11.4). */
 export function isControlsBarFocusable(idle: boolean): boolean {
   return !idle;
@@ -190,6 +224,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const fsBtn = $<HTMLButtonElement>('fs-btn');
   const sourceLabel = $<HTMLSpanElement>('source-label');
   const playback = $<HTMLElement>('playback');
+  applySourcePickerVisibility();
   const sourceButtons = [...controls.querySelectorAll<HTMLButtonElement>('button[data-source]')];
 
   // Segmented Pill & Hub Popups Elements (Slice 12.3)

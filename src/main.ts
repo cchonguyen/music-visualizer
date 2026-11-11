@@ -39,7 +39,7 @@ import { setAutoScale } from './gl/size';
 import { setFloatBuffersEnabled } from './gl/fbo';
 import { maxCostForTier, presetCost } from './presets/cost';
 import { FrameBudget } from './render/frameBudget';
-import { browserSupportProblems, showNotice } from './ui/notices';
+import { browserSupportProblems, showNotice, supportNoticeText } from './ui/notices';
 import { getGlobalDirector, type CameraUniforms, type ColorUniforms } from './render/globalDirector';
 import { clampDt } from './render/clock';
 import { adminGateway, AdminGateway } from './presets/adminGateway';
@@ -803,7 +803,7 @@ if (typeof window !== 'undefined') {
       }
     });
   }
-  const problems = browserSupportProblems();
-  if (problems.length) showNotice(problems.join(' '), 'error', 0);
+  const supportText = supportNoticeText(browserSupportProblems());
+  if (supportText) showNotice(supportText, 'error', 0, { dismissible: true });
   document.getElementById('start-btn')?.addEventListener('click', start, { once: true });
 }
