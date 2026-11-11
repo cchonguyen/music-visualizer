@@ -80,7 +80,6 @@ const sampleRemotePreset: RemotePresetRecord = {
 const testConfig: RemoteConfig = {
   supabaseUrl: 'https://test-project.supabase.co',
   anonKey: 'mock-anon-key',
-  adminPasskeyHash: 'dummy-hash',
 };
 
 describe('Slice 11.5: Application Startup Sync & Offline Reconciliation Integration', () => {
@@ -326,8 +325,6 @@ describe('Slice 11.5: Application Startup Sync & Offline Reconciliation Integrat
           tags: promoted!.preset.tags,
           updated_at: new Date().toISOString(),
         },
-        testConfig,
-        adminGateway.getState().adminToken,
         mockFetch as unknown as typeof fetch,
       );
 
@@ -335,9 +332,9 @@ describe('Slice 11.5: Application Startup Sync & Offline Reconciliation Integrat
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0] as [string, RequestInit];
       const [calledUrl, calledInit] = call;
-      expect(calledUrl).toContain('/rest/v1/system_presets');
-      expect((calledInit.headers as Record<string, string>)['Authorization']).toBe('Bearer mock-admin-token');
-      expect((calledInit.headers as Record<string, string>)['Prefer']).toContain('resolution=merge-duplicates');
+      expect(calledUrl).toBe('/admin/api/presets');
+      expect(calledInit.method).toBe('POST');
+      expect(calledInit.headers as Record<string, string>).not.toHaveProperty('Authorization');
 
       // 5. Cache reflects updated preset
       saveCachedPresets(

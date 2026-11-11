@@ -6,7 +6,6 @@
 export interface RemoteConfig {
   supabaseUrl: string;
   anonKey: string;
-  adminPasskeyHash?: string;
 }
 
 /**
@@ -20,7 +19,6 @@ export function getRemoteConfig(overrides?: Partial<RemoteConfig>): RemoteConfig
   return {
     supabaseUrl: overrides?.supabaseUrl ?? env.VITE_SUPABASE_URL ?? '',
     anonKey: overrides?.anonKey ?? env.VITE_SUPABASE_ANON_KEY ?? '',
-    adminPasskeyHash: overrides?.adminPasskeyHash ?? env.VITE_ADMIN_PASSKEY_HASH ?? undefined,
   };
 }
 

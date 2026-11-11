@@ -200,9 +200,7 @@ export async function fetchRemotePresets(
   }
 }
 
-/** Admin token set by the Cloudflare Access handshake (adminGateway). Writes go through the same-origin proxy. */
-export const CF_ACCESS_ADMIN_TOKEN = 'cf-access-verified';
-/** Same-origin Worker proxy for system preset writes (Slice 11.8). */
+/** Same-origin Worker proxy for system preset writes. The only write path: the Worker checks Cloudflare Access and holds the service key. */
 export const ADMIN_PRESETS_PROXY_PATH = '/admin/api/presets';
 
 /** Same-origin proxy write: the Worker holds the service key and checks the Access cookie. */
@@ -232,14 +230,11 @@ async function proxyPresetWrite(
 }
 
 /**
- * Upsert a system preset record to Supabase via PostgREST.
- * Requires admin token or service role credentials.
- * With the Cloudflare Access token, writes go through the same-origin proxy and need no Supabase config.
+ * Upsert a system preset record through the Worker's `/admin/api/presets` proxy.
+ * The client never talks to the database for writes and holds no token.
  */
 export async function upsertRemotePreset(
   preset: RemotePresetRecord,
-  config: RemoteConfig = getRemoteConfig(),
-  adminToken?: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<{ success: boolean; error?: string }> {
   const payload = {
@@ -252,93 +247,24 @@ export async function upsertRemotePreset(
     is_deleted: false,
     updated_at: new Date().toISOString(),
   };
-
-  if (adminToken === CF_ACCESS_ADMIN_TOKEN) {
-    return proxyPresetWrite(ADMIN_PRESETS_PROXY_PATH, 'POST', payload, fetchFn);
-  }
-
-  if (!config.supabaseUrl || !config.anonKey) {
-    return { success: false, error: 'Remote endpoint not configured' };
-  }
-
-  const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
-  const url = `${baseUrl}/rest/v1/system_presets`;
-  const authToken = adminToken || config.anonKey;
-
-  try {
-    const response = await fetchFn(url, {
-      method: 'POST',
-      headers: {
-        apikey: config.anonKey,
-        Authorization: `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      return { success: false, error: errText || `HTTP ${response.status}: ${response.statusText}` };
-    }
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
-  }
+  return proxyPresetWrite(ADMIN_PRESETS_PROXY_PATH, 'POST', payload, fetchFn);
 }
 
 /**
- * Soft-delete a system preset record by setting `is_deleted = true`.
- * Requires admin token or service role credentials.
+ * Soft-delete a system preset (`is_deleted = true`) through the Worker's `/admin/api/presets` proxy.
  */
 export async function softDeleteRemotePreset(
   id: string,
-  config: RemoteConfig = getRemoteConfig(),
-  adminToken?: string,
   fetchFn: typeof fetch = fetch,
 ): Promise<{ success: boolean; error?: string }> {
   const payload = {
     is_deleted: true,
     updated_at: new Date().toISOString(),
   };
-
-  if (adminToken === CF_ACCESS_ADMIN_TOKEN) {
-    return proxyPresetWrite(
-      `${ADMIN_PRESETS_PROXY_PATH}?id=${encodeURIComponent(id)}`,
-      'PATCH',
-      payload,
-      fetchFn,
-    );
-  }
-
-  if (!config.supabaseUrl || !config.anonKey) {
-    return { success: false, error: 'Remote endpoint not configured' };
-  }
-
-  const baseUrl = config.supabaseUrl.replace(/\/+$/, '');
-  const url = `${baseUrl}/rest/v1/system_presets?id=eq.${encodeURIComponent(id)}`;
-  const authToken = adminToken || config.anonKey;
-
-  try {
-    const response = await fetchFn(url, {
-      method: 'PATCH',
-      headers: {
-        apikey: config.anonKey,
-        Authorization: `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      return { success: false, error: errText || `HTTP ${response.status}: ${response.statusText}` };
-    }
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
-  }
+  return proxyPresetWrite(
+    `${ADMIN_PRESETS_PROXY_PATH}?id=${encodeURIComponent(id)}`,
+    'PATCH',
+    payload,
+    fetchFn,
+  );
 }

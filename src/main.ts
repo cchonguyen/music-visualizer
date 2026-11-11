@@ -232,8 +232,8 @@ function start(): void {
     session = new PresetSession(comp, SCHEMAS, safeStorage(), {
       adminGateway,
       remoteWriter: {
-        upsert: (record, token) => upsertRemotePreset(record, getRemoteConfig(), token),
-        softDelete: (id, token) => softDeleteRemotePreset(id, getRemoteConfig(), token),
+        upsert: (record) => upsertRemotePreset(record),
+        softDelete: (id) => softDeleteRemotePreset(id),
         onResult: (r) => {
           if (!r.success) {
             showToast(`Not saved to the server: ${r.error}`);

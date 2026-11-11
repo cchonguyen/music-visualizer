@@ -121,8 +121,8 @@ export interface RemotePresetResult {
 
 /** Writes system preset changes to remote storage (Supabase via the Worker proxy). */
 export interface RemotePresetWriter {
-  upsert(record: RemotePresetRecord, token?: string): Promise<{ success: boolean; error?: string }>;
-  softDelete(id: string, token?: string): Promise<{ success: boolean; error?: string }>;
+  upsert(record: RemotePresetRecord): Promise<{ success: boolean; error?: string }>;
+  softDelete(id: string): Promise<{ success: boolean; error?: string }>;
   onResult?(result: RemotePresetResult): void;
 }
 
@@ -1115,16 +1115,14 @@ export class PresetSession {
       tags: [...(this.systemTagOverrides[id] ?? entry.preset.tags ?? [])],
       updated_at: new Date().toISOString(),
     };
-    const token = this.adminGateway?.getState().adminToken;
-    this.runRemote(writer, 'save', id, () => writer.upsert(record, token));
+    this.runRemote(writer, 'save', id, () => writer.upsert(record));
   }
 
   /** Fire-and-forget remote soft delete of a system preset. Never throws. No writer means nothing happens. */
   private softDeleteSystemPreset(id: string): void {
     const writer = this.remoteWriter;
     if (!writer) return;
-    const token = this.adminGateway?.getState().adminToken;
-    this.runRemote(writer, 'delete', id, () => writer.softDelete(id, token));
+    this.runRemote(writer, 'delete', id, () => writer.softDelete(id));
   }
 
   private runRemote(

@@ -2011,12 +2011,15 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     let pane = getPane();
     expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeUndefined();
 
-    // Simulate login via passkey
-    const promptSpy = vi.spyOn(studio, 'promptForAdminInput').mockReturnValue('admin-passkey-123');
+    // Simulate a verified Cloudflare Access identity from the Worker
+    vi.spyOn(adminGateway, 'checkCloudflareAccess').mockImplementation(async () => {
+      (adminGateway as any).state = { isAdmin: true, adminEmail: 'admin@music-visualizer.com', role: 'admin' };
+      (adminGateway as any).notifyListeners();
+      return true;
+    });
     const res = await studio.handleAdminLogin();
     expect(res.success).toBe(true);
     expect(studio.isAdmin()).toBe(true);
-    expect(showToastSpy).toHaveBeenCalledWith('👑 Admin Mode Activated');
 
     // UI should have refreshed into admin mode
     pane = getPane();
@@ -2036,7 +2039,6 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(pane.buttons.find((b: any) => b.title === 'Save (Read-only)')).toBeDefined();
     expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeUndefined();
 
-    promptSpy.mockRestore();
     showToastSpy.mockRestore();
   });
 
@@ -2076,14 +2078,10 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     const mockGateway = new AdminGateway({ mock: true });
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
 
-    // Cancelled
-    const cancelRes = await promptAdminLogin(mockGateway, () => null);
-    expect(cancelRes.success).toBe(false);
-
-    // Login with passkey
-    const passkeyRes = await promptAdminLogin(mockGateway, () => 'secret-key');
-    expect(passkeyRes.success).toBe(true);
-    expect(mockGateway.isAdmin()).toBe(true);
+    // No Cloudflare Access identity locally: there is no passkey fallback
+    const deniedRes = await promptAdminLogin(mockGateway, () => 'secret-key');
+    expect(deniedRes.success).toBe(false);
+    expect(mockGateway.isAdmin()).toBe(false);
 
     // 3. saveSystemPresetAction & deleteSystemPresetAction
     const mockSession = {
