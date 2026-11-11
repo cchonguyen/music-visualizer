@@ -3246,7 +3246,7 @@ describe('warp editor helpers (Slice 18.4)', () => {
   it('lists every operator type with a readable label', async () => {
     const { warpTypeOptions } = await import('./studio');
     const options = warpTypeOptions();
-    expect(Object.keys(options)).toHaveLength(10);
+    expect(Object.keys(options)).toHaveLength(11);
     expect(options['Radial']).toBe('radial');
     expect(options['Tile and mirror']).toBe('tile');
   });

@@ -4,7 +4,7 @@
 import { PingPong, feedbackFormat } from '../gl/fbo';
 import { FULLSCREEN_VERT } from '../gl/shader';
 import { getProgramCache } from '../gl/programCache';
-import { CURL_FLOW_STYLES, WARP_OP_MAX, WARP_OP_TYPES, type WarpOpType } from '../presets/warpOps';
+import { CURL_FLOW_STYLES, FOLD_ITERATIONS_MAX, FOLD_ITERATIONS_MIN, WARP_OP_MAX, WARP_OP_TYPES, type WarpOpType } from '../presets/warpOps';
 import type { ParamValue } from '../presets/schema';
 import { bindTarget, type RenderTarget } from './layer';
 import warpFieldSrc from './shaders/warpField.frag.glsl?raw';
@@ -54,6 +54,16 @@ export function curlExtras(values: Record<string, ParamValue>): [number, number,
   return [octaves, turbulence, flow];
 }
 
+/**
+ * Fractal fold's round count as the shader reads it: the setting (3 to 6), then capped by render scale so slower
+ * devices fold fewer times. Full scale allows 6, mid scale 4, low scale 3.
+ */
+export function foldIterations(values: Record<string, ParamValue>, renderScale: number): number {
+  const wanted = Math.max(FOLD_ITERATIONS_MIN, Math.min(FOLD_ITERATIONS_MAX, Math.round(numberOf(values, 'iterations', 4))));
+  const cap = renderScale >= 0.9 ? FOLD_ITERATIONS_MAX : renderScale >= 0.6 ? 4 : FOLD_ITERATIONS_MIN;
+  return Math.min(wanted, cap);
+}
+
 export class WarpField {
   private readonly gl: WebGL2RenderingContext;
   private pp: PingPong;
@@ -69,10 +79,12 @@ export class WarpField {
   private readonly extras = new Float32Array(WARP_OP_MAX * 3);
   private readonly target: { kind: 'fbo'; framebuffer: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number };
   private fieldReady = false;
+  private renderScale: number;
 
   constructor(gl: WebGL2RenderingContext, vao: WebGLVertexArrayObject, renderScale: number) {
     this.gl = gl;
     this.vao = vao;
+    this.renderScale = renderScale;
     const size = warpFieldSize(renderScale);
     this.pp = new PingPong(gl, size.width, size.height, feedbackFormat(gl));
     this.prog = getProgramCache(gl).acquire(FULLSCREEN_VERT, warpFieldSrc, 'warpField');
@@ -89,6 +101,7 @@ export class WarpField {
 
   /** Resizes the field for the render scale. Same size is a no-op. */
   setRenderScale(renderScale: number): void {
+    this.renderScale = renderScale;
     const size = warpFieldSize(renderScale);
     this.pp.resize(size.width, size.height);
   }
@@ -113,6 +126,10 @@ export class WarpField {
         this.extras[n * 3] = octaves;
         this.extras[n * 3 + 1] = turbulence;
         this.extras[n * 3 + 2] = flow;
+      } else if (op.type === 'fold') {
+        this.extras[n * 3] = foldIterations(op.values, this.renderScale);
+        this.extras[n * 3 + 1] = 0;
+        this.extras[n * 3 + 2] = 0;
       } else {
         this.extras[n * 3] = 0;
         this.extras[n * 3 + 1] = 0;
