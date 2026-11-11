@@ -33,7 +33,6 @@ uniform float uSobel;           // 0.0..1.0, default 0.0
 uniform float uSolarize;        // 0.0..1.0, default 0.0
 uniform float uSolarizePhase;   // phase modulation for solarize
 uniform float uMobiusPoleOffset;// 0.2..0.85, default 0.48
-uniform float uMobiusPolePolarity; // legacy polarity uniform (+1.0)
 uniform float uWarpAmp;         // warp amplitude
 
 // Slice 7.22 uniforms:
@@ -57,8 +56,6 @@ uniform float uMobiusSwirl;     // -2.0..2.0, default 0.65
 uniform int uMobiusMode;        // 0: auto, 1: dipoleFlow, 2: doubleVortex, 3: figureEight, 4: breathingOrbit
 
 // Audio modulation uniforms:
-uniform float uKick;
-uniform float uSub;
 uniform float uHigh;
 
 in vec2 vUv;
@@ -316,7 +313,10 @@ void main() {
 
   // Fetch color from previous frame
   vec3 c;
-  if (uWarpMode == 4 && uRgbSplit > 0.0) {
+  bool rgbSplitOn = (uWarpMode == 4 && uRgbSplit > 0.0);
+  vec2 uvR = uv;
+  vec2 uvB = uv;
+  if (rgbSplitOn) {
     // 3-tap sampling of uPrev with temporal swirl variety & dynamic chromatic displacement
     float splitAngle = uRgbSplit * (1.5 + 0.6 * sin(uTime * 0.65 + length(p) * 4.0));
     vec2 dispAxis = vec2(cos(uTime * 0.42), sin(uTime * 0.42)) * uRgbSplit * 0.35 * (0.5 + 0.5 * sin(uTime * 0.9));
@@ -324,14 +324,14 @@ void main() {
     float csR = cos(-splitAngle);
     float snR = sin(-splitAngle);
     vec2 pR = vec2(csR * p.x - snR * p.y, snR * p.x + csR * p.y) / (1.0 + uRgbSplit) + dispAxis;
-    vec2 uvR = mix(clamp(pR + 0.5 + uCentre, 0.0, 1.0), fract(pR + 0.5 + uCentre), uWrap);
+    uvR = mix(clamp(pR + 0.5 + uCentre, 0.0, 1.0), fract(pR + 0.5 + uCentre), uWrap);
 
     vec2 uvG = uv;
 
     float csB = cos(splitAngle);
     float snB = sin(splitAngle);
     vec2 pB = vec2(csB * p.x - snB * p.y, snB * p.x + csB * p.y) * (1.0 + uRgbSplit) - dispAxis;
-    vec2 uvB = mix(clamp(pB + 0.5 + uCentre, 0.0, 1.0), fract(pB + 0.5 + uCentre), uWrap);
+    uvB = mix(clamp(pB + 0.5 + uCentre, 0.0, 1.0), fract(pB + 0.5 + uCentre), uWrap);
 
     c = vec3(
       texture(uPrev, uvR).r,
@@ -343,7 +343,12 @@ void main() {
   }
 
   if (uBlur > 0.0) {
-    c = blurPrev(uv, uBlur);
+    if (rgbSplitOn) {
+      // Blur each channel around its own split coordinate so the split survives the blur.
+      c = vec3(blurPrev(uvR, uBlur).r, blurPrev(uv, uBlur).g, blurPrev(uvB, uBlur).b);
+    } else {
+      c = blurPrev(uv, uBlur);
+    }
   }
 
   // Post-fetch transforms
