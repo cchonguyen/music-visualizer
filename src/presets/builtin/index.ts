@@ -1,5 +1,5 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
-import { BLEND_MODES, parsePreset, type Preset, type SchemaRegistry } from '../format';
+import { BLEND_MODES, parsePreset, type Preset, type PresetMood, type PresetTheme, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
 import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
@@ -293,6 +293,70 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...SHOWCASE_PRESETS_21_24,
   ...SHOWCASE_PRESETS_25_26,
 ];
+
+/**
+ * Theme and mood of every built-in preset (Slice 20.7). Kept in one table so the whole set can be read at a glance.
+ * A theme or mood written inside a preset's own JSON wins over this table.
+ */
+export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood: PresetMood }>> = {
+  '01-curl-fluid-warp': { theme: 'fluid', mood: 'calm' },
+  '02-kaleidoscopic-mandala': { theme: 'geometric', mood: 'dreamy' },
+  '03-solarized-contour-rings': { theme: 'geometric', mood: 'calm' },
+  '04-mobius-dual-vortex': { theme: 'hypnotic', mood: 'dreamy' },
+  '05-rgb-aberration-vortex': { theme: 'hypnotic', mood: 'intense' },
+  '06-lissajous-vector-crt': { theme: 'waveform', mood: 'driving' },
+  '07-moire-interference-loom': { theme: 'hypnotic', mood: 'intense' },
+  '08-spectral-ridge-terrain': { theme: 'terrain', mood: 'driving' },
+  '09-chladni-cymatic-sand': { theme: 'particles', mood: 'calm' },
+  '10-phyllotaxis-spiral-bloom': { theme: 'geometric', mood: 'dreamy' },
+  '11-ferrofluid-magnetic-crown': { theme: 'fluid', mood: 'dark' },
+  '12-reaction-diffusion-coral': { theme: 'fluid', mood: 'dreamy' },
+  '13-solar-crown-eclipse': { theme: 'geometric', mood: 'intense' },
+  '14-sacred-orbit-mandala': { theme: 'geometric', mood: 'dreamy' },
+  '15-polar-spirograph-bloom': { theme: 'geometric', mood: 'bright' },
+  '16-hexagon-inward-portal': { theme: 'hypnotic', mood: 'driving' },
+  '17-corridor-led-equalizer': { theme: 'architecture', mood: 'driving' },
+  '18-star-burst-stream': { theme: 'sparkle', mood: 'intense' },
+  '19-spiral-pearl-beads': { theme: 'particles', mood: 'dreamy' },
+  '20-dual-rail-aurora-ark': { theme: 'waveform', mood: 'calm' },
+  '21-inhale-exhale': { theme: 'hypnotic', mood: 'calm' },
+  '22-ripple-pool': { theme: 'fluid', mood: 'calm' },
+  '23-gradient-storm': { theme: 'fluid', mood: 'intense' },
+  '24-mirror-tunnel': { theme: 'hypnotic', mood: 'driving' },
+  '25-deep-field': { theme: 'sparkle', mood: 'dreamy' },
+  '26-scope-bloom': { theme: 'waveform', mood: 'driving' },
+  'crown': { theme: 'geometric', mood: 'driving' },
+  'flight': { theme: 'hypnotic', mood: 'driving' },
+  'bars': { theme: 'waveform', mood: 'driving' },
+  'starter-vortex': { theme: 'hypnotic', mood: 'driving' },
+  'starter-honeycomb': { theme: 'geometric', mood: 'calm' },
+  'starter-pentagon-pulse': { theme: 'geometric', mood: 'driving' },
+  'starter-checker-warp': { theme: 'hypnotic', mood: 'driving' },
+  'starter-stripe-drift': { theme: 'hypnotic', mood: 'calm' },
+  'starter-kaleido': { theme: 'geometric', mood: 'dreamy' },
+  'starter-soft-smoke': { theme: 'fluid', mood: 'calm' },
+  'starter-circle-wave': { theme: 'waveform', mood: 'calm' },
+  'starter-ember': { theme: 'particles', mood: 'dark' },
+  'starter-quiet-tunnel': { theme: 'hypnotic', mood: 'calm' },
+  'tex-glass-tunnel': { theme: 'hypnotic', mood: 'calm' },
+  'tex-sub-bloom': { theme: 'hypnotic', mood: 'dark' },
+  'tex-silk-rings': { theme: 'geometric', mood: 'calm' },
+  'tex-static-rain': { theme: 'particles', mood: 'dark' },
+  'tex-prism-bars': { theme: 'waveform', mood: 'bright' },
+  'tex-pulse-skin': { theme: 'hypnotic', mood: 'driving' },
+  'tex-grain-crown': { theme: 'geometric', mood: 'calm' },
+  'tex-ripple-field': { theme: 'fluid', mood: 'calm' },
+  'tex-neon-weave': { theme: 'hypnotic', mood: 'bright' },
+  'tex-dust-wave': { theme: 'waveform', mood: 'dreamy' },
+};
+
+// Fill in theme and mood from the table. The preset objects are shared with every list above, so one pass covers all.
+for (const entry of ALL_PRESETS) {
+  const tag = PRESET_TAXONOMY[entry.id];
+  if (!tag) continue;
+  if (!entry.preset.theme) entry.preset.theme = tag.theme;
+  if (!entry.preset.mood) entry.preset.mood = tag.mood;
+}
 
 export function getPresetsByGroup(group: PresetGroup): readonly BuiltinPresetEntry[] {
   return ALL_PRESETS.filter((p) => p.group === group);

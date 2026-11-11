@@ -275,3 +275,36 @@ describe("parsePreset: warp operator stack (Slice 18.1)", () => {
     expect(preset.warp![0]!.enabled).toBe(false);
   });
 });
+
+describe("preset theme and mood (Slice 20.7)", () => {
+  const registry = { feedback: [], post: [], layers: {} } as never;
+  const base = { version: PRESET_VERSION, name: "t", tags: [], layers: [], feedback: {}, post: {}, transition: { style: "crossfade", seconds: 1 } };
+
+  it("reads a known theme and mood", () => {
+    const { preset, warnings } = parsePreset({ ...base, theme: "fractal", mood: "dreamy" }, registry);
+    expect(preset.theme).toBe("fractal");
+    expect(preset.mood).toBe("dreamy");
+    expect(warnings).toEqual([]);
+  });
+
+  it("leaves older presets without them, with no warning", () => {
+    const { preset, warnings } = parsePreset(base, registry);
+    expect("theme" in preset).toBe(false);
+    expect("mood" in preset).toBe(false);
+    expect(warnings).toEqual([]);
+  });
+
+  it("drops an unknown theme or mood with a warning and keeps the preset", () => {
+    const { preset, warnings } = parsePreset({ ...base, theme: "vaporwave", mood: 7 }, registry);
+    expect(preset.theme).toBeUndefined();
+    expect(preset.mood).toBeUndefined();
+    expect(warnings.length).toBe(2);
+  });
+
+  it("survives a save and load round trip", () => {
+    const first = parsePreset({ ...base, theme: "orbit", mood: "calm" }, registry).preset;
+    const again = parsePreset(JSON.parse(JSON.stringify(first)), registry).preset;
+    expect(again.theme).toBe("orbit");
+    expect(again.mood).toBe("calm");
+  });
+});

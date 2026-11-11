@@ -68,10 +68,32 @@ export interface WarpOperator {
   params: Settings;
 }
 
+/**
+ * Preset themes and moods (Slice 20.7). Both are optional, so old presets and user presets load exactly as before.
+ * A theme says what the preset is mostly about; a mood says how it feels. The cost level is not stored: it is
+ * worked out from the settings (see cost.ts).
+ */
+export const PRESET_THEMES = ["fluid", "fractal", "geometric", "hypnotic", "particles", "sparkle", "waveform", "terrain", "orbit", "architecture"] as const;
+export type PresetTheme = (typeof PRESET_THEMES)[number];
+export const PRESET_MOODS = ["calm", "dreamy", "driving", "intense", "bright", "dark"] as const;
+export type PresetMood = (typeof PRESET_MOODS)[number];
+
+export function isPresetTheme(value: unknown): value is PresetTheme {
+  return typeof value === "string" && (PRESET_THEMES as readonly string[]).includes(value);
+}
+
+export function isPresetMood(value: unknown): value is PresetMood {
+  return typeof value === "string" && (PRESET_MOODS as readonly string[]).includes(value);
+}
+
 export interface Preset {
   version: typeof PRESET_VERSION;
   name: string;
   tags: string[];
+  /** Slice 20.7: what the preset is mostly about. Missing means untagged. */
+  theme?: PresetTheme;
+  /** Slice 20.7: how the preset feels. Missing means untagged. */
+  mood?: PresetMood;
   transition: { style: Transition; seconds: number };
   feedback: Settings;
   layers: LayerEntry[];
@@ -358,10 +380,17 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
 
   const warp = parseWarp(raw.warp, warnings);
 
+  const theme = isPresetTheme(raw.theme) ? raw.theme : undefined;
+  if (raw.theme !== undefined && !theme) warnings.push(`theme: unknown theme "${String(raw.theme)}", ignored`);
+  const mood = isPresetMood(raw.mood) ? raw.mood : undefined;
+  if (raw.mood !== undefined && !mood) warnings.push(`mood: unknown mood "${String(raw.mood)}", ignored`);
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
     tags,
+    ...(theme ? { theme } : {}),
+    ...(mood ? { mood } : {}),
     transition,
     feedback,
     layers,
