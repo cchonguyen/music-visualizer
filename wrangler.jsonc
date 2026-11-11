@@ -17,4 +17,11 @@
   // Keep the workers.dev URL as a backup address.
   "workers_dev": true,
   "preview_urls": false
+  // Required Worker settings with no default in source. Set them as Cloudflare secrets or variables
+  // (Workers & Pages > music-visualizer > Settings > Variables and Secrets). The Worker fails closed
+  // with 503 `admin_config_missing` on admin routes while any of the first three is missing:
+  //   ADMIN_EMAIL              the one email allowed to use /admin
+  //   CF_ACCESS_TEAM_DOMAIN    Access team URL, e.g. https://<team>.cloudflareaccess.com
+  //   CF_ACCESS_AUD            Access application audience tag
+  //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY   preset write proxy (secrets)
 }

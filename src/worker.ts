@@ -19,10 +19,22 @@ export interface Env {
 
 export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export const DEFAULT_ADMIN_EMAIL = 'charliechonguyen@gmail.com';
-export const DEFAULT_CF_ACCESS_TEAM_DOMAIN = 'https://winter-wind-069c.cloudflareaccess.com';
-export const DEFAULT_CF_ACCESS_AUD =
-  '516db2b4f5b279ae34450adb290e7413ab7ed73ac85b63219959081d498cd4ab';
+/** Largest accepted request body for the preset write proxy. */
+export const MAX_BODY_BYTES = 256 * 1024;
+
+/** Columns of `system_presets` the Worker forwards. `updated_by` is set from the verified identity. */
+export const FORWARDED_COLUMNS = [
+  'id',
+  'name',
+  'subfolder',
+  'preset_data',
+  'sort_order',
+  'tags',
+  'is_deleted',
+  'updated_at',
+] as const;
+
+const SUBFOLDERS = ['showcase', 'flagship', 'classics'];
 
 const CF_ACCESS_HEADER = 'cf-access-jwt-assertion';
 const CF_ACCESS_EMAIL_HEADER = 'cf-access-authenticated-user-email';
@@ -37,6 +49,37 @@ const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store',
 };
 
+/** Headers added to every response the Worker builds itself. The CSP is added by `withSecurityHeaders`. */
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+};
+
+/** Strict policy for Worker responses: nothing loads, nothing frames. Only a nonced inline script may run. */
+function contentSecurityPolicy(nonce?: string): string {
+  const script = nonce ? `script-src 'nonce-${nonce}'` : "script-src 'none'";
+  return `default-src 'none'; ${script}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+}
+
+function newNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
+}
+
+function withSecurityHeaders(response: Response, nonce?: string): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+  headers.set('Content-Security-Policy', contentSecurityPolicy(nonce));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export type CfAccessReason =
   | 'missing_jwt'
   | 'malformed_jwt'
@@ -50,7 +93,8 @@ export type CfAccessReason =
   | 'jwt_not_yet_valid'
   | 'missing_email'
   | 'email_mismatch'
-  | 'email_not_allowed';
+  | 'email_not_allowed'
+  | 'admin_config_missing';
 
 export interface VerifyCfAccessJwtOptions {
   teamDomain: string;
@@ -293,7 +337,7 @@ type AuthResult =
   | { ok: false; reason: CfAccessReason; status: 401 | 403 | 503 };
 
 function statusForReason(reason: CfAccessReason): 401 | 403 | 503 {
-  if (reason === 'jwks_unavailable') return 503;
+  if (reason === 'jwks_unavailable' || reason === 'admin_config_missing') return 503;
   if (reason === 'email_not_allowed') return 403;
   return 401;
 }
@@ -308,11 +352,15 @@ async function authenticate(request: Request, env: Env, fetchFn: FetchLike): Pro
     status: statusForReason(reason),
   });
 
+  // Fail closed: all three settings are required and have no source default.
+  const teamDomain = env.CF_ACCESS_TEAM_DOMAIN?.trim();
+  const aud = env.CF_ACCESS_AUD?.trim();
+  const allowedEmail = env.ADMIN_EMAIL?.trim().toLowerCase();
+  if (!teamDomain || !aud || !allowedEmail) return fail('admin_config_missing');
+
   const token = getAccessToken(request);
   if (!token) return fail('missing_jwt');
 
-  const teamDomain = env.CF_ACCESS_TEAM_DOMAIN?.trim() || DEFAULT_CF_ACCESS_TEAM_DOMAIN;
-  const aud = env.CF_ACCESS_AUD?.trim() || DEFAULT_CF_ACCESS_AUD;
   const result = await verifyCfAccessJwt(token, { teamDomain, aud, fetchFn });
   if (!result.valid || !result.email) return fail(result.reason ?? 'malformed_jwt');
 
@@ -322,7 +370,6 @@ async function authenticate(request: Request, env: Env, fetchFn: FetchLike): Pro
     return fail('email_mismatch');
   }
 
-  const allowedEmail = (env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();
   if (email.toLowerCase() !== allowedEmail) return fail('email_not_allowed');
 
   return { ok: true, email };
@@ -342,7 +389,7 @@ function scriptJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
-function renderHandshakePage(auth: AuthResult, isPopup: boolean): Response {
+function renderHandshakePage(auth: AuthResult, isPopup: boolean, nonce: string): Response {
   if (!auth.ok) {
     const page = `<!doctype html>
 <html lang="en">
@@ -364,7 +411,7 @@ function renderHandshakePage(auth: AuthResult, isPopup: boolean): Response {
 <h1>Admin signed in</h1>
 <p>Signed in as ${escapeHtml(auth.email)}.</p>
 <p><a href="/">Back to the visualizer</a></p>
-<script>
+<script nonce="${nonce}">
 (function () {
   var signal = ${scriptJson(signal)};
   try { new BroadcastChannel(${scriptJson(SIGNAL_CHANNEL)}).postMessage(signal); } catch (e) {}
@@ -381,6 +428,50 @@ function renderHandshakePage(auth: AuthResult, isPopup: boolean): Response {
 }
 
 const PRESET_METHODS = ['POST', 'PATCH'];
+
+/** Read the body as text, returning null once it exceeds `maxBytes`. */
+async function readBodyCapped(request: Request, maxBytes: number): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+}
+
+/** Name of the first allowlisted column whose value has the wrong type, or null. */
+function findInvalidField(body: Record<string, unknown>): string | null {
+  const isObject = (v: unknown): boolean => !!v && typeof v === 'object' && !Array.isArray(v);
+  const checks: Record<string, (v: unknown) => boolean> = {
+    id: (v) => typeof v === 'string',
+    name: (v) => typeof v === 'string',
+    subfolder: (v) => typeof v === 'string' && SUBFOLDERS.includes(v),
+    preset_data: isObject,
+    sort_order: (v) => typeof v === 'number' && Number.isFinite(v),
+    tags: (v) => Array.isArray(v) && v.every((t) => typeof t === 'string'),
+    is_deleted: (v) => typeof v === 'boolean',
+    updated_at: (v) => typeof v === 'string',
+  };
+  for (const [column, ok] of Object.entries(checks)) {
+    if (body[column] !== undefined && !ok(body[column])) return column;
+  }
+  return null;
+}
 
 async function handlePresetWrite(
   request: Request,
@@ -411,9 +502,16 @@ async function handlePresetWrite(
     return jsonResponse({ error: 'unsupported_media_type' }, 415);
   }
 
+  const declared = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return jsonResponse({ error: 'payload_too_large' }, 413);
+  }
+  const raw = await readBodyCapped(request, MAX_BODY_BYTES);
+  if (raw === null) return jsonResponse({ error: 'payload_too_large' }, 413);
+
   let parsed: unknown;
   try {
-    parsed = await request.json();
+    parsed = JSON.parse(raw);
   } catch {
     return jsonResponse({ error: 'invalid_json' }, 400);
   }
@@ -421,6 +519,8 @@ async function handlePresetWrite(
     return jsonResponse({ error: 'invalid_body' }, 400);
   }
   const body = parsed as Record<string, unknown>;
+  const invalidField = findInvalidField(body);
+  if (invalidField) return jsonResponse({ error: 'invalid_field', field: invalidField }, 400);
 
   let presetId: string | null = null;
   if (method === 'POST') {
@@ -439,7 +539,11 @@ async function handlePresetWrite(
     return jsonResponse({ error: 'missing_supabase_config' }, 500);
   }
 
-  const forwarded = { ...body, updated_by: auth.email };
+  const forwarded: Record<string, unknown> = {};
+  for (const column of FORWARDED_COLUMNS) {
+    if (body[column] !== undefined) forwarded[column] = body[column];
+  }
+  forwarded.updated_by = auth.email;
   const target =
     method === 'POST'
       ? `${supabaseUrl}${SUPABASE_TABLE_PATH}`
@@ -481,7 +585,34 @@ export async function handleRequest(
   env: Env,
   fetchFn: FetchLike = fetch,
 ): Promise<Response> {
+  const nonce = newNonce();
   const url = new URL(request.url);
+  if (isWorkerRoute(url.pathname)) {
+    const response = await routeRequest(request, env, fetchFn, url, nonce);
+    // Only the signed-in handshake page carries an inline script, so only it gets the nonce.
+    const hasScript = response.status === 200 && (response.headers.get('Content-Type') ?? '').startsWith('text/html');
+    return withSecurityHeaders(response, hasScript ? nonce : undefined);
+  }
+  // Static assets keep their own headers; the Worker only passes them through.
+  return env.ASSETS.fetch(request);
+}
+
+function isWorkerRoute(path: string): boolean {
+  return (
+    path === '/admin/api/identity' ||
+    path === '/admin' ||
+    path === '/admin/' ||
+    path === '/admin/api/presets'
+  );
+}
+
+async function routeRequest(
+  request: Request,
+  env: Env,
+  fetchFn: FetchLike,
+  url: URL,
+  nonce: string,
+): Promise<Response> {
   const path = url.pathname;
 
   if (path === '/admin/api/identity') {
@@ -504,14 +635,14 @@ export async function handleRequest(
       return jsonResponse({ error: 'method_not_allowed' }, 405);
     }
     const auth = await authenticate(request, env, fetchFn);
-    return renderHandshakePage(auth, url.searchParams.get('popup') === '1');
+    return renderHandshakePage(auth, url.searchParams.get('popup') === '1', nonce);
   }
 
   if (path === '/admin/api/presets') {
     return handlePresetWrite(request, env, fetchFn, url);
   }
 
-  return env.ASSETS.fetch(request);
+  return jsonResponse({ error: 'not_found' }, 404);
 }
 
 export default {
