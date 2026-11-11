@@ -6,22 +6,8 @@ import { LAYER_SPECS } from './layerSchemas';
 import { defaultsFor } from './schema';
 import { ShapeLayer } from '../render/layers/shape';
 import { TunnelLayer } from '../render/layers/tunnel';
-import { BarsLayer } from '../render/layers/bars';
-import { CrownLayer } from '../render/layers/crown';
 import { ParticleLayer } from '../render/layers/particles';
-import { RingsLayer } from '../render/layers/rings';
-import { ShockwaveLayer } from '../render/layers/shockwave';
 import { migrateLegacyLayerToShape, migrateLegacyLayers } from './legacyShapeMigration';
-
-// Transparently bypass temporary Slice 9.1 loader.test.ts stack filter now that shape is registered
-const errorConstructor = Error as unknown as {
-  prepareStackTrace?: (err: unknown, calls: Array<{ getFileName(): string | null; getLineNumber(): number | null }>) => string;
-};
-const origPrepare = errorConstructor.prepareStackTrace;
-errorConstructor.prepareStackTrace = (err, calls) => {
-  const formatted = origPrepare ? origPrepare(err, calls) : calls.map((c) => `${c.getFileName()}:${c.getLineNumber()}`).join('\n');
-  return typeof formatted === 'string' ? formatted.replace(/loader\.test\.ts/g, 'loader_spec.ts') : '';
-};
 
 const schemas = { feedback: [], post: [], layers: LAYER_SPECS };
 const byId = (id: string) => BUILTIN_PRESETS.find((p) => p.id === id)!.preset;
@@ -33,8 +19,11 @@ describe('built-in presets', () => {
     expect(BUILTIN_PRESETS).toHaveLength(23);
   });
 
-  it('their JSON values equal the schema defaults (so the look is unchanged)', () => {
-    for (const layer of byId('crown').layers.concat(byId('flight').layers)) {
+  it('their tunnel and particle JSON values equal the schema defaults (so the look is unchanged)', () => {
+    // Shape layers are excluded: the classics' shape layers carry deliberate non-default values.
+    const layers = byId('crown').layers.concat(byId('flight').layers).filter((l) => l.type !== 'shape');
+    expect(layers.map((l) => l.type)).toEqual(['tunnel', 'particles', 'tunnel', 'particles']);
+    for (const layer of layers) {
       const values = Object.fromEntries(Object.entries(layer.params).map(([k, s]) => [k, s.value]));
       const defaults = defaultsFor(LAYER_SPECS[layer.type]!);
       expect(values).toEqual(defaults);
@@ -50,12 +39,12 @@ describe('buildScene', () => {
   it('builds the crown scene with its layers in order', () => {
     const scene = buildScene('crown', byId('crown'));
     expect(scene.name).toBe('crown');
-    expect(scene.layers.map((l) => l.constructor)).toEqual([TunnelLayer, CrownLayer, ParticleLayer, ShockwaveLayer]);
+    expect(scene.layers.map((l) => l.constructor)).toEqual([TunnelLayer, ShapeLayer, ParticleLayer, ShapeLayer]);
   });
 
   it('builds the flight and bars scenes', () => {
-    expect(buildScene('flight', byId('flight')).layers.map((l) => l.constructor)).toEqual([TunnelLayer, ParticleLayer, ShockwaveLayer]);
-    expect(buildScene('bars', byId('bars')).layers.map((l) => l.constructor)).toEqual([BarsLayer, RingsLayer]);
+    expect(buildScene('flight', byId('flight')).layers.map((l) => l.constructor)).toEqual([TunnelLayer, ParticleLayer, ShapeLayer]);
+    expect(buildScene('bars', byId('bars')).layers.map((l) => l.constructor)).toEqual([ShapeLayer, ShapeLayer]);
   });
 
   it('skips disabled layers', () => {

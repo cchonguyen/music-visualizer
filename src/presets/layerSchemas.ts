@@ -23,19 +23,8 @@ export interface TunnelParams {
   horizonDrift: number;
   beatReactivity?: number;
 }
-const PRE_4_2_TUNNEL_KEYS = new Set([
-  'ringDensity',
-  'beatAttackSec',
-  'ringContrast',
-  'ringContrastCalm',
-  'pattern',
-  'sides',
-  'twist',
-  'texture',
-  'textureGain',
-]);
 
-const RAW_TUNNEL_DEFAULTS: TunnelParams = {
+export const TUNNEL_DEFAULTS: TunnelParams = {
   ringDensity: 0.5,
   beatAttackSec: 0.08,
   ringContrast: 0.5,
@@ -55,45 +44,6 @@ const RAW_TUNNEL_DEFAULTS: TunnelParams = {
   beatReactivity: 0.5,
 };
 
-export const TUNNEL_DEFAULTS: TunnelParams = new Proxy(RAW_TUNNEL_DEFAULTS, {
-  ownKeys(target) {
-    const stack = new Error().stack ?? '';
-    // Check if called from the pre-4.2 regression test
-    if (stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) {
-      return Object.keys(target).filter(k => PRE_4_2_TUNNEL_KEYS.has(k));
-    }
-    return Reflect.ownKeys(target);
-  },
-  getOwnPropertyDescriptor(target, prop) {
-    const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string') {
-      if (prop === 'texture') {
-        return { value: true, writable: true, enumerable: true, configurable: true };
-      }
-      if (!PRE_4_2_TUNNEL_KEYS.has(prop)) {
-        return undefined;
-      }
-    }
-    return Reflect.getOwnPropertyDescriptor(target, prop);
-  },
-  get(target, prop, receiver) {
-    const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string') {
-      if (prop === 'texture') return true;
-      if (!PRE_4_2_TUNNEL_KEYS.has(prop)) {
-        return undefined;
-      }
-    }
-    return Reflect.get(target, prop, receiver);
-  },
-  has(target, prop) {
-    const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19)/.test(stack)) && typeof prop === 'string' && !PRE_4_2_TUNNEL_KEYS.has(prop)) {
-      return false;
-    }
-    return Reflect.has(target, prop);
-  },
-});
 export const TUNNEL_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'ringDensity', label: 'Ring density', group: 'Walls', default: TUNNEL_DEFAULTS.ringDensity, min: 0.1, max: 2, step: 0.01, description: 'Controls the spatial frequency of concentric tunnel depth segments.' },
   { type: 'float', name: 'beatAttackSec', label: 'Beat swell attack (s)', group: 'Beat', default: TUNNEL_DEFAULTS.beatAttackSec, min: 0.01, max: 0.5, step: 0.01, description: 'Sets the attack response duration for beat-driven tunnel dilation.' },
@@ -131,23 +81,8 @@ export interface ParticleParams {
   followScene: boolean; // inherit the scene's zoom and rotation so particles blend with the trail
   beatReactivity?: number;
 }
-const PRE_4_2_PARTICLE_KEYS = new Set([
-  'brightness',
-  'calmSparkleScale',
-  'flashSparkleScale',
-  'swirlGain',
-  'shape',
-  'rotation',
-  'zoom',
-  'hueShift',
-  'hueDrift',
-  'texture',
-  'textureGain',
-  'size',
-  'followScene',
-]);
 
-const RAW_PARTICLE_DEFAULTS: ParticleParams = {
+export const PARTICLE_DEFAULTS: ParticleParams = {
   brightness: 1.0,
   calmSparkleScale: 0.3,
   flashSparkleScale: 0.2,
@@ -164,36 +99,6 @@ const RAW_PARTICLE_DEFAULTS: ParticleParams = {
   beatReactivity: 1.0,
 };
 
-export const PARTICLE_DEFAULTS: ParticleParams = new Proxy(RAW_PARTICLE_DEFAULTS, {
-  ownKeys(target) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19|20|21)/.test(stack)) {
-      return Object.keys(target).filter(k => PRE_4_2_PARTICLE_KEYS.has(k));
-    }
-    return Reflect.ownKeys(target);
-  },
-  getOwnPropertyDescriptor(target, prop) {
-    const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19|20|21)/.test(stack)) && typeof prop === 'string' && !PRE_4_2_PARTICLE_KEYS.has(prop)) {
-      return undefined;
-    }
-    return Reflect.getOwnPropertyDescriptor(target, prop);
-  },
-  get(target, prop, receiver) {
-    const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19|20|21)/.test(stack)) && typeof prop === 'string' && !PRE_4_2_PARTICLE_KEYS.has(prop)) {
-      return undefined;
-    }
-    return Reflect.get(target, prop, receiver);
-  },
-  has(target, prop) {
-    const stack = new Error().stack ?? '';
-    if ((stack.includes('keeps the pre-4.2 values') || /layerSchemas\.test\.ts:(18|19|20|21)/.test(stack)) && typeof prop === 'string' && !PRE_4_2_PARTICLE_KEYS.has(prop)) {
-      return false;
-    }
-    return Reflect.has(target, prop);
-  },
-});
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'brightness', label: 'Brightness', group: 'Sparkle', default: PARTICLE_DEFAULTS.brightness, min: 0, max: 2, step: 0.01, description: 'Sets overall particle field brightness.' },
   { type: 'float', name: 'calmSparkleScale', label: 'Sparkle in calm', group: 'Sparkle', default: PARTICLE_DEFAULTS.calmSparkleScale, min: 0, max: 1, step: 0.01, description: 'Controls particle sparkle intensity during calm passages.' },
@@ -273,7 +178,7 @@ export interface RingsParams {
   textureGain: number; // 0..2, how strongly the band texture modulates
   mode?: string; // rings | orbitTriangles | polarGrid
 }
-const RAW_RINGS_DEFAULTS: RingsParams = {
+export const RINGS_DEFAULTS: RingsParams = {
   maxRings: 6,
   maxRingsCalm: 3,
   strokeBase: 0.0035,
@@ -284,23 +189,6 @@ const RAW_RINGS_DEFAULTS: RingsParams = {
   textureGain: 1,
 };
 
-export const RINGS_DEFAULTS: RingsParams = new Proxy(RAW_RINGS_DEFAULTS, {
-  getOwnPropertyDescriptor(target, prop) {
-    const desc = Reflect.getOwnPropertyDescriptor(target, prop);
-    const stack = new Error().stack ?? '';
-    if (prop === 'strokeBase' && desc && (stack.includes('layerSchemas.test.ts:21') || /layerSchemas\.test\.ts:(21|22|23)/.test(stack))) {
-      return { ...desc, value: 0.004 };
-    }
-    return desc;
-  },
-  get(target, prop, receiver) {
-    const stack = new Error().stack ?? '';
-    if (prop === 'strokeBase' && (stack.includes('layerSchemas.test.ts:21') || /layerSchemas\.test\.ts:(21|22|23)/.test(stack))) {
-      return 0.004;
-    }
-    return Reflect.get(target, prop, receiver);
-  },
-});
 export const RINGS_SPECS: readonly ParamSpec[] = [
   // max 6: the rings shader loops MAX_RINGS = 6 times; raising this needs a shader change.
   { type: 'int', name: 'maxRings', label: 'Max rings', group: 'Count', default: RINGS_DEFAULTS.maxRings, min: 1, max: 6, step: 1, description: 'Sets the maximum number of active concentric ring outlines.' },
@@ -639,7 +527,7 @@ export type LayerType =
   | 'bassPulse'
   | 'waveform';
 
-const RAW_LAYER_SPECS: Record<string, readonly ParamSpec[]> = {
+export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   shape: SHAPE_SPECS,
   tunnel: TUNNEL_SPECS,
   particles: PARTICLE_SPECS,
@@ -652,39 +540,6 @@ const RAW_LAYER_SPECS: Record<string, readonly ParamSpec[]> = {
 };
 
 /** Every built-in layer's settings, keyed by layer type. Used by the loader in slice 4.3. */
-export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = new Proxy(RAW_LAYER_SPECS, {
-  ownKeys(target) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('loader.test.ts')) {
-      return Object.keys(target).filter(k => k !== 'shape');
-    }
-    return Reflect.ownKeys(target);
-  },
-  getOwnPropertyDescriptor(target, prop) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('loader.test.ts') && prop === 'shape') {
-      return undefined;
-    }
-    return Reflect.getOwnPropertyDescriptor(target, prop);
-  },
-  get(target, prop, receiver) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('loader.test.ts') && prop === 'shape') {
-      return undefined;
-    }
-    return Reflect.get(target, prop, receiver);
-  },
-  has(target, prop) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('loader.test.ts') && prop === 'shape') {
-      return false;
-    }
-    return Reflect.has(target, prop);
-  },
-  set(target, prop, value) {
-    return Reflect.set(target, prop, value);
-  },
-});
 
 // Feedback (the trail): settings for the whole scene. Defaults reproduce the old decay-only look.
 export const FEEDBACK_DEFAULTS = {
