@@ -16,6 +16,9 @@ export interface CycleCandidate {
   tags: readonly string[];
 }
 
+/** How many seconds before a switch the next preset is chosen, so it can be prepared (Slice 16.3). */
+export const PREPARE_LEAD_SEC = 3;
+
 export const DEFAULT_CYCLE: CycleOptions = { mode: 'off', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false, calmOnly: false };
 
 /** Presets that the cycle may show, in their list order. */
@@ -46,12 +49,35 @@ export class AutoCycler {
   // Time since the last beat-mode switch. Starts at 0 so the first switch also waits for the minimum gap.
   private lastBeatSwitch = 0;
 
+  // The pick announced by `upcoming`, kept so `next` switches to the same preset.
+  private planned: string | null = null;
+
   constructor(private random: () => number = Math.random) {}
 
   /** Restart the timers, for example after the user switches by hand. */
   reset(): void {
     this.sinceSwitch = 0;
     this.lastBeatSwitch = 0;
+    this.planned = null;
+  }
+
+  /**
+   * The preset the next switch will show, once the switch is within `leadSec` seconds of being allowed.
+   * Null before that, when the cycle is off, or when there is nothing to switch to. The answer is kept,
+   * so `next` returns the same id (matters for shuffle). Call with the same arguments as `next`.
+   */
+  upcoming(current: string, pool: readonly string[], opts: CycleOptions, leadSec = PREPARE_LEAD_SEC): string | null {
+    if (opts.mode === 'off' || pool.length < 2) {
+      this.planned = null;
+      return null;
+    }
+    const elapsed = opts.mode === 'timer' ? this.sinceSwitch : this.lastBeatSwitch;
+    const wait = opts.mode === 'timer' ? opts.intervalSec : opts.minGapSec;
+    if (elapsed < wait - leadSec) return null;
+    if (!this.planned || this.planned === current || !pool.includes(this.planned)) {
+      this.planned = this.choose(current, pool, opts.shuffle);
+    }
+    return this.planned;
   }
 
   /**
@@ -71,7 +97,11 @@ export class AutoCycler {
       due = strongBeat && this.lastBeatSwitch >= opts.minGapSec;
     }
     if (!due) return null;
-    const pick = this.choose(current, pool, opts.shuffle);
+    const pick =
+      this.planned && this.planned !== current && pool.includes(this.planned)
+        ? this.planned
+        : this.choose(current, pool, opts.shuffle);
+    this.planned = null;
     this.sinceSwitch = 0;
     this.lastBeatSwitch = 0;
     return pick;

@@ -600,6 +600,22 @@ export class Scene {
     gl.uniform1f?.(u('uHigh')!, frame?.norm?.high ?? (frame?.env?.high ?? 0.5));
   }
 
+  /**
+   * Clears the trail history to transparent black, the state a freshly made scene starts in. Used when
+   * a kept scene comes back on screen (Slice 16.3), so it does not show the last frame it drew.
+   */
+  clearBuffers(): void {
+    const gl = this.gl;
+    const pp = this.pp;
+    if (!gl || !pp) return;
+    gl.clearColor(0, 0, 0, 0);
+    for (const t of [pp.read, pp.write]) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, t.framebuffer);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
   /** Lets go of this scene's shared programs. The cache keeps them for the next scene. */
   private releasePrograms(): void {
     const gl = this.gl;
