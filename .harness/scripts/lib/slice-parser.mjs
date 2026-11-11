@@ -15,7 +15,8 @@
  *   targets: string[],
  *   targetFiles: string[],
  *   coords: string[],
- *   verify: string
+ *   verify: string,
+ *   issue: number|null
  * }}
  */
 export function parseSliceLine(line) {
@@ -29,21 +30,24 @@ export function parseSliceLine(line) {
       targetFiles: [],
       coords: [],
       verify: '',
+      issue: null,
     };
   }
 
   const parts = line.split('|');
 
-  // 1. Status extraction
+  // 1. Status extraction: bracketed markers count only right after the bold title.
+  const boldMatch = line.match(/\*\*([^*]+)\*\*/);
   let status = '';
-  if (/\[IN_PROGRESS\]/i.test(line)) {
-    status = '[IN_PROGRESS]';
-  } else if (/\[PENDING\]/i.test(line)) {
-    status = '[PENDING]';
-  } else if (/\[[xX]\]/.test(line)) {
+  const afterTitle = boldMatch ? line.slice(boldMatch.index + boldMatch[0].length) : '';
+  // A marker at the very end of the line is also honoured (legacy lines written by start-slice).
+  const marker =
+    afterTitle.match(/^ (\[(?:IN_PROGRESS|PENDING|BLOCKED)\])/i) ||
+    afterTitle.match(/ (\[(?:IN_PROGRESS|PENDING|BLOCKED)\])\s*$/i);
+  if (marker) {
+    status = marker[1].toUpperCase();
+  } else if (/^\s*-\s*\[[xX]\]/.test(line)) {
     status = '[x]';
-  } else if (/\[BLOCKED\]/i.test(line)) {
-    status = '[BLOCKED]';
   } else if (/^\s*-\s*\[\s*\]/.test(line)) {
     status = '[PENDING]';
   }
@@ -52,11 +56,11 @@ export function parseSliceLine(line) {
   let id = null;
   let title = null;
   let fullTitle = null;
+  const ID_RE = '([0-9]+(?:\\.[0-9]+)*[a-z]?)';
 
-  const boldMatch = line.match(/\*\*([^*]+)\*\*/);
   if (boldMatch) {
     fullTitle = boldMatch[1].trim();
-    const sliceMatch = fullTitle.match(/^Slice\s+([0-9]+(?:\.[0-9]+)*)(?::\s*(.*))?$/i);
+    const sliceMatch = fullTitle.match(new RegExp('^Slice\\s+' + ID_RE + '(?::\\s*(.*))?$', 'i'));
     if (sliceMatch) {
       id = sliceMatch[1];
       title = sliceMatch[2] ? sliceMatch[2].trim() : fullTitle;
@@ -64,11 +68,14 @@ export function parseSliceLine(line) {
       title = fullTitle;
     }
   } else {
-    const sliceMatch = line.match(/Slice\s+([0-9]+(?:\.[0-9]+)*)/i);
+    const sliceMatch = line.match(new RegExp('Slice\\s+' + ID_RE, 'i'));
     if (sliceMatch) {
       id = sliceMatch[1];
     }
   }
+
+  const issueMatch = line.match(/\bIssue:\s*#(\d+)/i);
+  const issue = issueMatch ? Number(issueMatch[1]) : null;
 
   // 3. Target files extraction
   // Find segment containing 'Target files:'
@@ -137,6 +144,7 @@ export function parseSliceLine(line) {
     targetFiles: targets,
     coords,
     verify,
+    issue,
   };
 }
 

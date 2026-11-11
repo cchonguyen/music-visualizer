@@ -1,0 +1,21 @@
+{
+  "owner": "cchonguyen",
+  "projectNumber": null,
+  "apiVersion": "2026-03-10",
+  "statusField": "Status",
+  "repos": [
+    "cchonguyen/claude-harness-hub",
+    "cchonguyen/music-visualizer",
+    "cchonguyen/Concert-Tracker"
+  ],
+  "statusOptions": {
+    "status:backlog": "Backlog",
+    "status:ready": "Ready",
+    "status:in-progress": "In progress",
+    "status:blocked-on-operator": "Needs you",
+    "status:blocked": "Blocked",
+    "done": "Done",
+    "wontdo": "Won't do"
+  },
+  "closedWindowDays": 14
+}

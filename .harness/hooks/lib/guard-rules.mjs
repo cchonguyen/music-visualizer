@@ -38,7 +38,6 @@ export function agentsBlock(text) {
 }
 
 // Colour tag on a slice line: [GREEN], [YELLOW] or [RED]
-export const colourOf = (line) => line?.match(/\[(GREEN|YELLOW|RED)\]/)?.[1] ?? null;
 
 // Slice identity: the text inside **Slice N**, so rewording a line keeps its identity
 export const sliceIdOf = (line) => line?.match(/\*\*Slice\s+([^*]+)\*\*/)?.[1].trim() ?? line?.trim();
