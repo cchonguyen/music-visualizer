@@ -27,6 +27,7 @@ import { advanceSway } from './render/swayStore';
 import { advanceCrown } from './render/crownStore';
 import { cycleIndex, indexForDigit, readStoredPresetId, safeStorage, storePresetId, stepForKey } from './presets/library';
 import { showToast } from './ui/toast';
+import { TouchGestureRecognizer } from './ui/gestures';
 import { Studio } from './studio/studio';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
@@ -160,6 +161,86 @@ function flagLayer(layer: RenderLayer, calm: boolean, contrast: number, swap: nu
   }
 }
 
+// Touch on the stage (Slice 21.7). Touch only, so mouse clicks keep their normal behaviour.
+// Tap toggles the controls, horizontal swipe changes preset ([ and ] keys), double tap toggles fullscreen.
+function wireTouchGestures(canvas: HTMLCanvasElement): void {
+  const recognizer = new TouchGestureRecognizer({
+    onTap: () => {
+      const collapsed = document.getElementById('controls')?.classList.contains('collapsed');
+      document.getElementById(collapsed ? 'controls-show' : 'controls-close')?.click();
+    },
+    onSwipe: (direction) => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: direction === 'left' ? ']' : '[' }));
+    },
+    onDoubleTap: () => {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen().catch(() => showNotice('Fullscreen was blocked by the browser.'));
+    },
+  });
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch' || !e.isPrimary) return;
+    recognizer.pointerDown({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+  });
+  canvas.addEventListener('pointerup', (e) => {
+    if (e.pointerType !== 'touch' || !e.isPrimary) return;
+    recognizer.pointerUp({ x: e.clientX, y: e.clientY, t: e.timeStamp });
+  });
+  canvas.addEventListener('pointercancel', (e) => {
+    if (e.pointerType === 'touch') recognizer.cancel();
+  });
+}
+
+// Keeps the screen awake while audio plays (Slice 21.7). Feature-detected. Released while the page is hidden.
+function keepScreenAwake(engine: AudioEngine): void {
+  type WakeLockSentinelLike = { release(): Promise<void>; addEventListener(type: 'release', cb: () => void): void };
+  type WakeLockApi = { request(type: 'screen'): Promise<WakeLockSentinelLike> };
+  const wakeLock = (navigator as unknown as { wakeLock?: WakeLockApi }).wakeLock;
+  if (!wakeLock || typeof wakeLock.request !== 'function') return;
+
+  let sentinel: WakeLockSentinelLike | null = null;
+  let requesting = false;
+  const playing = (): boolean => {
+    if (engine.kind === 'none') return false;
+    const media = engine.media;
+    return media ? !media.paused : true;
+  };
+  const release = (): void => {
+    const held = sentinel;
+    sentinel = null;
+    if (held) void held.release().catch(() => undefined);
+  };
+  const sync = (): void => {
+    if (document.visibilityState === 'hidden' || !playing()) {
+      release();
+      return;
+    }
+    if (sentinel || requesting) return;
+    requesting = true;
+    wakeLock
+      .request('screen')
+      .then((held) => {
+        requesting = false;
+        if (document.visibilityState === 'hidden' || !playing()) {
+          void held.release().catch(() => undefined);
+          return;
+        }
+        sentinel = held;
+        held.addEventListener('release', () => {
+          if (sentinel === held) sentinel = null;
+        });
+      })
+      .catch(() => {
+        requesting = false; // Denied or unavailable: the visualizer still works without it.
+      });
+  };
+  engine.on('source-changed', sync);
+  engine.on('source-ended', sync);
+  document.addEventListener('play', sync, true);
+  document.addEventListener('pause', sync, true);
+  document.addEventListener('ended', sync, true);
+  document.addEventListener('visibilitychange', sync);
+}
+
 function start(): void {
   const startScreen = document.getElementById('start')!;
   const canvas = document.getElementById('stage') as HTMLCanvasElement;
@@ -175,6 +256,8 @@ function start(): void {
     return;
   }
   startScreen.hidden = true;
+  wireTouchGestures(canvas);
+  keepScreenAwake(engine);
 
   // Freeze (k) holds the picture; while frozen, . draws exactly one frame (frameStep.ts).
   window.addEventListener('keydown', (e) => {

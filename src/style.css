@@ -31,7 +31,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: #000; color: var(--text); overflow: hidden; }
-#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
 .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(0,0,0,.85); text-align: center; padding: 2rem; }
 .overlay[hidden], .controls[hidden], .notice[hidden], #playback[hidden] { display: none; }
 .warn { max-width: 34rem; line-height: 1.5; color: #ccc; }
