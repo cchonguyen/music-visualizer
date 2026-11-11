@@ -16,6 +16,8 @@
   "routes": [{ "pattern": "music-visualizer.charliechonguyen.com", "custom_domain": true }],
   // Keep the workers.dev URL as a backup address.
   "workers_dev": true,
+  // Keep dashboard plain variables across deploys (Wrangler defaults to clearing them).
+  "keep_vars": true,
   "preview_urls": false
   // Required Worker settings with no default in source. Set them as Cloudflare secrets or variables
   // (Workers & Pages > music-visualizer > Settings > Variables and Secrets). The Worker fails closed
