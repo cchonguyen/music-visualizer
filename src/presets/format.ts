@@ -1,6 +1,6 @@
 // Preset format: the shape of a preset as a JSON file, and the checker that turns
 // any JSON (hand-edited, imported, or saved by an older version) into a safe Preset.
-import { AUDIO_SOURCES, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
+import { AUDIO_SOURCES, REMOVED_FEEDBACK_SETTINGS, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
 import type { GlobalDirectorSettings } from "../render/globalDirector";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
@@ -176,12 +176,12 @@ function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink |
 }
 
 /** Fills every known setting (defaults for missing ones), and reports unknown or bad ones. */
-function parseSettings(raw: unknown, specs: readonly ParamSpec[], where: string, warnings: string[]): Settings {
+function parseSettings(raw: unknown, specs: readonly ParamSpec[], where: string, warnings: string[], removed: readonly string[] = []): Settings {
   if (raw !== undefined && !isRecord(raw)) warnings.push(`${where}: expected an object, using defaults`);
   const input: Record<string, unknown> = isRecord(raw) ? raw : {};
   const knownNames = new Set(specs.map((spec) => spec.name));
   for (const key of Object.keys(input)) {
-    if (!knownNames.has(key)) warnings.push(`${where}.${key}: unknown setting, ignored`);
+    if (!knownNames.has(key) && !removed.includes(key)) warnings.push(`${where}.${key}: unknown setting, ignored`);
   }
 
   const out: Settings = {};
@@ -289,7 +289,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     name: raw.name.trim(),
     tags,
     transition,
-    feedback: parseSettings(raw.feedback, registry.feedback, "feedback", warnings),
+    feedback: parseSettings(raw.feedback, registry.feedback, "feedback", warnings, REMOVED_FEEDBACK_SETTINGS),
     layers,
     post: parseSettings(raw.post, registry.post, "post", warnings),
     ...(directorProfile ? { directorProfile } : {}),

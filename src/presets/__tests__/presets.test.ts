@@ -80,7 +80,7 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(p2.feedback.radialFold?.value).toBe(0.48);
     expect(p2.feedback.mandalaTile?.value).toBe(0.35);
     expect(p2.feedback.mandalaCounterSpin?.value).toBe(0.3);
-    expect(p2.feedback.mandalaKickFlare?.value).toBe(0.4);
+    expect(p2.feedback).not.toHaveProperty('mandalaKickFlare'); // dropped on load (Slice 14.9)
     expect(p2.feedback.zoom?.value).toBe(1.038);
     expect(p2.feedback.rotate?.value).toBe(0.015);
     expect(p2.feedback.decay?.value).toBe(0.90);

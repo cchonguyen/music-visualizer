@@ -186,6 +186,13 @@ export function defaultsFor(specs: readonly ParamSpec[]): Record<string, ParamVa
 }
 
 /** Extended feedback warp parameters (Slice 7.11). */
+/**
+ * Feedback settings that no longer exist. Old presets may still carry them: the loader drops them
+ * silently (no warning) so the preset loads and looks the same. `mandalaKickFlare` never reached the
+ * shader's output (nothing multiplied it in), so removing it changes no pixels.
+ */
+export const REMOVED_FEEDBACK_SETTINGS: readonly string[] = ["mandalaKickFlare"];
+
 export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   // Warp group (non-intense)
   {
@@ -283,17 +290,6 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     max: 1.0,
     step: 0.05,
     description: "Sets counter-rotational spin speed across nested mandala rings.",
-  },
-  {
-    type: "float",
-    name: "mandalaKickFlare",
-    label: "Kick crystal flare",
-    group: "Warp",
-    default: 0.35,
-    min: 0.0,
-    max: 1.0,
-    step: 0.05,
-    description: "Expands mandala crystal flares on detected bass kick transients.",
   },
   {
     type: "enum",

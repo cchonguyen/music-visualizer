@@ -153,7 +153,7 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(defaults.radialFold).toBe(0.0);
       expect(defaults.mandalaTile).toBe(0.0);
       expect(defaults.mandalaCounterSpin).toBe(0.25);
-      expect(defaults.mandalaKickFlare).toBe(0.35);
+      expect(defaults).not.toHaveProperty('mandalaKickFlare'); // removed control (Slice 14.9)
       expect(defaults.mandalaPattern).toBe('auto');
       expect(defaults.contourFreq).toBe(7.85);
       expect(defaults.contourWidth).toBe(0.45);
