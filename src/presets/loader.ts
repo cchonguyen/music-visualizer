@@ -15,11 +15,10 @@ import { MoireLayer } from '../render/layers/moire';
 import { SpectralTerrainLayer } from '../render/layers/spectralTerrain';
 import { ChladniSandLayer } from '../render/layers/chladniSand';
 import { FerrofluidLayer } from '../render/layers/ferrofluid';
-import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
-import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
+import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams } from './layerSchemas';
 import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
 
@@ -97,8 +96,23 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   spectralTerrain: (p) => new SpectralTerrainLayer(p as Partial<SpectralTerrainParams>),
   chladniSand: (p) => new ChladniSandLayer(p as Partial<ChladniSandParams>),
   ferrofluid: (p) => new FerrofluidLayer(p as Partial<FerrofluidParams>),
-  reactionDiffusion: (p) => new ReactionDiffusionLayer(p as Partial<ReactionDiffusionParams>),
 };
+
+/**
+ * Layer types retired from the app (Slice 15.10). Old presets that contain one still load:
+ * the layer is skipped when the scene is built, and its type is queued for a one-time notice.
+ * The schema stays registered so the saved values survive a re-save.
+ */
+export const RETIRED_LAYER_TYPES: ReadonlySet<string> = new Set(['reactionDiffusion']);
+
+const retiredSkips = new Set<string>();
+
+/** Returns (and clears) the retired layer types skipped since the last call. */
+export function takeRetiredLayerSkips(): string[] {
+  const out = [...retiredSkips];
+  retiredSkips.clear();
+  return out;
+}
 
 /** Builds a scene with fresh layers. Disabled layers are skipped. */
 export function buildScene(name: string, preset: Preset): Scene {
@@ -106,6 +120,10 @@ export function buildScene(name: string, preset: Preset): Scene {
   const configs: SceneLayerConfig[] = [];
   for (const entry of preset.layers) {
     if (!entry.enabled) continue;
+    if (RETIRED_LAYER_TYPES.has(entry.type)) {
+      retiredSkips.add(entry.type);
+      continue;
+    }
     let factory = LAYER_FACTORIES[entry.type];
     let params = entry.params;
     if (!factory) {
@@ -136,6 +154,10 @@ export function createLayersFromPreset(preset: Preset, options: { migrateLegacy?
   const layers: RenderLayer[] = [];
   for (const entry of entries) {
     if (!entry.enabled) continue;
+    if (RETIRED_LAYER_TYPES.has(entry.type)) {
+      retiredSkips.add(entry.type);
+      continue;
+    }
     let factory = LAYER_FACTORIES[entry.type];
     let params = entry.params;
     if (!factory) {
@@ -164,7 +186,6 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof SpectralTerrainLayer) layer.setParams(values as Partial<SpectralTerrainParams>);
   else if (layer instanceof ChladniSandLayer) layer.setParams(values as Partial<ChladniSandParams>);
   else if (layer instanceof FerrofluidLayer) layer.setParams(values as Partial<FerrofluidParams>);
-  else if (layer instanceof ReactionDiffusionLayer) layer.setParams(values as Partial<ReactionDiffusionParams>);
 }
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */

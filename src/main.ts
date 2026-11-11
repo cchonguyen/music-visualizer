@@ -19,7 +19,7 @@ import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
-import { applyLinkedPreset, hasCrownLayer, hasLinks } from './presets/loader';
+import { applyLinkedPreset, hasCrownLayer, hasLinks, takeRetiredLayerSkips } from './presets/loader';
 import { LinkRunner } from './presets/links';
 import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
@@ -258,6 +258,8 @@ function start(): void {
       currentId = id;
       cycler.reset();
       liveSession.show(id);
+      const skipped = takeRetiredLayerSkips();
+      if (skipped.length) showNotice('This preset used a retired layer (ReactionDiffusion). That layer was skipped.', 'info', 6000);
       crownOn = hasCrownLayer(liveSession.get(id)?.preset);
       director.notifyPresetChanged(liveSession.get(id)?.preset);
       storePresetId(id);

@@ -277,17 +277,17 @@ describe('Preset group organization (Slice 7.16)', () => {
     expect(ids).toEqual(['crown', 'flight', 'bars']);
   });
 
-  it('groups all tex-* presets in textures group', () => {
+  it('groups the remaining tex-* presets in textures group (rest moved to review, Slice 15.10)', () => {
     const textures = getPresetsByGroup('textures');
-    expect(textures.length).toBe(10);
+    expect(textures.length).toBe(2);
     for (const p of textures) {
       expect(p.id.startsWith('tex-')).toBe(true);
     }
   });
 
-  it('groups the 10 starter-* presets in archive group', () => {
+  it('groups the remaining starter-* preset in archive group (9 moved to review, Slice 15.10)', () => {
     const archive = getPresetsByGroup('archive');
-    expect(archive.length).toBe(10);
+    expect(archive.length).toBe(1);
     for (const p of archive) {
       expect(p.id.startsWith('starter-')).toBe(true);
     }

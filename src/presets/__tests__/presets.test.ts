@@ -235,8 +235,8 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(ripPart.opacity).toBe(0.75);
   });
 
-  it('all 23 existing presets continue to pass without error or warnings', () => {
-    expect(BUILTIN_PRESETS).toHaveLength(23);
+  it('the 6 remaining existing presets continue to pass without error or warnings', () => {
+    expect(BUILTIN_PRESETS).toHaveLength(6);
     for (const b of BUILTIN_PRESETS) {
       expect(b.warnings).toEqual([]);
       const scene = buildScene(b.id, b.preset);

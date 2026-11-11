@@ -7,7 +7,7 @@ import {
   REACTION_DIFFUSION_SPECS,
   REACTION_DIFFUSION_DEFAULTS,
 } from '../../presets/schema';
-import { LAYER_FACTORIES, applyValues, buildScene } from '../../presets/loader';
+import { LAYER_FACTORIES, buildScene } from '../../presets/loader';
 import { FLAGSHIP_PRESETS_12, ALL_PRESETS, getPresetsByGroup } from '../../presets/builtin';
 import { PRESET_VERSION } from '../../presets/format';
 import { BrightnessLimiter } from '../safety';
@@ -329,14 +329,12 @@ describe('ReactionDiffusionLayer (Slice 7.17)', () => {
     expect(() => layer.draw(makeMockFrame(), mockClock, mockTarget)).not.toThrow();
   });
 
-  it('registers in LAYER_FACTORIES and applyValues updates params', () => {
-    const factory = LAYER_FACTORIES['reactionDiffusion'];
-    expect(factory).toBeDefined();
+  it('is retired from LAYER_FACTORIES (Slice 15.10); the layer class still takes params directly', () => {
+    expect(LAYER_FACTORIES['reactionDiffusion']).toBeUndefined();
 
-    const layer = factory!({ speed: 1.5, brightness: 2.0 }) as ReactionDiffusionLayer;
-    expect(layer).toBeInstanceOf(ReactionDiffusionLayer);
+    const layer = new ReactionDiffusionLayer({ speed: 1.5, brightness: 2.0 });
 
-    applyValues(layer, { speed: 2.0, brightness: 2.5 });
+    layer.setParams({ speed: 2.0, brightness: 2.5 });
     expect((layer as any).p.speed).toBe(2.0);
     expect((layer as any).p.brightness).toBe(2.5);
   });
@@ -357,18 +355,17 @@ describe('ReactionDiffusionLayer (Slice 7.17)', () => {
     expect(rdLayer).toBeDefined();
     expect(rdLayer!.enabled).toBe(true);
 
-    // Scene construction from Preset 12
+    // Retired layer is skipped when building a scene (Slice 15.10)
     const scene = buildScene('test-12', preset);
-    expect(scene.layers.some((l) => l instanceof ReactionDiffusionLayer)).toBe(true);
+    expect(scene.layers.some((l) => l instanceof ReactionDiffusionLayer)).toBe(false);
   });
 
-  it('includes Preset 12 in ALL_PRESETS and getPresetsByGroup("flagship")', () => {
+  it('keeps Preset 12 out of ALL_PRESETS (moved to review, Slice 15.10)', () => {
     const foundInAll = ALL_PRESETS.find((p) => p.id === '12-reaction-diffusion-coral');
-    expect(foundInAll).toBeDefined();
-    expect(foundInAll!.group).toBe('flagship');
+    expect(foundInAll).toBeUndefined();
 
     const flagships = getPresetsByGroup('flagship');
-    expect(flagships.some((p) => p.id === '12-reaction-diffusion-coral')).toBe(true);
+    expect(flagships.some((p) => p.id === '12-reaction-diffusion-coral')).toBe(false);
   });
 
   it('passes WCAG safety luminance checks via BrightnessLimiter on Preset 12', () => {
