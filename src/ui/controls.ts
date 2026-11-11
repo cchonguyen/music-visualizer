@@ -187,7 +187,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const seek = $<HTMLInputElement>('seek');
   const time = $<HTMLSpanElement>('time');
   const volume = $<HTMLInputElement>('volume');
-  const calm = document.getElementById('calm') as HTMLInputElement | null;
   const fsBtn = $<HTMLButtonElement>('fs-btn');
   const sourceLabel = $<HTMLSpanElement>('source-label');
   const playback = $<HTMLElement>('playback');
@@ -268,7 +267,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   controls.hidden = false;
   if (onboardingToast) onboardingToast.hidden = false;
   engine.setVolume(Number(volume.value));
-  if (calm) calm.checked = state.calm;
 
   const loadFile = (file: File | undefined) => {
     if (!file) return;
@@ -357,12 +355,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     engine.setVolume(Number(volume.value));
     syncVolumeText();
   });
-  if (calm) {
-    calm.addEventListener('change', () => {
-      state.calm = calm.checked;
-      getGlobalDirector().setCalm(calm.checked);
-    });
-  }
 
   // Experience Mode & Global Director HUD (Slice 8.2)
   const experienceLabel = document.getElementById('experience-label') as HTMLSpanElement | null;
@@ -376,7 +368,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     const director = getGlobalDirector();
     const currentMode = mode ?? director.getExperienceMode();
     state.calm = director.isCalm();
-    if (calm) calm.checked = state.calm;
     if (experienceLabel) {
       const prefix = experienceLabel.textContent?.startsWith('Visuals') ? 'Visuals' : 'Experience';
       experienceLabel.textContent = `${prefix}: ${EXPERIENCE_LABELS[currentMode] ?? currentMode}`;

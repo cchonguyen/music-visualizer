@@ -436,6 +436,7 @@ function start(): void {
       const calmPreset = curl ?? all.find((e) => e.preset.tags.includes('calm'));
       if (calmPreset && calmPreset.id !== session.shownId) {
         switchShown(calmPreset.id);
+        showToast(`Calm: switched to ${calmPreset.preset.name}`);
       }
     }
   };

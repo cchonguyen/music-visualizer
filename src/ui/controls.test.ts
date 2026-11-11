@@ -191,8 +191,17 @@ describe('source formatting helpers (Slice 12.3)', () => {
 describe('shortcuts list keys (slices 8.1 and 8.7)', () => {
   it('makes every key in the list tappable: letters, digits, brackets, arrows, Space and .', () => {
     const keys = [...dialog.matchAll(/<button type="button" class="key" data-key="([^"]+)"/g)].map((m) => m[1]);
-    const expected = ['A', 'B', 'C', 'D', 'E', 'F', 'K', 'P', 'X', ' ', '.', '[', ']', '?', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    const expected = ['A', 'B', 'C', 'E', 'F', 'K', 'P', 'X', ' ', '.', '[', ']', '?', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
     expect(keys.sort()).toEqual(expected.sort());
+  });
+
+  it('does not advertise the debug panel key (slice 21.1)', () => {
+    expect(dialog).not.toContain('Debug panel');
+    expect(dialog).not.toContain('data-key="D"');
+  });
+
+  it('start-screen copy does not reference a Calm switch (slice 21.1)', () => {
+    expect(indexHtml).not.toContain('Calm switch');
   });
 
   it('makes the Help (?) row a tappable key (slice 11.8), not plain kbd', () => {
