@@ -416,3 +416,75 @@ describe("FrameBuilder band waveforms on demand (Slice 16.9)", () => {
     expect(f.bandWaveforms).toBe(before);
   });
 });
+
+describe("FrameBuilder short-window onset (Slice 17.1)", () => {
+  const FAST_FFT = 2048;
+  const FAST_BINS = FAST_FFT / 2;
+  const KICK_PERIOD = 30; // frames, 0.5 s at 60 fps
+
+  /** Sub-band bytes for an analyser window of `fft` points, `age` seconds after a kick began. */
+  function kickBytes(fft: number, age: number, peak: number): Uint8Array {
+    const bins = new Uint8Array(fft / 2);
+    // A window that is only partly filled with the kick shows a proportionally smaller level.
+    const fill = Math.min(1, Math.max(0, age / (fft / SAMPLE_RATE)));
+    const lo = binForFrequency(20, SAMPLE_RATE, fft);
+    const hi = Math.round((120 * fft) / SAMPLE_RATE);
+    for (let i = lo; i < hi; i += 1) bins[i] = Math.round(peak * fill);
+    return bins;
+  }
+
+  function run(peak: number, withFast: boolean) {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE, withFast ? FAST_FFT : 0);
+    const onsetFrames: number[] = [];
+    const beatFrames: number[] = [];
+    for (let i = 0; i < 180; i += 1) {
+      const sinceKick = i % KICK_PERIOD;
+      const age = i >= KICK_PERIOD && sinceKick < 12 ? (sinceKick + 1) * STEP_SEC : -1;
+      // After the rise the kick tail dies away, as a real kick does.
+      const full = age >= 0 && sinceKick < 6;
+      const slow = full ? kickBytes(FFT_SIZE, age, peak) : emptySpectrum();
+      const fast = full ? kickBytes(FAST_FFT, age, peak) : new Uint8Array(FAST_BINS);
+      const frame = builder.build(i * STEP_SEC, slow, silentWaveform, withFast ? fast : undefined);
+      if (frame.onset) onsetFrames.push(i);
+      if (frame.beat) beatFrames.push(i);
+    }
+    return { onsetFrames, beatFrames };
+  }
+
+  it("fires on the first frame of every kick, even a soft one the long window misses", () => {
+    const { onsetFrames, beatFrames } = run(100, true);
+    expect(onsetFrames).toEqual([30, 60, 90, 120, 150]);
+    // The 8192-point window rises too slowly for a soft kick to cross the threshold; the short one does not.
+    expect(beatFrames.length).toBeLessThan(onsetFrames.length);
+  });
+
+  it("never fires later than the long-window beat on a full-strength kick", () => {
+    const { onsetFrames, beatFrames } = run(255, true);
+    expect(onsetFrames.length).toBe(5);
+    beatFrames.forEach((b, k) => expect(onsetFrames[k]!).toBeLessThanOrEqual(b));
+  });
+
+  it("mirrors the normal beat when there is no short analyser", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE);
+    for (let i = 0; i < 90; i += 1) {
+      const isKick = i > 0 && i % 30 === 0;
+      const frame = builder.build(i * STEP_SEC, isKick ? kickSpectrum() : emptySpectrum(), silentWaveform);
+      expect(frame.onset).toBe(frame.beat);
+    }
+  });
+
+  it("keeps the normal beat output unchanged when a short analyser is added", () => {
+    const a = run(255, true).beatFrames;
+    const b = run(255, false).beatFrames;
+    expect(a).toEqual(b);
+  });
+
+  it("reset clears the short-window state", () => {
+    const builder = new FrameBuilder(SAMPLE_RATE, FFT_SIZE, FAST_FFT);
+    builder.build(0, emptySpectrum(), silentWaveform, new Uint8Array(FAST_BINS));
+    builder.reset();
+    const frame = builder.build(0, emptySpectrum(), silentWaveform, new Uint8Array(FAST_BINS));
+    expect(frame.onset).toBe(false);
+    expect(frame.onsetStrength).toBe(0);
+  });
+});

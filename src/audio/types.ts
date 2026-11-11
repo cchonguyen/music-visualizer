@@ -50,4 +50,8 @@ export interface AudioFrame {
   spectrum: Float32Array; // raw magnitude per bin, 0..1, length = fftSize/2
   smoothedSpectrum: Float32Array; // per-bin envelope, 0..1, length = fftSize/2
   sampleRate: number;
+  // Short-window onset (Slice 17.1). Fires from a small second analyser, so it lands a few frames earlier
+  // than `beat`. Optional so older frame mocks stay valid; read it as `frame.onset ?? frame.beat`.
+  onset?: boolean;
+  onsetStrength?: number; // 0..1, strength of the short-window onset
 }

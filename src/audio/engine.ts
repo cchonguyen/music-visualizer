@@ -12,11 +12,14 @@ import type { AudioFrame } from './types';
 export type SourceKind = 'none' | 'file' | 'display' | 'mic' | `test:${TestSignal}`;
 type EngineEvent = 'source-ended' | 'error' | 'source-changed';
 
+const FAST_FFT_SIZE = 2048; // 17.1: short window used only for onset timing
 const FFT_SIZE = 8192; // 2.3 measured: 4096 missed 6/20 kicks and fired 27 false beats under a 95 Hz note; 8192 caught 20/20
 
 export class AudioEngine {
   readonly ctx: AudioContext;
   private analyser: AnalyserNode;
+  private fastAnalyser: AnalyserNode;
+  private fastByteSpectrum: Uint8Array<ArrayBuffer>;
   private gain: GainNode;
   private builder: FrameBuilder;
   private byteSpectrum: Uint8Array<ArrayBuffer>;
@@ -44,9 +47,15 @@ export class AudioEngine {
     // Pinned dB window so 0..1 levels mean the same thing for every source.
     this.analyser.minDecibels = -100;
     this.analyser.maxDecibels = -30;
+    this.fastAnalyser = this.ctx.createAnalyser();
+    this.fastAnalyser.fftSize = FAST_FFT_SIZE;
+    this.fastAnalyser.smoothingTimeConstant = 0;
+    this.fastAnalyser.minDecibels = -100;
+    this.fastAnalyser.maxDecibels = -30;
+    this.fastByteSpectrum = new Uint8Array(FAST_FFT_SIZE / 2);
     this.gain = this.ctx.createGain();
     this.gain.connect(this.ctx.destination);
-    this.builder = new FrameBuilder(this.ctx.sampleRate, FFT_SIZE);
+    this.builder = new FrameBuilder(this.ctx.sampleRate, FFT_SIZE, FAST_FFT_SIZE);
     this.byteSpectrum = new Uint8Array(FFT_SIZE / 2);
     this.waveform = new Float32Array(FFT_SIZE);
   }
@@ -86,6 +95,7 @@ export class AudioEngine {
   private attach(source: ActiveSource, kind: SourceKind): void {
     this.stop();
     source.node.connect(this.analyser);
+    source.node.connect(this.fastAnalyser); // analysis only: it has no output, so it is never audible
     // Reconnect output per source: only file and test signals are audible.
     this.analyser.disconnect();
     if (source.audible) this.analyser.connect(this.gain);
@@ -138,12 +148,14 @@ export class AudioEngine {
   readFrame(): AudioFrame {
     if (this.ctx.currentTime < this.settleUntil) {
       this.byteSpectrum.fill(0);
+      this.fastByteSpectrum.fill(0);
       this.waveform.fill(0);
     } else {
+      this.fastAnalyser.getByteFrequencyData(this.fastByteSpectrum);
       this.analyser.getByteFrequencyData(this.byteSpectrum);
       this.analyser.getFloatTimeDomainData(this.waveform);
     }
-    return this.builder.build(this.ctx.currentTime, this.byteSpectrum, this.waveform);
+    return this.builder.build(this.ctx.currentTime, this.byteSpectrum, this.waveform, this.fastByteSpectrum);
   }
 
   /** Audio-track settings for capture/mic (null for file and test signals). */
