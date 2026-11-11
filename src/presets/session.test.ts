@@ -758,7 +758,7 @@ describe('system preset remote writes (Slice 11.9)', () => {
     return s;
   }
 
-  it('saveSystemPreset upserts the record with the admin token', async () => {
+  it('saveSystemPreset upserts the record', async () => {
     const writer = makeWriter();
     const s = adminSession(writer);
     const entry = s.get('crown')!;
@@ -767,8 +767,8 @@ describe('system preset remote writes (Slice 11.9)', () => {
     await flush();
 
     expect(writer.upsert).toHaveBeenCalledTimes(1);
-    const [record, token] = writer.upsert.mock.calls[0] as [RemotePresetRecord, string];
-    expect(token).toBe('mock-admin-token');
+    const [record, ...rest] = writer.upsert.mock.calls[0] as [RemotePresetRecord];
+    expect(rest).toEqual([]);
     expect(record.id).toBe('crown');
     expect(record.name).toBe(entry.preset.name);
     expect(record.preset_data).toEqual(entry.preset);
@@ -805,10 +805,9 @@ describe('system preset remote writes (Slice 11.9)', () => {
     await flush();
 
     expect(writer.upsert).toHaveBeenCalledTimes(1);
-    const [record, token] = writer.upsert.mock.calls[0] as [RemotePresetRecord, string];
+    const [record] = writer.upsert.mock.calls[0] as [RemotePresetRecord];
     expect(record.id).toBe(newId);
     expect(record.subfolder).toBe('showcase');
-    expect(token).toBe('mock-admin-token');
   });
 
   it('setSystemPresetSubfolder upserts the new subfolder', async () => {
@@ -820,13 +819,13 @@ describe('system preset remote writes (Slice 11.9)', () => {
     expect(record.subfolder).toBe('flagship');
   });
 
-  it('removeSystemPreset soft-deletes the id with the admin token', async () => {
+  it('removeSystemPreset soft-deletes the id', async () => {
     const writer = makeWriter();
     const s = adminSession(writer);
     s.removeSystemPreset('flight');
     await flush();
     expect(writer.softDelete).toHaveBeenCalledTimes(1);
-    expect(writer.softDelete).toHaveBeenCalledWith('flight', 'mock-admin-token');
+    expect(writer.softDelete).toHaveBeenCalledWith('flight');
     expect(writer.upsert).not.toHaveBeenCalled();
   });
 

@@ -243,11 +243,11 @@ function waitForAdminPopup(
 }
 
 /**
- * Log in to administrator mode via Cloudflare Access gate (/admin) or local passkey fallback.
+ * Log in to administrator mode via Cloudflare Access gate (/admin).
  */
 export async function promptAdminLogin(
   adminGateway: IAdminGateway,
-  promptFn?: (msg: string, defaultVal?: string) => string | null,
+  _promptFn?: (msg: string, defaultVal?: string) => string | null,
   navigateFn?: (url: string) => void,
 ): Promise<{ success: boolean; error?: string }> {
   if (adminGateway.isAdmin()) {
@@ -272,26 +272,9 @@ export async function promptAdminLogin(
       }
     }
 
-    // 2. Local passkey prompt fallback
-    const prompt =
-      promptFn ??
-      ((msg, d) => {
-        if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-          return window.prompt(msg, d);
-        }
-        return null;
-      });
-    const input = prompt('Local Dev: Enter Admin Passkey:');
-    if (!input || !input.trim()) {
-      return { success: false, error: 'Cancelled' };
-    }
-    const res = await adminGateway.login({ secret: input.trim() });
-    if (res.success) {
-      showToast('👑 Admin Mode Activated');
-    } else {
-      showToast(res.error || 'Admin login failed');
-    }
-    return res;
+    // 2. No local passkey: Cloudflare Access is the only admin route.
+    showToast('Admin sign-in needs Cloudflare Access (open /admin on the deployed site).');
+    return { success: false, error: 'Cloudflare Access required' };
   }
 
   // 3. Production flow (!isLocalOrTest)
