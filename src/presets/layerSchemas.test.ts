@@ -72,6 +72,7 @@ describe("layer schemas", () => {
       "bars",
       "bassPulse",
       "crown",
+      "julia",
       "particles",
       "rings",
       "shape",

@@ -15,6 +15,7 @@ import { MoireLayer } from '../render/layers/moire';
 import { SpectralTerrainLayer } from '../render/layers/spectralTerrain';
 import { ChladniSandLayer } from '../render/layers/chladniSand';
 import { FerrofluidLayer } from '../render/layers/ferrofluid';
+import { JuliaLayer } from '../render/layers/julia';
 import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
 import type { ResolvedWarpOp } from '../render/warpField';
@@ -23,7 +24,7 @@ import { LinkRunner, type LinkInputs } from './links';
 import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
-import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams } from './layerSchemas';
+import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams, JuliaParams } from './layerSchemas';
 import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
 
 // Register moire and spectralTerrain in LAYER_SPECS for loader consumers
@@ -101,6 +102,7 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   chladniSand: (p) => new ChladniSandLayer(p as Partial<ChladniSandParams>),
   ferrofluid: (p) => new FerrofluidLayer(p as Partial<FerrofluidParams>),
   reactionDiffusion: (p) => new ReactionDiffusionLayer(p as Partial<ReactionDiffusionParams>),
+  julia: (p) => new JuliaLayer(p as Partial<JuliaParams>),
 };
 
 /** Builds a scene with fresh layers. Disabled layers are skipped. */
@@ -169,6 +171,7 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof ChladniSandLayer) layer.setParams(values as Partial<ChladniSandParams>);
   else if (layer instanceof FerrofluidLayer) layer.setParams(values as Partial<FerrofluidParams>);
   else if (layer instanceof ReactionDiffusionLayer) layer.setParams(values as Partial<ReactionDiffusionParams>);
+  else if (layer instanceof JuliaLayer) layer.setParams(values as Partial<JuliaParams>);
 }
 
 /** Pushes every enabled layer's settings from `preset` into a scene built from it (same order). */

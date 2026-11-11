@@ -542,6 +542,39 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'glow', label: 'Glow bloom', group: 'Audio & Style', default: SHAPE_DEFAULTS.glow, min: 0, max: 2.0, step: 0.05, description: 'Controls bloom glow luminance around reactive vector outlines.' },
 ];
 
+/** Julia set layer (Slice 20.3). */
+export const JULIA_SHAPES = ['classic', 'dendrite', 'spiral', 'rabbit'] as const;
+export interface JuliaParams {
+  shape: string; // which family of Julia sets
+  zoom: number; // 0.4..4
+  speed: number; // 0..2, slow orbit of the constant, view turn and colour drift
+  reactivity: number; // 0..1, how far mid and bass move the constant
+  smoothing: number; // 0.2..3 s time constant for mid and bass (never below 0.2 s so the set cannot flash)
+  iterations: number; // 16..96, capped lower on large targets
+  brightness: number;
+  colourSpread: number; // 0..1, how many colour bands
+}
+export const JULIA_DEFAULTS: JuliaParams = {
+  shape: 'classic',
+  zoom: 1,
+  speed: 0.5,
+  reactivity: 0.5,
+  smoothing: 1,
+  iterations: 48,
+  brightness: 1,
+  colourSpread: 0.5,
+};
+export const JULIA_SPECS: readonly ParamSpec[] = [
+  { type: 'enum', name: 'shape', label: 'Set shape', group: 'Julia', default: JULIA_DEFAULTS.shape, options: JULIA_SHAPES, description: 'Chooses the family of Julia set: classic, dendrite, spiral or rabbit.' },
+  { type: 'float', name: 'zoom', label: 'Zoom', group: 'Julia', default: JULIA_DEFAULTS.zoom, min: 0.4, max: 4, step: 0.05, description: 'Magnifies the set. Higher shows finer filaments.' },
+  { type: 'float', name: 'speed', label: 'Drift speed', group: 'Julia', default: JULIA_DEFAULTS.speed, min: 0, max: 2, step: 0.05, description: 'Speed of the slow orbit, turn and colour drift. 0 holds the set still.' },
+  { type: 'float', name: 'reactivity', label: 'Music reactivity', group: 'Audio', default: JULIA_DEFAULTS.reactivity, min: 0, max: 1, step: 0.05, description: 'How far the mids and bass move the set. 0 ignores the music.' },
+  { type: 'float', name: 'smoothing', label: 'Smoothing (s)', group: 'Audio', default: JULIA_DEFAULTS.smoothing, min: 0.2, max: 3, step: 0.05, description: 'How slowly the set follows the music. Longer is calmer. Never faster than 0.2 s, so it cannot flash.' },
+  { type: 'int', name: 'iterations', label: 'Detail (iterations)', group: 'Julia', default: JULIA_DEFAULTS.iterations, min: 16, max: 96, step: 8, description: 'More iterations draw finer detail and cost more. Large screens are capped lower.' },
+  { type: 'float', name: 'brightness', label: 'Brightness', group: 'Colour', default: JULIA_DEFAULTS.brightness, min: 0.1, max: 3, step: 0.05, description: 'Scales the brightness of the filaments.' },
+  { type: 'float', name: 'colourSpread', label: 'Colour bands', group: 'Colour', default: JULIA_DEFAULTS.colourSpread, min: 0, max: 1, step: 0.05, description: 'How many colour bands run through the filaments.' },
+];
+
 export type LayerType =
   | 'shape'
   | 'tunnel'
@@ -551,7 +584,8 @@ export type LayerType =
   | 'shockwave'
   | 'bars'
   | 'bassPulse'
-  | 'waveform';
+  | 'waveform'
+  | 'julia';
 
 /** Studio-only view tier (Slice 15.4). Never saved in presets. A spec with no tier counts as advanced. */
 export type ControlTier = 'basic' | 'advanced';
@@ -580,6 +614,7 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   bars: allBasic(BARS_SPECS),
   bassPulse: allBasic(BASS_PULSE_SPECS),
   waveform: allBasic(WAVEFORM_SPECS),
+  julia: allBasic(JULIA_SPECS),
 };
 
 /** Basic controls of the combined Feedback and post section (8). Applied in place below, these specs are not shared. */
