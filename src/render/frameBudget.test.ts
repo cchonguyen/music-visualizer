@@ -47,3 +47,15 @@ describe('FrameBudget', () => {
     expect(b.summary()).toEqual({ samples: 0, p50Ms: 0, p95Ms: 0, overBudgetPct: 0 });
   });
 });
+
+describe('FrameBudget summary reuse (Slice 16.9)', () => {
+  it('gives the same answer on repeated calls and does not disturb the samples', () => {
+    const b = new FrameBudget(16.7, 8);
+    for (const v of [30, 10, 20, 5, 25, 15, 12, 18, 40, 8]) b.push(v);
+    const first = b.summary();
+    expect(b.summary()).toEqual(first);
+    b.push(1);
+    expect(b.summary().samples).toBe(8);
+    expect(b.summary().p50Ms).toBeLessThanOrEqual(first.p95Ms);
+  });
+});

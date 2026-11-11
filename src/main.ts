@@ -571,17 +571,20 @@ function start(): void {
       if (beatTimes.length > MAX_BEATS) beatTimes.shift();
     }
 
-    panel.update({
-      sourceName: sourceName(engine.kind, state.fileName),
-      frame,
-      frameMs,
-      budget: budget.summary(),
-      trackSettings: engine.trackSettings,
-      latency:
-        engine.kind === 'test:kick'
-          ? estimateLatencyMs(engine.kickTimes, beatTimes, engine.ctx.outputLatency || 0, engine.ctx.baseLatency || 0, displayFrameMs)
-          : null,
-    });
+    // Debug stats are worked out only while the panel is open (budget sort, latency estimate).
+    if (panel.isVisible) {
+      panel.update({
+        sourceName: sourceName(engine.kind, state.fileName),
+        frame,
+        frameMs,
+        budget: budget.summary(),
+        trackSettings: engine.trackSettings,
+        latency:
+          engine.kind === 'test:kick'
+            ? estimateLatencyMs(engine.kickTimes, beatTimes, engine.ctx.outputLatency || 0, engine.ctx.baseLatency || 0, displayFrameMs)
+            : null,
+      });
+    }
     controls.tick();
     if (bench && benchPanel && !benchReported) {
       if (bench.done) {
