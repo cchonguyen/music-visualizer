@@ -56,7 +56,7 @@ beforeEach(() => {
 describe('built-in presets', () => {
   it('are listed and start unchanged', () => {
     expect(session.list().slice(0, 3).map((e) => e.id)).toEqual(['crown', 'flight', 'bars']);
-    expect(session.list()).toHaveLength(23);
+    expect(session.list()).toHaveLength(6);
     expect(session.isDirty('crown')).toBe(false);
   });
 

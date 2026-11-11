@@ -18,14 +18,13 @@ import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import { JuliaLayer } from '../render/layers/julia';
 import { OrbitLayer } from '../render/layers/orbit';
 import { ArchitectureLayer } from '../render/layers/architecture';
-import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
 import type { ResolvedWarpOp } from '../render/warpField';
 import { warpOpSpecs } from './warpOps';
 import { LinkRunner, type LinkInputs } from './links';
 import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
-import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
+import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams, JuliaParams, OrbitParams, ArchitectureParams } from './layerSchemas';
 import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
 
@@ -89,6 +88,18 @@ export function readFeedbackSettings(feedbackOrPreset: Preset | Settings | Recor
 
 // Values come from parsePreset, which has already checked every name and range against
 // layerSchemas.ts. The casts below rely on that check.
+/**
+ * Layer types retired from the app (Slice 15.10). The factory is gone, so the Studio add-layer list no longer
+ * offers them. Old presets that still contain one load: the layer is skipped when a scene is built.
+ * The schema stays registered so the saved values survive a re-save.
+ */
+export const RETIRED_LAYER_TYPES: ReadonlySet<string> = new Set(['reactionDiffusion']);
+
+/** True when the preset has an enabled layer of a retired type (its scene skips that layer). */
+export function presetHasRetiredLayer(preset: Preset | null | undefined): boolean {
+  return !!preset?.layers.some((l) => l.enabled && RETIRED_LAYER_TYPES.has(l.type));
+}
+
 export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   shape: (p) => new ShapeLayer(p as Partial<ShapeParams>),
   tunnel: (p) => new TunnelLayer(p as Partial<TunnelParams>),
@@ -103,7 +114,6 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   spectralTerrain: (p) => new SpectralTerrainLayer(p as Partial<SpectralTerrainParams>),
   chladniSand: (p) => new ChladniSandLayer(p as Partial<ChladniSandParams>),
   ferrofluid: (p) => new FerrofluidLayer(p as Partial<FerrofluidParams>),
-  reactionDiffusion: (p) => new ReactionDiffusionLayer(p as Partial<ReactionDiffusionParams>),
   julia: (p) => new JuliaLayer(p as Partial<JuliaParams>),
   orbit: (p) => new OrbitLayer(p as Partial<OrbitParams>),
   architecture: (p) => new ArchitectureLayer(p as Partial<ArchitectureParams>),
@@ -114,7 +124,7 @@ export function buildScene(name: string, preset: Preset): Scene {
   const layers: RenderLayer[] = [];
   const configs: SceneLayerConfig[] = [];
   for (const entry of preset.layers) {
-    if (!entry.enabled) continue;
+    if (!entry.enabled || RETIRED_LAYER_TYPES.has(entry.type)) continue;
     let factory = LAYER_FACTORIES[entry.type];
     let params = entry.params;
     if (!factory) {
@@ -145,7 +155,7 @@ export function createLayersFromPreset(preset: Preset, options: { migrateLegacy?
   const entries = options.migrateLegacy ? migrateLegacyLayers(preset.layers) : preset.layers;
   const layers: RenderLayer[] = [];
   for (const entry of entries) {
-    if (!entry.enabled) continue;
+    if (!entry.enabled || RETIRED_LAYER_TYPES.has(entry.type)) continue;
     let factory = LAYER_FACTORIES[entry.type];
     let params = entry.params;
     if (!factory) {
@@ -174,7 +184,6 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof SpectralTerrainLayer) layer.setParams(values as Partial<SpectralTerrainParams>);
   else if (layer instanceof ChladniSandLayer) layer.setParams(values as Partial<ChladniSandParams>);
   else if (layer instanceof FerrofluidLayer) layer.setParams(values as Partial<FerrofluidParams>);
-  else if (layer instanceof ReactionDiffusionLayer) layer.setParams(values as Partial<ReactionDiffusionParams>);
   else if (layer instanceof JuliaLayer) layer.setParams(values as Partial<JuliaParams>);
   else if (layer instanceof OrbitLayer) layer.setParams(values as Partial<OrbitParams>);
   else if (layer instanceof ArchitectureLayer) layer.setParams(values as Partial<ArchitectureParams>);
