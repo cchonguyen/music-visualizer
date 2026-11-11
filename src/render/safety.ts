@@ -83,7 +83,14 @@ export class BrightnessLimiter {
 
       // Maintain rolling 1-second window
       const cutoff = this.clock - REVERSAL_WINDOW_SEC;
-      this.reversalTimes = this.reversalTimes.filter((time) => time > cutoff);
+      // Drop reversals older than the window in place, without building a new array every frame.
+      const times = this.reversalTimes;
+      let keep = 0;
+      for (let i = 0; i < times.length; i++) {
+        const time = times[i]!;
+        if (time > cutoff) times[keep++] = time;
+      }
+      times.length = keep;
 
       // Increase damping when reversals exceed 3 per second
       const count = this.reversalTimes.length;

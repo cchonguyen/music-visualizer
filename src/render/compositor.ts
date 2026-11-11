@@ -38,6 +38,7 @@ export const POST_IDENTITY = {
   hueShift: 0, saturation: 1, contrast: 1, gamma: 1, brightness: 0, mirror: 0, vignette: 0, chroma: 0, bloom: 0, bloomThreshold: 0.6,
 };
 type PostValues = typeof POST_IDENTITY;
+const POST_KEYS = Object.keys(POST_IDENTITY) as (keyof PostValues)[];
 
 export const TRANSITIONS = ['crossfade', 'wipe', 'dissolve', 'zoom', 'morph'] as const;
 
@@ -133,6 +134,13 @@ export class Compositor implements RenderLayer {
   // When each scene was last on screen or prepared (a counter, not a time). The smallest is dropped first.
   private lastUsed = new Map<string, number>();
   private useTick = 0;
+  // Reused by the morph search and the draw loop so a frame builds no arrays or objects (Slice 16.8).
+  private readonly pair: [string, number] = ['', 0];
+  private readonly pair2: [string, number] = ['', 0];
+  private readonly activeNames: string[] = [];
+  private readonly halfTarget: RenderTarget = { kind: 'fbo', framebuffer: null as unknown as WebGLFramebuffer, texture: null as unknown as WebGLTexture, width: 1, height: 1 };
+  private readonly scaledTarget: RenderTarget = { kind: 'fbo', framebuffer: null as unknown as WebGLFramebuffer, texture: null as unknown as WebGLTexture, width: 1, height: 1 };
+  private calmEl: HTMLInputElement | null | undefined = undefined;
   private gl: WebGL2RenderingContext | null = null;
   private prog: WebGLProgram | null = null;
   private postProg: WebGLProgram | null = null;
@@ -227,22 +235,27 @@ export class Compositor implements RenderLayer {
 
   /** Post chain settings from the shown preset (E4, E5). Missing keys keep their identity value. */
   setPost(values: Record<string, ParamValue>): void {
-    const next: PostValues = { ...POST_IDENTITY };
-    for (const key of Object.keys(POST_IDENTITY) as (keyof PostValues)[]) {
+    // Filled in place: linked presets call this every frame.
+    const post = this.post;
+    for (let i = 0; i < POST_KEYS.length; i++) {
+      const key = POST_KEYS[i]!;
       const v = values[key];
-      if (typeof v === 'number') next[key] = v;
+      post[key] = typeof v === 'number' ? v : POST_IDENTITY[key];
     }
-    this.post = next;
   }
 
   /** Global Director camera and color uniforms (Sector 483, Slice 7.31). */
   setDirectorState(cam: CameraUniforms, color: ColorUniforms): void {
-    this.directorCam = { ...cam };
-    this.directorColor = {
-      ...color,
-      shadowTint: [color.shadowTint[0], color.shadowTint[1], color.shadowTint[2]],
-      highlightTint: [color.highlightTint[0], color.highlightTint[1], color.highlightTint[2]],
-    };
+    // Copied into the existing objects: main calls this every frame.
+    const dc = this.directorCam;
+    dc.panX = cam.panX; dc.panY = cam.panY; dc.zoom = cam.zoom; dc.roll = cam.roll; dc.tiltX = cam.tiltX; dc.tiltY = cam.tiltY;
+    const col = this.directorColor;
+    col.shadowTint[0] = color.shadowTint[0]; col.shadowTint[1] = color.shadowTint[1]; col.shadowTint[2] = color.shadowTint[2];
+    col.highlightTint[0] = color.highlightTint[0]; col.highlightTint[1] = color.highlightTint[1]; col.highlightTint[2] = color.highlightTint[2];
+    col.spatialSpread = color.spatialSpread;
+    col.gradAngle = color.gradAngle;
+    col.intensity = color.intensity;
+    col.cycleAngle = color.cycleAngle;
   }
 
   hasDirectorEffect(): boolean {
@@ -367,9 +380,13 @@ export class Compositor implements RenderLayer {
 
   /** Disposes the oldest off-screen scenes beyond what the count and memory caps allow. */
   private trimKept(): void {
-    const kept = [...this.ready].filter((n) => (this.weights.get(n) ?? 0) === 0 && (this.targets.get(n) ?? 0) === 0);
+    // Count first: the common frame has nothing to drop and builds no array.
+    let keptCount = 0;
+    for (const n of this.ready) if ((this.weights.get(n) ?? 0) === 0 && (this.targets.get(n) ?? 0) === 0) keptCount++;
+    if (keptCount === 0) return;
     const limit = retainLimit(this.w, this.h, getEffectiveRenderScale(), this.gl ? feedbackFormat(this.gl) : 'rgba8');
-    if (kept.length <= limit) return;
+    if (keptCount <= limit) return;
+    const kept = [...this.ready].filter((n) => (this.weights.get(n) ?? 0) === 0 && (this.targets.get(n) ?? 0) === 0);
     kept.sort((x, y) => (this.lastUsed.get(x) ?? 0) - (this.lastUsed.get(y) ?? 0));
     for (const name of kept.slice(0, kept.length - limit)) {
       this.scenes.get(name)?.dispose();
@@ -385,19 +402,26 @@ export class Compositor implements RenderLayer {
    * inputs), the weakest fading-out scene is snapped to 0 so the cap holds.
    */
   private easeWeights(dtSec: number): void {
-    const names = new Set([...this.weights.keys(), ...this.targets.keys()]);
-    for (const name of names) {
-      const w = this.weights.get(name) ?? 0;
-      const t = this.targets.get(name) ?? 0;
-      let next = releaseEnvelope(w, t, dtSec, this.fadeSec, this.fadeSec);
-      if (Math.abs(next - t) < 1e-3) next = t; // settle exactly, so finished fades free buffers
-      this.weights.set(name, next);
+    // Scenes with a weight, then scenes that only have a target. Setting an existing key while looping is safe.
+    for (const [name, w] of this.weights) this.easeOne(name, w, dtSec);
+    for (const name of this.targets.keys()) {
+      if (!this.weights.has(name)) this.easeOne(name, 0, dtSec);
     }
-    const visible = [...this.weights.entries()].filter(([, w]) => w > 0);
-    if (visible.length > 2) {
+    let visibleCount = 0;
+    for (const w of this.weights.values()) if (w > 0) visibleCount++;
+    if (visibleCount > 2) {
+      // Rare: three scenes visible at once. Snap the weakest fading-out ones to 0.
+      const visible = [...this.weights.entries()].filter(([, w]) => w > 0);
       visible.sort((x, y) => (this.targets.get(x[0]) ?? 0) - (this.targets.get(y[0]) ?? 0) || x[1] - y[1]);
       for (const [name] of visible.slice(0, visible.length - 2)) this.weights.set(name, 0);
     }
+  }
+
+  private easeOne(name: string, w: number, dtSec: number): void {
+    const t = this.targets.get(name) ?? 0;
+    let next = releaseEnvelope(w, t, dtSec, this.fadeSec, this.fadeSec);
+    if (Math.abs(next - t) < 1e-3) next = t; // settle exactly, so finished fades free buffers
+    this.weights.set(name, next);
   }
 
   init(gl: WebGL2RenderingContext): void {
@@ -475,8 +499,24 @@ export class Compositor implements RenderLayer {
 
     if (isMorph) {
       // Find outgoing scene (weight > 0, target == 0) and incoming scene (target > 0)
-      const outgoingEntry = [...this.weights.entries()].find(([name, w]) => w > 0 && (this.targets.get(name) ?? 0) === 0);
-      const incomingEntry = [...this.targets.entries()].find(([name, t]) => t > 0 && (this.weights.get(name) ?? 0) < t);
+      let outgoingEntry: [string, number] | null = null;
+      for (const [name, w] of this.weights) {
+        if (w > 0 && (this.targets.get(name) ?? 0) === 0) {
+          outgoingEntry = this.pair;
+          this.pair[0] = name;
+          this.pair[1] = w;
+          break;
+        }
+      }
+      let incomingEntry: [string, number] | null = null;
+      for (const [name, t] of this.targets) {
+        if (t > 0 && (this.weights.get(name) ?? 0) < t) {
+          incomingEntry = this.pair2;
+          this.pair2[0] = name;
+          this.pair2[1] = t;
+          break;
+        }
+      }
 
       if (outgoingEntry && incomingEntry) {
         const outName = outgoingEntry[0];
@@ -534,7 +574,8 @@ export class Compositor implements RenderLayer {
       // Bring scenes up and down with their weights (eased toward the key-press targets).
       if (!initialising) this.easeWeights(clock.dtSec);
     }
-    const active: string[] = [];
+    const active = this.activeNames;
+    active.length = 0;
     for (const [name, weight] of this.weights) {
       if (weight > 0) {
         if (!this.ready.has(name)) this.bringUp(gl, name);
@@ -550,10 +591,11 @@ export class Compositor implements RenderLayer {
     }
 
     // Estimated brightness target: loudness-driven, with a dim floor (the limiter enforces the floor).
-    const isCalm =
-      this.calm ||
-      (typeof document !== 'undefined' &&
-        Boolean((document.getElementById('calm') as HTMLInputElement | null)?.checked));
+    // The calm checkbox is looked up once, not on every frame.
+    if (this.calmEl === undefined && typeof document !== 'undefined') {
+      this.calmEl = document.getElementById('calm') as HTMLInputElement | null;
+    }
+    const isCalm = this.calm || Boolean(this.calmEl?.checked);
     this.limiter.calm = isCalm;
 
     const now = performance.now();
@@ -575,7 +617,7 @@ export class Compositor implements RenderLayer {
     const half = this.half;
     // Below 100% the final pass draws into the scaled buffer; the copy pass after it upscales to the target.
     const scaled = this.scaled;
-    const finalDest: RenderTarget = scaled ? this.bufferTarget(scaled.write, { width: scaled.width, height: scaled.height }) : target;
+    const finalDest: RenderTarget = scaled ? this.bufferTarget(this.scaledTarget, scaled.write, scaled.width, scaled.height) : target;
     if (!this.postActive() || !half || !this.postProg || !this.blurProg) {
       // No post effect: one pass, blend and safety together (the look before E4).
       this.blendPass(gl, texA, texB, wA, wB, cap, 1, finalDest);
@@ -584,12 +626,12 @@ export class Compositor implements RenderLayer {
       // horizontally and vertically. These are quarter-area passes.
       let bloomTex: WebGLTexture | null = null;
       if (this.post.bloom > 0) {
-        const halfSize = { width: half.width, height: half.height };
-        this.blendPass(gl, texA, texB, wA, wB, cap, 0, this.bufferTarget(half.write, halfSize));
+        const halfOut = this.bufferTarget(this.halfTarget, half.write, half.width, half.height);
+        this.blendPass(gl, texA, texB, wA, wB, cap, 0, halfOut);
         half.swap();
-        this.blurPass(gl, half.read.texture, 1 / half.width, 0, this.bufferTarget(half.write, halfSize));
+        this.blurPass(gl, half.read.texture, 1 / half.width, 0, this.bufferTarget(this.halfTarget, half.write, half.width, half.height));
         half.swap();
-        this.blurPass(gl, half.read.texture, 0, 1 / half.height, this.bufferTarget(half.write, halfSize));
+        this.blurPass(gl, half.read.texture, 0, 1 / half.height, this.bufferTarget(this.halfTarget, half.write, half.width, half.height));
         half.swap();
         bloomTex = half.read.texture;
       }
@@ -605,8 +647,14 @@ export class Compositor implements RenderLayer {
     this.trimKept();
   }
 
-  private bufferTarget(pass: { framebuffer: WebGLFramebuffer; texture: WebGLTexture }, size: { width: number; height: number }): RenderTarget {
-    return { kind: 'fbo', framebuffer: pass.framebuffer, texture: pass.texture, width: size.width, height: size.height };
+  /** Points a reused target object at a buffer. The same two objects are filled every frame. */
+  private bufferTarget(out: RenderTarget, pass: { framebuffer: WebGLFramebuffer; texture: WebGLTexture }, width: number, height: number): RenderTarget {
+    const t = out as { kind: 'fbo'; framebuffer: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number };
+    t.framebuffer = pass.framebuffer;
+    t.texture = pass.texture;
+    t.width = width;
+    t.height = height;
+    return out;
   }
 
   /** Binds an output target. Canvas output is drawn into the centred box (slice 5.3). */
