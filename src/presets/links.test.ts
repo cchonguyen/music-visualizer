@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { LinkRunner, sourceValue, type LinkInputs } from './links';
+import { LinkRunner, ReactionBank, sourceValue, type LinkInputs } from './links';
+import type { Reaction } from './reactions';
 import type { AudioFrame } from '../audio/types';
 import { AUDIO_SOURCES, type Settings } from './format';
 import type { ParamSpec } from './schema';
@@ -180,5 +181,85 @@ describe('LFO rate', () => {
     const v = sourceValue('lfoSaw', inputs({ timeSec: 3.3 }), 1000);
     expect(v).toBeGreaterThanOrEqual(0);
     expect(v).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('reactions in the link runner (Slice 17.4)', () => {
+  const bank = () => new ReactionBank();
+  const kick = (over: Partial<Reaction> = {}): Reaction => ({
+    trigger: { type: 'beat' }, response: 'kick', target: { group: 'feedback', name: 'zoom' }, amount: 0.25, ease: 0.3, ...over,
+  });
+  const beatInputs = (beat: boolean, t: number): LinkInputs => ({ frame: frame({ onset: beat, onsetStrength: 0.9 }), timeSec: t, sectionContrast: 0 });
+
+  it('leaves settings alone when no reaction targets them', () => {
+    const engine = bank().engineFor('p', [kick({ target: { group: 'feedback', name: 'rotate' } })])!;
+    const out = new LinkRunner().resolve('F', { zoom: { value: 1.05 } }, [zoom], beatInputs(true, 0), 0.016, { engine, group: 'feedback' });
+    expect(out.zoom).toBe(1.05);
+  });
+
+  it('adds the kick to a plain value and eases back, clamped to the range', () => {
+    const engine = bank().engineFor('p', [kick()])!;
+    const runner = new LinkRunner();
+    engine.update(frame({ onset: true, onsetStrength: 0.9 }), 0, 0.016, 0);
+    const hit = runner.resolve('F', { zoom: { value: 1 } }, [zoom], beatInputs(true, 0), 0.016, { engine, group: 'feedback' }).zoom as number;
+    expect(hit).toBeCloseTo(1 + 0.25 * 0.4, 6);
+    for (let i = 1; i < 90; i += 1) engine.update(frame(), i / 60, 1 / 60, 0);
+    const later = runner.resolve('F', { zoom: { value: 1 } }, [zoom], beatInputs(false, 1.5), 0.016, { engine, group: 'feedback' }).zoom as number;
+    expect(later).toBeCloseTo(1, 3);
+    engine.update(frame({ onset: true, onsetStrength: 0.9 }), 2, 0.016, 0);
+    const high = runner.resolve('F', { zoom: { value: 1.19 } }, [zoom], beatInputs(true, 2), 0.016, { engine, group: 'feedback' }).zoom as number;
+    expect(high).toBe(zoom.max);
+  });
+
+  it('runs after the audio link: base, link, reaction, clamp', () => {
+    const engine = bank().engineFor('p', [kick({ amount: 0.1 })])!;
+    engine.update(frame({ onset: true, onsetStrength: 0.9 }), 0, 0.016, 0);
+    // sub norm is 0.6, so the link alone gives 1 + 0.5 x 0.4 x 0.6 = 1.12 (smooth 0 follows within one step at a long dt).
+    const linkedOnly = new LinkRunner().resolve('F', { zoom: { value: 1, link: { source: 'sub', amount: 0.5, smooth: 0 } } }, [zoom], beatInputs(true, 0), 10).zoom as number;
+    const both = new LinkRunner().resolve('F', { zoom: { value: 1, link: { source: 'sub', amount: 0.5, smooth: 0 } } }, [zoom], beatInputs(true, 0), 10, { engine, group: 'feedback' }).zoom as number;
+    expect(both).toBeCloseTo(linkedOnly + 0.1 * 0.4, 6);
+  });
+
+  it('applies to a morph-only setting too, and rounds integer settings', () => {
+    const level: ParamSpec = { type: 'int', name: 'level', label: 'L', group: 'G', default: 2, min: 0, max: 10, step: 1 };
+    const engine = bank().engineFor('p', [kick({ target: { group: 'post', name: 'level' }, amount: 0.24 })])!;
+    engine.update(frame({ onset: true, onsetStrength: 0.9 }), 0, 0.016, 0);
+    const out = new LinkRunner().resolve('P', { level: { value: 2, morph: { to: 4, rate: 0.1 } } }, [level], beatInputs(true, 0), 0.016, { engine, group: 'post' }).level;
+    expect(Number.isInteger(out)).toBe(true);
+    expect(out).toBe(Math.round(2 + 0.24 * 10));
+  });
+});
+
+describe('ReactionBank', () => {
+  const r = (): Reaction => ({ trigger: { type: 'beat' }, response: 'kick', target: { group: 'feedback', name: 'zoom' }, amount: 0.2, ease: 0.3 });
+
+  it('gives no engine without reactions, and keeps one engine while they are unchanged', () => {
+    const bank = new ReactionBank();
+    expect(bank.engineFor('a', undefined)).toBeNull();
+    expect(bank.engineFor('a', [])).toBeNull();
+    const first = bank.engineFor('a', [r()]);
+    expect(first).not.toBeNull();
+    expect(bank.engineFor('a', [r()])).toBe(first); // equal content, even as a new array
+  });
+
+  it('rebuilds when a reaction changes, including an edit in place', () => {
+    const bank = new ReactionBank();
+    const list = [r()];
+    const first = bank.engineFor('a', list);
+    list[0]!.amount = 0.5;
+    const second = bank.engineFor('a', list);
+    expect(second).not.toBe(first);
+    expect(bank.engineFor('a', list)).toBe(second);
+  });
+
+  it('seeds from the scope, so the same preset always picks the same values', () => {
+    const pick: Reaction = { trigger: { type: 'beat' }, response: 'pick', target: { group: 'feedback', name: 'zoom' }, amount: 1, ease: 0 };
+    const results = ['x', 'x', 'y'].map((scope) => {
+      const e = new ReactionBank().engineFor(scope, [pick])!;
+      e.update(frame({ onset: true }), 0, 0.016, 0);
+      return e.apply('feedback', 'zoom', 1, { min: 0, max: 2 });
+    });
+    expect(results[0]).toBe(results[1]);
+    expect(results[0]).not.toBe(results[2]);
   });
 });

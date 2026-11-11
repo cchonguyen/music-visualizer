@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { applyLinkedPreset, buildScene, createLayersFromPreset, hasCrownLayer, LAYER_FACTORIES } from './loader';
-import { LinkRunner } from './links';
+import { LinkRunner, ReactionBank } from './links';
 import { previewPreset } from './session';
 import type { AudioFrame } from '../audio/types';
 import type { Preset } from './format';
@@ -289,5 +289,47 @@ describe('applyLinkedPreset with a muted layer', () => {
     const scene = buildScene('mute-test', previewPreset(preset, state));
     applyLinkedPreset(preset, scene, new LinkRunner(), 'mute-test', inputs, 0.016);
     expect((scene.layers[0] as unknown as { p: { ringDensity: number } }).p.ringDensity).toBe(0.5);
+  });
+});
+
+describe('applyLinkedPreset with reactions (Slice 17.4)', () => {
+  const preset = {
+    version: PRESET_VERSION,
+    name: 'react-test',
+    tags: [],
+    transition: { style: 'cut', seconds: 0 },
+    feedback: { zoom: { value: 1 } },
+    post: { hueShift: { value: 0 } },
+    layers: [],
+    reactions: [
+      { trigger: { type: 'beat' }, response: 'kick', target: { group: 'feedback', name: 'zoom' }, amount: 0.2, ease: 0.3 },
+      { trigger: { type: 'beat' }, response: 'step', target: { group: 'post', name: 'hueShift' }, amount: 0.5, ease: 0 },
+    ],
+  } as unknown as Preset;
+  const frameWith = (beat: boolean) => ({ onset: beat, onsetStrength: 0.9, beat, beatStrength: 0.9 }) as unknown as AudioFrame;
+
+  it('moves Feedback and Post values on a beat, and returns them to rest between beats', () => {
+    const bank = new ReactionBank();
+    const engine = bank.engineFor('r', preset.reactions)!;
+    const applied: Record<string, unknown>[] = [];
+    const scene = { setFeedback: (v: Record<string, unknown>) => applied.push(v), layers: [], setLayerConfig: () => {} } as never;
+    const runner = new LinkRunner();
+    const post = applyLinkedPreset(preset, scene, runner, 'r', { frame: frameWith(true), timeSec: 0, sectionContrast: 0 }, 1 / 60, engine);
+    expect(applied[0]!.zoom as number).toBeGreaterThan(1.05);
+    expect(post.hueShift as number).toBeGreaterThan(1);
+    let last: Record<string, unknown> = applied[0]!;
+    for (let i = 1; i < 120; i += 1) {
+      applyLinkedPreset(preset, scene, runner, 'r', { frame: frameWith(false), timeSec: i / 60, sectionContrast: 0 }, 1 / 60, engine);
+      last = applied[applied.length - 1]!;
+    }
+    expect(last.zoom as number).toBeCloseTo(1, 3);
+  });
+
+  it('does nothing different without an engine (Off)', () => {
+    const applied: Record<string, unknown>[] = [];
+    const scene = { setFeedback: (v: Record<string, unknown>) => applied.push(v), layers: [], setLayerConfig: () => {} } as never;
+    const post = applyLinkedPreset(preset, scene, new LinkRunner(), 'r', { frame: frameWith(true), timeSec: 0, sectionContrast: 0 }, 1 / 60, null);
+    expect(applied[0]!.zoom).toBe(1);
+    expect(post.hueShift).toBe(0);
   });
 });

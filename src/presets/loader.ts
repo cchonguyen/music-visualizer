@@ -18,6 +18,7 @@ import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import { ReactionDiffusionLayer } from '../render/layers/reactionDiffusion';
 import type { Preset, Settings } from './format';
 import { LinkRunner, type LinkInputs } from './links';
+import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ReactionDiffusionParams, type ParamSpec, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams } from './layerSchemas';
@@ -182,6 +183,11 @@ export function applyPresetToScene(preset: Preset, scene: Scene, _gl?: WebGL2Ren
   });
 }
 
+/** True when the preset has reactions (Slice 17.4). */
+export function hasReactions(preset: Preset): boolean {
+  return (preset.reactions?.length ?? 0) > 0;
+}
+
 /** True when any setting of the preset has an audio link. */
 export function hasLinks(preset: Preset): boolean {
   const all = [...preset.layers.flatMap((l) => Object.values(l.params)), ...Object.values(preset.feedback), ...Object.values(preset.post)];
@@ -192,8 +198,10 @@ export function hasLinks(preset: Preset): boolean {
  * Per-frame version of applyPresetToScene for presets with audio links. `scope` identifies the
  * preset in the link runner (its id). Each layer's scope is `${scope}L${k}`, and feedback's is `${scope}F`.
  */
-export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunner, scope: string, inputs: LinkInputs, dtSec: number): Record<string, ParamValue> {
-  scene.setFeedback(runner.resolve(`${scope}F`, preset.feedback, FEEDBACK_SPECS, inputs, dtSec));
+export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunner, scope: string, inputs: LinkInputs, dtSec: number, reactions?: ReactionEngine | null): Record<string, ParamValue> {
+  // Reactions move Feedback and Post only. They are applied after the audio link and before the range clamp.
+  reactions?.update(inputs.frame, inputs.timeSec, dtSec, inputs.sectionContrast);
+  scene.setFeedback(runner.resolve(`${scope}F`, preset.feedback, FEEDBACK_SPECS, inputs, dtSec, reactions ? { engine: reactions, group: 'feedback' } : undefined));
   const live = preset.layers.filter((l) => l.enabled);
   live.forEach((entry, k) => {
     const layer = scene.layers[k];
@@ -205,7 +213,7 @@ export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunn
       trails: entry.trails ?? true,
     });
   });
-  return runner.resolve(`${scope}P`, preset.post, POST_SPECS, inputs, dtSec);
+  return runner.resolve(`${scope}P`, preset.post, POST_SPECS, inputs, dtSec, reactions ? { engine: reactions, group: 'post' } : undefined);
 }
 
 /** True when preset contains an enabled layer with type === 'crown' or circular bars 'shape'. */

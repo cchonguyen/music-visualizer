@@ -20,7 +20,7 @@ import { RingsLayer } from './render/layers/rings';
 import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
 import { applyLinkedPreset, hasCrownLayer, hasLinks } from './presets/loader';
-import { LinkRunner } from './presets/links';
+import { LinkRunner, ReactionBank } from './presets/links';
 import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
 import { advanceCrown } from './render/crownStore';
@@ -196,6 +196,7 @@ function start(): void {
   const benchSeconds = benchmarkSeconds(params);
   let benchLayer: GpuTimedLayer | null = null;
   const linkRunner = new LinkRunner();
+  const reactionBank = new ReactionBank();
   const director = getGlobalDirector();
   // Auto-cycle (T2): off by default. Keys: C timer, B beat, X shuffle.
   const cycle: CycleOptions = { ...DEFAULT_CYCLE };
@@ -671,8 +672,9 @@ function start(): void {
     if (session && shown) {
       const entry = session.get(shown);
       if (entry) crownOn = hasCrownLayer(entry.preset);
-      if (entry && hasLinks(entry.preset)) {
-        const post = applyLinkedPreset(session.previewOf(shown), session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec);
+      const reactions = entry ? reactionBank.engineFor(shown, entry.preset.reactions) : null;
+      if (entry && (hasLinks(entry.preset) || reactions)) {
+        const post = applyLinkedPreset(session.previewOf(shown), session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec, reactions);
         compositor?.setPost(post);
       }
     }
