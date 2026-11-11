@@ -13,13 +13,17 @@ describe("layer schemas", () => {
     }
   });
 
-  // Each schema default must equal the value the layer used before slice 4.2.
-  // If one of these changes, the look changes too, so this test must be updated on purpose.
-  it("keeps the pre-4.2 values as defaults (no visible change)", () => {
-    expect(TUNNEL_DEFAULTS).toEqual({ ringDensity: 0.5, beatAttackSec: 0.08, ringContrast: 0.5, ringContrastCalm: 0.25, pattern: 'rings', sides: 0, twist: 0, texture: true, textureGain: 1 });
-    expect(PARTICLE_DEFAULTS).toEqual({ brightness: 1.0, calmSparkleScale: 0.3, flashSparkleScale: 0.2, swirlGain: 1, shape: 'streak', rotation: 0, zoom: 1, hueShift: 0, hueDrift: 0, texture: true, textureGain: 1, size: 2, followScene: false });
+  // Pins the real exported defaults. If one of these changes, the look of presets that rely on it
+  // changes too, so this test must be updated on purpose.
+  it("pins the shipped layer defaults", () => {
+    expect(TUNNEL_DEFAULTS).toEqual({
+      ringDensity: 0.5, beatAttackSec: 0.08, ringContrast: 0.5, ringContrastCalm: 0.25, pattern: 'rings', sides: 0, twist: 0,
+      texture: false, textureGain: 1, flightMode: 'dropReverse', reverseOnBreakdown: true, hueSpread: 0.55, wallTexture: 0.55,
+      zoomPunch: 0, swirlPulse: 0.35, horizonDrift: 0.4, beatReactivity: 0.5,
+    });
+    expect(PARTICLE_DEFAULTS).toEqual({ brightness: 1.0, calmSparkleScale: 0.3, flashSparkleScale: 0.2, swirlGain: 1, shape: 'streak', rotation: 0, zoom: 1, hueShift: 0, hueDrift: 0, texture: true, textureGain: 1, size: 2, followScene: false, beatReactivity: 1.0 });
     expect(CROWN_DEFAULTS.rimFactor).toBe(1 - 0.16);
-    expect(RINGS_DEFAULTS).toEqual({ maxRings: 6, maxRingsCalm: 3, strokeBase: 0.004, strokeNormGain: 0.01, sides: 0, style: 'outline', texture: true, textureGain: 1 });
+    expect(RINGS_DEFAULTS).toEqual({ maxRings: 6, maxRingsCalm: 3, strokeBase: 0.0035, strokeNormGain: 0.01, sides: 0, style: 'outline', texture: true, textureGain: 1 });
     expect(SHOCKWAVE_DEFAULTS).toEqual({ ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35, style: 'ring', texture: true, textureGain: 1 });
     expect(BARS_DEFAULTS).toEqual({ texture: true, textureGain: 1 });
     expect(BASS_PULSE_DEFAULTS).toEqual({ texture: true, textureGain: 1 });

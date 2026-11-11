@@ -177,49 +177,8 @@ export interface BuiltinPresetEntry {
   subfolder?: SystemSubfolder;
 }
 
-const LEGACY_CROWN_RAW = {
-  version: 1,
-  name: 'Crown',
-  tags: ['built-in'],
-  transition: { style: 'crossfade', seconds: 0.32 },
-  feedback: {},
-  layers: [
-    { type: 'tunnel', params: { ringDensity: 0.5, beatAttackSec: 0.08, ringContrast: 0.5, ringContrastCalm: 0.25 } },
-    { type: 'crown', params: { rimFactor: 0.84 } },
-    { type: 'particles', params: { brightness: 1, calmSparkleScale: 0.3, flashSparkleScale: 0.2 } },
-    { type: 'shockwave', params: { ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35 } },
-  ],
-  post: {},
-};
-
-const LEGACY_FLIGHT_RAW = {
-  version: 1,
-  name: 'Flight',
-  tags: ['built-in'],
-  transition: { style: 'crossfade', seconds: 0.32 },
-  feedback: {},
-  layers: [
-    { type: 'tunnel', params: { ringDensity: 0.5, beatAttackSec: 0.08, ringContrast: 0.5, ringContrastCalm: 0.25 } },
-    { type: 'particles', params: { brightness: 1, calmSparkleScale: 0.3, flashSparkleScale: 0.2 } },
-    { type: 'shockwave', params: { ringStart: 0.16, ringEnd: 0.95, ringSec: 0.35 } },
-  ],
-  post: {},
-};
-
-const LEGACY_BARS_RAW = {
-  version: 1,
-  name: 'Bars',
-  tags: ['built-in'],
-  transition: { style: 'crossfade', seconds: 0.32 },
-  feedback: {},
-  layers: [
-    { type: 'bars', params: {} },
-    { type: 'rings', params: { maxRings: 6, maxRingsCalm: 3, strokeBase: 0.004, strokeNormGain: 0.01 } },
-  ],
-  post: {},
-};
-
-const RAW_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
+/** Built-in presets in key order. The first three keep the old keys 0 / 1 / 2; the starter pack follows (drafts to tune). */
+export const BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
   { id: 'crown', group: 'classic', subfolder: 'classics', ...parsePreset(crown, SCHEMAS) },
   { id: 'flight', group: 'classic', subfolder: 'classics', ...parsePreset(flight, SCHEMAS) },
   { id: 'bars', group: 'classic', subfolder: 'classics', ...parsePreset(bars, SCHEMAS) },
@@ -245,30 +204,6 @@ const RAW_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
   { id: 'tex-dust-wave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_dust_wave, SCHEMAS) },
 ];
 
-const LOADER_TEST_BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
-  { id: 'crown', group: 'classic', subfolder: 'classics', ...parsePreset(LEGACY_CROWN_RAW, SCHEMAS) },
-  { id: 'flight', group: 'classic', subfolder: 'classics', ...parsePreset(LEGACY_FLIGHT_RAW, SCHEMAS) },
-  { id: 'bars', group: 'classic', subfolder: 'classics', ...parsePreset(LEGACY_BARS_RAW, SCHEMAS) },
-  ...RAW_BUILTIN_PRESETS.slice(3),
-];
-
-/** Built-in presets in key order. The first three keep the old keys 0 / 1 / 2; the starter pack follows (drafts to tune). */
-export const BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = new Proxy(RAW_BUILTIN_PRESETS, {
-  get(target, prop, receiver) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('loader.test.ts') || stack.includes('loader_spec.ts')) {
-      return Reflect.get(LOADER_TEST_BUILTIN_PRESETS, prop, receiver);
-    }
-    return Reflect.get(target, prop, receiver);
-  },
-  ownKeys(target) {
-    const stack = new Error().stack ?? '';
-    if (stack.includes('loader.test.ts') || stack.includes('loader_spec.ts')) {
-      return Reflect.ownKeys(LOADER_TEST_BUILTIN_PRESETS);
-    }
-    return Reflect.ownKeys(target);
-  },
-});
 
 /** Flagship Presets 01–06 (Slice 7.12). */
 export const FLAGSHIP_PRESETS: readonly BuiltinPresetEntry[] = [
