@@ -28,7 +28,8 @@ import { advanceCrown } from './render/crownStore';
 import { cycleIndex, indexForDigit, readStoredPresetId, safeStorage, storePresetId, stepForKey } from './presets/library';
 import { showToast } from './ui/toast';
 import { TouchGestureRecognizer } from './ui/gestures';
-import { Studio } from './studio/studio';
+// Studio is type-only here. Its code (and Tweakpane) loads with import() on first open.
+import type { Studio } from './studio/studio';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
@@ -45,11 +46,15 @@ import { browserSupportProblems, showNotice, supportNoticeText } from './ui/noti
 import { getGlobalDirector, type CameraUniforms, type ColorUniforms } from './render/globalDirector';
 import { clampDt } from './render/clock';
 import { adminGateway, AdminGateway } from './presets/adminGateway';
-import {
-  ADMIN_AUTH_CHANNEL,
-  ADMIN_AUTH_STORAGE_KEY,
-  isVerifiedAdminSignal,
-} from './studio/adminControls';
+// Admin signal names are mirrored from studio/adminControls.ts so the page-wide listeners do not
+// pull admin code into the startup bundle. Keep these values in sync with that file.
+const ADMIN_AUTH_CHANNEL = 'mv-admin-auth';
+const ADMIN_AUTH_STORAGE_KEY = 'mv.adminAuthSignal';
+function isVerifiedAdminSignal(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return v.type === 'mv-admin-authenticated' && v.verified === true;
+}
 import {
   loadCachedPresets,
   saveCachedPresets,
@@ -375,15 +380,39 @@ function start(): void {
       director.notifyPresetChanged(liveSession.get(id)?.preset);
       storePresetId(id);
       if (announce) showToast(liveSession.get(id)!.preset.name);
-      if (studio.visible) studio.bind(id);
+      if (isStudioOpen()) studioPanel?.bind(id);
     };
-    const studio = new Studio(document.getElementById('studio')!, {
-      session: liveSession,
-      switchTo: (id) => switchTo(id, true),
-      frameMs: () => frameMs,
-      linkMeter: (key) => linkRunner.meterByKey(key),
-      adminGateway,
-    });
+    // Preset Studio loads on first open (Slice 21.8). Until then there is no panel and nothing is drawn.
+    let studioPanel: Studio | null = null;
+    let studioWanted = false;
+    let studioLoading: Promise<Studio> | null = null;
+    const ensureStudio = (): Promise<Studio> => {
+      studioLoading ??= import('./studio/studio').then(({ Studio: StudioClass }) => {
+        const panel = new StudioClass(document.getElementById('studio')!, {
+          session: liveSession,
+          switchTo: (id) => switchTo(id, true),
+          frameMs: () => frameMs,
+          linkMeter: (key) => linkRunner.meterByKey(key),
+          adminGateway,
+        });
+        studioPanel = panel;
+        return panel;
+      });
+      return studioLoading;
+    };
+    const isStudioOpen = (): boolean => (studioPanel ? studioPanel.visible : studioWanted);
+    const setStudioOpen = (open: boolean): void => {
+      studioWanted = open;
+      if (!open) {
+        studioPanel?.setVisible(false);
+        return;
+      }
+      void ensureStudio().then((panel) => {
+        if (!studioWanted) return;
+        panel.setVisible(true);
+        panel.bind(currentId);
+      });
+    };
     switchTo(currentId);
     switchShown = (id) => switchTo(id, true);
 
@@ -430,17 +459,18 @@ function start(): void {
       // ignore storage errors
     }
     if (shouldReturnToStudio) {
-      studio.setVisible(true);
-      studio.bind(currentId);
+      setStudioOpen(true);
     }
 
-    // Background asynchronous sync of system presets with local cache persistence
-    syncSystemPresets(liveSession, getRemoteConfig(), { storage: safeStorage(), studio })
+    // Background asynchronous sync of system presets with local cache persistence.
+    // The bridge refreshes the Studio dropdown only if the Studio has been loaded.
+    const studioBridge = { refreshPresetDropdown: () => studioPanel?.refreshPresetDropdown() };
+    syncSystemPresets(liveSession, getRemoteConfig(), { storage: safeStorage(), studio: studioBridge })
       .then((records) => {
         if (records && records.length > 0) {
           liveSession.applyRemoteSystemPresets(records);
           saveCachedPresets(records, safeStorage());
-          studio.refreshPresetDropdown();
+          studioPanel?.refreshPresetDropdown();
         }
       })
       .catch(() => {
@@ -448,15 +478,14 @@ function start(): void {
       });
     // Studio button and E key share one toggle. Escape closes Studio unless the shortcuts dialog is open.
     const toggleStudio = () => {
-      studio.setVisible(!studio.visible);
-      if (studio.visible) studio.bind(currentId);
+      setStudioOpen(!isStudioOpen());
     };
     document.getElementById('studio-open')!.addEventListener('click', toggleStudio);
     window.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape' || !studio.visible) return;
+      if (e.key !== 'Escape' || !isStudioOpen()) return;
       const shortcuts = document.getElementById('shortcuts');
       if (shortcuts instanceof HTMLDialogElement && shortcuts.open) return;
-      studio.setVisible(false);
+      setStudioOpen(false);
     });
     // No automatic blend: the view changes only when a key is pressed.
     window.addEventListener('keydown', (e) => {
