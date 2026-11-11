@@ -445,3 +445,69 @@ describe('render scale covers the whole chain (Slice 16.5)', () => {
     expect(used[used.length - 2]).toBe(postSrc);
   });
 });
+
+describe('no per-frame lookups or rebuilds (Slice 16.8)', () => {
+  it('looks up the calm checkbox once, not on every frame', () => {
+    const getElementById = vi.fn(() => ({ checked: false }));
+    vi.stubGlobal('document', { getElementById });
+    try {
+      const { comp } = rig(['a']);
+      comp.setWeights({ a: 1 });
+      for (let i = 0; i < 6; i++) comp.draw(FRAME, clock(0.1), TARGET);
+      expect(getElementById).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('follows the calm checkbox state when it is ticked', () => {
+    const box = { checked: false };
+    vi.stubGlobal('document', { getElementById: () => box });
+    try {
+      const { comp } = rig(['a']);
+      comp.setWeights({ a: 1 });
+      comp.draw(FRAME, clock(0.1), TARGET);
+      expect(comp.brightnessLimiter.calm).toBe(false);
+      box.checked = true;
+      comp.draw(FRAME, clock(0.1), TARGET);
+      expect(comp.brightnessLimiter.calm).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('setPost keeps values given and returns the rest to identity, in place', () => {
+    const c = new Compositor([]);
+    c.setPost({ saturation: 1.5, bloom: 0.4 });
+    expect(c.hasPost()).toBe(true);
+    c.setPost({ saturation: 1.5 });
+    expect(c.hasPost()).toBe(true);
+    c.setPost({});
+    expect(c.hasPost()).toBe(false);
+    c.setPost({ vignette: 0.2, junk: 5, saturation: 'x' as unknown as number });
+    expect(c.hasPost()).toBe(true);
+  });
+
+  it('setDirectorState copies its input: changing the source afterwards changes nothing', () => {
+    const c = new Compositor([]);
+    const cam = { panX: 0.1, panY: 0, zoom: 1.2, roll: 0, tiltX: 0, tiltY: 0 };
+    const col = { shadowTint: [1, 1, 1] as [number, number, number], highlightTint: [1, 1, 1] as [number, number, number], spatialSpread: 0, gradAngle: 0, intensity: 0.5, cycleAngle: 0 };
+    c.setDirectorState(cam, col);
+    expect(c.hasDirectorEffect()).toBe(true);
+    cam.zoom = 1;
+    cam.panX = 0;
+    col.intensity = 0;
+    expect(c.hasDirectorEffect()).toBe(true);
+    c.setDirectorState({ panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 }, { ...col, intensity: 0 });
+    expect(c.hasDirectorEffect()).toBe(false);
+  });
+
+  it('a normal frame builds no scene list or weight set: the active list is reused', () => {
+    const { comp, frame } = rig(['a', 'b']);
+    comp.setWeights({ a: 1 });
+    frame();
+    const before = (comp as unknown as { activeNames: string[] }).activeNames;
+    for (let i = 0; i < 5; i++) frame();
+    expect((comp as unknown as { activeNames: string[] }).activeNames).toBe(before);
+  });
+});

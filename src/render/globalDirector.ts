@@ -312,66 +312,46 @@ export function analyzePresetMotion(preset?: Preset | null): Record<CameraMove, 
 /** Alias for motion profile analysis of presets. */
 export const extractPresetMotionProfile = analyzePresetMotion;
 
+function setCamera(out: CameraUniforms, panX: number, panY: number, zoom: number, roll: number, tiltX: number, tiltY: number): CameraUniforms {
+  out.panX = panX;
+  out.panY = panY;
+  out.zoom = zoom;
+  out.roll = roll;
+  out.tiltX = tiltX;
+  out.tiltY = tiltY;
+  return out;
+}
+
+/**
+ * Camera pose for one move. Pass `out` to have it filled and returned (no allocation); without it a new
+ * object is returned.
+ */
 export function evaluateCameraMove(
   move: CameraMove,
   phaseSec: number,
-  smoothedEnergy: number
+  smoothedEnergy: number,
+  out: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 },
 ): CameraUniforms {
   switch (move) {
     case 'craneSway': {
       const px = 0.12 * Math.sin(0.35 * phaseSec);
       const py = 0.12 * Math.cos(0.28 * phaseSec);
-      return {
-        panX: px,
-        panY: py,
-        zoom: 1.15,
-        roll: 0.0,
-        tiltX: -0.15 * px,
-        tiltY: -0.15 * py,
-      };
+      return setCamera(out, px, py, 1.15, 0.0, -0.15 * px, -0.15 * py);
     }
     case 'dutchRoll': {
       const px = 0.06 * Math.cos(0.20 * phaseSec);
       const py = 0.06 * Math.sin(0.20 * phaseSec);
-      return {
-        panX: px,
-        panY: py,
-        zoom: 1.16,
-        roll: 0.42 * Math.sin(0.40 * phaseSec),
-        tiltX: 0.0,
-        tiltY: 0.0,
-      };
+      return setCamera(out, px, py, 1.16, 0.42 * Math.sin(0.40 * phaseSec), 0.0, 0.0);
     }
     case 'breathingPush': {
-      return {
-        panX: 0.0,
-        panY: 0.0,
-        zoom: 1.08 + 0.42 * Math.max(0, Math.min(1, smoothedEnergy)),
-        roll: 0.0,
-        tiltX: 0.0,
-        tiltY: 0.0,
-      };
+      return setCamera(out, 0.0, 0.0, 1.08 + 0.42 * Math.max(0, Math.min(1, smoothedEnergy)), 0.0, 0.0, 0.0);
     }
     case 'horizonTilt': {
-      return {
-        panX: 0.0,
-        panY: 0.0,
-        zoom: 1.16,
-        roll: 0.0,
-        tiltX: 0.45 * Math.sin(0.25 * phaseSec),
-        tiltY: 0.60 * Math.cos(0.18 * phaseSec),
-      };
+      return setCamera(out, 0.0, 0.0, 1.16, 0.0, 0.45 * Math.sin(0.25 * phaseSec), 0.60 * Math.cos(0.18 * phaseSec));
     }
     case 'stillAnchor':
     default: {
-      return {
-        panX: 0.0,
-        panY: 0.0,
-        zoom: 1.04,
-        roll: 0.0,
-        tiltX: 0.0,
-        tiltY: 0.0,
-      };
+      return setCamera(out, 0.0, 0.0, 1.04, 0.0, 0.0, 0.0);
     }
   }
 }
@@ -818,7 +798,7 @@ export class GlobalDirector {
           (1 - wAlpha) * this.fromPresetWeights[m] + wAlpha * this.targetPresetWeights[m];
       }
     } else {
-      this.currentPresetWeights = { ...this.targetPresetWeights };
+      for (const m of CAMERA_MOVES) this.currentPresetWeights[m] = this.targetPresetWeights[m];
     }
 
     const isBeat = Boolean(frame?.kickPulse || frame?.beatByBand?.sub || frame?.beat);
@@ -859,24 +839,22 @@ export class GlobalDirector {
     }
   }
 
-  getCameraUniforms(): CameraUniforms {
+  // Scratch poses for the two moves being blended, reused every call.
+  private readonly fromPose: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
+  private readonly toPose: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
+
+  /** Camera uniforms for this frame. Pass `out` to have it filled and returned (no allocation per frame). */
+  getCameraUniforms(out: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 }): CameraUniforms {
     const effectiveIntensity = this.isCalm()
       ? Math.min(this.settings.cameraIntensity, 0.25)
       : this.settings.cameraIntensity;
 
     if (this.settings.cameraMode === 'off' || effectiveIntensity <= 0) {
-      return {
-        panX: 0,
-        panY: 0,
-        zoom: 1,
-        roll: 0,
-        tiltX: 0,
-        tiltY: 0,
-      };
+      return setCamera(out, 0, 0, 1, 0, 0, 0);
     }
 
-    const uFrom = evaluateCameraMove(this.fromMove, this.phaseSec, this.smoothedEnergy);
-    const uTo = evaluateCameraMove(this.toMove, this.phaseSec, this.smoothedEnergy);
+    const uFrom = evaluateCameraMove(this.fromMove, this.phaseSec, this.smoothedEnergy, this.fromPose);
+    const uTo = evaluateCameraMove(this.toMove, this.phaseSec, this.smoothedEnergy, this.toPose);
     const alpha = smoothstep(0, 1, Math.min(1.0, this.moveMorphSec / 6.0));
 
     const rawPanX = (1 - alpha) * uFrom.panX + alpha * uTo.panX;
@@ -898,57 +876,44 @@ export class GlobalDirector {
     const minFloor = isStill ? 1.03 : Math.max(1.03, 1.0 + 0.08 * effectiveIntensity);
     zoom = Math.max(minFloor, zoom);
 
-    return {
-      panX,
-      panY,
-      zoom,
-      roll,
-      tiltX,
-      tiltY,
-    };
+    return setCamera(out, panX, panY, zoom, roll, tiltX, tiltY);
   }
 
-  getColorUniforms(): ColorUniforms {
+  /** Colour uniforms for this frame. Pass `out` to have it filled and returned (no allocation per frame). */
+  getColorUniforms(
+    out: ColorUniforms = { shadowTint: [1, 1, 1], highlightTint: [1, 1, 1], spatialSpread: 0, gradAngle: 0, intensity: 0, cycleAngle: 0 },
+  ): ColorUniforms {
     if (this.settings.colorMood === 'native' || this.settings.colorIntensity <= 0) {
-      return {
-        shadowTint: [1, 1, 1],
-        highlightTint: [1, 1, 1],
-        spatialSpread: 0,
-        gradAngle: this.gradAngle,
-        intensity: 0,
-        cycleAngle: 0,
-      };
+      out.shadowTint[0] = 1; out.shadowTint[1] = 1; out.shadowTint[2] = 1;
+      out.highlightTint[0] = 1; out.highlightTint[1] = 1; out.highlightTint[2] = 1;
+      out.spatialSpread = 0;
+      out.gradAngle = this.gradAngle;
+      out.intensity = 0;
+      out.cycleAngle = 0;
+      return out;
     }
 
     const pFrom = DIRECTOR_PALETTES[this.fromPalette] ?? DIRECTOR_PALETTES.native;
     const pTo = DIRECTOR_PALETTES[this.toPalette] ?? DIRECTOR_PALETTES.native;
     const beta = smoothstep(0, 1, Math.min(1.0, this.paletteMorphSec / 6.0));
 
-    const shadowTint: [number, number, number] = [
-      (1 - beta) * pFrom.shadowTint[0] + beta * pTo.shadowTint[0],
-      (1 - beta) * pFrom.shadowTint[1] + beta * pTo.shadowTint[1],
-      (1 - beta) * pFrom.shadowTint[2] + beta * pTo.shadowTint[2],
-    ];
-
-    const highlightTint: [number, number, number] = [
-      (1 - beta) * pFrom.highlightTint[0] + beta * pTo.highlightTint[0],
-      (1 - beta) * pFrom.highlightTint[1] + beta * pTo.highlightTint[1],
-      (1 - beta) * pFrom.highlightTint[2] + beta * pTo.highlightTint[2],
-    ];
+    const shadowTint = out.shadowTint;
+    const highlightTint = out.highlightTint;
+    for (let i = 0; i < 3; i++) {
+      shadowTint[i] = (1 - beta) * pFrom.shadowTint[i]! + beta * pTo.shadowTint[i]!;
+      highlightTint[i] = (1 - beta) * pFrom.highlightTint[i]! + beta * pTo.highlightTint[i]!;
+    }
 
     const spatialSpread = Math.min(1.0, (1 - beta) * pFrom.spatialSpread + beta * pTo.spatialSpread + 0.3 * this.burstIntensity);
 
     // Boosted baseline intensity + reactive flare on big hits
     const dynamicIntensity = Math.min(1.0, this.settings.colorIntensity * (1.2 + 0.5 * this.burstIntensity));
 
-    return {
-      shadowTint,
-      highlightTint,
-      spatialSpread,
-      gradAngle: this.gradAngle,
-      intensity: dynamicIntensity,
-      cycleAngle: this.cycleAngle,
-    };
+    out.spatialSpread = spatialSpread;
+    out.gradAngle = this.gradAngle;
+    out.intensity = dynamicIntensity;
+    out.cycleAngle = this.cycleAngle;
+    return out;
   }
 
   isActive(): boolean {

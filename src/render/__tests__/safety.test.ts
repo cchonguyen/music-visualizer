@@ -326,3 +326,34 @@ describe('Dark-floor preservation under Calm and Reversal Damping', () => {
     expect(compositeFragSrc).toContain('c *= (1.0 - uReversalDamp * 0.35)');
   });
 });
+
+describe('Reversal window without per-frame arrays (Slice 16.8)', () => {
+  /** Alternate the target high and low so each step is a reversal. */
+  function flicker(lim: BrightnessLimiter, steps: number, dt: number): void {
+    for (let i = 0; i < steps; i++) lim.step(i % 2 === 0 ? 1.0 : CAP_FLOOR, dt);
+  }
+
+  it('keeps the same array while old reversals are dropped', () => {
+    const lim = new BrightnessLimiter();
+    const before = (lim as unknown as { reversalTimes: number[] }).reversalTimes;
+    flicker(lim, 40, 0.1);
+    expect((lim as unknown as { reversalTimes: number[] }).reversalTimes).toBe(before);
+  });
+
+  it('forgets reversals after the one-second window', () => {
+    const lim = new BrightnessLimiter();
+    flicker(lim, 30, 0.1);
+    for (let i = 0; i < 30; i++) lim.step(0.5, 0.1);
+    expect(lim.reversalDamp).toBe(0);
+    expect((lim as unknown as { reversalTimes: number[] }).reversalTimes.length).toBe(0);
+  });
+
+  it('only counts reversals inside the last second', () => {
+    const lim = new BrightnessLimiter();
+    flicker(lim, 60, 0.05);
+    const times = (lim as unknown as { reversalTimes: number[] }).reversalTimes;
+    expect(times.length).toBeGreaterThan(0);
+    expect(times.length).toBeLessThanOrEqual(21);
+    expect(lim.reversalDamp).toBeGreaterThan(0);
+  });
+});

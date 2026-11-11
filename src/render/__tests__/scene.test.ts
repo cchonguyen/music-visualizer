@@ -591,3 +591,65 @@ describe('Slice 7.18: Blend defaults, screen mode, energy compensation, and trai
     expect(lastDt()).toBeCloseTo(1 / 60, 9); // zero falls back to 60 Hz
   });
 });
+
+describe('Scene draw loop reuses its objects (Slice 16.8)', () => {
+  function overlayScene() {
+    const gl = createMockGl();
+    const calls: { target: unknown; opts: unknown }[] = [];
+    const layer: RenderLayer = {
+      init: vi.fn(),
+      resize: vi.fn(),
+      draw: vi.fn((_f: AudioFrame, _c: RenderClock, target: RenderTarget, opts?: unknown) => {
+        calls.push({ target, opts });
+      }),
+      dispose: vi.fn(),
+    };
+    const trail: RenderLayer = { init: vi.fn(), resize: vi.fn(), draw: vi.fn(), dispose: vi.fn() };
+    const scene = new Scene('s', [trail, layer], [{ opacity: 1, blend: 'max', trails: true }, { opacity: 1, blend: 'max', trails: false }]);
+    scene.init(gl);
+    scene.resize(64, 36, 1);
+    return { gl, scene, layer, trail, calls };
+  }
+
+  it('looks up the copy program texture uniform once, not every frame, even with an overlay layer', () => {
+    const { gl, scene } = overlayScene();
+    const count = () => (gl.getUniformLocation as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[1] === 'uSrc').length;
+    scene.draw(makeMockFrame(), mockClock);
+    const afterFirst = count();
+    for (let i = 0; i < 5; i++) scene.draw(makeMockFrame(), mockClock);
+    expect(count()).toBe(afterFirst);
+    expect(afterFirst).toBeLessThanOrEqual(1);
+  });
+
+  it('passes the same target and options objects to a layer every frame, with current values', () => {
+    const { scene, calls } = overlayScene();
+    scene.draw(makeMockFrame(), mockClock);
+    scene.setLayerConfig(1, { opacity: 0.4 });
+    scene.draw(makeMockFrame(), mockClock);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.target).toBe(calls[0]!.target);
+    expect(calls[1]!.opts).toBe(calls[0]!.opts);
+    expect((calls[1]!.opts as { opacity: number }).opacity).toBeCloseTo(0.4, 5);
+  });
+
+  it('still draws an overlay layer after its trails setting is switched', () => {
+    const gl = createMockGl();
+    const draw = vi.fn();
+    const layer: RenderLayer = { init: vi.fn(), resize: vi.fn(), draw, dispose: vi.fn() };
+    const scene = new Scene('s', [layer], [{ opacity: 1, blend: 'max', trails: true }]);
+    scene.init(gl);
+    scene.draw(makeMockFrame(), mockClock);
+    expect(draw).toHaveBeenCalledTimes(1);
+    const drawsBefore = (gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length;
+    scene.setLayerConfig(0, { trails: false });
+    scene.draw(makeMockFrame(), mockClock);
+    expect(draw).toHaveBeenCalledTimes(2);
+    // The overlay pass adds a copy of the trail buffer, so a frame with an overlay layer makes more draw calls.
+    const drawsAfter = (gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length - drawsBefore;
+    expect(drawsAfter).toBeGreaterThan(drawsBefore);
+    scene.setLayerConfigs([{ opacity: 1, blend: 'max', trails: true }]);
+    const mark = (gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length;
+    scene.draw(makeMockFrame(), mockClock);
+    expect((gl.drawArrays as ReturnType<typeof vi.fn>).mock.calls.length - mark).toBe(drawsBefore);
+  });
+});
