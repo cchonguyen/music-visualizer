@@ -4,7 +4,7 @@
 import { PingPong, feedbackFormat } from '../gl/fbo';
 import { FULLSCREEN_VERT } from '../gl/shader';
 import { getProgramCache } from '../gl/programCache';
-import { WARP_OP_MAX, WARP_OP_TYPES, type WarpOpType } from '../presets/warpOps';
+import { CURL_FLOW_STYLES, WARP_OP_MAX, WARP_OP_TYPES, type WarpOpType } from '../presets/warpOps';
 import type { ParamValue } from '../presets/schema';
 import { bindTarget, type RenderTarget } from './layer';
 import warpFieldSrc from './shaders/warpField.frag.glsl?raw';
@@ -46,6 +46,14 @@ export function activeWarpOpCount(ops: readonly ResolvedWarpOp[]): number {
   return n;
 }
 
+/** Curl noise's three own settings as the shader reads them: octaves, turbulence, flow style number. */
+export function curlExtras(values: Record<string, ParamValue>): [number, number, number] {
+  const octaves = Math.max(1, Math.min(3, Math.round(numberOf(values, 'octaves', 2))));
+  const turbulence = Math.max(0, Math.min(1, numberOf(values, 'turbulence', 0.45)));
+  const flow = Math.max(0, (CURL_FLOW_STYLES as readonly string[]).indexOf(String(values.flow ?? 'plumes')));
+  return [octaves, turbulence, flow];
+}
+
 export class WarpField {
   private readonly gl: WebGL2RenderingContext;
   private pp: PingPong;
@@ -58,6 +66,7 @@ export class WarpField {
   private readonly scales = new Float32Array(WARP_OP_MAX);
   private readonly speeds = new Float32Array(WARP_OP_MAX);
   private readonly centres = new Float32Array(WARP_OP_MAX * 2);
+  private readonly extras = new Float32Array(WARP_OP_MAX * 3);
   private readonly target: { kind: 'fbo'; framebuffer: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number };
   private fieldReady = false;
 
@@ -67,7 +76,7 @@ export class WarpField {
     const size = warpFieldSize(renderScale);
     this.pp = new PingPong(gl, size.width, size.height, feedbackFormat(gl));
     this.prog = getProgramCache(gl).acquire(FULLSCREEN_VERT, warpFieldSrc, 'warpField');
-    for (const name of ['uOpCount', 'uOpType', 'uOpAmount', 'uOpScale', 'uOpSpeed', 'uOpCentre', 'uTime', 'uDt', 'uAspect']) {
+    for (const name of ['uOpCount', 'uOpType', 'uOpAmount', 'uOpScale', 'uOpSpeed', 'uOpCentre', 'uOpExtra', 'uHigh', 'uTime', 'uDt', 'uAspect']) {
       this.uni.set(name, gl.getUniformLocation(this.prog, name));
     }
     this.target = { kind: 'fbo', framebuffer: this.pp.write.framebuffer, texture: this.pp.write.texture, width: size.width, height: size.height };
@@ -88,7 +97,7 @@ export class WarpField {
    * Draws the field for this frame. Returns false, and touches no GPU state, when no operator is active.
    * The caller binds its own target afterwards.
    */
-  update(ops: readonly ResolvedWarpOp[], timeSec: number, dtSec: number, aspect: number): boolean {
+  update(ops: readonly ResolvedWarpOp[], timeSec: number, dtSec: number, aspect: number, high = 0.5): boolean {
     let n = 0;
     for (const op of ops) {
       if (n >= WARP_OP_MAX) break;
@@ -99,6 +108,16 @@ export class WarpField {
       this.speeds[n] = numberOf(op.values, 'speed', 0);
       this.centres[n * 2] = numberOf(op.values, 'centreX', 0);
       this.centres[n * 2 + 1] = numberOf(op.values, 'centreY', 0);
+      if (op.type === 'curl') {
+        const [octaves, turbulence, flow] = curlExtras(op.values);
+        this.extras[n * 3] = octaves;
+        this.extras[n * 3 + 1] = turbulence;
+        this.extras[n * 3 + 2] = flow;
+      } else {
+        this.extras[n * 3] = 0;
+        this.extras[n * 3 + 1] = 0;
+        this.extras[n * 3 + 2] = 0;
+      }
       n++;
     }
     if (n === 0) {
@@ -121,6 +140,8 @@ export class WarpField {
     gl.uniform1fv(this.uni.get('uOpScale') ?? null, this.scales);
     gl.uniform1fv(this.uni.get('uOpSpeed') ?? null, this.speeds);
     gl.uniform2fv(this.uni.get('uOpCentre') ?? null, this.centres);
+    gl.uniform3fv(this.uni.get('uOpExtra') ?? null, this.extras);
+    gl.uniform1f(this.uni.get('uHigh') ?? null, high);
     gl.uniform1f(this.uni.get('uTime') ?? null, timeSec);
     gl.uniform1f(this.uni.get('uDt') ?? null, dtSec);
     gl.uniform1f(this.uni.get('uAspect') ?? null, aspect);

@@ -374,7 +374,7 @@ export class Scene {
       if (!this.warpField) this.warpField = new WarpField(gl, this.vao, getEffectiveRenderScale());
       this.warpField.setRenderScale(getEffectiveRenderScale());
       const fieldDt = clampDt(clock.dtSec) > 0 ? clampDt(clock.dtSec) : 1 / 60;
-      fieldOn = this.warpField.update(this.warpOps, clock.timeSec, fieldDt, pp.width / Math.max(pp.height, 1));
+      fieldOn = this.warpField.update(this.warpOps, clock.timeSec, fieldDt, pp.width / Math.max(pp.height, 1), frame?.norm?.high ?? (frame?.env?.high ?? 0.5));
     }
 
     // 1A) Decay last frame into the write target (blending off: this is a copy).

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { WarpField, warpFieldSize, activeWarpOpCount, isActiveWarpOp, WARP_FIELD_WIDTH, WARP_FIELD_HEIGHT, type ResolvedWarpOp } from './warpField';
+import { WarpField, curlExtras, warpFieldSize, activeWarpOpCount, isActiveWarpOp, WARP_FIELD_WIDTH, WARP_FIELD_HEIGHT, type ResolvedWarpOp } from './warpField';
 import warpFieldSrc from './shaders/warpField.frag.glsl?raw';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { WARP_OP_TYPES } from '../presets/warpOps';
@@ -29,7 +29,7 @@ function mockGl() {
     texParameteri: vi.fn(), texImage2D: vi.fn(), framebufferTexture2D: vi.fn(),
     drawArrays: vi.fn(), disable: vi.fn(), viewport: vi.fn(),
     getUniformLocation: vi.fn().mockImplementation((_p: unknown, name: string) => ({ name })),
-    uniform1i: vi.fn(), uniform1f: vi.fn(), uniform1iv: vi.fn(), uniform1fv: vi.fn(), uniform2fv: vi.fn(),
+    uniform1i: vi.fn(), uniform1f: vi.fn(), uniform1iv: vi.fn(), uniform1fv: vi.fn(), uniform2fv: vi.fn(), uniform3fv: vi.fn(),
     isContextLost: vi.fn().mockReturnValue(false),
   };
   return gl as unknown as WebGL2RenderingContext & typeof gl;
@@ -96,6 +96,26 @@ describe('WarpField.update', () => {
     field.setRenderScale(0.5);
     expect(gl.texImage2D).toHaveBeenCalled();
     expect(gl.texImage2D.mock.calls[0]![3]).toBe(32);
+  });
+});
+
+describe('curl noise operator (Slice 18.5)', () => {
+  it('reads octaves, turbulence and flow style into the numbers the shader uses', () => {
+    expect(curlExtras({})).toEqual([2, 0.45, 0]);
+    expect(curlExtras({ octaves: 3, turbulence: 0.9, flow: 'inflow' })).toEqual([3, 0.9, 3]);
+    expect(curlExtras({ octaves: 9, turbulence: 4, flow: 'eddies' })).toEqual([3, 1, 1]);
+    expect(curlExtras({ octaves: 0, turbulence: -1, flow: 'nope' })).toEqual([1, 0, 0]);
+  });
+
+  it('packs the curl settings and the treble level into the field pass', () => {
+    const gl = mockGl();
+    const field = new WarpField(gl, {} as WebGLVertexArrayObject, 1);
+    const curl = op('curl', 0.6, true, { octaves: 3, turbulence: 0.5 });
+    curl.values.flow = 'outflow';
+    expect(field.update([op('radial', 0.5), curl], 1, 1 / 60, 2, 0.8)).toBe(true);
+    const extras = gl.uniform3fv.mock.calls[0]![1] as Float32Array;
+    expect(Array.from(extras.slice(0, 6))).toEqual([0, 0, 0, 3, 0.5, 2]);
+    expect(gl.uniform1f).toHaveBeenCalledWith({ name: 'uHigh' }, 0.8);
   });
 });
 

@@ -3229,10 +3229,24 @@ describe('Studio warp operator editor (Slice 18.4)', () => {
 });
 
 describe('warp editor helpers (Slice 18.4)', () => {
+  it('changing an operator to Curl noise fills in its own settings, and keeps the shared ones', async () => {
+    const { newWarpOperator, fillWarpParams } = await import('./studio');
+    const op = newWarpOperator('radial');
+    op.params.amount!.value = 0.8;
+    op.type = 'curl';
+    fillWarpParams(op);
+    expect(op.params.amount!.value).toBe(0.8);
+    expect(op.params.octaves!.value).toBe(2);
+    expect(op.params.flow!.value).toBe('plumes');
+    op.type = 'swirl';
+    fillWarpParams(op);
+    expect(op.params.amount!.value).toBe(0.8);
+  });
+
   it('lists every operator type with a readable label', async () => {
     const { warpTypeOptions } = await import('./studio');
     const options = warpTypeOptions();
-    expect(Object.keys(options)).toHaveLength(8);
+    expect(Object.keys(options)).toHaveLength(9);
     expect(options['Radial']).toBe('radial');
     expect(options['Tile and mirror']).toBe('tile');
   });
