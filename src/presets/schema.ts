@@ -154,7 +154,7 @@ export const FEEDBACK_POST_LAYOUT: Readonly<Record<string, readonly string[]>> =
   Colour: [
     "hueDrift", "hueShift", "saturation", "contrast", "gamma", "brightness",
     "contourFreq", "contourWidth", "colorSpread", "solarize",
-    "bloom", "bloomThreshold", "vignette", "crtScanlines", "crtBarrel",
+    "bloom", "bloomThreshold", "bloomSize", "bloomTintAmount", "bloomTintHue", "bloomPulse", "vignette", "crtScanlines", "crtBarrel",
   ],
 };
 

@@ -32,12 +32,13 @@ import type { CameraUniforms, ColorUniforms } from './globalDirector';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
 import blurSrc from './shaders/blur.frag.glsl?raw';
-import { BlurChain } from './blurChain';
+import { BlurChain, bloomPlan, type BloomPlan } from './blurChain';
 import copySrc from './shaders/copy.frag.glsl?raw';
 
 /** Post settings with identity values (see post.frag.glsl). */
 export const POST_IDENTITY = {
   hueShift: 0, saturation: 1, contrast: 1, gamma: 1, brightness: 0, mirror: 0, vignette: 0, chroma: 0, bloom: 0, bloomThreshold: 0.6,
+  bloomSize: 0, bloomTintAmount: 0, bloomTintHue: 0, bloomPulse: 0,
 };
 type PostValues = typeof POST_IDENTITY;
 const POST_KEYS = Object.keys(POST_IDENTITY) as (keyof PostValues)[];
@@ -150,6 +151,8 @@ export class Compositor implements RenderLayer {
   private vao: WebGLVertexArrayObject | null = null;
   // Blurred copies of the frame at half, quarter and eighth size, built only when asked for (Slice 18.6).
   private blurChain: BlurChain | null = null;
+  private readonly plan: BloomPlan = { level: 0, spread: 1, weights: [1, 0, 0] };
+  private beatEnv = 0;
   private readonly blurFn = (src: WebGLTexture, stepX: number, stepY: number, target: RenderTarget): void => {
     if (this.gl) this.blurPass(this.gl, src, stepX, stepY, target);
   };
@@ -654,12 +657,14 @@ export class Compositor implements RenderLayer {
       // across and down. These are quarter-area passes. Only level 0 is asked for: nothing samples the deeper ones yet.
       let bloomTex: WebGLTexture | null = null;
       if (this.post.bloom > 0) {
-        chain.request(0);
+        const plan = bloomPlan(this.post.bloomSize, this.plan);
+        chain.request(plan.level);
         this.blendPass(gl, texA, texB, wA, wB, cap, 0, chain.sourceTarget());
-        chain.build(this.blurFn);
+        chain.build(this.blurFn, plan.spread);
         bloomTex = chain.texture(0);
       }
       // The one full-size pass: blend, post chain and safety, straight into the real target.
+      this.beatEnv = Number.isFinite(frame.kickEnv) ? Math.min(1, Math.max(0, frame.kickEnv)) : 0;
       this.finalPass(gl, texA, texB, wA, wB, cap, bloomTex, finalDest);
     }
     if (scaled) this.upscalePass(gl, scaled.write.texture, target);
@@ -759,9 +764,17 @@ export class Compositor implements RenderLayer {
     gl.bindTexture(gl.TEXTURE_2D, texB);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, bloom);
+    // Wider glows read the quarter and eighth levels too. A level with weight 0 is bound to the half-size one so the sampler is never empty.
+    const chain = this.blurChain;
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, chain?.texture(1) ?? bloom);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_2D, chain?.texture(2) ?? bloom);
     gl.uniform1i(this.u(prog, 'uA'), 0);
     gl.uniform1i(this.u(prog, 'uB'), 1);
     gl.uniform1i(this.u(prog, 'uBloom'), 2);
+    gl.uniform1i(this.loc(prog, 'uBloom1'), 3);
+    gl.uniform1i(this.loc(prog, 'uBloom2'), 4);
     gl.uniform1f(this.u(prog, 'uWA'), wA);
     gl.uniform1f(this.u(prog, 'uWB'), wB);
     gl.uniform1i(this.u(prog, 'uStyle'), this.transition);
@@ -780,6 +793,12 @@ export class Compositor implements RenderLayer {
     gl.uniform1f(this.u(prog, 'uChroma'), p.chroma);
     gl.uniform1f(this.loc(prog, 'uBloomAmt'), p.bloom);
     gl.uniform1f(this.loc(prog, 'uBloomThr'), p.bloomThreshold);
+    const w = this.plan.weights;
+    gl.uniform3f(this.loc(prog, 'uBloomW'), w[0], w[1], w[2]);
+    gl.uniform1f(this.loc(prog, 'uBloomTintAmt'), p.bloomTintAmount);
+    gl.uniform1f(this.loc(prog, 'uBloomTintHue'), p.bloomTintHue);
+    gl.uniform1f(this.loc(prog, 'uBloomPulse'), p.bloomPulse);
+    gl.uniform1f(this.loc(prog, 'uBeat'), this.beatEnv);
 
     // Global Director uniforms (Sector 483, Slice 7.31)
     gl.uniform2f(this.loc(this.postProg, 'uCamPan'), this.directorCam.panX, this.directorCam.panY);

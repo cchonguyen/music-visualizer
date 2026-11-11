@@ -616,6 +616,10 @@ export const POST_SPECS: readonly ParamSpec[] = [
   },
   { type: 'float', name: 'bloom', label: 'Bloom amount', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01, description: 'Controls diffuse luminous glow intensity over bright regions.' },
   { type: 'float', name: 'bloomThreshold', label: 'Bloom brightness cut-off', group: 'Glow', default: 0.6, min: 0, max: 1, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Sets minimum luminance cut-off required to trigger bloom glow.' },
+  { type: 'float', name: 'bloomSize', label: 'Bloom size (below 0 tight, above 0 wide)', group: 'Glow', default: 0, min: -1, max: 2, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Sets how far the glow spreads. 0 is the usual glow, negative keeps it close to bright edges, positive spreads it wide.' },
+  { type: 'float', name: 'bloomTintAmount', label: 'Bloom tint amount', group: 'Glow', default: 0, min: 0, max: 1, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Mixes the glow toward a single colour. 0 keeps the glow in the picture colours.' },
+  { type: 'float', name: 'bloomTintHue', label: 'Bloom tint colour (hue, rad)', group: 'Glow', default: 0, min: -3.14, max: 3.14, step: 0.01, showWhen: { bloom: { above: 0 }, bloomTintAmount: { above: 0 } }, description: 'Picks the colour the glow is tinted toward.' },
+  { type: 'float', name: 'bloomPulse', label: 'Bloom beat pulse', group: 'Glow', default: 0, min: 0, max: 2, step: 0.01, showWhen: { bloom: { above: 0 } }, description: 'Makes the glow swell on each kick, then ease back.' },
 ];
 
 export const FEEDBACK_SPECS: readonly ParamSpec[] = [

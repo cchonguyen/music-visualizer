@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BlurChain, BLUR_IDLE_FRAMES, BLUR_LEVELS, blurLevelSize } from './blurChain';
+import { BlurChain, BLUR_IDLE_FRAMES, BLUR_LEVELS, blurLevelSize, bloomPlan } from './blurChain';
 
 function mockGl() {
   let n = 0;
@@ -141,5 +141,50 @@ describe('BlurChain: built only when something asks', () => {
     chain.dispose();
     expect(chain.levelsAllocated).toBe(0);
     expect(chain.levelsWanted).toBe(0);
+  });
+});
+
+describe('bloomPlan (Slice 18.7)', () => {
+  it('0 is the original glow: level 0, usual spread, all weight on the half-size blur', () => {
+    expect(bloomPlan(0)).toEqual({ level: 0, spread: 1, weights: [1, 0, 0] });
+  });
+
+  it('negative sizes tighten the half-size blur and never ask for deeper levels', () => {
+    expect(bloomPlan(-1)).toEqual({ level: 0, spread: 0.5, weights: [1, 0, 0] });
+    expect(bloomPlan(-0.5).spread).toBeCloseTo(0.75, 6);
+  });
+
+  it('0 to 1 fades from half to quarter size, 1 to 2 from quarter to eighth, and the weights always add to 1', () => {
+    expect(bloomPlan(0.25)).toEqual({ level: 1, spread: 1, weights: [0.75, 0.25, 0] });
+    expect(bloomPlan(1)).toEqual({ level: 1, spread: 1, weights: [0, 1, 0] });
+    expect(bloomPlan(1.5)).toEqual({ level: 2, spread: 1, weights: [0, 0.5, 0.5] });
+    expect(bloomPlan(2)).toEqual({ level: 2, spread: 1, weights: [0, 0, 1] });
+    for (let s = -1; s <= 2; s += 0.1) expect(bloomPlan(s).weights.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
+  });
+
+  it('clamps out-of-range and bad values', () => {
+    expect(bloomPlan(9).level).toBe(2);
+    expect(bloomPlan(-9).spread).toBe(0.5);
+    expect(bloomPlan(NaN)).toEqual({ level: 0, spread: 1, weights: [1, 0, 0] });
+  });
+
+  it('fills the object it is given', () => {
+    const out = { level: 0, spread: 1, weights: [1, 0, 0] as [number, number, number] };
+    expect(bloomPlan(1.5, out)).toBe(out);
+    expect(out.level).toBe(2);
+  });
+});
+
+describe('BlurChain spread (Slice 18.7)', () => {
+  it('spread tightens level 0 only', () => {
+    const chain = new BlurChain(mockGl(), 64, 36);
+    const { calls, pass } = recorder();
+    chain.request(1);
+    chain.sourceTarget();
+    chain.build(pass, 0.5);
+    expect(calls[0]!.stepX).toBeCloseTo(0.5 / 64, 9);
+    expect(calls[1]!.stepY).toBeCloseTo(0.5 / 36, 9);
+    expect(calls[2]!.stepX).toBeCloseTo(1 / 32, 9);
+    expect(calls[3]!.stepY).toBeCloseTo(1 / 18, 9);
   });
 });
