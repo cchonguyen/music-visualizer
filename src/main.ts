@@ -38,6 +38,7 @@ import { QualityGovernor, TIER_SETTINGS, detectTier } from './render/qualityGove
 import { setAutoScale } from './gl/size';
 import { setFloatBuffersEnabled } from './gl/fbo';
 import { maxCostForTier, presetCost } from './presets/cost';
+import { mountPresetBrowser, toBrowserPreset, withFavourite, type BrowserPreset, type PresetBrowserHandle } from './ui/presetBrowser';
 import { FrameBudget } from './render/frameBudget';
 import { browserSupportProblems, showNotice, supportNoticeText } from './ui/notices';
 import { getGlobalDirector, type CameraUniforms, type ColorUniforms } from './render/globalDirector';
@@ -271,6 +272,9 @@ function start(): void {
     for (const problem of session.loadUserPresets()) console.warn('Saved preset skipped:', problem);
     const liveSession = session;
     const order = () => liveSession.list().map((e) => e.id);
+    // Preset browser on the main screen (Slice 21.5). Built from the session, so it shows the same favourites the auto-cycle reads.
+    const browserEntries = (): BrowserPreset[] => liveSession.list().map((e) => toBrowserPreset(e.id, e.preset));
+    let presetBrowser: PresetBrowserHandle | null = null;
     const remembered = readStoredPresetId();
     let currentId = remembered && liveSession.get(remembered) ? remembered : 'crown';
     let retiredNoticeShown = false;
@@ -278,6 +282,7 @@ function start(): void {
       currentId = id;
       cycler.reset();
       liveSession.show(id);
+      presetBrowser?.setEntries(browserEntries());
       // Old presets may still hold a retired ReactionDiffusion layer. It is skipped; say so once per session.
       if (!retiredNoticeShown && presetHasRetiredLayer(liveSession.get(id)?.preset)) {
         retiredNoticeShown = true;
@@ -298,6 +303,22 @@ function start(): void {
     });
     switchTo(currentId);
     switchShown = (id) => switchTo(id, true);
+
+    // Show the browser on the main screen. Benchmark mode keeps it hidden, since it drives the presets itself.
+    const browserRoot = document.getElementById('preset-browser');
+    if (browserRoot && benchSeconds === null) {
+      browserRoot.hidden = false;
+      presetBrowser = mountPresetBrowser(browserRoot, {
+        onSelect: (id) => switchTo(id, true),
+        onFavouriteChange: (id, on) => {
+          const entry = liveSession.get(id);
+          if (!entry) return;
+          liveSession.setPresetTags(id, withFavourite(entry.preset.tags, on));
+          showToast(on ? `Favourited ${entry.preset.name}` : `Removed ${entry.preset.name} from favourites`);
+        },
+      });
+      presetBrowser.setEntries(browserEntries());
+    }
 
     // Check Cloudflare Access identity on startup (e.g. returning from /admin gate)
     if (typeof adminGateway.checkCloudflareAccess === 'function') {
