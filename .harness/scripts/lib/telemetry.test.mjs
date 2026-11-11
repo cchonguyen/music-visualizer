@@ -64,16 +64,18 @@ test('appendCall keeps the corrupt file as .bak and starts fresh', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('dispatchesFor counts Agent/Task calls with an agentType or dispatchedType for the slice only', () => {
+test('dispatchesFor counts only gf-coder Agent/Task dispatches for the slice', () => {
   const calls = [
     call({ tool: 'Agent', agentType: 'harness:gf-coder', filePath: '' }),
     call({ tool: 'Task', agentType: 'harness:el-architect', filePath: '' }),
+    call({ tool: 'Agent', agentType: 'harness:gf-verifier', filePath: '' }),
+    call({ tool: 'Agent', agentType: 'harness:gf-navigator', filePath: '' }),
     call({ tool: 'Agent', agentType: '', dispatchedType: 'harness:gf-coder', filePath: '' }),
     call({ tool: 'Agent', agentType: '', dispatchedType: '', filePath: '' }),
     call({ tool: 'Agent', agentType: 'harness:gf-coder', slice: '2', filePath: '' }),
     call({ tool: 'Read', agentType: 'harness:gf-coder' }),
   ];
-  assert.equal(dispatchesFor(calls, '1').length, 3);
+  assert.equal(dispatchesFor(calls, '1').length, 2);
 });
 
 test('a main-thread dispatch with no agent_type is recorded by the hook and counted by the gate', () => {

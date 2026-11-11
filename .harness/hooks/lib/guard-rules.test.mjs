@@ -200,10 +200,12 @@ test('circuit breaker enforces 2-search limit for goldfish workers', () => {
   assert.equal(checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 0 }, thresholds }).allowed, true);
   assert.equal(checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 1 }, thresholds }).allowed, true);
 
-  // 3rd search blocked
-  const blocked = checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 2 }, thresholds });
-  assert.equal(blocked.allowed, false);
-  assert.match(blocked.reason, /CIRCUIT BREAKER: Goldfish search budget exceeded/);
+  // 3rd search flagged as a warning: checkSearchBudget reports the overrun, but the hook
+  // only warns on stderr and logs goldfish_breaker_warn (exit 0), and the counter still increments.
+  const warned = checkSearchBudget({ role: 'goldfish', telemetry: { goldfish_searches: 2 }, thresholds });
+  assert.equal(warned.allowed, false);
+  assert.equal(warned.count, 3);
+  assert.match(warned.reason, /CIRCUIT BREAKER: Goldfish search budget exceeded/);
 });
 
 test('goldfish target locks block editing files outside active slice Target files', () => {
@@ -220,18 +222,21 @@ test('goldfish target locks block editing files outside active slice Target file
   assert.equal(blocked.allowed, false);
   assert.match(blocked.reason, /SCOPE LOCK BLOCK/);
 
-  // Hard State-File Lockout: gf-coder cannot touch PROGRESS.md, ATLAS.md, or HISTORY.md even if allowed
-  const blockedProgress = checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'goldfish' });
-  assert.equal(blockedProgress.allowed, false);
-  assert.match(blockedProgress.reason, /DENIED: gf-coder cannot modify \.spec\/PROGRESS\.md or Atlas state files/);
+  // State-file lockout disabled (owner approval, 2026-11-06): gf-coder may edit PROGRESS.md, ATLAS.md, HISTORY.md
+  // when they are in scope; the normal SCOPE LOCK still applies to files not listed.
+  const progressAllowed = checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'goldfish' });
+  assert.equal(progressAllowed.allowed, true);
+  assert.doesNotMatch(progressAllowed.reason ?? '', /DENIED: gf-coder cannot modify/);
 
-  const blockedAtlas = checkTargetFileScope({ relTarget: '.spec/ATLAS.md', allowedTargets: allowed, role: 'goldfish' });
-  assert.equal(blockedAtlas.allowed, false);
-  assert.match(blockedAtlas.reason, /DENIED: gf-coder cannot modify \.spec\/PROGRESS\.md or Atlas state files/);
+  const atlasAllowed = checkTargetFileScope({ relTarget: '.spec/ATLAS.md', allowedTargets: [...allowed, '.spec/ATLAS.md'], role: 'goldfish' });
+  assert.equal(atlasAllowed.allowed, true);
 
-  const blockedHistory = checkTargetFileScope({ relTarget: '.spec/archive/HISTORY.md', allowedTargets: allowed, role: 'goldfish' });
-  assert.equal(blockedHistory.allowed, false);
-  assert.match(blockedHistory.reason, /DENIED: gf-coder cannot modify \.spec\/PROGRESS\.md or Atlas state files/);
+  const historyAllowed = checkTargetFileScope({ relTarget: '.spec/archive/HISTORY.md', allowedTargets: [...allowed, '.spec/archive/HISTORY.md'], role: 'goldfish' });
+  assert.equal(historyAllowed.allowed, true);
+
+  const atlasOutOfScope = checkTargetFileScope({ relTarget: '.spec/ATLAS.md', allowedTargets: allowed, role: 'goldfish' });
+  assert.equal(atlasOutOfScope.allowed, false);
+  assert.match(atlasOutOfScope.reason, /SCOPE LOCK BLOCK/);
 
   // Non-goldfish roles (e.g., coordinator) are permitted to update PROGRESS.md
   assert.equal(checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'coordinator' }).allowed, true);

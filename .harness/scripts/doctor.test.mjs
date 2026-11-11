@@ -33,6 +33,7 @@ test('a clean run yields DOCTOR_PASS', () => {
     assert.equal(state.head, HEAD);
     assert.equal(typeof state.at, 'string');
     assert.equal(byName(state, 'fast-path-budget').ok, true);
+    assert.equal(byName(state, 'fast-path-budget').detail, 'coordinator source-read budget soft: warns and logs');
     assert.equal(byName(state, 'spoke-engine-hash').severity, 'skip');
   } finally {
     cleanup(root);
@@ -136,13 +137,14 @@ test('an installed plugin older than the repo warns without halting', () => {
   }
 });
 
-test('the gate refuses Edit after a failing run and names the failing check', () => {
+test('the gate allows Edit after a failing run but warns and names the failing check', () => {
   const root = makeRoot({ agent: false });
   try {
     const state = runProbes({ root, head: HEAD });
     const d = gateDecision({ state, head: HEAD, toolName: 'Edit' });
-    assert.equal(d.allowed, false);
-    assert.match(d.reason, /gf-coder-registered/);
+    assert.equal(d.allowed, true);
+    assert.equal(d.warn, 'doctor not current for this HEAD');
+    assert.match(d.cause, /gf-coder-registered/);
   } finally {
     cleanup(root);
   }

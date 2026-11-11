@@ -96,3 +96,26 @@ test('standing rules hook is registered as its own SessionStart command, outside
   const cmds = cfg.hooks.SessionStart.flatMap((m) => m.hooks.map((h) => h.command));
   assert.ok(cmds.some((c) => c.endsWith('/hooks/standing-rules.mjs"')));
 });
+
+test('harness agents own their PROGRESS.md pick-up, unblock and handoff steps', () => {
+  for (const f of ['gf-coder.md', 'el-architect.md', 'gf-navigator.md']) {
+    const body = fs.readFileSync(new URL(`../agents/${f}`, import.meta.url), 'utf8');
+    assert.match(body, /Pick-up:/, f);
+    assert.match(body, /Unblock:/, f);
+    assert.match(body, /Handoff:/, f);
+    assert.match(body, /\.spec\/PROGRESS\.md/, f);
+  }
+  const coder = fs.readFileSync(new URL('../agents/gf-coder.md', import.meta.url), 'utf8');
+  assert.match(coder, /plus `\.spec\/PROGRESS\.md` for the pick-up, unblock, handoff and close steps/);
+});
+
+test('gf-coder close step mirrors /wrap: gate and decision record come before marking [x], and nothing is committed', () => {
+  const coder = fs.readFileSync(new URL('../agents/gf-coder.md', import.meta.url), 'utf8');
+  const gate = coder.indexOf('Run the gate: `bash bin/verify-slice.sh`');
+  const decision = coder.indexOf('Record a decision.');
+  const mark = coder.indexOf('change the marker to `[x]`');
+  assert.ok(gate > 0 && decision > gate && mark > decision, 'close steps out of order or missing');
+  assert.match(coder, /Do not commit, push, or open a pull request/);
+  assert.match(coder, /--bypass-decisions/);
+  assert.match(coder, /--add-recent/);
+});

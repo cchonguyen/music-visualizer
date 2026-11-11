@@ -7,6 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { appendEvent } from '../scripts/lib/event-log.mjs';
+import { resolveRoot } from './lib/vibe.mjs';
 
 export function normalizeToolName(toolName) {
   if (!toolName || typeof toolName !== 'string') return '';
@@ -94,10 +96,12 @@ if (isDirectRun) {
   }
 
   let normalizedInput = rawInput;
+  let session = process.env.CLAUDE_SESSION_ID || 'default';
   if (rawInput && rawInput.trim()) {
     try {
       const parsed = JSON.parse(rawInput);
       const normalized = normalizePayload(parsed);
+      session = normalized.session_id;
       normalizedInput = JSON.stringify(normalized);
     } catch {
       normalizedInput = rawInput;
@@ -110,6 +114,24 @@ if (isDirectRun) {
     stdio: ['pipe', 'inherit', 'inherit'],
     env: process.env
   });
+
+  // Exit 0 (pass) and 2 (deliberate block) are normal. Anything else is a hook error worth triage.
+  if (child.error || child.status === null || (child.status !== 0 && child.status !== 2)) {
+    try {
+      appendEvent(resolveRoot(), {
+        session,
+        kind: 'hook_error',
+        source: 'adapter.mjs',
+        slice: null,
+        detail: {
+          script: path.basename(scriptPath),
+          status: child.status,
+          signal: child.signal ?? null,
+          error: child.error ? String(child.error.message) : null
+        }
+      });
+    } catch {}
+  }
 
   process.exit(child.status !== null ? child.status : (child.error ? 1 : 0));
 }

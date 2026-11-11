@@ -72,9 +72,6 @@ test('main-thread Bash outside the allow-list is refused and the reason names th
     'curl x',
     'kill 123',
     'rm -rf x',
-    'git push --force origin b',
-    'git push origin +main',
-    'git branch -D b',
     'git reset --hard',
     'git clean -fd',
     'git checkout -- x',
@@ -97,6 +94,23 @@ test('main-thread Bash outside the allow-list is refused and the reason names th
     assert.match(r.reason, /Dispatch harness:gf-coder for other work\./, command);
   }
   assert.match(bash('node other.mjs').reason, /node other\.mjs/);
+});
+
+// Force push and branch -D are not refused here. hard-blocks.mjs refuses them for every Bash call,
+// and bash-guard.mjs runs it first, so this allow-list does not repeat those rules.
+test('main-thread Bash force push and branch -D are allowed by mainThreadDecision (hard-blocks.mjs refuses them)', () => {
+  const allowed = [
+    'git push --force origin b',
+    'git push -fu origin x',
+    'git push -uf origin x',
+    'git push origin +main',
+    'git push origin HEAD:+main',
+    'git branch -D b',
+    'git --git-dir=.git branch -D b',
+  ];
+  for (const command of allowed) {
+    assert.equal(bash(command).allowed, true, `expected allowed here (hard-blocks.mjs refuses): ${command}`);
+  }
 });
 
 test('main-thread Bash may run the --restore recovery command, with optional trailing args', () => {
@@ -143,11 +157,7 @@ test('audit: main-thread Bash bypasses are refused and the reason names the comm
     ['ls\nrm -rf src', 'rm -rf src'],
     ['git -C . reset --hard', 'git -C . reset --hard'],
     ['git -c core.x=1 clean -fd', 'git -c core.x=1 clean -fd'],
-    ['git --git-dir=.git branch -D b', 'git --git-dir=.git branch -D b'],
     ['git --work-tree=. reset --hard', 'git --work-tree=. reset --hard'],
-    ['git push -fu origin x', 'git push -fu origin x'],
-    ['git push -uf origin x', 'git push -uf origin x'],
-    ['git push origin HEAD:+main', 'git push origin HEAD:+main'],
     ['git checkout .', 'git checkout .'],
     ['git checkout -- .', 'git checkout -- .'],
     ['git restore .', 'git restore .'],

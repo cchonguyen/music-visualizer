@@ -537,6 +537,23 @@ test('a stale [IN_PROGRESS] placeholder with no changed targets does not block a
   assert.ok(r.notes.some((n) => n.includes('no changed Target files')));
 });
 
+test('a placeholder that lists .spec/PROGRESS.md is not taken as touched by a done slice PR', () => {
+  // Concert-Tracker PR #262: the promoted next slice lists .spec/PROGRESS.md, which every slice PR changes.
+  const doneLine = '- [x] **Slice 9.1** `[CORE / DATA]` : thing. Target files: `src/foo.js`, `src/foo.test.js`, `.spec/PROGRESS.md`';
+  const nextLine = '- [ ] **Slice 9.2** [IN_PROGRESS] `[UI / VISUAL]` : next. Target files: `src/next/x.tsx`, `.spec/PROGRESS.md`';
+  const r = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/foo.js', 'src/foo.test.js'],
+    diff: new Map([
+      ['.spec/PROGRESS.md', { added: [doneLine, nextLine], removed: [] }],
+      ['src/foo.js', { added: [], removed: [] }],
+      ['src/foo.test.js', { added: ['assert.equal(1, 1);'], removed: [] }],
+    ]),
+    progress: doneLine + '\n' + nextLine + '\n',
+  });
+  assert.equal(r.sliceType, 'CORE / DATA');
+  assert.ok(!r.problems.some((p) => p.includes("Outside the slice's Target files")), r.problems.join('; '));
+});
+
 test('an [IN_PROGRESS] slice whose targets this PR changes still blocks out-of-scope files', () => {
   const activeLine = '- [ ] **Slice 10** [IN_PROGRESS] `[GREEN][CORE / DATA]`: next — Target files: `src/next/x.js`';
   const r = analyze({

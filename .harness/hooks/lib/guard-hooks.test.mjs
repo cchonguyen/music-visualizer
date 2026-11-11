@@ -56,11 +56,13 @@ const edit = (dir, rel, extra = {}) => ({
   session_id: 's1', tool_name: 'Edit', tool_input: { file_path: path.join(dir, rel), old_string: 'a', new_string: 'b', ...extra },
 });
 
-test('manager mode with no active slice blocks source edits (PLAN LOCK)', () => {
+test('manager mode with no active slice warns but allows source edits (PLAN LOCK WARN)', () => {
   const dir = makeRepo({ files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': '# Progress\n', 'src/app.js': 'a\n' } });
   const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
-  assert.equal(r.status, 2);
-  assert.match(r.stderr, /PLAN LOCK/);
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARN: PLAN LOCK/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8');
+  assert.match(events, /"kind":"plan_lock_warn"/);
 });
 
 test('a new active slice resets the coordinator edit budget (regression: slice name was never read)', () => {
@@ -245,8 +247,12 @@ test('main-thread Bash outside the allow-list is refused; the same command from 
   });
   const command = 'npm install left-pad';
   const main = run({ tool_name: 'Bash', tool_input: { command } });
-  assert.equal(main.status, 2);
-  assert.match(main.stderr, /Main thread Bash is limited to the allow-list/);
+  assert.equal(main.status, 0, main.stderr);
+  assert.match(main.stderr, /WARN:/);
+  const eventsDir = path.join(dir, '.spec', '.events');
+  const mainEvents = fs.readdirSync(eventsDir).flatMap((f) => fs.readFileSync(path.join(eventsDir, f), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l)));
+  assert.ok(mainEvents.some((e) => e.kind === 'main_thread_warn'));
   const sub = run({ agent_type: 'gf-coder', tool_name: 'Bash', tool_input: { command } });
   assert.equal(sub.status, 0);
 });
@@ -254,10 +260,67 @@ test('main-thread Bash outside the allow-list is refused; the same command from 
 test('main-thread Edit outside .spec is refused; the same edit from a subagent is not', () => {
   const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
   const main = runHook(GUARD, dir, edit(dir, 'src/app.js'));
-  assert.equal(main.status, 2);
-  assert.match(main.stderr, /Main thread may edit only \.spec\//);
+  assert.equal(main.status, 0, main.stderr);
+  assert.match(main.stderr, /WARN:/);
+  const mainEvents = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(mainEvents.some((e) => e.kind === 'main_thread_warn'));
   const sub = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
   assert.equal(sub.status, 0);
 });
 
 after(() => { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); });
+
+test('a stale doctor state warns and logs doctor_stale but never refuses the edit', () => {
+  const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+  const file = path.join(os.tmpdir(), `doctor-fail-${path.basename(dir)}-${Date.now()}.json`);
+  fs.writeFileSync(file, JSON.stringify({ status: 'DOCTOR_FAIL', head, failing: ['gf-coder-registered'] }));
+  const res = spawnSync(process.execPath, [GUARD], {
+    cwd: dir,
+    input: JSON.stringify({ ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' }),
+    encoding: 'utf8',
+    env: { ...process.env, HARNESS_DOCTOR_STATE: file, CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stderr, /doctor not current for this HEAD/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(events.some((e) => e.kind === 'doctor_stale'));
+  fs.rmSync(file, { force: true });
+});
+
+test('a coordinator edit over the fast-path budget warns, logs fast_path_warn and proceeds (exit 0)', () => {
+  const dir = makeRepo({
+    files: {
+      '.spec/harness.json': '{"workMode":"manager"}\n',
+      '.spec/PROGRESS.md': SLICE('src/app.js'),
+      'src/app.js': 'a\n',
+      '.spec/.session-telemetry.json': JSON.stringify({ sessionId: 's1', currentSlice: '3.3', coordinator_edits: 1 }),
+    },
+  });
+  const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'coordinator' });
+  assert.equal(r.status, 0);
+  assert.match(r.stderr, /WARN: FAST-PATH BUDGET EXCEEDED/);
+  const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
+    .split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  assert.ok(events.some((e) => e.kind === 'fast_path_warn' && e.source === 'pre-tool-guard'));
+});
+
+test('bash-guard warn events carry the session_id and land in that session file', () => {
+  const dir = makeRepo({ files: { 'src/app.js': 'a\n' } });
+  const res = spawnSync(process.execPath, [BASH], {
+    cwd: dir,
+    input: JSON.stringify({ session_id: 'sess-bash-14', tool_name: 'Bash', tool_input: { command: 'npm install left-pad' } }),
+    encoding: 'utf8',
+    env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
+  });
+  assert.equal(res.status, 0, res.stderr);
+  const file = path.join(dir, '.spec', '.events', 'sess-bash-14.jsonl');
+  assert.equal(fs.existsSync(file), true);
+  const events = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const warn = events.find((e) => e.kind === 'main_thread_warn');
+  assert.ok(warn, 'main_thread_warn event written');
+  assert.equal(warn.session, 'sess-bash-14');
+  assert.equal(warn.source, 'bash-guard');
+});

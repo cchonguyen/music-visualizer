@@ -1,6 +1,7 @@
 // Pure helpers for the live doctor gate (Slice 10.1). No probes run here.
 import fs from 'node:fs';
 import path from 'node:path';
+import { isHardBlockedSegment } from './hard-blocks.mjs';
 
 const DEFAULT_STATE_PATH = '/tmp/harness-session-state.json';
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
@@ -16,12 +17,6 @@ const ALLOWED_SEGMENTS = [
   /^gh pr (view|list)(\s|$)/,
   /^(ls|cat|grep|rg)(\s|$)/,
   /^sed -n(\s|$)/,
-];
-
-// Force-push and branch deletion stay refused even though `git push` and `git branch` are allowed.
-const DESTRUCTIVE = [
-  /^git push\b.*(\s--force(-with-lease)?(\s|=|$)|\s-f(\s|$))/,
-  /^git branch\b.*\s-D(\s|$)/,
 ];
 
 export function statePath() {
@@ -55,7 +50,7 @@ export function isAllowListed(command) {
   const parts = cmd.split(/\|\||&&|[;&|]/).map((s) => s.trim()).filter(Boolean);
   if (!parts.length) return false;
   return parts.every((part) =>
-    ALLOWED_SEGMENTS.some((re) => re.test(part)) && !DESTRUCTIVE.some((re) => re.test(part)));
+    ALLOWED_SEGMENTS.some((re) => re.test(part)) && !isHardBlockedSegment(part));
 }
 
 const short = (h) => String(h || '').slice(0, 7) || 'unknown';
@@ -73,17 +68,16 @@ function passBlock(state, head) {
   return null;
 }
 
+// Soft gate: never refuses for doctor state. A missing or stale pass returns a warn banner and a cause.
+export const DOCTOR_WARN = 'doctor not current for this HEAD';
+
 export function gateDecision({ state, head, toolName, command } = {}) {
   const isBash = toolName === 'Bash';
   const needsPass = WRITE_TOOLS.has(toolName) || (isBash && !isAllowListed(command));
-  if (!needsPass) return { allowed: true, reason: '' };
+  if (!needsPass) return { allowed: true, reason: '', warn: '', cause: '' };
 
   const blocked = passBlock(state, head);
-  if (!blocked) return { allowed: true, reason: '' };
+  if (!blocked) return { allowed: true, reason: '', warn: '', cause: '' };
 
-  const subject = isBash ? 'Bash command not on the doctor allow-list' : `${toolName} tool`;
-  return {
-    allowed: false,
-    reason: `Doctor gate refused ${subject}: ${blocked}. Run node .harness/scripts/doctor.mjs and fix the failing checks.`,
-  };
+  return { allowed: true, reason: '', warn: DOCTOR_WARN, cause: blocked };
 }
