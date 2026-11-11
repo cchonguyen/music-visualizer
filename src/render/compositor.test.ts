@@ -3,6 +3,8 @@ import { Compositor, RETAIN_MAX_BYTES, RETAIN_MAX_SCENES, aspectBox, retainLimit
 import { Scene } from './scene';
 import type { AudioFrame } from '../audio/types';
 import type { RenderLayer, RenderTarget } from './layer';
+import compositeSrc from './shaders/composite.frag.glsl?raw';
+import postSrc from './shaders/post.frag.glsl?raw';
 
 const mk = (name: string) => new Scene(name, []);
 
@@ -255,5 +257,102 @@ describe('prepare and the fade gate (Slice 16.3)', () => {
     comp.prepare('s5');
     frame(0.2);
     expect(comp.isReady('s5')).toBe(true);
+  });
+});
+
+function block(src: string, name: string): string {
+  const a = src.indexOf(`// @${name}-begin`);
+  const b = src.indexOf(`// @${name}-end`);
+  expect(a).toBeGreaterThanOrEqual(0);
+  expect(b).toBeGreaterThan(a);
+  return src.slice(a, b);
+}
+
+describe('shader copies stay in step (Slice 16.4)', () => {
+  it('the blend block is the same in composite.frag and post.frag', () => {
+    expect(block(postSrc, 'blend')).toBe(block(compositeSrc, 'blend'));
+  });
+  it('the safety block is the same in composite.frag and post.frag', () => {
+    expect(block(postSrc, 'safety')).toBe(block(compositeSrc, 'safety'));
+  });
+  it('post.frag applies the safety rules last, after bloom and vignette, and clamps first', () => {
+    const main = postSrc.slice(postSrc.indexOf('void main()'));
+    const safety = main.indexOf('applySafety(c)');
+    expect(safety).toBeGreaterThan(main.indexOf('uBloomAmt'));
+    expect(safety).toBeGreaterThan(main.indexOf('uVignette'));
+    expect(main.indexOf('clamp(c, 0.0, 1.0)')).toBeLessThan(safety);
+    expect(main.indexOf('outColor')).toBeGreaterThan(safety);
+    expect(main.slice(safety)).not.toMatch(/c\s*[*+\-]?=/);
+  });
+  it('post.frag has no switch that turns the safety rules off', () => {
+    expect(postSrc).not.toContain('uSafety');
+  });
+});
+
+/** A gl mock whose programs are distinct, so uniform calls can be traced to the program that got them. */
+function createTracingGl() {
+  const gl = createMockGl() as unknown as Record<string, unknown>;
+  let id = 0;
+  const progOf = new Map<unknown, number>();
+  gl.createProgram = vi.fn(() => {
+    const p = { id: id++ };
+    progOf.set(p, p.id);
+    return p;
+  });
+  gl.getUniformLocation = vi.fn((prog: unknown, name: string) => ({ name, prog }));
+  const uniforms: { name: string; value: number; prog: unknown }[] = [];
+  gl.uniform1f = vi.fn((loc: { name: string; prog: unknown } | null, value: number) => {
+    if (loc) uniforms.push({ name: loc.name, value, prog: loc.prog });
+  });
+  const used: unknown[] = [];
+  gl.useProgram = vi.fn((p: unknown) => used.push(p));
+  return { gl: gl as unknown as WebGL2RenderingContext, uniforms, used };
+}
+
+describe('final pass count (Slice 16.4)', () => {
+  function setup(post: Record<string, number>) {
+    const t = createTracingGl();
+    const layer = spyLayer();
+    const comp = new Compositor([new Scene('a', [layer])]);
+    comp.init(t.gl);
+    comp.resize(64, 36, 1);
+    comp.setPost(post);
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 3; i++) comp.draw(FRAME, clock(0.1), TARGET);
+    // Look at one frame only.
+    t.uniforms.length = 0;
+    comp.draw(FRAME, clock(0.1), TARGET);
+    return { ...t, comp };
+  }
+  const capPasses = (u: { name: string }[]) => u.filter((x) => x.name === 'uCap').length;
+
+  it('a preset with no post effect runs one blend-and-safety pass', () => {
+    const { uniforms, comp } = setup({});
+    expect(comp.hasPost()).toBe(false);
+    expect(capPasses(uniforms)).toBe(1);
+  });
+
+  it('a preset with post effects runs one pass, not three', () => {
+    const { uniforms, comp } = setup({ saturation: 1.4, vignette: 0.3 });
+    expect(comp.hasPost()).toBe(true);
+    expect(capPasses(uniforms)).toBe(1);
+    expect(uniforms.some((x) => x.name === 'uSat')).toBe(true);
+  });
+
+  it('the post pass is the last program used in the frame, so safety is last', () => {
+    const { used, uniforms } = setup({ saturation: 1.4 });
+    const hue = uniforms.find((x) => x.name === 'uHue')!;
+    expect(used[used.length - 1]).toBe(hue.prog);
+  });
+
+  it('bloom adds one half-size blend ahead of the single full-size pass', () => {
+    const { uniforms } = setup({ bloom: 0.5 });
+    const caps = uniforms.filter((x) => x.name === 'uCap');
+    expect(caps).toHaveLength(2);
+    // The half-size blend (composite program) has safety off; the final pass (post program) is the one with uHue.
+    const safetyOff = uniforms.filter((x) => x.name === 'uSafety' && x.value === 0);
+    expect(safetyOff).toHaveLength(1);
+    const hue = uniforms.find((x) => x.name === 'uHue')!;
+    expect(uniforms.filter((x) => x.name === 'uCap' && x.prog === hue.prog)).toHaveLength(1);
   });
 });

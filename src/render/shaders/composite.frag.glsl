@@ -1,7 +1,9 @@
 #version 300 es
 precision highp float;
 
-// Final pass: blend up to two finished scenes, then apply the safety rules.
+// Blend up to two finished scenes, then apply the safety rules. Used on its own when no post effect is set,
+// and for the half-size blend that feeds bloom (safety off). The same blend and safety blocks are repeated in
+// post.frag.glsl, which does all three in one pass; compositor.test.ts checks the two copies stay identical.
 uniform sampler2D uA;
 uniform sampler2D uB;
 uniform float uWA;      // weight of scene A (0..1)
@@ -16,26 +18,31 @@ uniform float uReversalDamp; // 0.0..1.0 damping from rapid reversals (> 3 rever
 in vec2 vUv;
 out vec4 outColor;
 
-void main() {
+// @blend-begin
+vec3 blendAt(vec2 uv) {
   vec3 c;
   if (uStyle == 0 || uWA <= 0.0 || uWB <= 0.0) {
-    c = texture(uA, vUv).rgb * uWA + texture(uB, vUv).rgb * uWB;
+    c = texture(uA, uv).rgb * uWA + texture(uB, uv).rgb * uWB;
   } else if (uStyle == 1) {
     // Wipe: scene B arrives from the left, with a soft edge.
-    float m = 1.0 - smoothstep(uT - 0.01, uT + 0.01, vUv.x);
-    c = mix(texture(uA, vUv).rgb, texture(uB, vUv).rgb, m);
+    float m = 1.0 - smoothstep(uT - 0.01, uT + 0.01, uv.x);
+    c = mix(texture(uA, uv).rgb, texture(uB, uv).rgb, m);
   } else if (uStyle == 2) {
     // Dissolve: random pixels change first, then the rest.
-    float n = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453);
+    float n = fract(sin(dot(uv, vec2(12.9898, 78.233))) * 43758.5453);
     float m = 1.0 - smoothstep(uT - 0.1, uT + 0.1, n);
-    c = mix(texture(uA, vUv).rgb, texture(uB, vUv).rgb, m);
+    c = mix(texture(uA, uv).rgb, texture(uB, uv).rgb, m);
   } else {
     // Zoom-through: B grows out of the centre while A fades.
-    vec2 uvB = 0.5 + (vUv - 0.5) / (0.6 + 0.4 * uT);
-    c = texture(uA, vUv).rgb * (1.0 - uT) + texture(uB, uvB).rgb * uT;
+    vec2 uvB = 0.5 + (uv - 0.5) / (0.6 + 0.4 * uT);
+    c = texture(uA, uv).rgb * (1.0 - uT) + texture(uB, uvB).rgb * uT;
   }
+  return c;
+}
+// @blend-end
 
-  if (uSafety > 0.5) {
+// @safety-begin
+vec3 applySafety(vec3 c) {
     // Saturated red: where R/(R+G+B) >= 0.8, mix toward grey of the same total.
     float sum = c.r + c.g + c.b;
     if (sum > 0.0001) {
@@ -77,7 +84,12 @@ void main() {
     // Luminance cap: scale down anything brighter than the cap.
     float L = dot(c, vec3(0.2126, 0.7152, 0.0722));
     if (L > uCap) c *= uCap / max(L, 0.0001);
-  }
+  return c;
+}
+// @safety-end
 
+void main() {
+  vec3 c = blendAt(vUv);
+  if (uSafety > 0.5) c = applySafety(c);
   outColor = vec4(c, 1.0);
 }

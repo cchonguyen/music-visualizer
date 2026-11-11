@@ -36,7 +36,9 @@ export class GlHost {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    const gl = canvas.getContext('webgl2', { antialias: true, alpha: false, premultipliedAlpha: false });
+    // No canvas antialiasing: every layer draws into its own buffer and the last pass is one full-screen
+    // triangle, so multisampling the canvas costs memory and bandwidth and smooths nothing (Slice 16.4).
+    const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false });
     if (!gl) throw new WebGL2UnavailableError();
     this.gl = gl;
 

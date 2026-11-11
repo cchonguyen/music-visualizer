@@ -11,7 +11,9 @@
 // - A fade does not start in the frame a scene is being initialised: the switch waits until it is ready.
 // - At most two scenes can be active at once (the shader has two inputs).
 // - Order: blend -> post chain (+ bloom) -> safety. Safety is always last; no preset can turn it off.
-// - With no post effect set, the post passes are skipped and the output is the old single pass.
+// - One full-size pass after the scenes (Slice 16.4): with no post effect, composite.frag does blend and safety;
+//   with post effects, post.frag does blend, post and safety together. Bloom adds three half-size passes
+//   (blend, blur, blur) before it. Neither path has a full-size intermediate buffer.
 import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
@@ -132,7 +134,6 @@ export class Compositor implements RenderLayer {
   private postProg: WebGLProgram | null = null;
   private blurProg: WebGLProgram | null = null;
   private vao: WebGLVertexArrayObject | null = null;
-  private full: PingPong | null = null;
   private half: PingPong | null = null;
   // Uniform locations, cached per program (a name can be missing from one program and present in another).
   private locs = new Map<WebGLProgram, Map<string, WebGLUniformLocation | null>>();
@@ -399,9 +400,7 @@ export class Compositor implements RenderLayer {
     this.blurProg = compileProgram(gl, FULLSCREEN_VERT, blurSrc, 'blur');
     this.locs.clear();
     this.vao = createVao(gl);
-    this.full?.dispose();
     this.half?.dispose();
-    this.full = new PingPong(gl, this.w, this.h);
     this.half = new PingPong(gl, Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
     this.ready.clear();
     this.stale.clear();
@@ -420,7 +419,6 @@ export class Compositor implements RenderLayer {
     this.offX = box.offX;
     this.offY = box.offY;
     this.appliedAspect = aspectCorrect;
-    this.full?.resize(this.w, this.h);
     this.half?.resize(Math.max(1, this.w >> 1), Math.max(1, this.h >> 1));
     for (const name of this.ready) this.scenes.get(name)?.resize(this.w, this.h, dpr);
   }
@@ -534,28 +532,28 @@ export class Compositor implements RenderLayer {
     const sceneA = a ? this.scenes.get(a) : undefined;
     const sceneB = b ? this.scenes.get(b) : undefined;
 
-    if (!this.postActive() || !this.full || !this.half || !this.postProg || !this.blurProg) {
-      // Fast path: one pass, blend and safety together (the look before E4).
-      this.blendPass(gl, sceneA?.outputTexture() ?? null, sceneB?.outputTexture() ?? null, wA, wB, cap, 1, target);
+    const texA = sceneA?.outputTexture() ?? null;
+    const texB = sceneB?.outputTexture() ?? null;
+    const half = this.half;
+    if (!this.postActive() || !half || !this.postProg || !this.blurProg) {
+      // No post effect: one pass, blend and safety together (the look before E4).
+      this.blendPass(gl, texA, texB, wA, wB, cap, 1, target);
     } else {
-      const full = this.full;
-      const half = this.half;
-      const size = { width: full.width, height: full.height };
-      // 1) Blend into the post buffer (no safety yet).
-      this.blendPass(gl, sceneA?.outputTexture() ?? null, sceneB?.outputTexture() ?? null, wA, wB, cap, 0, this.bufferTarget(full.write, size));
-      full.swap();
-      // 2) Bloom (E5): blur a half-size copy, horizontally then vertically.
+      // Bloom (E5) needs a blurred copy of the blended image: blend at half size, then blur it
+      // horizontally and vertically. These are quarter-area passes.
+      let bloomTex: WebGLTexture | null = null;
       if (this.post.bloom > 0) {
-        this.blurPass(gl, full.read.texture, 1 / half.width, 0, this.bufferTarget(half.write, { width: half.width, height: half.height }));
+        const halfSize = { width: half.width, height: half.height };
+        this.blendPass(gl, texA, texB, wA, wB, cap, 0, this.bufferTarget(half.write, halfSize));
         half.swap();
-        this.blurPass(gl, half.read.texture, 0, 1 / half.height, this.bufferTarget(half.write, { width: half.width, height: half.height }));
+        this.blurPass(gl, half.read.texture, 1 / half.width, 0, this.bufferTarget(half.write, halfSize));
         half.swap();
+        this.blurPass(gl, half.read.texture, 0, 1 / half.height, this.bufferTarget(half.write, halfSize));
+        half.swap();
+        bloomTex = half.read.texture;
       }
-      // 3) Post chain (E4) and bloom add, into the other buffer.
-      this.postPass(gl, full.read.texture, this.post.bloom > 0 ? half.read.texture : full.read.texture, this.bufferTarget(full.write, size));
-      full.swap();
-      // 4) Safety, always last, into the real target.
-      this.blendPass(gl, full.read.texture, null, 1, 0, cap, 1, target);
+      // The one full-size pass: blend, post chain and safety, straight into the real target.
+      this.finalPass(gl, texA, texB, wA, wB, cap, bloomTex, target);
     }
 
     // Fades that have finished keep their buffers, up to the cap (oldest first out).
@@ -619,18 +617,30 @@ export class Compositor implements RenderLayer {
     gl.bindVertexArray(null);
   }
 
-  private postPass(gl: WebGL2RenderingContext, img: WebGLTexture, bloom: WebGLTexture, target: RenderTarget): void {
+  /** Blend, post chain and safety in one pass (post.frag.glsl). Safety is applied last and cannot be turned off. */
+  private finalPass(gl: WebGL2RenderingContext, texA: WebGLTexture | null, texB: WebGLTexture | null, wA: number, wB: number, cap: number, bloom: WebGLTexture | null, target: RenderTarget): void {
     const p = this.post;
     const prog = this.postProg!;
     this.bindTo(gl, target);
     gl.disable(gl.BLEND);
     gl.useProgram(prog);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, img);
+    gl.bindTexture(gl.TEXTURE_2D, texA);
     gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, texB);
+    gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, bloom);
-    gl.uniform1i(this.u(prog, 'uImg'), 0);
-    gl.uniform1i(this.u(prog, 'uBloom'), 1);
+    gl.uniform1i(this.u(prog, 'uA'), 0);
+    gl.uniform1i(this.u(prog, 'uB'), 1);
+    gl.uniform1i(this.u(prog, 'uBloom'), 2);
+    gl.uniform1f(this.u(prog, 'uWA'), wA);
+    gl.uniform1f(this.u(prog, 'uWB'), wB);
+    gl.uniform1i(this.u(prog, 'uStyle'), this.transition);
+    const sum = wA + wB;
+    gl.uniform1f(this.u(prog, 'uT'), sum > 0 ? wB / sum : 0);
+    gl.uniform1f(this.u(prog, 'uCap'), cap);
+    gl.uniform1f(this.u(prog, 'uCalm'), this.limiter.calm ? 1.0 : 0.0);
+    gl.uniform1f(this.u(prog, 'uReversalDamp'), this.limiter.reversalDamp);
     gl.uniform1f(this.u(prog, 'uHue'), p.hueShift);
     gl.uniform1f(this.u(prog, 'uSat'), p.saturation);
     gl.uniform1f(this.u(prog, 'uContrast'), p.contrast);
@@ -666,9 +676,7 @@ export class Compositor implements RenderLayer {
     this.ready.clear();
     this.stale.clear();
     this.drawn.clear();
-    this.full?.dispose();
     this.half?.dispose();
-    this.full = null;
     this.half = null;
     const gl = this.gl;
     if (gl) {
