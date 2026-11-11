@@ -6,6 +6,7 @@ import {
   parsePreset,
   PresetFormatError,
   type Preset,
+  type LayerEntry,
   type SchemaRegistry,
   type DirectorPaletteAsset,
   type ExperienceBundleAsset,
@@ -101,6 +102,39 @@ export interface SceneHost {
   setTransition(style: string): void;
 }
 
+/** Studio-only solo and mute state for one preset, by layer index. Never saved or exported. */
+export interface LayerMonitorState {
+  solo: Set<number>;
+  mute: Set<number>;
+}
+
+let layerIdCounter = 0;
+const layerIds = new WeakMap<LayerEntry, string>();
+/** A stable Studio-side id for a layer entry. Not part of the preset format. */
+export function layerId(layer: LayerEntry): string {
+  let id = layerIds.get(layer);
+  if (!id) {
+    id = `layer-${++layerIdCounter}`;
+    layerIds.set(layer, id);
+  }
+  return id;
+}
+
+/** True when layer `index` renders in the preview: enabled, not muted, and soloed when any layer is soloed. */
+export function isLayerRendered(layer: LayerEntry, index: number, state: LayerMonitorState | undefined): boolean {
+  if (!layer.enabled) return false;
+  if (!state) return true;
+  if (state.mute.has(index)) return false;
+  if (state.solo.size > 0 && !state.solo.has(index)) return false;
+  return true;
+}
+
+/** The preset as the preview renders it: layers hidden by solo or mute are switched off. Returns the input when nothing is hidden. */
+export function previewPreset(preset: Preset, state: LayerMonitorState | undefined): Preset {
+  if (!state || (state.solo.size === 0 && state.mute.size === 0)) return preset;
+  return { ...preset, layers: preset.layers.map((l, i) => (isLayerRendered(l, i, state) || !l.enabled ? l : { ...l, enabled: false })) };
+}
+
 export interface SessionEntry {
   id: string;
   builtin: boolean;
@@ -142,6 +176,7 @@ export class PresetSession {
   // Undo history (slice S4): JSON snapshots of the working copy, per preset.
   private committed = new Map<string, string>();
   private lastPushAt = new Map<string, number>();
+  private monitors = new Map<string, LayerMonitorState>();
   private undoStack = new Map<string, string[]>();
   private redoStack = new Map<string, string[]>();
   private folders: UserPresetFolder[] = [];
@@ -253,7 +288,7 @@ export class PresetSession {
     const entry = this.entries.get(id);
     if (!entry) throw new Error(`show: unknown preset "${id}"`);
     if (!this.scenes.has(id)) this.buildAndRegister(id);
-    applyPresetToScene(entry.preset, this.scenes.get(id)!);
+    applyPresetToScene(previewPreset(entry.preset, this.monitors.get(id)), this.scenes.get(id)!);
     this.host.setFadeSeconds(entry.preset.transition.seconds);
     this.host.setWeights({ [id]: 1 });
     this.host.setPost(valuesOf(entry.preset.post));
@@ -312,7 +347,7 @@ export class PresetSession {
     const sameLayers = source.layers.length === entry.preset.layers.length && source.layers.every((l, i) => l.type === entry.preset.layers[i]!.type);
     if (!sameLayers) return;
     if (!this.scenes.has(id)) this.buildAndRegister(id);
-    applyPresetToScene(source, this.scenes.get(id)!);
+    applyPresetToScene(previewPreset(source, this.monitors.get(id)), this.scenes.get(id)!);
   }
 
   /** Push the shown preset's post settings to the compositor (after the Studio edits them). */
@@ -333,14 +368,97 @@ export class PresetSession {
     if (!entry) throw new Error(`rebuild: unknown preset "${id}"`);
     if (!this.scenes.has(id)) return; // built next time it is shown
     this.buildAndRegister(id);
-    applyPresetToScene(entry.preset, this.scenes.get(id)!);
+    applyPresetToScene(previewPreset(entry.preset, this.monitors.get(id)), this.scenes.get(id)!);
   }
 
   private buildAndRegister(id: string): void {
     const entry = this.entries.get(id)!;
-    const scene = buildScene(id, entry.preset);
+    const scene = buildScene(id, previewPreset(entry.preset, this.monitors.get(id)));
     this.scenes.set(id, scene);
     this.host.setScene(scene);
+  }
+
+  /** The working copy as the preview renders it (solo and mute applied). Use this, not `preset`, to drive the live scene. */
+  previewOf(id: string): Preset {
+    return previewPreset(this.require(id).preset, this.monitors.get(id));
+  }
+
+  monitorOf(id: string): LayerMonitorState | undefined {
+    return this.monitors.get(id);
+  }
+
+  isSolo(id: string, index: number): boolean {
+    return this.monitors.get(id)?.solo.has(index) ?? false;
+  }
+
+  isMuted(id: string, index: number): boolean {
+    return this.monitors.get(id)?.mute.has(index) ?? false;
+  }
+
+  /** Solo or unsolo a layer (Studio state only, never saved). Rebuilds the preview. */
+  setSolo(id: string, index: number, on: boolean): void {
+    this.setMonitor(id, 'solo', index, on);
+  }
+
+  /** Mute or unmute a layer (Studio state only, never saved). Rebuilds the preview. */
+  setMute(id: string, index: number, on: boolean): void {
+    this.setMonitor(id, 'mute', index, on);
+  }
+
+  private setMonitor(id: string, kind: 'solo' | 'mute', index: number, on: boolean): void {
+    this.require(id);
+    const state = this.monitors.get(id) ?? { solo: new Set<number>(), mute: new Set<number>() };
+    if (on) state[kind].add(index);
+    else state[kind].delete(index);
+    this.monitors.set(id, state);
+    this.rebuild(id);
+  }
+
+  /** Drop solo and mute for a preset (e.g. when its layer list changes shape). */
+  clearMonitor(id: string): void {
+    if (this.monitors.delete(id)) this.rebuild(id);
+  }
+
+  /**
+   * Duplicate layer `index`: a full copy (same type, deep-copied settings) inserted directly after it, with a fresh id.
+   * Solo and mute marks on later layers shift down so they stay on the same layers. Returns the new index.
+   */
+  duplicateLayer(id: string, index: number): number {
+    const entry = this.require(id);
+    const source = entry.preset.layers[index];
+    if (!source) throw new Error(`duplicateLayer: no layer ${index}`);
+    const copy = JSON.parse(JSON.stringify(source)) as LayerEntry;
+    layerId(copy);
+    entry.preset.layers.splice(index + 1, 0, copy);
+    const state = this.monitors.get(id);
+    if (state) {
+      for (const kind of ['solo', 'mute'] as const) {
+        state[kind] = new Set([...state[kind]].map((i) => (i > index ? i + 1 : i)));
+      }
+    }
+    this.commit(id);
+    this.rebuild(id);
+    return index + 1;
+  }
+
+  /** Keep solo and mute on the same layers after Studio removes layer `index`. */
+  shiftMonitorAfterRemove(id: string, index: number): void {
+    const state = this.monitors.get(id);
+    if (!state) return;
+    for (const kind of ['solo', 'mute'] as const) {
+      state[kind] = new Set([...state[kind]].filter((i) => i !== index).map((i) => (i > index ? i - 1 : i)));
+    }
+  }
+
+  /** Keep solo and mute on the same layers after Studio swaps layers `a` and `b`. */
+  swapMonitor(id: string, a: number, b: number): void {
+    const state = this.monitors.get(id);
+    if (!state) return;
+    for (const kind of ['solo', 'mute'] as const) {
+      const next = new Set<number>();
+      for (const i of state[kind]) next.add(i === a ? b : i === b ? a : i);
+      state[kind] = next;
+    }
   }
 
   /** Save the working copy. Built-ins are read-only: use saveAs. */
