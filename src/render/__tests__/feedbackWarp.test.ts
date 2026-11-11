@@ -83,6 +83,8 @@ function createMockGl(): WebGL2RenderingContext {
     uniformMatrix4fv: vi.fn(),
     uniform1fv: vi.fn(),
     deleteProgram: vi.fn(),
+    isProgram: vi.fn().mockReturnValue(true),
+    isContextLost: vi.fn().mockReturnValue(false),
     deleteShader: vi.fn(),
     deleteTexture: vi.fn(),
     deleteFramebuffer: vi.fn(),
