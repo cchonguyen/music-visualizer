@@ -4,13 +4,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { modeOf, readCheckpoints, ensureBaseline, diffSince } from './lib/vibe.mjs';
+import { ACTIVE_TASK, modeOf, readCheckpoints, ensureBaseline, diffSince } from './lib/vibe.mjs';
 import {
-  agentsBlock, colourOf, isEngineLocked, isEnginePath, isHubOrigin, nextContent,
+  agentsBlock, isEngineLocked, isEnginePath, isHubOrigin, nextContent,
 } from './lib/guard-rules.mjs';
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
 import { updateTelemetry } from '../scripts/lib/telemetry-store.mjs';
-import { clearUpshiftAuth, verifyUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
+import { clearUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
@@ -22,7 +22,6 @@ const gitIn = (cwd, args, env = {}) =>
 const gitRoot = () => { try { return gitIn(process.cwd(), ['rev-parse', '--show-toplevel']); } catch { return ''; } };
 
 const CHECKPOINT_REF = 'refs/harness/slice-checkpoint';
-const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
 
 export const activeTargets = (line) => {
   const match = line?.match(/Target files:\s*([^|\n]+)/i);
@@ -201,7 +200,7 @@ export function checkTargetFileScope({ relTarget, allowedTargets = [], role = 'g
   if (!isAllowed) {
     return {
       allowed: false,
-      reason: `SCOPE LOCK BLOCK: "${clean}" is not listed in the active slice's Target files (${allowedTargets.join(', ')}). Update .spec/PROGRESS.md first if this file is required.`
+      reason: `SCOPE LOCK: "${clean}" is not listed in the active slice's Target files (${allowedTargets.join(', ')}). The edit goes ahead; the file will be recorded as Scope-Widened at finish.`
     };
   }
 
@@ -375,10 +374,6 @@ if (isDirectRun) {
     toolName: event.tool_name,
     command: event.tool_input?.command,
   });
-  if (!gate.allowed) {
-    console.error(gate.reason);
-    process.exit(2);
-  }
   if (gate.warn) {
     console.error(`WARN: ${gate.warn} (${gate.cause}). Run node .harness/scripts/doctor.mjs.`);
     appendEvent(root, {
@@ -392,41 +387,7 @@ if (isDirectRun) {
   const role = resolveRole(event);
   const thresholds = loadThresholds(root);
 
-  // Guard 0: Block silent subagent upshifts
-  if (event.tool_name === 'Agent' || event.tool_name === 'Task') {
-    const subagentType = String(event.tool_input?.subagent_type || event.tool_input?.name || '').trim();
-    if (subagentType === 'architect-opus') {
-      const scoutPath = path.join(root, '.spec', 'SCOUT.md');
-      let allowed = false;
-      if (fs.existsSync(scoutPath)) {
-        const scoutText = fs.readFileSync(scoutPath, 'utf8');
-        if (/Level:\s*3|Scout-Level:\s*3|Model:\s*opus/i.test(scoutText)) {
-          allowed = true;
-        }
-      }
-      if (!allowed) {
-        console.error('UPSHIFT LOCK VIOLATION: architect-opus requires Level 3 in .spec/SCOUT.md or explicit operator authorization.');
-        process.exit(2);
-      }
-      process.exit(0);
-    }
-    if (subagentType === 'engineer-sonnet') {
-      const scoutPath = path.join(root, '.spec', 'SCOUT.md');
-      let allowed = false;
-      if (fs.existsSync(scoutPath)) {
-        const scoutText = fs.readFileSync(scoutPath, 'utf8');
-        if (/Level:\s*[23]|Scout-Level:\s*[23]|Model:\s*(sonnet|opus)/i.test(scoutText)) {
-          allowed = true;
-        }
-      }
-      if (!allowed && fs.existsSync(scoutPath)) {
-        console.error('UPSHIFT LOCK VIOLATION: engineer-sonnet requires Level 2 or 3 in .spec/SCOUT.md.');
-        process.exit(2);
-      }
-      process.exit(0);
-    }
-    process.exit(0);
-  }
+  if (event.tool_name === 'Agent' || event.tool_name === 'Task') process.exit(0);
 
   // Active slice name for telemetry
   let activeSliceName = '';
@@ -530,12 +491,6 @@ if (isDirectRun) {
     }
     const sliceId = (line) => line?.match(/\*\*Slice\s+([^*]+)\*\*/)?.[1].trim() ?? line?.trim();
     const previousActive = currentContent.split('\n').find((line) => ACTIVE_TASK.test(line));
-    const nowActive = activeTaskLines[0];
-    if (activeTaskLines.length === 1 && previousActive && sliceId(nowActive) === sliceId(previousActive)
-      && colourOf(nowActive) !== colourOf(previousActive)) {
-      console.error(`COLOUR LOCK: The colour tag on the active slice is frozen at /spec. Keep ${colourOf(previousActive) || 'its current tag'}; only the architect changes it.`);
-      process.exit(2);
-    }
     const prevId = sliceId(previousActive);
     const nextId = sliceId(activeTaskLines[0]);
     if (previousActive && prevId !== nextId) {
@@ -633,8 +588,13 @@ if (isDirectRun) {
       const allowedList = activeTargets(activeLines[0]);
       const scopeCheck = checkTargetFileScope({ relTarget, allowedTargets: allowedList, role });
       if (!scopeCheck.allowed) {
-        console.error(scopeCheck.reason);
-        process.exit(2);
+        console.error(`WARN: ${scopeCheck.reason}`);
+        appendEvent(root, {
+          session: event.session_id,
+          kind: 'scope_lock_warn',
+          source: 'pre-tool-guard',
+          detail: { file: relTarget, targets: allowedList },
+        });
       }
     }
   }

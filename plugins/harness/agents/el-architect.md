@@ -13,6 +13,7 @@ You handle deep planning, architecture design, spec finalization, and black box 
 - Maintain Context Atlas registry in `.spec/ATLAS.md` (Sector 000).
 - If `.spec/BLACK_BOX.md` exists, inspect the `black-box/<slice-id>` stash, investigate the failure, resolve the root cause, remove BLACK_BOX.md, and create safe atomic slices.
 - Populate and update `.spec/PROGRESS.md` with small, atomic (<5 target files) slices with explicit `Target files:`, `Coords: [...]`, and quiet `Verify:` commands.
+- When writing slices via /spec, open one GitHub Issue per slice (labels `slice`, `status:backlog`, the repo's project label) and add `Issue: #N` to the slice line. Add the `gate-change` label to slices that touch a gate. Never set status labels by hand.
 
 2. PROGRESS STATE (`.spec/PROGRESS.md` is yours to update without asking):
 - Pick-up: at the start, read `.spec/PROGRESS.md` and note every `[IN_PROGRESS]` and `[BLOCKED]` slice. Do not reword or move an `[IN_PROGRESS]` slice unless your task names it.

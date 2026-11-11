@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlan, acceptSlices, sliceTargets, reconcileMerge } from './accept-plan.mjs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parsePlan, checkSlices } from './accept-plan.mjs';
+
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), 'accept-plan.mjs');
 
 test('parsePlan reads the id and slice lines and ignores other lines', () => {
   const text = '# Plan: p-1\n\nSome note.\n- slice: 8.3\n- slice: 8.4\n';
@@ -15,105 +22,85 @@ test('parsePlan throws when no slice is listed', () => {
   assert.throws(() => parsePlan('# Plan: p-2\nno slices here\n'), /zero slices/);
 });
 
-test('acceptSlices marks an open line [x] with the plan suffix', () => {
-  const progress = '- [ ] **Slice 8.3: Thing**  Target files: a.mjs | Verify: x\n- [x] **Slice 8.2: Old**\n';
-  const r = acceptSlices(progress, ['8.3'], 'p-1');
-  assert.equal(
-    r.text,
-    '- [x] **Slice 8.3: Thing**  Target files: a.mjs | Verify: x Accepted-by-plan: p-1\n- [x] **Slice 8.2: Old**\n',
-  );
-  assert.deepEqual(r.accepted, ['8.3']);
-  assert.deepEqual(r.already, []);
-  assert.deepEqual(r.missing, []);
+test('checkSlices finds open and done slices', () => {
+  const progress = '- [ ] **Slice 8.3: Thing** Verify: x\n- [x] **Slice 8.2: Old**\n';
+  assert.deepEqual(checkSlices(progress, ['8.3', '8.2']), { found: ['8.3', '8.2'], missing: [] });
 });
 
-test('acceptSlices treats an [IN_PROGRESS] line as open and removes the token', () => {
-  const progress = '- [ ] **Slice 8.3: Thing** [IN_PROGRESS] [CORE / DATA] Verify: x\n';
-  const r = acceptSlices(progress, ['8.3'], 'p-1');
-  assert.equal(
-    r.text,
-    '- [x] **Slice 8.3: Thing** [CORE / DATA] Verify: x Accepted-by-plan: p-1\n',
-  );
-  assert.deepEqual(r.accepted, ['8.3']);
-});
-
-test('acceptSlices reports already-accepted slices and leaves them unchanged', () => {
-  const progress = '- [x] **Slice 8.2: Old** Verify: x\n';
-  const r = acceptSlices(progress, ['8.2'], 'p-1');
-  assert.equal(r.text, progress);
-  assert.deepEqual(r.already, ['8.2']);
-  assert.deepEqual(r.accepted, []);
-});
-
-test('acceptSlices reports missing slices and leaves the text unchanged', () => {
+test('checkSlices reports missing slices', () => {
   const progress = '- [ ] **Slice 8.3: Thing** Verify: x\n';
-  const r = acceptSlices(progress, ['9.9'], 'p-1');
-  assert.equal(r.text, progress);
-  assert.deepEqual(r.missing, ['9.9']);
-  assert.deepEqual(r.accepted, []);
+  assert.deepEqual(checkSlices(progress, ['8.3', '9.9']), { found: ['8.3'], missing: ['9.9'] });
 });
 
-test('acceptSlices does not confuse 8.3 with 8.30', () => {
+test('checkSlices does not confuse 8.3 with 8.30', () => {
   const progress = '- [ ] **Slice 8.30: Other** Verify: x\n';
-  const r = acceptSlices(progress, ['8.3'], 'p-1');
-  assert.equal(r.text, progress);
-  assert.deepEqual(r.missing, ['8.3']);
+  assert.deepEqual(checkSlices(progress, ['8.3']), { found: [], missing: ['8.3'] });
 });
 
-test('sliceTargets strips [NEW] from target paths', () => {
-  const line = '- [ ] **Slice 9.9: X** [IN_PROGRESS] Target files: a.mjs [NEW], b.mjs | Verify: x';
-  assert.deepEqual(sliceTargets(line), ['a.mjs', 'b.mjs']);
-});
+// Build a sandbox repo layout so the CLI reads its own PROGRESS.md and plans.
+function sandbox(progress, plan) {
+  const root = mkdtempSync(join(tmpdir(), 'accept-plan-'));
+  mkdirSync(join(root, '.harness', 'scripts'), { recursive: true });
+  mkdirSync(join(root, '.spec', 'plans'), { recursive: true });
+  copyFileSync(SCRIPT, join(root, '.harness', 'scripts', 'accept-plan.mjs'));
+  const progressPath = join(root, '.spec', 'PROGRESS.md');
+  const planPath = join(root, '.spec', 'plans', 'p.md');
+  writeFileSync(progressPath, progress);
+  writeFileSync(planPath, plan);
+  return { root, progressPath, planPath };
+}
 
-test('reconcileMerge marks a single matching IN_PROGRESS slice with the Merged suffix', () => {
-  const progress = [
-    '- [x] **Slice 8.1: Old** Target files: a.mjs | Verify: x',
-    '- [ ] **Slice 9.1: New** [IN_PROGRESS] [CORE / DATA] Target files: a.mjs, b.mjs | Verify: x',
-    '',
-  ].join('\n');
-  const r = reconcileMerge(progress, { prNumber: 60, login: 'alice', changedFiles: ['b.mjs'] });
-  assert.equal(
-    r.text,
-    [
-      '- [x] **Slice 8.1: Old** Target files: a.mjs | Verify: x',
-      '- [x] **Slice 9.1: New** [CORE / DATA] Target files: a.mjs, b.mjs | Verify: x Merged: PR #60 by alice',
-      '',
-    ].join('\n'),
+function runCheck(sb) {
+  return spawnSync(
+    process.execPath,
+    [join(sb.root, '.harness', 'scripts', 'accept-plan.mjs'), '--check', sb.planPath],
+    { cwd: sb.root, encoding: 'utf8' },
   );
-  assert.deepEqual(r.sliceIds, ['9.1']);
-  assert.equal(r.status, 'merged');
+}
+
+test('--check exits 0 when all slices are found and leaves files unchanged', () => {
+  const progress = '- [ ] **Slice 1.1: A** [IN_PROGRESS] Verify: x\n- [x] **Slice 1.2: B**\n';
+  const plan = '# Plan: p\n- slice: 1.1\n- slice: 1.2\n';
+  const sb = sandbox(progress, plan);
+  try {
+    const r = runCheck(sb);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /slice 1\.1: found/);
+    assert.match(r.stdout, /slice 1\.2: found/);
+    assert.equal(readFileSync(sb.progressPath, 'utf8'), progress);
+    assert.equal(readFileSync(sb.planPath, 'utf8'), plan);
+  } finally {
+    rmSync(sb.root, { recursive: true, force: true });
+  }
 });
 
-test('reconcileMerge with no matching file returns status none and unchanged text', () => {
-  const progress = '- [ ] **Slice 9.1: New** [IN_PROGRESS] Target files: a.mjs | Verify: x\n';
-  const r = reconcileMerge(progress, { prNumber: 60, login: 'alice', changedFiles: ['z.mjs'] });
-  assert.equal(r.text, progress);
-  assert.deepEqual(r.sliceIds, []);
-  assert.equal(r.status, 'none');
+test('--check exits 1 when a slice is missing and leaves files unchanged', () => {
+  const progress = '- [ ] **Slice 1.1: A** Verify: x\n';
+  const plan = '# Plan: p\n- slice: 1.1\n- slice: 2.2\n';
+  const sb = sandbox(progress, plan);
+  try {
+    const r = runCheck(sb);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /slice 2\.2: missing/);
+    assert.match(r.stderr, /missing slices: 2\.2/);
+    assert.equal(readFileSync(sb.progressPath, 'utf8'), progress);
+  } finally {
+    rmSync(sb.root, { recursive: true, force: true });
+  }
 });
 
-test('reconcileMerge does not touch an already [x] matching slice', () => {
-  const progress = '- [x] **Slice 9.1: Done** Target files: a.mjs | Verify: x\n';
-  const r = reconcileMerge(progress, { prNumber: 60, login: 'alice', changedFiles: ['a.mjs'] });
-  assert.equal(r.text, progress);
-  assert.equal(r.status, 'none');
-});
-
-test('reconcileMerge throws ambiguous when two IN_PROGRESS slices match', () => {
-  const progress = [
-    '- [ ] **Slice 9.1: A** [IN_PROGRESS] Target files: a.mjs | Verify: x',
-    '- [ ] **Slice 9.2: B** [IN_PROGRESS] Target files: a.mjs | Verify: x',
-    '',
-  ].join('\n');
-  assert.throws(
-    () => reconcileMerge(progress, { prNumber: 60, login: 'alice', changedFiles: ['a.mjs'] }),
-    /ambiguous/,
-  );
-});
-
-test('reconcileMerge matches a changed file given as ./x', () => {
-  const progress = '- [ ] **Slice 9.1: A** [IN_PROGRESS] Target files: x.mjs | Verify: x\n';
-  const r = reconcileMerge(progress, { prNumber: 61, login: 'bob', changedFiles: ['./x.mjs'] });
-  assert.equal(r.status, 'merged');
-  assert.deepEqual(r.sliceIds, ['9.1']);
+test('running without --check exits 1 and does not write', () => {
+  const progress = '- [ ] **Slice 1.1: A** Verify: x\n';
+  const sb = sandbox(progress, '# Plan: p\n- slice: 1.1\n');
+  try {
+    const r = spawnSync(
+      process.execPath,
+      [join(sb.root, '.harness', 'scripts', 'accept-plan.mjs'), sb.planPath],
+      { cwd: sb.root, encoding: 'utf8' },
+    );
+    assert.equal(r.status, 1);
+    assert.equal(readFileSync(sb.progressPath, 'utf8'), progress);
+  } finally {
+    rmSync(sb.root, { recursive: true, force: true });
+  }
 });

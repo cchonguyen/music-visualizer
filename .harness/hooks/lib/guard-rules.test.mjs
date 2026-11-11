@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  agentsBlock, bashWriteReason, colourOf, isEngineLocked, isHubOrigin, isProtectedPath, nextContent, sliceIdOf,
+  agentsBlock, bashWriteReason, isEngineLocked, isHubOrigin, isProtectedPath, nextContent, sliceIdOf,
 } from './guard-rules.mjs';
 import {
   normalizeToolName, normalizeToolInput, normalizePayload
@@ -9,6 +9,7 @@ import {
 import {
   checkFastPathBudget, checkSearchBudget, checkTargetFileScope, isSourceFile, resolveRole
 } from '../pre-tool-guard.mjs';
+import { ACTIVE_TASK } from './vibe.mjs';
 import {
   validateProgressSlices
 } from '../el-exit-gate.mjs';
@@ -29,11 +30,9 @@ test('the AGENTS.md block is the text between the markers, markers included', ()
   assert.equal(agentsBlock('no block here'), '');
 });
 
-test('colour and slice identity are read from a slice line', () => {
+test('slice identity is read from a slice line', () => {
   const line = '- [ ] **Slice 3.3** [IN_PROGRESS] `[YELLOW][CORE / DATA]`: guard';
-  assert.equal(colourOf(line), 'YELLOW');
   assert.equal(sliceIdOf(line), '3.3');
-  assert.equal(colourOf('- [ ] **Slice 1** `[CORE / DATA]`'), null);
 });
 
 test('nextContent applies Write and Edit, including "$&" in replacement text', () => {
@@ -220,7 +219,7 @@ test('goldfish target locks block editing files outside active slice Target file
   // File outside allowed list blocked
   const blocked = checkTargetFileScope({ relTarget: 'unrelated/config.json', allowedTargets: allowed, role: 'goldfish' });
   assert.equal(blocked.allowed, false);
-  assert.match(blocked.reason, /SCOPE LOCK BLOCK/);
+  assert.match(blocked.reason, /SCOPE LOCK/);
 
   // State-file lockout disabled (owner approval, 2026-11-06): gf-coder may edit PROGRESS.md, ATLAS.md, HISTORY.md
   // when they are in scope; the normal SCOPE LOCK still applies to files not listed.
@@ -236,7 +235,7 @@ test('goldfish target locks block editing files outside active slice Target file
 
   const atlasOutOfScope = checkTargetFileScope({ relTarget: '.spec/ATLAS.md', allowedTargets: allowed, role: 'goldfish' });
   assert.equal(atlasOutOfScope.allowed, false);
-  assert.match(atlasOutOfScope.reason, /SCOPE LOCK BLOCK/);
+  assert.match(atlasOutOfScope.reason, /SCOPE LOCK/);
 
   // Non-goldfish roles (e.g., coordinator) are permitted to update PROGRESS.md
   assert.equal(checkTargetFileScope({ relTarget: '.spec/PROGRESS.md', allowedTargets: allowed, role: 'coordinator' }).allowed, true);
@@ -315,4 +314,10 @@ test('el exit gate open-only mode ignores completed slices', () => {
   const atlas = '| Coords: [1] |';
   assert.equal(validateProgressSlices(doneBad, atlas, { openOnly: true }).valid, validateProgressSlices(doneBad.split('\n')[1] + '\n', atlas).valid);
   assert.equal(validateProgressSlices(doneBad, atlas, { openOnly: true }).slicesCount, 1);
+});
+
+test('ACTIVE_TASK counts a marker only after the bold title or at line end', () => {
+  assert.equal(ACTIVE_TASK.test('- [ ] **Slice 1** [IN_PROGRESS] `[GREEN]`: x'), true);
+  assert.equal(ACTIVE_TASK.test('- [ ] **Slice 1** `[GREEN]`: x [IN_PROGRESS]'), true);
+  assert.equal(ACTIVE_TASK.test('- [ ] **Slice 2** [PENDING] `[GREEN]`: the parser counts [IN_PROGRESS] only after the title'), false);
 });

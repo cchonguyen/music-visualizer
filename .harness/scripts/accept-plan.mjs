@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Accept the slices listed in a plan file by marking them [x] in .spec/PROGRESS.md.
-// Usage: node .harness/scripts/accept-plan.mjs <planFile>
+// Validate that every slice listed in a plan file exists in .spec/PROGRESS.md.
+// Usage: node .harness/scripts/accept-plan.mjs --check <planFile>
+// Read-only: never writes files. A plan merge records approval only.
 // Node built-ins only.
 
-import { readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parseSliceLine } from './lib/slice-parser.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -33,89 +33,20 @@ export function parsePlan(text) {
   return { id: match[1], sliceIds };
 }
 
-export function acceptSlices(progressText, sliceIds, planId) {
+// Report which slice ids exist in PROGRESS.md (open or done). Pure; no writes.
+export function checkSlices(progressText, sliceIds) {
   const lines = String(progressText).split('\n');
-  const accepted = [];
-  const already = [];
+  const found = [];
   const missing = [];
-
   for (const id of sliceIds) {
     const openPrefix = `- [ ] **Slice ${id}:`;
     const donePrefix = `- [x] **Slice ${id}:`;
-    const idx = lines.findIndex(
+    const exists = lines.some(
       (line) => line.startsWith(openPrefix) || line.startsWith(donePrefix),
     );
-    if (idx === -1) {
-      missing.push(id);
-      continue;
-    }
-    const line = lines[idx];
-    if (line.startsWith(donePrefix)) {
-      already.push(id);
-      continue;
-    }
-    const cr = line.endsWith('\r') ? '\r' : '';
-    let body = cr ? line.slice(0, -1) : line;
-    body = body.replace(/\s*\[IN_PROGRESS\]/g, '');
-    body = '- [x]' + body.slice('- [ ]'.length);
-    lines[idx] = `${body.replace(/\s+$/, '')} Accepted-by-plan: ${planId}${cr}`;
-    accepted.push(id);
+    (exists ? found : missing).push(id);
   }
-
-  return { text: lines.join('\n'), accepted, already, missing };
-}
-
-// Target file paths of a slice line, with [NEW]/[DELETE]/[IN_PROGRESS] tags removed.
-export function sliceTargets(line) {
-  let parsed;
-  try {
-    parsed = parseSliceLine(line);
-  } catch {
-    return [];
-  }
-  if (!parsed || !Array.isArray(parsed.targets)) {
-    return [];
-  }
-  return parsed.targets
-    .map((t) => String(t).replace(/\[(NEW|DELETE|IN_PROGRESS)\]/g, '').trim())
-    .filter((t) => t !== '');
-}
-
-function normalizePath(file) {
-  return String(file).replace(/\\/g, '/').replace(/^(\.\/)+/, '');
-}
-
-// Mark the single open [IN_PROGRESS] slice whose targets intersect changedFiles as merged.
-export function reconcileMerge(progressText, { prNumber, login, changedFiles }) {
-  const lines = String(progressText).split('\n');
-  const changed = new Set((changedFiles || []).map(normalizePath).filter((f) => f !== ''));
-  const candidates = [];
-
-  lines.forEach((line, idx) => {
-    if (!/^- \[ \] \*\*Slice /.test(line)) return;
-    if (!/\[IN_PROGRESS\]/.test(line)) return;
-    const targets = sliceTargets(line).map(normalizePath);
-    if (!targets.some((t) => changed.has(t))) return;
-    const id = line.match(/\*\*Slice ([^:\s]+):/)[1];
-    candidates.push({ idx, id });
-  });
-
-  if (candidates.length === 0) {
-    return { text: progressText, sliceIds: [], status: 'none' };
-  }
-  if (candidates.length > 1) {
-    const ids = candidates.map((c) => c.id);
-    throw new Error(`ambiguous merge: slices ${ids.join(', ')} match PR #${prNumber}`);
-  }
-
-  const { idx, id } = candidates[0];
-  const line = lines[idx];
-  const cr = line.endsWith('\r') ? '\r' : '';
-  let body = cr ? line.slice(0, -1) : line;
-  body = body.replace(/\s*\[IN_PROGRESS\]/g, '');
-  body = '- [x]' + body.slice('- [ ]'.length);
-  lines[idx] = `${body.replace(/\s+$/, '')} Merged: PR #${prNumber} by ${login}${cr}`;
-  return { text: lines.join('\n'), sliceIds: [id], status: 'merged' };
+  return { found, missing };
 }
 
 function isInsidePlans(file) {
@@ -124,41 +55,14 @@ function isInsidePlans(file) {
   return rel !== '' && rel.split(sep)[0] !== '..' && !isAbsolute(rel);
 }
 
-// Usage: node .harness/scripts/accept-plan.mjs --merged <prNumber> <login> <changedFile...>
-function runMerged(rest) {
-  const [prNumber, login, ...changedFiles] = rest;
-  if (!prNumber || !/^\d+$/.test(prNumber) || !login || login.trim() === '') {
-    console.error('usage: node .harness/scripts/accept-plan.mjs --merged <prNumber> <login> <changedFile...>');
-    return 1;
-  }
-  const progressPath = resolve(ROOT, '.spec', 'PROGRESS.md');
-  try {
-    const progress = readFileSync(progressPath, 'utf8');
-    const result = reconcileMerge(progress, { prNumber, login, changedFiles });
-    if (result.status === 'merged') {
-      const tmp = `${progressPath}.tmp-${process.pid}`;
-      writeFileSync(tmp, result.text, 'utf8');
-      renameSync(tmp, progressPath);
-      console.log(`reconciled: ${result.sliceIds[0]}`);
-    } else {
-      console.log('reconciled: none');
-    }
-    return 0;
-  } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
-    return 1;
-  }
-}
+const USAGE = 'usage: node .harness/scripts/accept-plan.mjs --check <planFile>';
 
 function main(args) {
-  const arg = args[0];
-  if (!arg) {
-    console.error('usage: node .harness/scripts/accept-plan.mjs <planFile>');
+  if (args[0] !== '--check' || !args[1]) {
+    console.error(USAGE);
     return 1;
   }
-  if (arg === '--merged') {
-    return runMerged(args.slice(1));
-  }
+  const arg = args[1];
   const planPath = resolve(process.cwd(), arg);
   if (!isInsidePlans(planPath)) {
     console.error(`plan file must be inside .spec/plans/: ${arg}`);
@@ -168,15 +72,18 @@ function main(args) {
   try {
     const plan = parsePlan(readFileSync(planPath, 'utf8'));
     const progress = readFileSync(progressPath, 'utf8');
-    const result = acceptSlices(progress, plan.sliceIds, plan.id);
+    const result = checkSlices(progress, plan.sliceIds);
+    console.log(`Plan ${plan.id}`);
+    for (const id of result.found) {
+      console.log(`- slice ${id}: found`);
+    }
+    for (const id of result.missing) {
+      console.log(`- slice ${id}: missing`);
+    }
     if (result.missing.length > 0) {
       console.error(`missing slices: ${result.missing.join(', ')}`);
       return 1;
     }
-    const tmp = `${progressPath}.tmp-${process.pid}`;
-    writeFileSync(tmp, result.text, 'utf8');
-    renameSync(tmp, progressPath);
-    console.log(`accepted: ${result.accepted.length}, already: ${result.already.length}`);
     return 0;
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));

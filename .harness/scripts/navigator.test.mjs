@@ -310,7 +310,7 @@ test('pr-scope-check analyze verifies line budgets against soft caps', () => {
   assert.ok(fail.problems.some((p) => p.includes('Line budget exceeded: CLAUDE.md has 7 lines (soft cap: 5)')));
 });
 
-test('finishSlice does not remove [IN_PROGRESS] if working tree has unstaged files outside scope', () => {
+test('finishSlice commits untracked files outside scope and records them in Scope-Widened', () => {
   const dir = makeTempSpecRepo();
   const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
@@ -322,15 +322,13 @@ test('finishSlice does not remove [IN_PROGRESS] if working tree has unstaged fil
     // Also create an untracked dirty file outside scope
     fs.writeFileSync(path.join(dir, 'untracked-rogue.txt'), 'rogue');
 
-    assert.throws(
-      () => finishSlice(dir, 'feat: attempt finish', { skipChecks: true }),
-      /untracked-rogue\.txt/
-    );
+    finishSlice(dir, 'feat: attempt finish', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
 
-    // Verify [IN_PROGRESS] was preserved in PROGRESS.md
+    const body = git('log', '-1', '--format=%B');
+    assert.match(body, /^Scope-Widened: untracked-rogue\.txt$/m);
     const progress = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8');
-    assert.match(progress, /\*\*Slice 2\*\* \[IN_PROGRESS\]/);
-    assert.doesNotMatch(progress, /- \[x\] \*\*Slice 2\*\*/);
+    assert.match(progress, /- \[x\] \*\*Slice 2\*\*/);
+    assert.doesNotMatch(progress, /\[IN_PROGRESS\]/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

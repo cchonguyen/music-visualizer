@@ -62,6 +62,7 @@ test('parseSliceLine handles empty or invalid lines gracefully', () => {
     targetFiles: [],
     coords: [],
     verify: '',
+    issue: null,
   });
 
   assert.deepEqual(parseSliceLine(null), {
@@ -73,6 +74,7 @@ test('parseSliceLine handles empty or invalid lines gracefully', () => {
     targetFiles: [],
     coords: [],
     verify: '',
+    issue: null,
   });
 });
 
@@ -132,4 +134,28 @@ test('atomicWriteFileSync writes file safely and ensureHarnessRoot returns cwd',
 
   const root = ensureHarnessRoot();
   assert.ok(typeof root === 'string' && root.length > 0);
+});
+
+test('parseSliceLine accepts letter-suffix IDs', () => {
+  assert.equal(parseSliceLine('- [x] **Slice 11.16a: Old attempt** Target files: a.js').id, '11.16a');
+  assert.equal(parseSliceLine('- [x] **Slice 10.7b: Allow-List** Target files: a.js').id, '10.7b');
+});
+
+test('parseSliceLine reads the optional Issue field', () => {
+  const withIssue = parseSliceLine('- [ ] **Slice 1.1: A** [PENDING] Issue: #42 | Target files: a.js');
+  assert.equal(withIssue.issue, 42);
+  const without = parseSliceLine('- [ ] **Slice 1.2: B** [PENDING] Target files: a.js');
+  assert.equal(without.issue, null);
+});
+
+test('parseSliceLine ignores marker words quoted in prose', () => {
+  const line =
+    '- [x] **Slice 2.1: Done** [CORE / DATA] The old [IN_PROGRESS] and [PENDING] and [BLOCKED] words are quoted. Target files: a.js';
+  assert.equal(parseSliceLine(line).status, '[x]');
+  const open = '- [ ] **Slice 2.2: Open** [CORE / DATA] mentions [IN_PROGRESS] in prose. Target files: a.js';
+  assert.equal(parseSliceLine(open).status, '[PENDING]');
+  const active = '- [ ] **Slice 2.3: Active** [IN_PROGRESS] [CORE / DATA] text. Target files: a.js';
+  assert.equal(parseSliceLine(active).status, '[IN_PROGRESS]');
+  const blocked = '- [ ] **Slice 2.4: Blocked** [BLOCKED] text. Target files: a.js';
+  assert.equal(parseSliceLine(blocked).status, '[BLOCKED]');
 });

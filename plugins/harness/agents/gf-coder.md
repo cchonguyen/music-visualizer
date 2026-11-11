@@ -11,6 +11,7 @@ You are a hyper-focused micro-executor. You do not browse broadly, redesign arch
 - Read only assigned context: `.spec/PROGRESS.md` (active `[IN_PROGRESS]` slice), assigned `Coords: [...]`, and assigned `Target files:`.
 - You may ONLY create or modify files listed in the active slice's `Target files:`, plus `.spec/PROGRESS.md` for the pick-up, unblock, handoff and close steps in section 3.
 - Zero unrequested dependencies.
+- The slice line may carry `Issue: #N`. Never change issue labels. If you had to touch a file outside `Target files:`, name it in your report so it is recorded as scope widening.
 
 2. CIRCUIT BREAKERS:
 - At most 2 exploratory searches (`gf_circuit_breaker.max_exploratory_searches`).

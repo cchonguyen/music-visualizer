@@ -1,0 +1,28 @@
+# Harness issue status (spoke template). Copy to .github/workflows/harness-issue-status.yml in a spoke.
+# Opened, reopened or ready sets in-progress; merged clears status labels; closed unmerged sets backlog.
+# Fork pull requests get a read-only token and will fail here; that is expected (no pull_request_target).
+name: Harness issue status
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed, labeled, unlabeled]
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node .harness/scripts/issue-status.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
