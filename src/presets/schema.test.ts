@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { parsePreset } from "./format";
 import {
   assertValidSpec,
   coerceValue,
@@ -232,3 +233,30 @@ describe("Parameter Descriptors & Warning Schema Contracts", () => {
 });
 
 
+
+describe("Removed Mandala kick flare control", () => {
+  it("is gone from the feedback schema", () => {
+    expect(FEEDBACK_WARP_SPECS.some((s) => s.name === "mandalaKickFlare")).toBe(false);
+    expect(defaultsFor(FEEDBACK_WARP_SPECS)).not.toHaveProperty("mandalaKickFlare");
+  });
+
+  it("an old preset that carries it loads, drops it, and keeps its other settings", () => {
+    const registry = { feedback: FEEDBACK_WARP_SPECS, post: POST_CRT_SPECS, layers: {} };
+    const raw = {
+      version: 1,
+      name: "Old mandala",
+      feedback: {
+        mandalaKickFlare: { value: 0.4, link: { source: "kick", amount: 0.5, smooth: 0.2 } },
+        mandalaTile: { value: 0.35 },
+        radialFold: { value: 0.48 },
+      },
+      layers: [],
+    };
+    const { preset, warnings } = parsePreset(raw, registry);
+    expect(warnings).toEqual([]);
+    expect(preset.feedback).not.toHaveProperty("mandalaKickFlare");
+    expect(preset.feedback.mandalaTile?.value).toBe(0.35);
+    expect(preset.feedback.radialFold?.value).toBe(0.48);
+    expect(preset.feedback.zoom?.value).toBe(defaultsFor(FEEDBACK_WARP_SPECS).zoom);
+  });
+});
