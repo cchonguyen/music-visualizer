@@ -6,12 +6,13 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 ## Current Build Status
 - **Live:** https://music-visualizer.charliechonguyen.com (custom domain; workers.dev backup).
 - **Stages 1 to 10:** Complete and verified in code.
-  - 13 WebGL2 visual layers including ShapeLayer, SpectralTerrain, ChladniSand, ReactionDiffusion, Ferrofluid, Moire, Tunnel, Waveform, Particles, Rings, Crown, Shockwave, BassPulse.
+  - 14 WebGL2 visual layer types including ShapeLayer, SpectralTerrain, ChladniSand, ReactionDiffusion, Ferrofluid, Moire, Tunnel, Waveform, Particles, Rings, Crown, Shockwave, BassPulse, Bars.
   - Post-processing chain with multi-mode feedback warp (curl, mobius, polarFold, rgbSplit, sobel, solarize) and bloom.
   - 20 Flagship Presets fully tuned and registered.
   - Preset Studio with hierarchical preset folders and user folder management.
   - Photosensitivity safety governor with bidirectional slew clamping.
-  - Unit tests: 827 tests passing across 60 test suites.
+  - Unit tests: 993 tests passing across 65 test suites.
+- **Stage 14 (trust and foundations):** admin access is Cloudflare Access only (the old client passkey path and direct database writes are gone). The Worker caps and checks request bodies and sends security headers. Frame time steps are clamped to 0.1 s, feedback motion is per second so it looks the same at any refresh rate, and the morph wave no longer jumps when its rate changes.
 - **In Progress:** none
 - **Up Next:** Ongoing refinement and preset authoring.
 
