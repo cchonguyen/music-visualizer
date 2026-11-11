@@ -17,6 +17,21 @@ import { attachSwipeDismiss } from '../ui/controls';
 import { isSpecVisible, layoutFeedbackPost, type ParamSpec, type ParamValue } from '../presets/schema';
 import { showToast } from '../ui/toast';
 import {
+  MAX_REACTIONS,
+  REACTION_AMOUNT_MAX,
+  REACTION_EASE_MAX,
+  REACTION_EVERY_BEATS_MAX,
+  REACTION_EVERY_SECONDS_MAX,
+  REACTION_EVERY_SECONDS_MIN,
+  RESPONSE_TYPES,
+  TRIGGER_TYPES,
+  type Reaction,
+  type ReactionGroup,
+  type ResponseType,
+  type TriggerType,
+} from '../presets/reactions';
+import { REACTION_STYLES, REACTION_STYLE_LABELS, parseReactionStyle } from '../presets/reactionStyles';
+import {
   EXPERIENCE_MODES,
   CAMERA_MODES,
   COLOR_MOODS,
@@ -365,6 +380,8 @@ export class Studio {
   private locked = new Set<number>();
   private monitor = { ms: 0 };
   private linkTarget = '';
+  /** Which reaction is open in the reaction editor (Slice 17.6). */
+  private reactionIndex = 0;
   private linkMonitor = { value: 0 };
   /** Delete two-tap state: when the first tap armed it, its timer, and the button it lives on. */
   private deleteArmedAt: number | null = null;
@@ -1079,6 +1096,8 @@ export class Studio {
     // --- Audio link (slice E2) --------------------------------------------------------
     this.bindLinkEditor(pane, id, preset);
     this.bindMorphEditor(pane, id, preset);
+    // --- Reactions (Slice 17.6) --------------------------------------------------------
+    this.bindReactionEditor(pane, id, preset);
 
     // --- Frame time -----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
@@ -1180,6 +1199,88 @@ export class Studio {
     pane.addButton({ title: 'Remove audio link' }).on('click', () => {
       session.commit(id);
       delete (setting as Setting).link;
+      this.bind(id);
+    });
+  }
+
+  /**
+   * Reactions (Slice 17.6): this preset's reaction style, and a list of its own reactions (when it happens, what
+   * happens, which Feedback or Post control, how much, how long to ease). Edits are live: the render loop notices
+   * the change on the next frame.
+   */
+  private bindReactionEditor(pane: Pane, id: string, preset: Preset): void {
+    const session = this.opts.session;
+    pane.addBlade({ view: 'separator' });
+    const styleBox = { style: preset.reactionStyle ?? REACTION_STYLE_GLOBAL };
+    pane.addBinding(styleBox, 'style', {
+      label: 'Reaction style',
+      options: reactionStyleOptions(),
+    }).on('change', (ev) => {
+      const style = parseReactionStyle(ev.value);
+      if (style) preset.reactionStyle = style;
+      else delete preset.reactionStyle;
+      session.commit(id);
+    });
+
+    const list = preset.reactions ?? [];
+    if (this.reactionIndex >= list.length) this.reactionIndex = Math.max(0, list.length - 1);
+    const targets = reactionTargets(preset);
+    if (list.length > 0) {
+      const pick = { index: String(this.reactionIndex) };
+      pane.addBinding(pick, 'index', {
+        label: 'Reaction',
+        options: Object.fromEntries(list.map((r, i) => [`${i + 1}. ${describeReaction(r)}`, String(i)])),
+      }).on('change', (ev) => {
+        this.reactionIndex = Number(ev.value);
+        this.bind(id);
+      });
+    }
+    if (list.length < MAX_REACTIONS) {
+      pane.addButton({ title: 'Add reaction' }).on('click', () => {
+        session.commit(id);
+        const reactions = (preset.reactions ??= []);
+        reactions.push(newReaction(targets[0]));
+        this.reactionIndex = reactions.length - 1;
+        this.bind(id);
+      });
+    }
+    const reaction = list[this.reactionIndex];
+    if (!reaction) return;
+
+    const onEdit = () => session.commit(id);
+    const trigger = { type: reaction.trigger.type as string };
+    pane.addBinding(trigger, 'type', {
+      label: 'When',
+      options: Object.fromEntries(TRIGGER_TYPES.map((t) => [TRIGGER_LABELS[t], t])),
+    }).on('change', (ev) => {
+      reaction.trigger = triggerOf(String(ev.value) as TriggerType, reaction.trigger.n);
+      onEdit();
+      this.bind(id);
+    });
+    if (reaction.trigger.type === 'everyNBeats') {
+      pane.addBinding(reaction.trigger as unknown as Record<string, unknown>, 'n', { label: 'Every how many beats', min: 1, max: REACTION_EVERY_BEATS_MAX, step: 1 }).on('change', onEdit);
+    } else if (reaction.trigger.type === 'everyNSeconds') {
+      pane.addBinding(reaction.trigger as unknown as Record<string, unknown>, 'n', { label: 'Every how many seconds', min: REACTION_EVERY_SECONDS_MIN, max: REACTION_EVERY_SECONDS_MAX, step: 0.25 }).on('change', onEdit);
+    }
+    pane.addBinding(reaction as unknown as Record<string, unknown>, 'response', {
+      label: 'What happens',
+      options: Object.fromEntries(RESPONSE_TYPES.map((r) => [RESPONSE_LABELS[r], r])),
+    }).on('change', onEdit);
+    const where = { key: reactionTargetKey(reaction.target) };
+    // A control that is hidden right now (for example Warp in a mode that does not use it) stays pickable if it is already chosen.
+    const options = Object.fromEntries(targets.map((t) => [t.label, t.key]));
+    if (!targets.some((t) => t.key === where.key)) options[`${reaction.target.group === 'post' ? 'Post' : 'Feedback'} · ${reaction.target.name}`] = where.key;
+    pane.addBinding(where, 'key', { label: 'Which control', options }).on('change', (ev) => {
+      const next = parseReactionTargetKey(String(ev.value));
+      if (next) reaction.target = next;
+      onEdit();
+    });
+    pane.addBinding(reaction as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -REACTION_AMOUNT_MAX, max: REACTION_AMOUNT_MAX, step: 0.01 }).on('change', onEdit);
+    pane.addBinding(reaction as unknown as Record<string, unknown>, 'ease', { label: 'Ease time (s)', min: 0, max: REACTION_EASE_MAX, step: 0.05 }).on('change', onEdit);
+    pane.addButton({ title: 'Remove reaction' }).on('click', () => {
+      session.commit(id);
+      list.splice(this.reactionIndex, 1);
+      if (list.length === 0) delete preset.reactions;
       this.bind(id);
     });
   }
@@ -1460,6 +1561,95 @@ export function formatLayerLabel(layer: LayerEntry, index: number): string {
     return `${index + 1}. Shape (${base} · ${effect})${off}`;
   }
   return `${index + 1}. ${layer.type}${off}`;
+}
+
+// --- Reactions (Slice 17.6) --------------------------------------------------------------
+
+/** The style box value that means "no style of its own; follow the global setting". */
+export const REACTION_STYLE_GLOBAL = 'global';
+
+export const TRIGGER_LABELS: Readonly<Record<TriggerType, string>> = {
+  beat: 'Every beat',
+  strongBeat: 'Every strong beat',
+  everyNBeats: 'Every N beats',
+  everyNSeconds: 'Every N seconds',
+  section: 'Section change',
+  loudJump: 'Quiet-to-loud jump',
+};
+
+export const RESPONSE_LABELS: Readonly<Record<ResponseType, string>> = {
+  kick: 'Kick (jump, then ease back)',
+  step: 'Step (move and hold)',
+  flip: 'Flip (reverse direction)',
+  drift: 'Drift (slow wander)',
+  pick: 'Pick (random value)',
+};
+
+/** Style choices for one preset: follow the global setting, or one of the four styles. */
+export function reactionStyleOptions(): Record<string, string> {
+  const out: Record<string, string> = { 'Use the global setting': REACTION_STYLE_GLOBAL };
+  for (const style of REACTION_STYLES) out[REACTION_STYLE_LABELS[style]] = style;
+  return out;
+}
+
+export interface ReactionTargetChoice {
+  key: string;
+  label: string;
+  group: ReactionGroup;
+  name: string;
+}
+
+/** `feedback.zoom` style key for a target. */
+export function reactionTargetKey(target: { group: ReactionGroup; name: string }): string {
+  return `${target.group}.${target.name}`;
+}
+
+export function parseReactionTargetKey(key: string): { group: ReactionGroup; name: string } | null {
+  const dot = key.indexOf('.');
+  if (dot < 0) return null;
+  const group = key.slice(0, dot);
+  const name = key.slice(dot + 1);
+  return (group === 'feedback' || group === 'post') && name ? { group, name } : null;
+}
+
+/** Feedback and Post number controls a reaction can move, skipping ones hidden by the current mode. */
+export function reactionTargets(preset: Preset): ReactionTargetChoice[] {
+  const out: ReactionTargetChoice[] = [];
+  for (const spec of FEEDBACK_NUMBERS) {
+    if (isSpecVisible(spec, preset.feedback)) out.push({ key: `feedback.${spec.name}`, label: `Feedback · ${spec.label}`, group: 'feedback', name: spec.name });
+  }
+  for (const spec of POST_NUMBERS) {
+    if (isSpecVisible(spec, preset.post)) out.push({ key: `post.${spec.name}`, label: `Post · ${spec.label}`, group: 'post', name: spec.name });
+  }
+  return out;
+}
+
+/** A starting reaction: a kick on every beat. Defaults to the Feedback zoom. */
+export function newReaction(target?: { group: ReactionGroup; name: string }): Reaction {
+  return {
+    trigger: { type: 'beat' },
+    response: 'kick',
+    target: target ? { group: target.group, name: target.name } : { group: 'feedback', name: 'zoom' },
+    amount: 0.1,
+    ease: 0.35,
+  };
+}
+
+/** A trigger of the given type, with a sensible N when the type needs one. */
+export function triggerOf(type: TriggerType, previousN?: number): Reaction['trigger'] {
+  if (type === 'everyNBeats') return { type, n: Math.min(REACTION_EVERY_BEATS_MAX, Math.max(1, Math.round(previousN ?? 4))) };
+  if (type === 'everyNSeconds') return { type, n: Math.min(REACTION_EVERY_SECONDS_MAX, Math.max(REACTION_EVERY_SECONDS_MIN, previousN ?? 4)) };
+  return { type };
+}
+
+/** One line for the reaction list, for example "Every 8 beats: Flip, Feedback · Spin per frame (rad)". */
+export function describeReaction(r: Reaction): string {
+  const n = r.trigger.n;
+  const when = r.trigger.type === 'everyNBeats' ? `Every ${n ?? 4} beats` : r.trigger.type === 'everyNSeconds' ? `Every ${n ?? 4} s` : TRIGGER_LABELS[r.trigger.type];
+  const specs = r.target.group === 'post' ? POST_NUMBERS : FEEDBACK_NUMBERS;
+  const label = specs.find((sp) => sp.name === r.target.name)?.label ?? r.target.name;
+  const what = RESPONSE_LABELS[r.response].split(' (')[0];
+  return `${when}: ${what}, ${r.target.group === 'post' ? 'Post' : 'Feedback'} · ${label}`;
 }
 
 /** Every numeric setting that can take a link, with the key used in the Studio and the link meter key. */
