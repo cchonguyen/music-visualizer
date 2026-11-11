@@ -97,6 +97,19 @@ describe("ReactionEngine triggers and responses", () => {
     expect(e.apply("feedback", "rotate", 0.02, ROTATE)).toBeCloseTo(0.02, 3);
   });
 
+  it("flip also reverses a kick on the same control, so a centred control swings the other way", () => {
+    const e = new ReactionEngine([
+      react({ response: "kick", target: { group: "feedback", name: "rotate" }, amount: 0.25, ease: 0.2 }),
+      react({ response: "flip", trigger: { type: "everyNBeats", n: 2 }, target: { group: "feedback", name: "rotate" }, ease: 0 }),
+    ]);
+    e.update(frame({ onset: true, beatCount: 0 }), 0, DT, 0);
+    const first = e.apply("feedback", "rotate", 0, ROTATE);
+    expect(first).toBeGreaterThan(0);
+    for (let i = 1; i < 60; i += 1) e.update(frame({ beatCount: i >= 30 ? 1 : 0 }), i * DT, DT, 0); // the first tick
+    e.update(frame({ onset: true, beatCount: 2 }), 1, DT, 0); // the second tick flips, and the kick lands on the flipped side
+    expect(e.apply("feedback", "rotate", 0, ROTATE)).toBeCloseTo(-first, 6);
+  });
+
   it("pick moves to a seeded random offset and holds; the same seed gives the same picks", () => {
     const make = (seed: number) => new ReactionEngine([react({ response: "pick", amount: 0.8, ease: 0.1 })], seed);
     const a = run(make(3), 200, [10, 60, 110]);

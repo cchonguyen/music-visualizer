@@ -7,6 +7,7 @@ import { showToast } from './toast';
 import { cyclePalette } from '../render/paletteStore';
 import { getVisualGain, setVisualGain } from '../render/gainStore';
 import { getBeatSensitivity, setBeatSensitivity } from '../audio/onset';
+import { getReactionStyle, REACTION_STYLES, REACTION_STYLE_LABELS, setReactionStyle } from '../presets/reactionStyles';
 import { getRenderScale, RENDER_SCALES, setRenderScale } from '../gl/size';
 import { getAspectCorrect, setAspectCorrect } from '../render/compositor';
 import {
@@ -503,6 +504,21 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   }
   qualitySelect.value = String(getRenderScale());
   qualitySelect.addEventListener('change', () => setRenderScale(Number(qualitySelect.value)));
+
+  // Reaction style (Slice 17.5): Off, Gentle, Punchy or Wild. Off by default; saved locally. A preset's own style wins.
+  const reactionSelect = document.getElementById('reaction-style') as HTMLSelectElement | null;
+  if (reactionSelect) {
+    for (const style of REACTION_STYLES) {
+      const opt = document.createElement('option');
+      opt.value = style;
+      opt.textContent = REACTION_STYLE_LABELS[style];
+      reactionSelect.append(opt);
+    }
+    reactionSelect.value = getReactionStyle();
+    reactionSelect.addEventListener('change', () => {
+      reactionSelect.value = setReactionStyle(reactionSelect.value);
+    });
+  }
 
   // Aspect correction (slice 5.3): keeps shapes round in non-16:9 windows. On by default; saved locally.
   const aspectBox = $<HTMLInputElement>('aspect-correct');

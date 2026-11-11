@@ -101,14 +101,22 @@ export interface ReactionTarget {
   group: ReactionGroup;
 }
 
-function sameReactions(a: readonly Reaction[], b: readonly Reaction[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    const x = a[i]!;
-    const y = b[i]!;
-    if (x.trigger.type !== y.trigger.type || x.trigger.n !== y.trigger.n) return false;
-    if (x.response !== y.response || x.amount !== y.amount || x.ease !== y.ease || x.seed !== y.seed) return false;
-    if (x.target.group !== y.target.group || x.target.name !== y.target.name) return false;
+const NO_REACTIONS: readonly Reaction[] = [];
+
+function sameReaction(x: Reaction, y: Reaction): boolean {
+  return (
+    x.trigger.type === y.trigger.type && x.trigger.n === y.trigger.n &&
+    x.response === y.response && x.amount === y.amount && x.ease === y.ease && x.seed === y.seed &&
+    x.target.group === y.target.group && x.target.name === y.target.name
+  );
+}
+
+/** True when `snapshot` equals `extra` followed by `own`, without building that joined list. */
+function sameReactions(snapshot: readonly Reaction[], extra: readonly Reaction[], own: readonly Reaction[]): boolean {
+  if (snapshot.length !== extra.length + own.length) return false;
+  for (let i = 0; i < snapshot.length; i += 1) {
+    const live = i < extra.length ? extra[i]! : own[i - extra.length]!;
+    if (!sameReaction(snapshot[i]!, live)) return false;
   }
   return true;
 }
@@ -127,15 +135,19 @@ function seedOf(scope: string): number {
 export class ReactionBank {
   private entries = new Map<string, { engine: ReactionEngine; snapshot: Reaction[] }>();
 
-  /** The engine for this preset, or null when it has no reactions. */
-  engineFor(scope: string, reactions: readonly Reaction[] | undefined): ReactionEngine | null {
-    if (!reactions || reactions.length === 0) {
+  /**
+   * The engine for this preset, or null when it has no reactions. `own` is the preset's own list; `extra` is the
+   * list from its reaction style (Slice 17.5), which runs first.
+   */
+  engineFor(scope: string, own: readonly Reaction[] | undefined, extra: readonly Reaction[] = NO_REACTIONS): ReactionEngine | null {
+    const mine = own ?? NO_REACTIONS;
+    if (mine.length + extra.length === 0) {
       this.entries.delete(scope);
       return null;
     }
     const known = this.entries.get(scope);
-    if (known && sameReactions(known.snapshot, reactions)) return known.engine;
-    const snapshot = reactions.map((r) => ({ ...r, trigger: { ...r.trigger }, target: { ...r.target } }));
+    if (known && sameReactions(known.snapshot, extra, mine)) return known.engine;
+    const snapshot = [...extra, ...mine].map((r) => ({ ...r, trigger: { ...r.trigger }, target: { ...r.target } }));
     const engine = new ReactionEngine(snapshot, seedOf(scope));
     this.entries.set(scope, { engine, snapshot });
     return engine;

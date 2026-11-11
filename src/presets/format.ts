@@ -3,6 +3,7 @@
 import { AUDIO_SOURCES, REMOVED_FEEDBACK_SETTINGS, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
 import type { GlobalDirectorSettings } from "../render/globalDirector";
 import { parseReactions, type Reaction } from "./reactions";
+import { parseReactionStyle, type ReactionStyle } from "./reactionStyles";
 
 /** Bump this when the shape changes, and add an upgrade step for the old version. */
 export const PRESET_VERSION = 1 as const;
@@ -69,6 +70,8 @@ export interface Preset {
   post: Settings;
   /** Slice 17.3: triggers that move Feedback and Post controls (kick, step, flip, drift, pick). Missing means none. */
   reactions?: Reaction[];
+  /** Slice 17.5: this preset's reaction style. Missing means use the global setting (Off unless the viewer changes it). */
+  reactionStyle?: ReactionStyle;
   directorProfile?: {
     cameraMode?: string;
     colorMood?: string;
@@ -311,6 +314,8 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
   const feedback = parseSettings(raw.feedback, registry.feedback, "feedback", warnings, REMOVED_FEEDBACK_SETTINGS);
   migrateWarpZero(feedback);
 
+  const reactionStyle = parseReactionStyle(raw.reactionStyle);
+  if (raw.reactionStyle !== undefined && !reactionStyle) warnings.push(`reactionStyle: unknown style "${String(raw.reactionStyle)}", ignored`);
   const reactions = parseReactions(raw.reactions, { feedback: registry.feedback, post: registry.post }, warnings);
 
   const preset: Preset = {
@@ -322,6 +327,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     layers,
     post: parseSettings(raw.post, registry.post, "post", warnings),
     ...(reactions.length > 0 ? { reactions } : {}),
+    ...(reactionStyle ? { reactionStyle } : {}),
     ...(directorProfile ? { directorProfile } : {}),
   };
   return { preset, warnings };
