@@ -249,6 +249,24 @@ describe("Feedback and Post dependent control visibility (Slice 15.1)", () => {
     expect(byName(POST_SPECS, 'bloom').showWhen).toBeUndefined();
   });
 
+  it("the bloom options show only while Bloom is on, and the tint colour only while the tint is on (Slice 18.7)", () => {
+    for (const name of ['bloomSize', 'bloomTintAmount', 'bloomPulse']) {
+      const spec = byName(POST_SPECS, name);
+      expect(isSpecVisible(spec, { bloom: 0 })).toBe(false);
+      expect(isSpecVisible(spec, { bloom: 0.4 })).toBe(true);
+    }
+    const hue = byName(POST_SPECS, 'bloomTintHue');
+    expect(isSpecVisible(hue, { bloom: 0.4, bloomTintAmount: 0 })).toBe(false);
+    expect(isSpecVisible(hue, { bloom: 0, bloomTintAmount: 0.5 })).toBe(false);
+    expect(isSpecVisible(hue, { bloom: 0.4, bloomTintAmount: 0.5 })).toBe(true);
+  });
+
+  it("the new bloom options default to no change, so old presets look the same (Slice 18.7)", () => {
+    expect(byName(POST_SPECS, 'bloomSize').default).toBe(0);
+    expect(byName(POST_SPECS, 'bloomTintAmount').default).toBe(0);
+    expect(byName(POST_SPECS, 'bloomPulse').default).toBe(0);
+  });
+
   it("Wave warp, count and speed follow the warp modes that read them", () => {
     const visible = (n: string, mode: string) => isSpecVisible(byName(FEEDBACK_SPECS, n), { warpMode: mode });
     for (const mode of ['classic', 'curl', 'mobius']) expect(visible('warp', mode)).toBe(true);

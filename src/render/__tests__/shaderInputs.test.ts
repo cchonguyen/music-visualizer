@@ -53,8 +53,8 @@ describe('Slice 14.8: RGB split survives blur', () => {
 describe('Slice 14.8: bloom blur steps use matching texel sizes', () => {
   it('uses one half-resolution texel per axis', () => {
     // The blur passes moved from the compositor into the blur chain (Slice 18.6); each level steps one of its own texels.
-    expect(blurChainSrc).toContain('1 / pp.width, 0,');
-    expect(blurChainSrc).toContain('0, 1 / pp.height,');
+    expect(blurChainSrc).toContain('(1 / pp.width) * k, 0,');
+    expect(blurChainSrc).toContain('0, (1 / pp.height) * k,');
     expect(blurChainSrc).not.toContain('2 / pp.width');
     expect(blurChainSrc).not.toContain('2 / pp.height');
     expect(compositorSrc).not.toContain('2 / full.width');

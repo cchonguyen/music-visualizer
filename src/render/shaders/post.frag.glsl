@@ -21,6 +21,13 @@ uniform float uCalm;    // 1.0 = Calm mode enabled, 0.0 = normal
 uniform float uReversalDamp; // 0.0..1.0 damping from rapid reversals (> 3 reversals/sec)
 
 uniform sampler2D uBloom; // half-size blur of the image (E5)
+uniform sampler2D uBloom1; // quarter-size blur (Slice 18.7)
+uniform sampler2D uBloom2; // eighth-size blur (Slice 18.7)
+uniform vec3 uBloomW;      // weight of each blur level in the glow, adds to 1. (1, 0, 0) = the original glow
+uniform float uBloomTintAmt; // 0 = glow keeps the picture colours
+uniform float uBloomTintHue; // radians
+uniform float uBloomPulse;   // how much the glow swells on a kick
+uniform float uBeat;         // kick envelope, 0..1
 uniform float uHue;       // radians
 uniform float uSat;       // 0 = grey, 1 = unchanged
 uniform float uContrast;  // 1 = unchanged
@@ -185,8 +192,17 @@ void main() {
   }
 
   if (uBloomAmt > 0.0) {
-    vec3 g = texture(uBloom, uv).rgb;
-    c += max(g - uBloomThr, 0.0) * uBloomAmt;
+    vec3 g = texture(uBloom, uv).rgb * uBloomW.x;
+    if (uBloomW.y > 0.0) g += texture(uBloom1, uv).rgb * uBloomW.y;
+    if (uBloomW.z > 0.0) g += texture(uBloom2, uv).rgb * uBloomW.z;
+    vec3 glow = max(g - uBloomThr, 0.0);
+    if (uBloomTintAmt > 0.0) {
+      // Move the glow toward one colour, keeping its brightness.
+      vec3 tc = 0.5 + 0.5 * cos(uBloomTintHue + vec3(0.0, 2.0944, 4.1888));
+      float gl = dot(glow, vec3(0.2126, 0.7152, 0.0722));
+      glow = mix(glow, vec3(gl) * tc * 1.8, uBloomTintAmt);
+    }
+    c += glow * uBloomAmt * (1.0 + uBloomPulse * uBeat);
   }
 
   float d = length(vUv - 0.5);

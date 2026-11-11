@@ -566,3 +566,60 @@ describe('lighter crossfade (Slice 16.11)', () => {
     expect(r.layers.get('a')!.draw.mock.calls.length).toBe(first + 4);
   });
 });
+
+describe('bloom options on the blur chain (Slice 18.7)', () => {
+  function frameWith(post: Record<string, number>, frame: AudioFrame = FRAME) {
+    const t = createTracingGl();
+    const comp = new Compositor([new Scene('a', [spyLayer()])]);
+    comp.init(t.gl);
+    comp.resize(64, 36, 1);
+    comp.setPost({ bloom: 0.5, ...post });
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 3; i++) comp.draw(frame, clock(0.1), TARGET);
+    const mock = (name: string) => (t.gl as unknown as Record<string, { mock: { calls: unknown[][] }; mockClear: () => void }>)[name]!;
+    mock('uniform2f').mockClear();
+    mock('uniform3f').mockClear();
+    t.uniforms.length = 0;
+    comp.draw(frame, clock(0.1), TARGET);
+    const named = (fn: string, name: string) => mock(fn).mock.calls.filter((c) => (c[0] as { name: string } | null)?.name === name);
+    const last = (name: string) => t.uniforms.filter((u) => u.name === name).pop()?.value;
+    return { steps: named('uniform2f', 'uStep'), weights: named('uniform3f', 'uBloomW'), last };
+  }
+
+  it('the default glow is the original one: one level, two blur passes, weights 1 0 0, no tint or pulse', () => {
+    const { steps, weights, last } = frameWith({});
+    expect(steps).toHaveLength(2);
+    expect(weights[weights.length - 1]!.slice(1)).toEqual([1, 0, 0]);
+    expect(last('uBloomTintAmt')).toBe(0);
+    expect(last('uBloomPulse')).toBe(0);
+  });
+
+  it('wide sizes build the quarter and eighth levels, and only when asked', () => {
+    expect(frameWith({ bloomSize: 0.5 }).steps).toHaveLength(4);
+    expect(frameWith({ bloomSize: 1.5 }).steps).toHaveLength(6);
+    const wide = frameWith({ bloomSize: 1.5 }).weights.pop()!.slice(1);
+    expect(wide).toEqual([0, 0.5, 0.5]);
+    expect(frameWith({ bloomSize: 0 }).steps).toHaveLength(2);
+  });
+
+  it('tight bloom pulls the blur taps of the half-size level closer', () => {
+    const tight = frameWith({ bloomSize: -1 }).steps;
+    const normal = frameWith({ bloomSize: 0 }).steps;
+    expect(tight).toHaveLength(2);
+    expect((tight[0]![1] as number)).toBeCloseTo((normal[0]![1] as number) * 0.5, 6);
+  });
+
+  it('passes the tint, the pulse and the kick envelope to the final pass', () => {
+    const frame = { ...FRAME, kickEnv: 0.75 } as AudioFrame;
+    const { last } = frameWith({ bloomTintAmount: 0.6, bloomTintHue: 1.2, bloomPulse: 0.5 }, frame);
+    expect(last('uBloomTintAmt')).toBe(0.6);
+    expect(last('uBloomTintHue')).toBe(1.2);
+    expect(last('uBloomPulse')).toBe(0.5);
+    expect(last('uBeat')).toBe(0.75);
+  });
+
+  it('the safety pass is still last: bloom is added before the clamp and the safety rules', () => {
+    expect(postSrc.indexOf('uBloomPulse * uBeat')).toBeGreaterThan(0);
+    expect(postSrc.indexOf('uBloomPulse * uBeat')).toBeLessThan(postSrc.indexOf('applySafety(c)'));
+  });
+});

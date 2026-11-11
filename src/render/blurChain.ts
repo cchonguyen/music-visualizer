@@ -18,6 +18,34 @@ export function blurLevelSize(baseWidth: number, baseHeight: number, level: numb
 }
 
 // gl.COLOR_ATTACHMENT0, kept in one array so invalidating allocates nothing.
+/**
+ * How the final pass reads the chain for a Bloom size (-1..2). Below 0 the half-size level is blurred with
+ * its taps closer together (tight). 0 is the half-size blur bloom always used. Between 0 and 2 the glow
+ * fades from the half-size to the quarter-size and then to the eighth-size blur (wide).
+ * Fills `out` when given, so the render loop can reuse one object.
+ */
+export interface BloomPlan {
+  /** Highest level to request. */
+  level: number;
+  /** Tap spacing multiplier for level 0 (1 = usual). */
+  spread: number;
+  /** Weight of each level in the glow. They add to 1. */
+  weights: [number, number, number];
+}
+
+export function bloomPlan(size: number, out: BloomPlan = { level: 0, spread: 1, weights: [1, 0, 0] }): BloomPlan {
+  const s = Number.isFinite(size) ? Math.min(2, Math.max(-1, size)) : 0;
+  const w = out.weights;
+  if (s <= 0) {
+    out.level = 0; out.spread = 1 + 0.5 * s; w[0] = 1; w[1] = 0; w[2] = 0;
+  } else if (s <= 1) {
+    out.level = 1; out.spread = 1; w[0] = 1 - s; w[1] = s; w[2] = 0;
+  } else {
+    out.level = 2; out.spread = 1; w[0] = 0; w[1] = 2 - s; w[2] = s - 1;
+  }
+  return out;
+}
+
 const COLOR_ATTACHMENT: number[] = [0x8ce0];
 
 export class BlurChain {
@@ -81,10 +109,10 @@ export class BlurChain {
   }
 
   /**
-   * Blurs every requested level. Level 0 expects the unblurred frame to have been drawn into `sourceTarget()`.
+   * Blurs every requested level. `spread` scales the tap spacing of level 0 (below 1 gives a tighter blur). Level 0 expects the unblurred frame to have been drawn into `sourceTarget()`.
    * Buffers whose contents are no longer needed are invalidated so tiled GPUs can skip writing them back.
    */
-  build(pass: BlurPassFn): void {
+  build(pass: BlurPassFn, spread = 1): void {
     const gl = this.gl;
     const wanted = this.levelsWanted;
     for (let i = 0; i < wanted; i++) {
@@ -96,9 +124,10 @@ export class BlurChain {
       } else {
         src = this.levels[i - 1]!.read.texture;
       }
-      pass(src, 1 / pp.width, 0, this.pointAt(pp.write, pp.width, pp.height));
+      const k = i === 0 ? spread : 1;
+      pass(src, (1 / pp.width) * k, 0, this.pointAt(pp.write, pp.width, pp.height));
       pp.swap();
-      pass(pp.read.texture, 0, 1 / pp.height, this.pointAt(pp.write, pp.width, pp.height));
+      pass(pp.read.texture, 0, (1 / pp.height) * k, this.pointAt(pp.write, pp.width, pp.height));
       pp.swap();
       // `write` now holds the across-blur, which nothing reads again.
       gl.bindFramebuffer(gl.FRAMEBUFFER, pp.write.framebuffer);
