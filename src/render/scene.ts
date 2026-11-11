@@ -15,7 +15,7 @@ import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
 import { advanceSceneTransform } from './sceneTransformStore';
 import { clearTerrainState, getTerrainState } from './terrainStore';
 import type { ParamValue } from '../presets/schema';
-import { getRenderScale, scaledBufferSize } from '../gl/size';
+import { getEffectiveRenderScale, scaledBufferSize } from '../gl/size';
 
 const BLIT_FRAG = `#version 300 es
 precision highp float;
@@ -248,9 +248,9 @@ export class Scene {
     this.uni.clear();
     for (const name of UNIFORMS) this.uni.set(name, gl.getUniformLocation(this.prog, name));
     this.vao = createVao(gl);
-    const b = scaledBufferSize(this.w, this.h, getRenderScale());
+    const b = scaledBufferSize(this.w, this.h, getEffectiveRenderScale());
     this.pp = new PingPong(gl, b.width, b.height);
-    this.appliedScale = getRenderScale();
+    this.appliedScale = getEffectiveRenderScale();
     this.snapshotTarget = this.allocateSnapshot(gl, b.width, b.height);
     for (const l of this.layers) l.init(gl);
   }
@@ -264,13 +264,13 @@ export class Scene {
 
   /** Sizes the feedback buffer for the current render scale (slice 5.2). */
   private applyScale(): void {
-    const b = scaledBufferSize(this.w, this.h, getRenderScale());
+    const b = scaledBufferSize(this.w, this.h, getEffectiveRenderScale());
     this.pp?.resize(b.width, b.height);
     if (this.gl) {
       this.freeSnapshot();
       this.snapshotTarget = this.allocateSnapshot(this.gl, b.width, b.height);
     }
-    this.appliedScale = getRenderScale();
+    this.appliedScale = getEffectiveRenderScale();
   }
 
   /** The finished image of the last draw (valid after draw()). */
@@ -285,7 +285,7 @@ export class Scene {
 
   draw(frame: AudioFrame, clock: RenderClock): void {
     const gl = this.gl;
-    if (gl && this.pp && getRenderScale() !== this.appliedScale) this.applyScale();
+    if (gl && this.pp && getEffectiveRenderScale() !== this.appliedScale) this.applyScale();
     const pp = this.pp;
     if (!gl || !pp || !this.prog || !this.vao) throw new Error(`Scene ${this.name}: draw before init`);
 
