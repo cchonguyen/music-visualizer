@@ -3,6 +3,7 @@
 // auto-cycle use. Grouping and badge logic is pure so it can be unit-tested; the DOM part only builds elements.
 import { PRESET_THEMES, type Preset, type PresetTheme } from '../presets/format';
 import { presetCost, type CostLevel } from '../presets/cost';
+import { THUMB_HEIGHT, THUMB_WIDTH, thumbnailFallbackLabel, thumbnailFor } from './thumbnails';
 
 export const FAVOURITE_TAG = 'favourite';
 export const UNTHEMED_KEY = 'unthemed' as const;
@@ -132,6 +133,27 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
     card.className = 'preset-card';
     card.dataset.presetId = entry.id;
 
+    // Slice 21.6: the captured thumbnail, or a text placeholder when none exists yet.
+    const thumb = document.createElement('div');
+    thumb.className = 'preset-card-thumb';
+    const thumbUrl = thumbnailFor(entry.id);
+    if (thumbUrl) {
+      const img = document.createElement('img');
+      img.src = thumbUrl;
+      img.alt = '';
+      img.width = THUMB_WIDTH;
+      img.height = THUMB_HEIGHT;
+      img.loading = 'lazy';
+      img.style.display = 'block';
+      img.style.width = '100%';
+      img.style.height = 'auto';
+      thumb.append(img);
+    } else {
+      thumb.classList.add('preset-card-thumb-fallback');
+      thumb.setAttribute('aria-hidden', 'true');
+      thumb.textContent = thumbnailFallbackLabel(entry.name);
+    }
+
     const pick = document.createElement('button');
     pick.type = 'button';
     pick.className = 'preset-card-pick';
@@ -160,7 +182,7 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
       render();
     });
 
-    card.append(pick, meta, fav);
+    card.append(thumb, pick, meta, fav);
     return card;
   };
 

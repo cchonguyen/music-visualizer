@@ -20,6 +20,7 @@ import type { AudioFrame } from '../audio/types';
 import { createVao } from '../gl/vao';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { LIGHT_FADE_MAX_SEC } from '../presets/cost';
+import { defaultThumbnailCapture, type ThumbnailCapture } from '../ui/thumbnails';
 import { PingPong, bytesPerPixel, detectFeedbackFormat, feedbackFormat, type BufferFormat } from '../gl/fbo';
 import { getEffectiveRenderScale, scaledBufferSize } from '../gl/size';
 import { type RenderClock } from './clock';
@@ -148,6 +149,9 @@ export class Compositor implements RenderLayer {
   // When each scene was last on screen or prepared (a counter, not a time). The smallest is dropped first.
   private lastUsed = new Map<string, number>();
   private useTick = 0;
+  // Slice 21.6: the scene with the largest target weight. A new one arms a thumbnail capture (see draw()).
+  private dominant: string | null = null;
+  private thumbnailCapture: ThumbnailCapture | null = defaultThumbnailCapture();
   // Reused by the morph search and the draw loop so a frame builds no arrays or objects (Slice 16.8).
   private readonly pair: [string, number] = ['', 0];
   private readonly pair2: [string, number] = ['', 0];
@@ -405,6 +409,19 @@ export class Compositor implements RenderLayer {
       if (!this.scenes.has(name)) throw new Error(`Compositor: unknown scene "${name}"`);
     }
     this.targets = new Map(Object.entries(weights).map(([k, v]) => [k, Math.min(1, Math.max(0, v))]));
+    // Slice 21.6: a preset that becomes the dominant scene arms its thumbnail timer. No pixels are read here.
+    let top: string | null = null;
+    let topW = 0;
+    for (const [k, v] of this.targets) {
+      if (v > topW) {
+        topW = v;
+        top = k;
+      }
+    }
+    if (top !== null && top !== this.dominant) {
+      this.dominant = top;
+      this.thumbnailCapture?.arm(top);
+    }
   }
 
   /**
@@ -720,6 +737,8 @@ export class Compositor implements RenderLayer {
       if ((this.weights.get(name) ?? 0) === 0 && this.drawn.delete(name)) this.stale.add(name);
     }
     this.trimKept();
+    // Slice 21.6: reads the canvas only in the frame a thumbnail capture is due. Otherwise this is a flag check.
+    if (this.thumbnailCapture?.isDue()) this.thumbnailCapture.captureIfDue(gl.canvas);
   }
 
   /** Points a reused target object at a buffer. The same two objects are filled every frame. */
