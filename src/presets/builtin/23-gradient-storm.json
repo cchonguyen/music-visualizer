@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "name": "Gradient Storm",
+  "tags": ["built-in", "flagship", "warp"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": { "decay": 0.93 },
+  "warp": [
+    {
+      "type": "curl",
+      "params": {
+        "amount": { "value": 0.7, "link": { "source": "high", "amount": 0.3, "smooth": 0.4 } },
+        "scale": 1,
+        "speed": 0.2,
+        "octaves": 2,
+        "turbulence": 0.5,
+        "flow": "eddies"
+      }
+    },
+    { "type": "stripes", "params": { "amount": 0.1, "scale": 1.5, "speed": 0.1 } }
+  ],
+  "layers": [
+    { "type": "particles", "opacity": 0.45, "blend": "add", "params": { "shape": "star", "brightness": 0.9, "swirlGain": 0.6, "size": 2.2 } },
+    {
+      "type": "shape",
+      "params": {
+        "baseShape": "star",
+        "sides": 5,
+        "starInner": 0.42,
+        "effectType": "waveform",
+        "sampleCount": 96,
+        "effectLength": 0.35,
+        "thickness": 2.6,
+        "audioSource": "waveform",
+        "colorMode": "amplitudeHot",
+        "glow": 0.8
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.7,
+    "bloomThreshold": 0.5,
+    "bloomPulse": 0.35,
+    "colourMap": 0.7,
+    "colourMapBy": "brightness",
+    "colourMapGradient": "toxic",
+    "colourMapGradient2": "sunset",
+    "colourMapMix": { "value": 0, "morph": { "to": 1, "rate": 0.06 } },
+    "vignette": 0.4
+  }
+}

@@ -45,6 +45,10 @@ import preset17 from './17-corridor-led-equalizer.json';
 import preset18 from './18-star-burst-stream.json';
 import preset19 from './19-spiral-pearl-beads.json';
 import preset20 from './20-dual-rail-aurora-ark.json';
+import preset21 from './21-inhale-exhale.json';
+import preset22 from './22-ripple-pool.json';
+import preset23 from './23-gradient-storm.json';
+import preset24 from './24-mirror-tunnel.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -124,6 +128,11 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   '18-star-burst-stream': 'showcase',
   '19-spiral-pearl-beads': 'showcase',
   '20-dual-rail-aurora-ark': 'showcase',
+  // Warp field, bloom and colour showcase (21–24, Stage 18). Kept in this folder; the folder label still says 13–20.
+  '21-inhale-exhale': 'showcase',
+  '22-ripple-pool': 'showcase',
+  '23-gradient-storm': 'showcase',
+  '24-mirror-tunnel': 'showcase',
 
   // Flagship (01–12)
   '01-curl-fluid-warp': 'flagship',
@@ -254,6 +263,14 @@ export const SHOWCASE_PRESETS_13_20: readonly BuiltinPresetEntry[] = [
 export const FLAGSHIP_PRESETS_13_20 = SHOWCASE_PRESETS_13_20;
 (BUILTIN_PRESETS as any).showcase = SHOWCASE_PRESETS_13_20;
 
+/** Stage 18 showcase presets 21–24: warp field operators, wide and tinted bloom, colour map and vignette options. */
+export const SHOWCASE_PRESETS_21_24: readonly BuiltinPresetEntry[] = [
+  { id: '21-inhale-exhale', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset21, SCHEMAS) },
+  { id: '22-ripple-pool', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset22, SCHEMAS) },
+  { id: '23-gradient-storm', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset23, SCHEMAS) },
+  { id: '24-mirror-tunnel', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset24, SCHEMAS) },
+];
+
 export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...BUILTIN_PRESETS,
   ...FLAGSHIP_PRESETS,
@@ -262,6 +279,7 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...FLAGSHIP_PRESETS_11,
   ...FLAGSHIP_PRESETS_12,
   ...SHOWCASE_PRESETS_13_20,
+  ...SHOWCASE_PRESETS_21_24,
 ];
 
 export function getPresetsByGroup(group: PresetGroup): readonly BuiltinPresetEntry[] {

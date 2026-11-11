@@ -43,6 +43,10 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     '18-star-burst-stream',
     '19-spiral-pearl-beads',
     '20-dual-rail-aurora-ark',
+    '21-inhale-exhale',
+    '22-ripple-pool',
+    '23-gradient-storm',
+    '24-mirror-tunnel',
   ];
 
   const EXPECTED_FLAGSHIP_IDS = [
@@ -94,8 +98,8 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     });
   });
 
-  it('categorizes all 41+ built-in presets accurately into their subfolders', () => {
-    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(8);
+  it('categorizes all 45+ built-in presets accurately into their subfolders', () => {
+    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(12);
     expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(12);
     expect(EXPECTED_CLASSICS_IDS).toHaveLength(23);
 
@@ -184,5 +188,53 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     expect(f2Group.entries.map((e) => e.id)).toEqual([p2]);
 
     expect(categorized.user.unfiled.map((e) => e.id)).toEqual([p3]);
+  });
+});
+
+describe('Stage 18 showcase presets 21 to 24 (Slice 18.10)', () => {
+  const NEW_IDS = ['21-inhale-exhale', '22-ripple-pool', '23-gradient-storm', '24-mirror-tunnel'];
+  const entry = (id: string) => ALL_PRESETS.find((p) => p.id === id)!;
+
+  it('all four load with no warnings', () => {
+    for (const id of NEW_IDS) {
+      expect(entry(id), id).toBeDefined();
+      expect(entry(id).warnings, id).toEqual([]);
+    }
+  });
+
+  it('each uses a warp field stack, the colour map and bloom', () => {
+    for (const id of NEW_IDS) {
+      const { preset } = entry(id);
+      expect(preset.warp?.length ?? 0, id).toBeGreaterThan(0);
+      expect(preset.warp!.length, id).toBeLessThanOrEqual(4);
+      expect(preset.post.colourMap!.value as number, id).toBeGreaterThan(0);
+      expect(preset.post.bloom!.value as number, id).toBeGreaterThan(0);
+    }
+  });
+
+  it('the Inhale Exhale radial operator pulls the middle in and pushes the edges out (positive amount)', () => {
+    const radial = entry('21-inhale-exhale').preset.warp!.find((op) => op.type === 'radial')!;
+    expect(radial.params.amount!.value as number).toBeGreaterThan(0);
+  });
+
+  it('exercises the wider options: tight, wide, tinted and pulsed bloom, curl, and the vignette shapes', () => {
+    const post = (id: string) => entry(id).preset.post;
+    expect(post('22-ripple-pool').bloomSize!.value as number).toBeLessThan(0);
+    expect(post('21-inhale-exhale').bloomSize!.value as number).toBeGreaterThan(0);
+    expect(post('21-inhale-exhale').bloomTintAmount!.value as number).toBeGreaterThan(0);
+    expect(post('23-gradient-storm').bloomPulse!.value as number).toBeGreaterThan(0);
+    expect(entry('23-gradient-storm').preset.warp!.some((op) => op.type === 'curl')).toBe(true);
+    expect(post('22-ripple-pool').vignetteShape!.value).toBe('round');
+    expect(post('24-mirror-tunnel').vignetteShape!.value).toBe('box');
+  });
+
+  it('every earlier preset is untouched: none has a warp stack, a colour map or a new bloom option', () => {
+    for (const p of ALL_PRESETS) {
+      if (NEW_IDS.includes(p.id)) continue;
+      expect(p.preset.warp, p.id).toBeUndefined();
+      expect(p.preset.post.colourMap!.value, p.id).toBe(0);
+      expect(p.preset.post.bloomSize!.value, p.id).toBe(0);
+      expect(p.preset.post.bloomPulse!.value, p.id).toBe(0);
+    }
   });
 });

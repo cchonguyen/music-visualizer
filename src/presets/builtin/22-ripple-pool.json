@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "Ripple Pool",
+  "tags": ["built-in", "flagship", "warp"],
+  "transition": { "style": "crossfade", "seconds": 0.35 },
+  "feedback": { "decay": 0.92, "zoom": 1.002 },
+  "warp": [
+    {
+      "type": "ripple",
+      "params": {
+        "amount": { "value": 0.35, "link": { "source": "bass", "amount": 0.4, "smooth": 0.3 } },
+        "scale": 1.6,
+        "speed": 0.35
+      }
+    },
+    { "type": "swirl", "params": { "amount": 0.12, "scale": 0.8, "speed": 0 } }
+  ],
+  "layers": [
+    { "type": "rings", "params": { "maxRings": 6, "maxRingsCalm": 4, "strokeBase": 0.002, "strokeNormGain": 0.004, "sides": 0, "style": "outline", "texture": true, "textureGain": 1.2 } }
+  ],
+  "post": {
+    "bloom": 0.8,
+    "bloomThreshold": 0.4,
+    "bloomSize": -0.6,
+    "bloomTintAmount": 0.5,
+    "bloomTintHue": 1.9,
+    "colourMap": 0.5,
+    "colourMapBy": "distance",
+    "colourMapGradient": "ice",
+    "colourMapGradient2": "candy",
+    "colourMapMix": 0.25,
+    "vignette": 0.5,
+    "vignetteShape": "round",
+    "vignetteBlend": "tint",
+    "vignetteColour": "#102050"
+  }
+}
