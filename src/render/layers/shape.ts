@@ -288,6 +288,14 @@ export class ShapeLayer implements RenderLayer {
         const idx = Math.min(wf.length - 1, Math.floor(i * step));
         rawBins[i] = (wf[idx]! + 1.0) * 0.5;
       }
+    } else if (this.p.audioSource === 'scope') {
+      // Signed oscilloscope trace: keeps the sign so silence stays at zero.
+      const wf = frame.waveform;
+      const step = wf.length / sampleCount;
+      for (let i = 0; i < sampleCount; i++) {
+        const idx = Math.min(wf.length - 1, Math.floor(i * step));
+        rawBins[i] = wf[idx]!;
+      }
     } else if (this.p.audioSource === 'sub' || this.p.audioSource === 'bass') {
       const wf = frame.bandWaveforms.sub;
       const step = wf.length / sampleCount;
@@ -322,9 +330,11 @@ export class ShapeLayer implements RenderLayer {
 
     // Apply reactivity & map to 256 texel buffer
     const reactivity = this.p.reactivity;
+    const signed = this.p.audioSource === 'scope';
     for (let j = 0; j < 256; j++) {
       const binIdx = Math.min(sampleCount - 1, Math.floor((j / 256) * sampleCount));
-      this.raw256[j] = Math.min(SHAPE_AMP_MAX, (rawBins[binIdx] ?? 0) * reactivity);
+      const v = (rawBins[binIdx] ?? 0) * reactivity;
+      this.raw256[j] = signed ? Math.max(-SHAPE_AMP_MAX, Math.min(SHAPE_AMP_MAX, v)) : Math.min(SHAPE_AMP_MAX, v);
     }
 
     // 3. Asymmetric envelope smoothing & gravity peak caps
@@ -337,7 +347,10 @@ export class ShapeLayer implements RenderLayer {
     for (let j = 0; j < 256; j++) {
       const targetVal = this.raw256[j]!;
       const prevVal = this.smoothedSamples[j]!;
-      if (targetVal >= prevVal) {
+      if (signed) {
+        // A trace has no rise or fall direction, so it uses the attack time both ways.
+        this.smoothedSamples[j] = prevVal + alphaAtt * (targetVal - prevVal);
+      } else if (targetVal >= prevVal) {
         this.smoothedSamples[j] = prevVal + alphaAtt * (targetVal - prevVal);
       } else {
         this.smoothedSamples[j] = prevVal + alphaRel * (targetVal - prevVal);

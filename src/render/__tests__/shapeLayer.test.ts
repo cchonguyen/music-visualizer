@@ -468,6 +468,45 @@ describe('ShapeLayer', () => {
     });
   });
 
+  describe('Signed scope source (Slice 19.1)', () => {
+    it('draws a flat trace for silence', () => {
+      const layer = new ShapeLayer({ audioSource: 'scope', reactivity: 1.0 });
+      layer.init(gl);
+      layer.draw(makeMockFrame(), mockClock, mockTarget);
+      for (let j = 0; j < 256; j++) expect(layer.smoothedSamples[j]).toBe(0);
+    });
+
+    it('keeps the sign of the waveform, unlike the unsigned waveform source', () => {
+      const wf = new Float32Array(1024);
+      for (let i = 0; i < wf.length; i++) wf[i] = i < 512 ? 0.5 : -0.5;
+      const scope = new ShapeLayer({ audioSource: 'scope', reactivity: 1.0, attackMs: 5 });
+      scope.init(gl);
+      for (let k = 0; k < 20; k++) scope.draw(makeMockFrame({ waveform: wf }), mockClock, mockTarget);
+      expect(scope.smoothedSamples[10]).toBeGreaterThan(0.4);
+      expect(scope.smoothedSamples[250]).toBeLessThan(-0.4);
+
+      const legacy = new ShapeLayer({ audioSource: 'waveform', reactivity: 1.0, attackMs: 5 });
+      legacy.init(gl);
+      for (let k = 0; k < 20; k++) legacy.draw(makeMockFrame({ waveform: wf }), mockClock, mockTarget);
+      expect(legacy.smoothedSamples[250]).toBeGreaterThan(0);
+    });
+
+    it('clamps to the amplitude ceiling both ways', () => {
+      const wf = new Float32Array(1024).fill(-1);
+      const layer = new ShapeLayer({ audioSource: 'scope', reactivity: SHAPE_REACTIVITY_MAX, attackMs: 5 });
+      layer.init(gl);
+      for (let k = 0; k < 50; k++) layer.draw(makeMockFrame({ waveform: wf }), mockClock, mockTarget);
+      expect(layer.smoothedSamples[0]).toBeGreaterThanOrEqual(-SHAPE_AMP_MAX);
+      expect(layer.smoothedSamples[0]).toBeLessThan(-1);
+    });
+
+    it('is a schema option and the vertex shader colours by absolute amplitude', () => {
+      const spec = SHAPE_SPECS.find((s) => s.name === 'audioSource') as unknown as { options: string[] };
+      expect(spec.options).toContain('scope');
+      expect(vertSrc).toContain('vAudioAmp = abs(audioAmp);');
+    });
+  });
+
   describe('Shader Source Integrity', () => {
     it('shape.vert.glsl starts with #version 300 es and defines key uniforms and attributes', () => {
       expect(vertSrc.startsWith('#version 300 es')).toBe(true);
