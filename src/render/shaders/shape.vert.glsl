@@ -391,7 +391,8 @@ void main() {
   // Screen aspect mapping: normalize X by target aspect
   gl_Position = vec4(P.x / uAspect, P.y, 0.0, 1.0);
 
-  vAudioAmp = audioAmp;
+  // Colour uses the size of the signal; the scope source can be negative.
+  vAudioAmp = abs(audioAmp);
   vPeakHold = peakHold;
   vAlpha = instAlpha;
   vU = u;

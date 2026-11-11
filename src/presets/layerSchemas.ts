@@ -367,7 +367,8 @@ export type ShapeAudioSource =
   | 'bass'
   | 'mid'
   | 'treble'
-  | 'energy';
+  | 'energy'
+  | 'scope';
 
 export type ShapeColorMode =
   | 'solid'
@@ -508,7 +509,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'propDelay', label: 'Audio delay', group: 'Propagation', default: SHAPE_DEFAULTS.propDelay, min: 0, max: 1.0, step: 0.05, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] }, description: 'Staggers audio reaction timing across successive propagated instances.' },
 
   // Category 5 — Audio & Style Tuning ("Audio & Style")
-  { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy'], description: 'Selects audio signal spectrum or waveform driving reactive modulation.' },
+  { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy', 'scope'], description: 'Selects audio signal driving reactive modulation. Scope is a signed oscilloscope trace: silence draws a flat line and the signal swings both ways.' },
   { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 15.0, step: 0.05, description: 'Scales overall dynamic sensitivity to audio input peaks.' },
   { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5, description: 'Sets smoothing attack response time in milliseconds for transient swells.' },
   { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10, description: 'Sets smoothing decay release time in milliseconds for sustained tails.' },
