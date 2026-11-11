@@ -5,7 +5,7 @@ import type { AudioFrame } from '../audio/types';
 import { PingPong, clampSize, type PassTarget } from '../gl/fbo';
 import { compileProgram, FULLSCREEN_VERT } from '../gl/shader';
 import { createVao } from '../gl/vao';
-import type { RenderClock } from './clock';
+import { clampDt, type RenderClock } from './clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from './layer';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { FEEDBACK_DEFAULTS } from '../presets/layerSchemas';
@@ -52,7 +52,7 @@ export const FEEDBACK_WARP_DEFAULTS = {
 
 const UNIFORMS = [
   'uPrev', 'uCentre', 'uDrift', 'uStretch', 'uZoom', 'uRot', 'uWarp', 'uWarpScale', 'uWarpSpeed',
-  'uTime', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
+  'uTime', 'uDt', 'uAspect', 'uWrap', 'uHueDrift', 'uBlur', 'uTexel', 'uDecay', 'uFade',
   'uWarpMode', 'uKaleidoN', 'uPortalRadius', 'uRgbSplit', 'uDecayRgb', 'uSobel', 'uSolarize',
   'uSolarizePhase', 'uMobiusPoleOffset', 'uMobiusPolePolarity', 'uWarpAmp',
   'uCurlOctaves', 'uCurlTurbulence', 'uCurlFlowPattern',
@@ -324,7 +324,9 @@ export class Scene {
     gl.useProgram(this.prog);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, pp.read.texture);
-    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame, terrainBiasDriftY);
+    // Feedback rates are per 1/60 s; the shader scales them by uDt so refresh rate does not change the look (Slice 14.6).
+    const stepDt = clampDt(clock.dtSec) > 0 ? clampDt(clock.dtSec) : 1 / 60;
+    this.setFeedbackUniforms(gl, clock.timeSec, pp.width, pp.height, frame, terrainBiasDriftY, stepDt);
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -495,7 +497,7 @@ export class Scene {
     }
   }
 
-  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number, frame?: AudioFrame, terrainBiasDriftY = 0): void {
+  private setFeedbackUniforms(gl: WebGL2RenderingContext, timeSec: number, width: number, height: number, frame?: AudioFrame, terrainBiasDriftY = 0, stepDt = 1 / 60): void {
     const n = (key: string) => Number(this.fb[key]);
     const u = (name: string) => this.uni.get(name) ?? null;
     gl.uniform1i(u('uPrev'), 0);
@@ -508,6 +510,7 @@ export class Scene {
     gl.uniform1f(u('uWarpScale'), n('warpScale'));
     gl.uniform1f(u('uWarpSpeed'), n('warpSpeed'));
     gl.uniform1f(u('uTime'), timeSec);
+    gl.uniform1f(u('uDt'), stepDt);
     gl.uniform1f(u('uAspect'), width / Math.max(height, 1));
     gl.uniform1f(u('uWrap'), this.fb.wrap === 'wrap' ? 1 : 0);
     gl.uniform1f(u('uHueDrift'), n('hueDrift'));

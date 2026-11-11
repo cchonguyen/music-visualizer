@@ -6,21 +6,22 @@ precision highp float;
 // dynamic wandering Möbius dipole flow, and luminance-gated topographic solarize.
 uniform sampler2D uPrev;
 uniform vec2 uCentre;     // centre of zoom and rotate, in uv (0,0 = screen middle)
-uniform vec2 uDrift;      // slide per frame, in uv
+uniform vec2 uDrift;      // slide per 1/60 s, in uv (scaled by uDt)
 uniform vec2 uStretch;    // stretch per axis (1 = none)
-uniform float uZoom;      // > 1 pushes trails outward
-uniform float uRot;       // radians per frame
+uniform float uZoom;      // > 1 pushes trails outward, per 1/60 s
+uniform float uRot;       // radians per 1/60 s
 uniform float uWarp;      // wave amount
 uniform float uWarpScale; // wave count across the screen
 uniform float uWarpSpeed; // wave speed
 uniform float uTime;      // render clock, seconds
+uniform float uDt;        // clamped time step, seconds (Slice 14.6)
 uniform float uAspect;    // width / height, keeps rotation round
 uniform float uWrap;      // 0 = clamp at the edge, 1 = wrap around
 uniform float uHueDrift;  // hue rotation per frame, radians
 uniform float uBlur;      // 0..1 mix toward a 5-tap blur
 uniform vec2 uTexel;      // 1 / size in pixels
-uniform float uDecay;     // persistence per frame
-uniform float uFade;      // subtracted per frame
+uniform float uDecay;     // persistence per 1/60 s (applied as pow(decay, dt * 60))
+uniform float uFade;      // subtracted per 1/60 s
 
 // Slice 7.11 / 7.22 uniforms:
 uniform int uWarpMode;          // 0: classic, 1: curl, 2: polarFold, 3: mobius, 4: rgbSplit
@@ -184,13 +185,17 @@ vec2 cExp(vec2 w) {
 }
 
 void main() {
+  // Rates are authored per 1/60 s. tick is 1.0 at 60 Hz, 0.5 at 120 Hz.
+  float tick = max(uDt * 60.0, 1e-4);
+  float zoom = pow(max(uZoom, 1e-4), tick);
+  float rotAngle = uRot * tick;
   vec2 p = vUv - 0.5 - uCentre;
   p.x *= uAspect; // rotate in screen space, not stretched uv space
-  float cs = cos(-uRot);
-  float sn = sin(-uRot);
+  float cs = cos(-rotAngle);
+  float sn = sin(-rotAngle);
   p = vec2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
   p.x /= uAspect;
-  p /= uZoom;
+  p /= zoom;
   p /= uStretch;
 
   // Warp modes
@@ -218,7 +223,7 @@ void main() {
     }
 
     float warpAmt = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
-    p += vel * (warpAmt * 0.032);
+    p += vel * (warpAmt * 0.032 * tick);
     p.x /= uAspect;
   } else if (uWarpMode == 2) {
     // Kaleidoscopic Mandala with radial fold & wallpaper tiling
@@ -285,7 +290,7 @@ void main() {
     vec2 w = cLog(zeta);
 
     float warpAmt = uWarpAmp > 0.0 ? uWarpAmp : (uWarp > 0.0 ? uWarp : 1.0);
-    w += vec2(flowFactor, swirlFactor) * (0.115 * centerBoost * warpAmt);
+    w += vec2(flowFactor, swirlFactor) * (0.115 * centerBoost * warpAmt * tick);
 
     vec2 expW = cExp(w);
     vec2 num = a - cMul(b, expW);
@@ -302,10 +307,10 @@ void main() {
   } else {
     // 'classic': wave warp
     float w = sin(uTime * uWarpSpeed + p.y * uWarpScale * TWO_PI) + cos(uTime * uWarpSpeed + p.x * uWarpScale * TWO_PI);
-    p += uWarp * 0.02 * vec2(w, -w);
+    p += uWarp * 0.02 * tick * vec2(w, -w);
   }
 
-  p -= uDrift;
+  p -= uDrift * tick;
   vec2 uv = p + 0.5 + uCentre;
   uv = mix(clamp(uv, 0.0, 1.0), fract(uv), uWrap);
 
@@ -387,9 +392,10 @@ void main() {
     c = mix(c, solarized, uSolarize);
   }
 
-  c = hueRotate(c, uHueDrift);
+  c = hueRotate(c, uHueDrift * tick);
 
   // Per-channel chromatic decay (uDecay * uDecayRgb)
-  vec3 decay = uDecay * uDecayRgb;
-  outColor = vec4(max(c * decay - uFade, 0.0), 1.0);
+  // Decay is pow(decay, dt * 60): same result at 60 Hz as the old per-frame decay.
+  vec3 decay = pow(max(uDecay * uDecayRgb, vec3(0.0)), vec3(tick));
+  outColor = vec4(max(c * decay - uFade * tick, 0.0), 1.0);
 }

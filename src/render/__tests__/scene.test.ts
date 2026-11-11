@@ -576,4 +576,18 @@ describe('Slice 7.18: Blend defaults, screen mode, energy compensation, and trai
     expect(outTex).toBeDefined();
     expect(scene.outputTexture()).toBe(outTex);
   });
+  it('sends the clamped clock step to the feedback shader as uDt (Slice 14.6)', () => {
+    const gl = createMockGl();
+    const scene = new Scene('dt-uniform', []);
+    scene.init(gl);
+    const f1 = gl.uniform1f as unknown as { mock: { calls: [{ name: string }, number][] } };
+    const lastDt = () => f1.mock.calls.filter(([l]) => l?.name === 'uDt').pop()![1];
+
+    scene.draw(makeMockFrame(), { timeSec: 1, dtSec: 1 / 120, frameIndex: 1 });
+    expect(lastDt()).toBeCloseTo(1 / 120, 9);
+    scene.draw(makeMockFrame(), { timeSec: 2, dtSec: 5, frameIndex: 2 });
+    expect(lastDt()).toBeCloseTo(0.1, 9); // clamped to MAX_DT_SEC
+    scene.draw(makeMockFrame(), { timeSec: 3, dtSec: 0, frameIndex: 3 });
+    expect(lastDt()).toBeCloseTo(1 / 60, 9); // zero falls back to 60 Hz
+  });
 });

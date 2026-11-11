@@ -581,4 +581,50 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       });
     });
   });
+  describe('Slice 14.6: feedback rates are per second, not per frame', () => {
+    /** Runs `steps` draws at `dt` and returns the per-step factors the shader would apply. */
+    function run(steps: number, dt: number) {
+      const gl = createMockGl();
+      const scene = new Scene('rate', []);
+      scene.init(gl);
+      scene.setFeedback({ decay: 0.9, zoom: 1.02, rotate: 0.01, driftX: 0.002, driftY: 0 });
+      const f1 = gl.uniform1f as unknown as { mock: { calls: [{ name: string }, number][] } };
+      const f2 = gl.uniform2f as unknown as { mock: { calls: [{ name: string }, number, number][] } };
+      let trail = 1;
+      let zoom = 1;
+      let rot = 0;
+      let drift = 0;
+      for (let i = 0; i < steps; i++) {
+        const start = f1.mock.calls.length;
+        const start2 = f2.mock.calls.length;
+        scene.draw(makeMockFrame({ dtSec: dt }), { frameIndex: i, timeSec: i * dt, dtSec: dt });
+        const get = (name: string) => f1.mock.calls.slice(start).filter(([l]) => l?.name === name).pop()![1];
+        const tick = get('uDt') * 60; // same maths as the shader
+        trail *= Math.pow(get('uDecay'), tick);
+        zoom *= Math.pow(get('uZoom'), tick);
+        rot += get('uRot') * tick;
+        const d = f2.mock.calls.slice(start2).filter(([l]) => l?.name === 'uDrift').pop()!;
+        drift += d[1] * tick;
+      }
+      return { trail, zoom, rot, drift };
+    }
+
+    it('gives the same trail, zoom, rotation and drift after 1 second at 60 and 120 steps per second', () => {
+      const a = run(60, 1 / 60);
+      const b = run(120, 1 / 120);
+      expect(a.trail).toBeCloseTo(Math.pow(0.9, 60), 9);
+      expect(b.trail).toBeCloseTo(a.trail, 9);
+      expect(b.zoom).toBeCloseTo(a.zoom, 9);
+      expect(b.rot).toBeCloseTo(a.rot, 9);
+      expect(b.drift).toBeCloseTo(a.drift, 9);
+    });
+
+    it('shader scales decay, zoom, rotate and drift by the time step', () => {
+      expect(feedbackSrc).toContain('uniform float uDt;');
+      expect(feedbackSrc).toContain('pow(max(uDecay * uDecayRgb, vec3(0.0)), vec3(tick))');
+      expect(feedbackSrc).toContain('pow(max(uZoom, 1e-4), tick)');
+      expect(feedbackSrc).toContain('uRot * tick');
+      expect(feedbackSrc).toContain('uDrift * tick');
+    });
+  });
 });
