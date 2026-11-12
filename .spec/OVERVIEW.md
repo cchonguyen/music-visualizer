@@ -23,6 +23,7 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 
 - 2026-11-06: particles will fill the whole frame, corners included, at twice their current size. A new "Follow scene transform" switch lets particles move with the scene. It is on for new presets only, so existing presets look the same.
 - 2026-11-12: triage only. Proposed: Visuals menu gets auto-cycle (Off / Timer / Beat) and Shuffle controls, reusing the existing keyboard-driven cycling. Not yet confirmed by Charlie.
+- 2026-11-12: confirmed by Charlie and planned as Slice 21.13. The Visuals menu gets an auto-cycle choice (Off / Timer / Beat), a Shuffle switch, and a timer length (5 to 120 seconds, 20 by default). Your choice is remembered after reload and stays in step with the C, B and X keys. The colour "Auto-cycle" option, favourite/skip tags and safety code are untouched.
 
 ## Where the Plan Lives
 - Working contract: `.spec/SYSTEM_SPEC.md`
