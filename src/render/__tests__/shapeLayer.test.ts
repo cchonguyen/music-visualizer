@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames, applyCopyMotion } from '../layers/shape';
 import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
+import { getVisualGain, setVisualGain } from '../gainStore';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderTarget } from '../layer';
@@ -504,6 +505,61 @@ describe('ShapeLayer', () => {
       const spec = SHAPE_SPECS.find((s) => s.name === 'audioSource') as unknown as { options: string[] };
       expect(spec.options).toContain('scope');
       expect(vertSrc).toContain('vAudioAmp = abs(audioAmp);');
+    });
+  });
+
+  describe('Punch option (Slice 19.9a)', () => {
+    const flat = (v: number) => {
+      const s = new Float32Array(256).fill(v);
+      return makeMockFrame({ spectrum: s, smoothedSpectrum: s });
+    };
+    /** Calm for 100 frames, then a sudden rise. Returns the sample after `after` loud frames. */
+    const runRise = (params: Record<string, unknown>, after: number): number => {
+      const layer = new ShapeLayer({ audioSource: 'spectrum', reactivity: 1.0, attackMs: 5, ...params });
+      layer.init(gl);
+      for (let k = 0; k < 100; k++) layer.draw(flat(0.3), mockClock, mockTarget);
+      for (let k = 0; k < after; k++) layer.draw(flat(0.7), mockClock, mockTarget);
+      return layer.smoothedSamples[128]!;
+    };
+
+    it('is a bool schema option, off by default, shown for the spectrum source only', () => {
+      const spec = SHAPE_SPECS.find((s) => s.name === 'punch') as unknown as { type: string; default: boolean; showWhen: Record<string, string> };
+      expect(spec.type).toBe('bool');
+      expect(spec.default).toBe(false);
+      expect(SHAPE_DEFAULTS.punch).toBe(false);
+      expect(spec.showWhen).toEqual({ audioSource: 'spectrum' });
+    });
+
+    it('lifts a sudden rise above what the plain spectrum gives', () => {
+      expect(runRise({ punch: true }, 5)).toBeGreaterThan(runRise({ punch: false }, 5));
+    });
+
+    it('settles once the rise has been held, because the average catches up', () => {
+      expect(runRise({ punch: true }, 400)).toBeLessThan(runRise({ punch: true }, 5));
+    });
+
+    it('leaves other audio sources untouched', () => {
+      const wf = new Float32Array(1024).fill(0.4);
+      const run = (punchOn: boolean) => {
+        const layer = new ShapeLayer({ audioSource: 'waveform', reactivity: 1.0, attackMs: 5, punch: punchOn });
+        layer.init(gl);
+        for (let k = 0; k < 20; k++) layer.draw(makeMockFrame({ waveform: wf }), mockClock, mockTarget);
+        return layer.smoothedSamples[100]!;
+      };
+      expect(run(true)).toBe(run(false));
+    });
+
+    it('is scaled by the global visual gain', () => {
+      const original = getVisualGain();
+      try {
+        setVisualGain(0.5);
+        const calm = runRise({ punch: true }, 5);
+        setVisualGain(1);
+        const normal = runRise({ punch: true }, 5);
+        expect(calm).toBeLessThan(normal);
+      } finally {
+        setVisualGain(original);
+      }
     });
   });
 

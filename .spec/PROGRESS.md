@@ -10,9 +10,11 @@ Status 2026-11-05: all slices built in code. Full details archived in `.spec/HIS
 Slices 5.4 to 5.10 were removed on 2026-11-08 because the work was superseded (owner decision, Charlie).
 
 ## Stage 19 — Shapes and particles (.spec/specs/roadmap/stage-19-shapes-particles.md)
-- [ ] **Slice 19.4: Real Shape glow from the blur chain** [BLOCKED] 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/render/shaders/shape.frag.glsl`, `src/render/layers/shape.ts`, `src/render/scene.ts` | Verify: npm run typecheck && npm test && npm run build
-Held 19.4: scope is wrong. The blur chain lives in the compositor and the Shape layer draws into the shared feedback buffer, so a per-layer glow needs a private target, its own blur passes and compositor changes outside the listed files. Post Bloom (Slice 18.7) already blurs the whole frame. Needs Charlie's decision.
-- [ ] **Slice 19.9: Close the gaps the audit found in Shape** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/layers/shape.ts`, `src/render/shaders/shape.vert.glsl`, `src/presets/layerSchemas.ts`, `src/render/__tests__/shapeLayer.test.ts` | Verify: npm run typecheck && npm test && npm run build
+Slice 19.4 (per-Shape glow) was removed on 2026-11-11. Post Bloom (Slice 18.7) already supplies the glow. Owner decision, Charlie.
+- [x] **Slice 19.9a: Bar punch, height range and global gain in Shape** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/layers/shape.ts`, `src/render/dynamics.ts`, `src/presets/layerSchemas.ts`, `src/render/__tests__/shapeLayer.test.ts` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 19.9b: Band texture along the Shape path** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/layers/shape.ts`, `src/render/shaders/shape.vert.glsl`, `src/presets/layerSchemas.ts`, `src/render/__tests__/shapeLayer.test.ts` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 19.9c: Rotating 3D curve base, loudness copy count and stroke width in Shape** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: to be confirmed when started (Shape layer and its schema) | Verify: npm run typecheck && npm test && npm run build
+Audit decisions (Charlie, 2026-11-11): audit accepted. Items 1 to 4 go into Shape. orbitTriangles and polarGrid stay on Rings and are not ported.
 - [ ] **Slice 19.10: Fold legacy layers into Shape with preset migration** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/presets/legacyShapeMigration.ts`, `src/presets/loader.ts`, `src/presets/loader.test.ts`, `src/presets/builtin/index.ts` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 20 — Generators and preset overhaul (.spec/specs/roadmap/stage-20-generators-presets.md)
