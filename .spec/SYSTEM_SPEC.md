@@ -18,6 +18,7 @@ Source documents: `.spec/SCOPE_BRIEF.md` (v2 brief, phone-focused, superseded fo
 - **Particle spread (Charlie, 2026-11-06):** treble particles fill the whole frame, corners included, with the current edge fade kept. Overall particle size doubles (factor 2.0). A new per-layer switch, "Follow scene transform", lets particles inherit the scene's feedback zoom, rotation and drift and the tunnel and swirl motion. Off in existing presets; on for presets created from now on.
 - **Later:** `.milk` import (both Council reviewers: a compiler sub-project; our own format gives most of the value), beat and bar tracker (for phrase-based scene changes, owner decision 2026-11-04), recording (canvas + audio), phone and iPhone version.
 - **Shape layer opacity (Charlie, 2026-11-09, bug fix):** the layer opacity slider must change the visible output of Shape layers. Scope: the Shape fragment shader scales output color by the layer opacity uniform, so the slider works under the default additive blend. No other layer or blend mode changes.
+- **Visuals menu: auto-cycle and shuffle (Charlie, 2026-11-12, triage, awaiting scope confirmation):** the Visuals popup gets an auto-cycle selector (Off / Timer / Beat) and a Shuffle toggle. They drive the existing `AutoCycler` state that keys C, B and X already change, and stay in sync with those keys. Whether the choice persists across reloads is an open question for Charlie.
 
 **Done means:** each stage works on the owner's desktop and has been used for real music before the next stage starts.
 
@@ -37,6 +38,7 @@ Until moved into a stage above:
 - Full 3D scenes with physically based lighting and DMX or LED output. The reference guide's flagship examples use Unreal or TouchDesigner. Our v1 is 2D-on-GPU with a fixed-axis forward tunnel; true 3D is a later decision.
 - Particle outflow modes, XY scope, and a separate particle morph control. The spread slice only widens reach, scales size, and adds the follow switch.
 - Shape layer opacity fix (2026-11-09): no changes to `applyLayerBlend` or any blend mode, no changes to other layers' shaders, no changes to trail attenuation.
+- Visuals menu auto-cycle and shuffle (2026-11-12): no new cycling or shuffle engine (reuse `src/presets/autoCycle.ts`), no new key bindings, no changes to Studio favourite/skip tags, no changes to the colour "Auto-cycle" option, no interval editor (20 s and 8 s stay), no render or safety pipeline changes.
 - Third-party 3D engines (three.js and similar) in v1. Reason: we build on raw WebGL2 so the render layer stays small and fully understood. Revisit only if a slice proves it necessary.
 
 ## 3. Guiding Principles

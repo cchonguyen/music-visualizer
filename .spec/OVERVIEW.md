@@ -22,6 +22,7 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 - 2026-11-09: bug fix. The layer opacity slider had no visible effect on Shape layers, because their default additive blend ignored the alpha it changes. The fix scales the Shape layer's color by the opacity, so the slider works. No other layer changes.
 
 - 2026-11-06: particles will fill the whole frame, corners included, at twice their current size. A new "Follow scene transform" switch lets particles move with the scene. It is on for new presets only, so existing presets look the same.
+- 2026-11-12: triage only. Proposed: Visuals menu gets auto-cycle (Off / Timer / Beat) and Shuffle controls, reusing the existing keyboard-driven cycling. Not yet confirmed by Charlie.
 
 ## Where the Plan Lives
 - Working contract: `.spec/SYSTEM_SPEC.md`
