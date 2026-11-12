@@ -283,6 +283,7 @@ describe('ShapeLayer', () => {
       'star',
       'spiral',
       'figure8',
+      'knot3d',
     ] as const;
 
     it.each(geometries)('renders baseShape %s with proper uniform upload', (shape) => {
@@ -560,6 +561,59 @@ describe('ShapeLayer', () => {
       } finally {
         setVisualGain(original);
       }
+    });
+  });
+
+  describe('3D curve base (Slice 19.9c)', () => {
+    const knot = (g: ReturnType<typeof createMockGl>) => g.uniformValues.get('uKnot') as number[];
+    const run = (params: Record<string, unknown>, frames: number, frame = makeMockFrame()) => {
+      const g = createMockGl();
+      const layer = new ShapeLayer(params);
+      layer.init(g);
+      for (let k = 0; k < frames; k++) layer.draw(frame, mockClock, mockTarget);
+      return g;
+    };
+
+    it('is a base shape option with a spin control that only shows for it', () => {
+      const base = SHAPE_SPECS.find((s) => s.name === 'baseShape') as unknown as { options: string[] };
+      expect(base.options).toContain('knot3d');
+      const spin = SHAPE_SPECS.find((s) => s.name === 'knotSpin') as unknown as { type: string; default: number; min: number; max: number; showWhen: Record<string, string> };
+      expect(spin.type).toBe('float');
+      expect(spin.default).toBe(1);
+      expect(spin.min).toBe(0);
+      expect(spin.max).toBe(3);
+      expect(spin.showWhen).toEqual({ baseShape: 'knot3d' });
+    });
+
+    it('uploads base shape 8 and turns over time', () => {
+      const g = run({ baseShape: 'knot3d' }, 1);
+      expect(g.uniformValues.get('uBaseShape')).toBe(8);
+      const first = [...knot(g)];
+      const later = [...knot(run({ baseShape: 'knot3d' }, 30))];
+      expect(later[0]).toBeGreaterThan(first[0]!);
+      expect(later[1]).toBeGreaterThan(first[1]!);
+      expect(later[2]).toBeGreaterThan(first[2]!);
+    });
+
+    it('drives pitch from sub, yaw from high and phase from kicks', () => {
+      const calm = makeMockFrame({ norm: { sub: 0, mid: 0, high: 0 }, kickPulse: false });
+      const loud = makeMockFrame({ norm: { sub: 1, mid: 1, high: 1 }, kickPulse: true });
+      const a = knot(run({ baseShape: 'knot3d' }, 10, calm));
+      const b = knot(run({ baseShape: 'knot3d' }, 10, loud));
+      expect(b[0]).toBeGreaterThan(a[0]!);
+      expect(b[1]).toBeGreaterThan(a[1]!);
+      expect(b[2]).toBeGreaterThan(a[2]!);
+    });
+
+    it('holds still at spin 0 and never turns for other base shapes', () => {
+      expect(knot(run({ baseShape: 'knot3d', knotSpin: 0 }, 20))).toEqual([0, 0, 0]);
+      expect(knot(run({ baseShape: 'circle' }, 20))).toEqual([0, 0, 0]);
+    });
+
+    it('has the shader branch and the perspective knot', () => {
+      expect(vertSrc).toContain('uniform vec3 uKnot;');
+      expect(vertSrc).toContain('} else if (uBaseShape == 8) {');
+      expect(vertSrc).toContain('vec2 knotPoint(float u, float effSize)');
     });
   });
 

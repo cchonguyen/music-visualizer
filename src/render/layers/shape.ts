@@ -42,6 +42,7 @@ const BASE_SHAPE_MAP: Record<ShapeBaseType, number> = {
   star: 5,
   spiral: 6,
   figure8: 7,
+  knot3d: 8,
 };
 
 const EDGE_MODE_MAP: Record<ShapeEdgeMode, number> = {
@@ -201,6 +202,11 @@ export class ShapeLayer implements RenderLayer {
   private uTexGain: WebGLUniformLocation | null = null;
   private uTexMid: WebGLUniformLocation | null = null;
   private uTexHigh: WebGLUniformLocation | null = null;
+  private uKnot: WebGLUniformLocation | null = null;
+  /** 3D curve angles and phase (Slice 19.9c). Pitch follows sub, yaw follows high, phase follows mid and kicks. */
+  private knotPitch = 0;
+  private knotYaw = 0;
+  private knotPhase = 0;
   /** Band textures for the band texture option (Slice 19.9b). Created on first use. */
   private readonly band = new BandTexture();
   private bandReady = false;
@@ -281,6 +287,10 @@ export class ShapeLayer implements RenderLayer {
     this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
     this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
     this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
+    this.uKnot = gl.getUniformLocation(this.program, 'uKnot');
+    this.knotPitch = 0;
+    this.knotYaw = 0;
+    this.knotPhase = 0;
     this.bandReady = false; // a fresh context needs fresh band textures
     this.uInstOffset = gl.getUniformLocation(this.program, 'uInstOffset[0]');
     this.uInstTransform = gl.getUniformLocation(this.program, 'uInstTransform[0]');
@@ -652,6 +662,14 @@ export class ShapeLayer implements RenderLayer {
     gl.uniform1f(this.uCornerRadius, this.p.cornerRadius);
     gl.uniform1f(this.uArcSweep, this.p.arcSweep);
     gl.uniform1f(this.uSpiralTurns, this.p.spiralTurns);
+    // 3D curve (Slice 19.9c): the angles only advance while that base shape is selected.
+    if (this.p.baseShape === 'knot3d') {
+      const spin = this.p.knotSpin;
+      this.knotPitch += dt * (0.32 + frame.norm.sub * 0.55) * spin;
+      this.knotYaw += dt * (0.48 + frame.norm.high * 0.65) * spin;
+      this.knotPhase += (dt * (0.45 + frame.norm.mid * 0.85) + (frame.kickPulse ? 0.12 : 0)) * spin;
+    }
+    gl.uniform3f(this.uKnot, this.knotPitch, this.knotYaw, this.knotPhase);
     gl.uniform1f(this.uSize, this.p.size);
     gl.uniform1f(this.uBasePulse, this.p.basePulse);
     gl.uniform1i(this.uNormalMode, NORMAL_MODE_MAP[this.p.normalMode] ?? 0);

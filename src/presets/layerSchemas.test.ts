@@ -85,7 +85,7 @@ describe("layer schemas", () => {
   });
 
   it("SHAPE_SPECS covers all 5 orthogonal categories and validates correctly", () => {
-    expect(SHAPE_SPECS.length).toBe(43);
+    expect(SHAPE_SPECS.length).toBe(44);
     SHAPE_SPECS.forEach(assertValidSpec);
 
     const groups = new Set(SHAPE_SPECS.map(s => s.group));
@@ -95,7 +95,7 @@ describe("layer schemas", () => {
     const baseSpecs = SHAPE_SPECS.filter(s => s.group === 'Base');
     expect(baseSpecs.map(s => s.name)).toEqual([
       'baseShape', 'edgeMode', 'sides', 'starInner', 'cornerRadius', 'arcSweep',
-      'spiralTurns', 'size', 'posX', 'posY', 'rotation', 'spinSpeed', 'basePulse',
+      'spiralTurns', 'knotSpin', 'size', 'posX', 'posY', 'rotation', 'spinSpeed', 'basePulse',
     ]);
 
     // Category 2: Effect
@@ -149,7 +149,7 @@ describe("layer schemas", () => {
       effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'],
     });
     expect(specMap.get('normalMode')?.showWhen).toEqual({
-      baseShape: ['polygon', 'star', 'spiral', 'figure8', 'arc'],
+      baseShape: ['polygon', 'star', 'spiral', 'figure8', 'knot3d', 'arc'],
     });
 
     expect(specMap.get('propCount')?.showWhen).toEqual({ propMode: ['concentric', 'stream', 'orbit', 'polar'] });
