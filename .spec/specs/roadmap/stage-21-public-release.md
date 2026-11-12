@@ -2,6 +2,8 @@
 
 Goal: ready for people who have never seen the app. A preset browser on the main screen, basic phone support, a lighter first load with no admin code for visitors, clearer accessibility controls, and backup.
 
+Status 2026-11-12: closed by Charlie. All slices built and merged. The "Done when" checks were not run on the live site.
+
 Read `README.md` in this folder first. Needs Stage 16 merged. The security work is in Stage 14 and must already be live.
 
 ## Why
@@ -21,17 +23,21 @@ Phone support is basic for now (Charlie, 2026-11-10): file and microphone source
 
 ## Slices
 
-- [ ] **Slice 21.1: Fix start-screen copy, remove dead Calm checkbox code, hide the debug shortcut, and announce the Calm preset switch** 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `index.html`, `src/ui/controls.ts`, `src/ui/controls.test.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.2: Tab-audio notice shown once and dismissible; phone-first source picker** 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/notices.ts`, `src/ui/controls.ts`, `src/main.ts`, `index.html` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.3: Intensity control (Full, Reduced, Calm) and live reduced-motion handling** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/safety.ts`, `src/render/safety.test.ts`, `src/ui/controls.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.4: Preset browser on the main screen with themes, favourites and cost badges** 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/presetBrowser.ts` [NEW], `src/ui/presetBrowser.test.ts` [NEW], `index.html`, `src/style.css` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.5: Wire the preset browser, favourite button and auto-cycle defaults** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/main.ts`, `src/ui/controls.ts`, `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.6: Preset thumbnails captured from the canvas** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/thumbnails.ts` [NEW], `src/ui/thumbnails.test.ts` [NEW], `src/ui/presetBrowser.ts`, `src/render/compositor.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.7: Touch gestures and screen wake lock** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/gestures.ts` [NEW], `src/ui/gestures.test.ts` [NEW], `src/main.ts`, `src/style.css` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.8: Studio and admin code load only when opened** `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/main.ts`, `src/studio/studio.ts`, `src/studio/adminControls.ts`, `vite.config.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.9: Export and import the whole user library** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/presets/session.ts`, `src/presets/session.test.ts`, `src/studio/studio.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.10: Installable app with offline cache** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `public/manifest.webmanifest` [NEW], `public/sw.js` [NEW], `index.html`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
-- [ ] **Slice 21.11: Accessibility pass on the new screens** `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/presetBrowser.ts`, `src/ui/toast.ts`, `src/style.css`, `docs/stage21-accessibility-audit.md` [NEW] | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.1: Fix start-screen copy, remove dead Calm checkbox code, hide the debug shortcut, and announce the Calm preset switch** 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `index.html`, `src/ui/controls.ts`, `src/ui/controls.test.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.2: Tab-audio notice shown once and dismissible; phone-first source picker** 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/notices.ts`, `src/ui/controls.ts`, `src/main.ts`, `index.html` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.3: Intensity control (Full, Reduced, Calm) and live reduced-motion handling** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/safety.ts`, `src/render/safety.test.ts`, `src/ui/controls.ts`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.4: Preset browser on the main screen with themes, favourites and cost badges** 🖐 `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/presetBrowser.ts` [NEW], `src/ui/presetBrowser.test.ts` [NEW], `index.html`, `src/style.css` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.5: Wire the preset browser, favourite button and auto-cycle defaults** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/main.ts`, `src/ui/controls.ts`, `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.6: Preset thumbnails captured from the canvas** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/thumbnails.ts` [NEW], `src/ui/thumbnails.test.ts` [NEW], `src/ui/presetBrowser.ts`, `src/render/compositor.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.7: Touch gestures and screen wake lock** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/gestures.ts` [NEW], `src/ui/gestures.test.ts` [NEW], `src/main.ts`, `src/style.css` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.8: Studio and admin code load only when opened** `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/main.ts`, `src/studio/studio.ts`, `src/studio/adminControls.ts`, `vite.config.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.9: Export and import the whole user library** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/presets/session.ts`, `src/presets/session.test.ts`, `src/studio/studio.ts`, `src/ui/controls.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.10: Installable app with offline cache** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `public/manifest.webmanifest` [NEW], `public/sw.js` [NEW], `index.html`, `src/main.ts` | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.11: Accessibility pass on the new screens** `[UI / VISUAL]` worker: engineer-sonnet (Sonnet) Target files: `src/ui/presetBrowser.ts`, `src/ui/toast.ts`, `src/style.css`, `docs/stage21-accessibility-audit.md` [NEW] | Verify: npm run typecheck && npm test && npm run build && npm run lint
+- [x] **Slice 21.12: Auto-cycle on by default** (added after this spec was written)
+- [x] **Slice 21.13: Visuals menu auto-cycle selector (Off, Timer, Beat), Shuffle toggle and adjustable timer** (Issue #303)
+- [x] **Slice 21.14: Condensed Visuals panel sized to the screen** (Issue #304)
+- [x] **Slice 21.15: Studio keeps scroll and open folders on rebuild** (Issue #307)
 
 ## Slice notes
 - **21.3** Full keeps today's limits. Reduced and Calm tighten them. No setting may loosen the limiter beyond today's values. Listen for changes to the reduced-motion media query.
