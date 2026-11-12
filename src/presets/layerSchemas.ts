@@ -322,7 +322,8 @@ export type ShapeBaseType =
   | 'polygon'
   | 'star'
   | 'spiral'
-  | 'figure8';
+  | 'figure8'
+  | 'knot3d';
 
 export type ShapeEdgeMode =
   | 'bottom'
@@ -397,6 +398,7 @@ export interface ShapeParams {
   cornerRadius: number;   // 0..0.5
   arcSweep: number;       // 0.1..1.0
   spiralTurns: number;    // 1..5
+  knotSpin: number;       // 0..3 (3D curve spin speed multiplier; 0 holds it still, Slice 19.9c)
   size: number;           // 0.1..2.0
   posX: number;           // -0.8..0.8
   posY: number;           // -0.8..0.8
@@ -451,6 +453,7 @@ export const SHAPE_DEFAULTS: ShapeParams = {
   cornerRadius: 0.0,
   arcSweep: 0.75,
   spiralTurns: 2.5,
+  knotSpin: 1,
   size: 0.45,
   posX: 0.0,
   posY: 0.0,
@@ -495,13 +498,14 @@ export const SHAPE_DEFAULTS: ShapeParams = {
 
 export const SHAPE_SPECS: readonly ParamSpec[] = [
   // Category 1 — Base Geometry ("Base")
-  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8'], description: 'Selects the underlying geometric blueprint curve.' },
+  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8', 'knot3d'], description: 'Selects the underlying geometric blueprint curve. 3D curve is a rotating knot seen in perspective.' },
   { type: 'enum', name: 'edgeMode', label: 'Edge mode', group: 'Base', default: SHAPE_DEFAULTS.edgeMode, options: ['bottom', 'top', 'dualHorizontal', 'dualVertical', 'frame'], showWhen: { baseShape: 'edgeLine' }, description: 'Configures viewport edge alignment anchoring for line geometries.' },
   { type: 'int', name: 'sides', label: 'Sides', group: 'Base', default: SHAPE_DEFAULTS.sides, min: 3, max: 12, step: 1, showWhen: { baseShape: ['polygon', 'star'] }, description: 'Sets the number of polygonal vertices or star points.' },
   { type: 'float', name: 'starInner', label: 'Star inner ratio', group: 'Base', default: SHAPE_DEFAULTS.starInner, min: 0.2, max: 0.9, step: 0.05, showWhen: { baseShape: 'star' }, description: 'Adjusts the inner radius indentation ratio for star shapes.' },
   { type: 'float', name: 'cornerRadius', label: 'Corner radius', group: 'Base', default: SHAPE_DEFAULTS.cornerRadius, min: 0, max: 0.5, step: 0.02, showWhen: { baseShape: ['polygon', 'star', 'edgeLine'] }, description: 'Rounds sharp geometric vertices into smooth filleted corners.' },
   { type: 'float', name: 'arcSweep', label: 'Arc sweep', group: 'Base', default: SHAPE_DEFAULTS.arcSweep, min: 0.1, max: 1.0, step: 0.05, showWhen: { baseShape: 'arc' }, description: 'Sets the angular coverage fraction of arc curve segments.' },
   { type: 'float', name: 'spiralTurns', label: 'Spiral turns', group: 'Base', default: SHAPE_DEFAULTS.spiralTurns, min: 1, max: 5, step: 0.25, showWhen: { baseShape: 'spiral' }, description: 'Sets the number of concentric revolutions for spiral curves.' },
+  { type: 'float', name: 'knotSpin', label: '3D curve spin', group: 'Base', default: SHAPE_DEFAULTS.knotSpin, min: 0, max: 3, step: 0.05, showWhen: { baseShape: 'knot3d' }, description: 'Scales how fast the 3D curve turns. Bass drives its pitch, treble its yaw, mids and kicks its phase. 0 holds it still.' },
   { type: 'float', name: 'size', label: 'Size', group: 'Base', default: SHAPE_DEFAULTS.size, min: 0.1, max: 2.0, step: 0.02, description: 'Scales overall geometric blueprint dimensions.' },
   { type: 'float', name: 'posX', label: 'Position X', group: 'Base', default: SHAPE_DEFAULTS.posX, min: -0.8, max: 0.8, step: 0.02, description: 'Positions geometric center along the horizontal axis.' },
   { type: 'float', name: 'posY', label: 'Position Y', group: 'Base', default: SHAPE_DEFAULTS.posY, min: -0.8, max: 0.8, step: 0.02, description: 'Positions geometric center along the vertical axis.' },
@@ -521,7 +525,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   // Category 3 — Direction & Symmetry ("Direction")
   { type: 'enum', name: 'extrudeDirection', label: 'Extrude direction', group: 'Direction', default: SHAPE_DEFAULTS.extrudeDirection, options: ['outward', 'inward', 'bilateral', 'alternating'], showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Controls whether reactive visual elements extend outward, inward, or bilaterally.' },
   { type: 'enum', name: 'symmetry', label: 'Symmetry', group: 'Direction', default: SHAPE_DEFAULTS.symmetry, options: ['wrap', 'mirror', 'repeat2', 'repeat4'], description: 'Applies geometric reflection and rotational cloning across axes.' },
-  { type: 'enum', name: 'normalMode', label: 'Normal mode', group: 'Direction', default: SHAPE_DEFAULTS.normalMode, options: ['radial', 'perpendicular'], showWhen: { baseShape: ['polygon', 'star', 'spiral', 'figure8', 'arc'] }, description: 'Determines vector orientation along surface normals or radial vectors.' },
+  { type: 'enum', name: 'normalMode', label: 'Normal mode', group: 'Direction', default: SHAPE_DEFAULTS.normalMode, options: ['radial', 'perpendicular'], showWhen: { baseShape: ['polygon', 'star', 'spiral', 'figure8', 'knot3d', 'arc'] }, description: 'Determines vector orientation along surface normals or radial vectors.' },
 
   // Category 4 — Propagation ("Propagation")
   { type: 'enum', name: 'propMode', label: 'Propagation mode', group: 'Propagation', default: SHAPE_DEFAULTS.propMode, options: ['single', 'concentric', 'shockwave', 'stream', 'orbit', 'polar'], description: 'Configures instance propagation behavior through space and time.' },

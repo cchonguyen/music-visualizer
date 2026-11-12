@@ -6,7 +6,7 @@ precision highp int;
 uniform vec2 uInstOffset[16];
 uniform vec4 uInstTransform[16]; // x: scale, y: rotation (rad), z: alpha, w: delay attenuation
 
-uniform int uBaseShape;        // 0: centerLine, 1: edgeLine, 2: circle, 3: arc, 4: polygon, 5: star, 6: spiral, 7: figure8
+uniform int uBaseShape;        // 0: centerLine, 1: edgeLine, 2: circle, 3: arc, 4: polygon, 5: star, 6: spiral, 7: figure8, 8: knot3d
 uniform int uEdgeMode;         // 0: bottom, 1: top, 2: dualHorizontal, 3: dualVertical, 4: frame
 uniform int uSides;            // 3..12
 uniform float uStarInner;      // 0.2..0.9
@@ -44,8 +44,28 @@ out float vAlpha;
 out float vU;
 out float vUAudio;
 
+uniform vec3 uKnot;            // 3D curve: x = pitch (rad), y = yaw (rad), z = phase (rad). Only read when uBaseShape == 8
+
 const float PI = 3.141592653589793;
 const float TAU = 6.283185307179586;
+
+// 3D curve base (Slice 19.9c): a Lissajous knot, rotated by pitch then yaw and drawn in perspective.
+vec3 knotRot(vec3 p, float pitch, float yaw) {
+  float cp = cos(pitch);
+  float sp = sin(pitch);
+  vec3 r1 = vec3(p.x, cp * p.y - sp * p.z, sp * p.y + cp * p.z);
+  float cy = cos(yaw);
+  float sy = sin(yaw);
+  return vec3(cy * r1.x + sy * r1.z, r1.y, -sy * r1.x + cy * r1.z);
+}
+
+vec2 knotPoint(float u, float effSize) {
+  float t = TAU * u;
+  vec3 knot = vec3(sin(3.0 * t + uKnot.z), sin(2.0 * t), cos(5.0 * t));
+  vec3 p3 = knotRot(knot, uKnot.x, uKnot.y);
+  float depth = 2.2 - p3.z * 0.55;
+  return effSize * 1.6 * p3.xy / depth;
+}
 
 void evaluateBaseCurve(
   float u,
@@ -227,6 +247,13 @@ void evaluateBaseCurve(
     vec2 dr = k * vec2(cos(theta), sin(theta)) + TAU * uSpiralTurns * vec2(-sin(theta), cos(theta));
     float lenDr = length(dr);
     T0 = (lenDr > 0.0001) ? (dr / lenDr) : vec2(cos(theta), sin(theta));
+    N0 = vec2(-T0.y, T0.x);
+  } else if (uBaseShape == 8) {
+    // knot3d: tangent from a small step either side of the point
+    P0 = knotPoint(u, effSize);
+    vec2 dr = knotPoint(u + 0.001, effSize) - knotPoint(u - 0.001, effSize);
+    float lenDr = length(dr);
+    T0 = (lenDr > 0.00001) ? (dr / lenDr) : vec2(1.0, 0.0);
     N0 = vec2(-T0.y, T0.x);
   } else {
     // figure8
