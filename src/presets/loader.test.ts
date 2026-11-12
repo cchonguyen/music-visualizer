@@ -182,6 +182,13 @@ describe('legacyShapeMigration', () => {
       params: params as never,
     });
 
+    it('keeps the trace sharp: 256 points and fast attack and release (Slice 19.12)', () => {
+      const m = migrateLegacyLayerToShape(waveform({ mode: { value: 'line' } }));
+      expect(m.params.sampleCount?.value).toBe(256);
+      expect(m.params.attackMs?.value).toBe(5);
+      expect(m.params.releaseMs?.value).toBe(40);
+    });
+
     it('uses the signed scope source so silence stays flat', () => {
       for (const mode of ['line', 'circle', 'star7']) {
         const m = migrateLegacyLayerToShape(waveform({ mode: { value: mode } }));
