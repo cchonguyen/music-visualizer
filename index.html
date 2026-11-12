@@ -171,6 +171,26 @@
             <select id="reaction-style" aria-label="Reaction style"></select>
           </label>
         </div>
+        <div class="exp-render-row">
+          <label class="exp-field">
+            <span>Preset auto-cycle</span>
+            <select id="exp-cycle-mode" aria-label="Preset auto-cycle">
+              <option value="off">Off</option>
+              <option value="timer">Timer</option>
+              <option value="beat">Beat</option>
+            </select>
+          </label>
+          <label class="exp-checkbox-field">
+            <input id="exp-cycle-shuffle" type="checkbox" aria-label="Shuffle presets" />
+            <span>Shuffle</span>
+          </label>
+        </div>
+        <div id="exp-cycle-interval-row" class="exp-render-row exp-cycle-interval-row" hidden>
+          <label class="exp-field">
+            <span>Switch every <output id="exp-cycle-interval-value">20 s</output></span>
+            <input id="exp-cycle-interval" type="range" min="5" max="120" step="1" value="20" aria-label="Seconds between preset switches" />
+          </label>
+        </div>
         <div class="exp-actions-row">
           <button type="button" id="exp-export-btn" class="exp-action-btn">Export Look</button>
           <label class="exp-action-btn exp-import-label">

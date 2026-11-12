@@ -478,7 +478,10 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     height: 44px;
     --slider-thumb-d: 28px;
   }
-  .exp-checkbox-field {
+  .exp-render-row[hidden] { display: none; }
+.exp-cycle-interval-row { grid-template-columns: 1fr; }
+
+.exp-checkbox-field {
     min-height: 44px;
   }
   .exp-checkbox-field input[type="checkbox"] {

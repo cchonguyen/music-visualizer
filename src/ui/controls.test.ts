@@ -115,6 +115,16 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
     expect(sourcePanel).toContain('id="volume-value"');
   });
 
+  it('has the preset auto-cycle selector, Shuffle toggle and timer length in #experience-panel (slice 21.13)', () => {
+    expect(expPanel).toContain('id="exp-cycle-mode"');
+    for (const v of ['off', 'timer', 'beat']) {
+      expect(expPanel).toMatch(new RegExp(`<option value="${v}">`));
+    }
+    expect(expPanel).toContain('id="exp-cycle-shuffle"');
+    expect(expPanel).toMatch(/id="exp-cycle-interval"[^>]*min="5"[^>]*max="120"/);
+    expect(expPanel).toContain('id="exp-cycle-interval-value"');
+  });
+
   it('consolidates Experience mode, Camera, Color, Gain, Beat, Quality and Aspect in #experience-panel', () => {
     for (const mode of ['cinematic', 'calm', 'minimal', 'colorWalk']) {
       expect(expPanel).toContain(`data-mode="${mode}"`);
