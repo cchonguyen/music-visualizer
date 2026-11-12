@@ -22,6 +22,8 @@ Source documents: `.spec/SCOPE_BRIEF.md` (v2 brief, phone-focused, superseded fo
 
 **Done means:** each stage works on the owner's desktop and has been used for real music before the next stage starts.
 
+**Studio scroll jump (2026-11-12, triage, not yet confirmed):** Picking a Layer in the Studio rebuilds the whole panel (`bind` in `src/studio/studio.ts:677`, called from the Layer dropdown at `:1020` and from `structure()` at `:1527`). The rebuild collapses sections and resets the scroll to the top. Sliders do not rebuild. Fix: keep the scroll position and which sections are open across a rebuild, or update the layer section in place.
+
 ## 2. Out of Scope (Do NOT Build)
 
 Until moved into a stage above:
@@ -39,6 +41,7 @@ Until moved into a stage above:
 - Particle outflow modes, XY scope, and a separate particle morph control. The spread slice only widens reach, scales size, and adds the follow switch.
 - Shape layer opacity fix (2026-11-09): no changes to `applyLayerBlend` or any blend mode, no changes to other layers' shaders, no changes to trail attenuation.
 - Visuals menu auto-cycle and shuffle (2026-11-12): no new cycling or shuffle engine (reuse `src/presets/autoCycle.ts`), no new key bindings, no changes to Studio favourite/skip tags, no changes to the colour "Auto-cycle" option, no beat minimum-gap editor (8 s stays; only the timer length is adjustable), no render or safety pipeline changes.
+- Studio scroll jump (2026-11-12): no new state store or framework, no virtual scroller, no changes to presets, schema or render code, no rewrite of every `bind` call site. Only the Studio panel's scroll and open-section state are kept across rebuilds.
 - Third-party 3D engines (three.js and similar) in v1. Reason: we build on raw WebGL2 so the render layer stays small and fully understood. Revisit only if a slice proves it necessary.
 
 ## 3. Guiding Principles
