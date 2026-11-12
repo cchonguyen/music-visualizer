@@ -203,6 +203,9 @@ export class ShapeLayer implements RenderLayer {
   private uTexMid: WebGLUniformLocation | null = null;
   private uTexHigh: WebGLUniformLocation | null = null;
   private uKnot: WebGLUniformLocation | null = null;
+  /** Loudness averages for the loudness-driven rings option (Slice 19.9d). */
+  private readonly slowLoud = new SlowFollower(3);
+  private readonly slowSubEnv = new SlowFollower(2);
   /** 3D curve angles and phase (Slice 19.9c). Pitch follows sub, yaw follows high, phase follows mid and kicks. */
   private knotPitch = 0;
   private knotYaw = 0;
@@ -304,6 +307,8 @@ export class ShapeLayer implements RenderLayer {
     this.peakVelocities.fill(0);
     this.raw256.fill(0);
     for (const f of this.slow256) f.reset();
+    this.slowLoud.reset();
+    this.slowSubEnv.reset();
     this.history.fill(0);
     this.historyHead = 0;
     this.delayedSamples.fill(0);
@@ -478,6 +483,21 @@ export class ShapeLayer implements RenderLayer {
     const mode = this.p.propMode;
     let activePropCount = 1;
 
+    // Loudness-driven rings (Slice 19.9d), same shaping as the legacy Rings layer: count follows
+    // the loudness level and its rise above its own average, stroke follows the band norms and bass punch.
+    let loudCount: number | null = null;
+    let thicknessMul = 1;
+    if (mode === 'concentric' && this.p.loudnessRings) {
+      const unit = (x: number) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0);
+      const visualGain = getVisualGain();
+      const loudAvg = this.slowLoud.step(frame.loudness, dt);
+      const level = shapeReaction(Math.min(1, 0.4 * unit(frame.energy) + 0.6 * punch(frame.loudness, loudAvg, 4)), visualGain);
+      const bassPunch = punch(frame.env.sub, this.slowSubEnv.step(frame.env.sub, dt), 4);
+      const normMean = (unit(frame.norm.sub) + unit(frame.norm.mid) + unit(frame.norm.high)) / 3;
+      loudCount = Math.min(16, Math.max(1, Math.round(level * this.p.propCount)));
+      thicknessMul = 0.6 + 0.8 * normMean + 0.6 * bassPunch * visualGain;
+    }
+
     this.instOffset.fill(0);
     this.instTransform.fill(0);
 
@@ -490,7 +510,7 @@ export class ShapeLayer implements RenderLayer {
       this.instTransform[2] = 1.0;
       this.instTransform[3] = 1.0;
     } else if (mode === 'concentric') {
-      const count = Math.min(16, Math.max(1, Math.round(this.p.propCount)));
+      const count = loudCount ?? Math.min(16, Math.max(1, Math.round(this.p.propCount)));
       activePropCount = count;
       const deltaS = this.p.propSpacing * 0.45;
       for (let m = 0; m < count; m++) {
@@ -678,7 +698,7 @@ export class ShapeLayer implements RenderLayer {
     gl.uniform1i(this.uEffectType, EFFECT_TYPE_MAP[this.p.effectType] ?? 4);
     gl.uniform1i(this.uSampleCount, sampleCount);
     gl.uniform1f(this.uEffectLength, this.p.effectLength);
-    gl.uniform1f(this.uThickness, this.p.thickness);
+    gl.uniform1f(this.uThickness, this.p.thickness * thicknessMul);
     gl.uniform1f(this.uBarGap, this.p.barGap);
     gl.uniform1i(this.uLedSegments, Math.round(this.p.ledSegments));
     gl.uniform1i(this.uPeakCaps, this.p.peakCaps ? 1 : 0);

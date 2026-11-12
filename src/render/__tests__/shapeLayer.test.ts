@@ -564,6 +564,57 @@ describe('ShapeLayer', () => {
     });
   });
 
+  describe('Loudness-driven rings (Slice 19.9d)', () => {
+    const quiet = () => makeMockFrame({ loudness: 0, energy: 0, norm: { sub: 0, mid: 0, high: 0 }, env: { sub: 0, mid: 0, high: 0 } });
+    const loud = () => makeMockFrame({ loudness: 1, energy: 1, norm: { sub: 1, mid: 1, high: 1 }, env: { sub: 1, mid: 1, high: 1 } });
+    /** Quiet for 100 frames, then `after` loud frames. Returns the last draw's instance count and stroke width. */
+    const run = (params: Record<string, unknown>, after: number) => {
+      const g = createMockGl();
+      const layer = new ShapeLayer({ propMode: 'concentric', propCount: 8, effectType: 'solidLine', thickness: 2, ...params });
+      layer.init(g);
+      for (let k = 0; k < 100; k++) layer.draw(quiet(), mockClock, mockTarget);
+      for (let k = 0; k < after; k++) layer.draw(loud(), mockClock, mockTarget);
+      return { rings: g.drawCalls[g.drawCalls.length - 1]!.primcount, stroke: g.uniformValues.get('uThickness') as number };
+    };
+
+    it('is a bool schema option, off by default, shown for concentric mode only', () => {
+      const spec = SHAPE_SPECS.find((s) => s.name === 'loudnessRings') as unknown as { type: string; default: boolean; showWhen: Record<string, string> };
+      expect(spec.type).toBe('bool');
+      expect(spec.default).toBe(false);
+      expect(SHAPE_DEFAULTS.loudnessRings).toBe(false);
+      expect(spec.showWhen).toEqual({ propMode: 'concentric' });
+    });
+
+    it('stays off by default: the full instance count and the set stroke width', () => {
+      const r = run({}, 5);
+      expect(r.rings).toBe(8);
+      expect(r.stroke).toBe(2);
+    });
+
+    it('shows one thin ring in calm and more, wider rings when the music rises', () => {
+      const calm = run({ loudnessRings: true }, 0);
+      const rise = run({ loudnessRings: true }, 3);
+      expect(calm.rings).toBe(1);
+      expect(calm.stroke).toBeCloseTo(2 * 0.6, 5);
+      expect(rise.rings).toBe(8);
+      expect(rise.stroke).toBeGreaterThan(calm.stroke);
+    });
+
+    it('never shows more rings than the instance count', () => {
+      expect(run({ loudnessRings: true, propCount: 3 }, 3).rings).toBeLessThanOrEqual(3);
+    });
+
+    it('settles to fewer rings once the loudness has been held, because its average catches up', () => {
+      expect(run({ loudnessRings: true }, 500).rings).toBeLessThan(run({ loudnessRings: true }, 3).rings);
+    });
+
+    it('leaves other propagation modes untouched', () => {
+      const r = run({ loudnessRings: true, propMode: 'single' }, 3);
+      expect(r.rings).toBe(1);
+      expect(r.stroke).toBe(2);
+    });
+  });
+
   describe('3D curve base (Slice 19.9c)', () => {
     const knot = (g: ReturnType<typeof createMockGl>) => g.uniformValues.get('uKnot') as number[];
     const run = (params: Record<string, unknown>, frames: number, frame = makeMockFrame()) => {
