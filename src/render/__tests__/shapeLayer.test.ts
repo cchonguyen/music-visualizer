@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames, applyCopyMotion } from '../layers/shape';
+import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames, applyCopyMotion, bucketExtreme, peakBandValues } from '../layers/shape';
 import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
 import { getVisualGain, setVisualGain } from '../gainStore';
 import type { AudioFrame } from '../../audio/types';
@@ -460,7 +460,7 @@ describe('ShapeLayer', () => {
       expect(spec.max).toBe(SHAPE_REACTIVITY_MAX);
       expect(spec.max).toBe(15.0);
       expect(SHAPE_AMP_MAX).toBe(10.0);
-      expect(SHAPE_DEFAULTS.reactivity).toBe(1.0);
+      expect(SHAPE_DEFAULTS.reactivity).toBe(1.25);
     });
 
     it('GLSL AMP_MAX constant matches the TypeScript constant', () => {
@@ -818,5 +818,19 @@ describe('ShapeLayer', () => {
       expect(fragSrc).toContain('uniform int uLedSegments;');
       expect(fragSrc).toContain('out vec4 fragColor;');
     });
+  });
+});
+
+describe('Peak-preserving sampling (Slice 19.13)', () => {
+  it('bucketExtreme keeps the sample with the largest magnitude, with its sign', () => {
+    const wf = new Float32Array([0.1, -0.9, 0.3, 0.2, 0.5, 0.4, -0.2, 0.1]);
+    expect(bucketExtreme(wf, 0, 4)).toBeCloseTo(-0.9);
+    expect(bucketExtreme(wf, 1, 4)).toBeCloseTo(0.5);
+  });
+
+  it('peakBandValues leans on the loudest bin instead of the mean', () => {
+    const smoothed = new Float32Array([0, 0, 1, 0]);
+    const v = peakBandValues(smoothed, [{ loBin: 0, hiBin: 4 }]);
+    expect(v[0]).toBeCloseTo(0.7 + 0.3 * 0.25);
   });
 });

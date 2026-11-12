@@ -11,7 +11,6 @@ import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
 import { blendAccents } from '../colourSwap';
 import { buildBarEdges, type BarEdge } from '../logScale';
-import { barValues } from '../barsState';
 import { BandTexture } from '../bandTexture';
 import { SlowFollower, punch } from '../dynamics';
 import { getVisualGain, shapeReaction } from '../gainStore';
@@ -129,6 +128,42 @@ export function applyCopyMotion(
     transforms[m * 4]! *= 1 + wobble * Math.sin(phase + m * 0.9);
     transforms[m * 4 + 1]! += m * rot;
   }
+}
+
+/**
+ * Peak-preserving downsampling (Slice 19.13). Picking or averaging one value per bucket rounds off the peaks.
+ * The trace keeps the sample with the largest magnitude in each bucket, and the spectrum blends mostly
+ * the loudest bin with a little of the mean.
+ */
+export function bucketExtreme(wf: ArrayLike<number>, i: number, step: number): number {
+  const lo = Math.min(wf.length - 1, Math.floor(i * step));
+  const hi = Math.min(wf.length, Math.max(lo + 1, Math.floor((i + 1) * step)));
+  let best = wf[lo] ?? 0;
+  for (let k = lo + 1; k < hi; k++) {
+    const v = wf[k] ?? 0;
+    if (Math.abs(v) > Math.abs(best)) best = v;
+  }
+  return best;
+}
+
+/** One value per band: 70% of the loudest bin and 30% of the mean, clamped to 0..1. */
+export function peakBandValues(smoothed: Float32Array, edges: { loBin: number; hiBin: number }[]): Float32Array {
+  const out = new Float32Array(edges.length);
+  for (let i = 0; i < edges.length; i++) {
+    const e = edges[i]!;
+    const lo = Math.max(0, e.loBin);
+    const hi = Math.min(e.hiBin, smoothed.length);
+    if (hi <= lo) continue;
+    let sum = 0;
+    let max = 0;
+    for (let k = lo; k < hi; k++) {
+      const v = smoothed[k] ?? 0;
+      sum += v;
+      if (v > max) max = v;
+    }
+    out[i] = Math.min(1, Math.max(0, 0.7 * max + 0.3 * (sum / (hi - lo))));
+  }
+  return out;
 }
 
 /** Frames of smoothed audio kept for per-element delay. */
@@ -353,7 +388,7 @@ export class ShapeLayer implements RenderLayer {
         this.edgeSampleRate = frame.sampleRate;
         this.edgeFftSize = fftSize;
       }
-      const vals = barValues(frame.smoothedSpectrum, this.edges);
+      const vals = peakBandValues(frame.smoothedSpectrum, this.edges);
       for (let i = 0; i < sampleCount; i++) {
         rawBins[i] = vals[i] ?? 0;
       }
@@ -361,40 +396,35 @@ export class ShapeLayer implements RenderLayer {
       const wf = frame.waveform;
       const step = wf.length / sampleCount;
       for (let i = 0; i < sampleCount; i++) {
-        const idx = Math.min(wf.length - 1, Math.floor(i * step));
-        rawBins[i] = (wf[idx]! + 1.0) * 0.5;
+        rawBins[i] = (bucketExtreme(wf, i, step) + 1.0) * 0.5;
       }
     } else if (this.p.audioSource === 'scope') {
       // Signed oscilloscope trace: keeps the sign so silence stays at zero.
       const wf = frame.waveform;
       const step = wf.length / sampleCount;
       for (let i = 0; i < sampleCount; i++) {
-        const idx = Math.min(wf.length - 1, Math.floor(i * step));
-        rawBins[i] = wf[idx]!;
+        rawBins[i] = bucketExtreme(wf, i, step);
       }
     } else if (this.p.audioSource === 'sub' || this.p.audioSource === 'bass') {
       const wf = frame.bandWaveforms.sub;
       const step = wf.length / sampleCount;
       const env = frame.env.sub;
       for (let i = 0; i < sampleCount; i++) {
-        const idx = Math.min(wf.length - 1, Math.floor(i * step));
-        rawBins[i] = Math.abs(wf[idx]!) * env * 2.0;
+        rawBins[i] = Math.abs(bucketExtreme(wf, i, step)) * env * 2.0;
       }
     } else if (this.p.audioSource === 'mid') {
       const wf = frame.bandWaveforms.mid;
       const step = wf.length / sampleCount;
       const env = frame.env.mid;
       for (let i = 0; i < sampleCount; i++) {
-        const idx = Math.min(wf.length - 1, Math.floor(i * step));
-        rawBins[i] = Math.abs(wf[idx]!) * env * 2.0;
+        rawBins[i] = Math.abs(bucketExtreme(wf, i, step)) * env * 2.0;
       }
     } else if (this.p.audioSource === 'treble') {
       const wf = frame.bandWaveforms.high;
       const step = wf.length / sampleCount;
       const env = frame.env.high;
       for (let i = 0; i < sampleCount; i++) {
-        const idx = Math.min(wf.length - 1, Math.floor(i * step));
-        rawBins[i] = Math.abs(wf[idx]!) * env * 2.0;
+        rawBins[i] = Math.abs(bucketExtreme(wf, i, step)) * env * 2.0;
       }
     } else {
       // energy
