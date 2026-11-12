@@ -563,6 +563,59 @@ describe('ShapeLayer', () => {
     });
   });
 
+  describe('Band texture option (Slice 19.9b)', () => {
+    const textureCount = (params: Record<string, unknown>) => {
+      const g = createMockGl();
+      const layer = new ShapeLayer(params);
+      layer.init(g);
+      layer.draw(makeMockFrame(), mockClock, mockTarget);
+      return { layer, g, created: (g.createTexture as unknown as { mock: { calls: unknown[] } }).mock.calls.length };
+    };
+
+    it('is a float schema option, 0 to 2 and off by default', () => {
+      const spec = SHAPE_SPECS.find((s) => s.name === 'bandTexture') as unknown as { type: string; default: number; min: number; max: number };
+      expect(spec.type).toBe('float');
+      expect(spec.default).toBe(0);
+      expect(spec.min).toBe(0);
+      expect(spec.max).toBe(2);
+      expect(SHAPE_DEFAULTS.bandTexture).toBe(0);
+    });
+
+    it('stays off by default: strength 0 and no band textures created', () => {
+      const off = textureCount({});
+      expect(off.g.uniformValues.get('uTexGain')).toBe(0);
+      const on = textureCount({ bandTexture: 1 });
+      // Three band rows plus the shared audio texture.
+      expect(on.created - off.created).toBe(4);
+    });
+
+    it('passes the strength and points the samplers at the mid and high rows', () => {
+      const { g } = textureCount({ bandTexture: 1.5 });
+      expect(g.uniformValues.get('uTexGain')).toBe(1.5);
+      // Units 0 and 1 hold the audio and peak rows; the band rows follow as sub, mid, high.
+      expect(g.uniformValues.get('uTexMid')).toBe(3);
+      expect(g.uniformValues.get('uTexHigh')).toBe(4);
+    });
+
+    it('releases the band textures on dispose', () => {
+      const { layer, g } = textureCount({ bandTexture: 1 });
+      const before = (g.deleteTexture as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+      layer.dispose();
+      const after = (g.deleteTexture as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+      // Audio and peak rows, three band rows and the shared texture.
+      expect(after - before).toBe(6);
+    });
+
+    it('has the shader hooks: mid scales height, high scales brightness, off when the strength is 0', () => {
+      expect(vertSrc).toContain('uniform float uTexGain;');
+      expect(vertSrc).toContain('uniform sampler2D uTexMid;');
+      expect(vertSrc).toContain('uniform sampler2D uTexHigh;');
+      expect(vertSrc).toContain('if (uTexGain > 0.0) {');
+      expect(vertSrc).toContain('audioAmp *= heightMul;');
+      expect(vertSrc).toContain('vAlpha = instAlpha * brightMul;');
+    });
+  });
+
   describe('Per-element delay (Slice 19.2)', () => {
     it('defaults to no delay so existing presets are unchanged', () => {
       expect(SHAPE_DEFAULTS.elementDelay).toBe(0);
