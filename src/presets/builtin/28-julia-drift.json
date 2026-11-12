@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "name": "Julia Drift",
+  "tags": ["built-in", "flagship", "fractal"],
+  "theme": "fractal",
+  "mood": "dreamy",
+  "transition": { "style": "crossfade", "seconds": 0.5 },
+  "feedback": { "decay": 0.9 },
+  "warp": [
+    { "type": "fold", "params": { "amount": 0.1, "scale": 1, "speed": 0.08, "iterations": 4 } }
+  ],
+  "layers": [
+    {
+      "type": "julia",
+      "blend": "add",
+      "params": { "shape": "classic", "zoom": 1.1, "speed": 0.5, "reactivity": 0.6, "smoothing": 1.2, "iterations": 48, "brightness": 1, "colourSpread": 0.6 }
+    },
+    {
+      "type": "particles",
+      "opacity": 0.4,
+      "blend": "add",
+      "params": { "shape": "dot", "brightness": 0.7, "size": 1.8 }
+    }
+  ],
+  "post": {
+    "bloom": 0.6,
+    "bloomThreshold": 0.45,
+    "colourMap": 0.4,
+    "colourMapBy": "brightness",
+    "colourMapGradient": "aurora",
+    "vignette": 0.45
+  }
+}

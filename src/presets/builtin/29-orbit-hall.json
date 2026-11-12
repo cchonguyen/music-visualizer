@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "Orbit Hall",
+  "tags": ["built-in", "flagship", "orbit"],
+  "theme": "orbit",
+  "mood": "dreamy",
+  "transition": { "style": "crossfade", "seconds": 0.5 },
+  "feedback": { "decay": 0.9 },
+  "layers": [
+    {
+      "type": "orbit",
+      "blend": "add",
+      "params": { "count": 36, "orbits": 4, "radius": 0.7, "tilt": 0.7, "depth": 0.7, "speed": 0.5, "yawSpeed": 0.18, "size": 0.035, "reactivity": 1, "shape": "ring", "brightness": 1 }
+    },
+    {
+      "type": "orbit",
+      "opacity": 0.7,
+      "blend": "add",
+      "params": { "count": 24, "orbits": 2, "radius": 0.35, "tilt": 1.1, "depth": 0.5, "speed": 0.9, "yawSpeed": 0.1, "size": 0.02, "reactivity": 1.2, "shape": "dot", "brightness": 1 }
+    }
+  ],
+  "post": {
+    "bloom": 0.55,
+    "bloomThreshold": 0.5,
+    "vignette": 0.4
+  }
+}

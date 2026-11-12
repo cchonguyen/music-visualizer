@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "name": "Ink Flow",
+  "tags": ["built-in", "flagship", "fluid"],
+  "theme": "fluid",
+  "mood": "calm",
+  "transition": { "style": "crossfade", "seconds": 0.5 },
+  "feedback": { "decay": 0.95, "zoom": 1.002 },
+  "warp": [
+    {
+      "type": "flow",
+      "params": {
+        "amount": { "value": 0.55, "link": { "source": "energy", "amount": 0.3, "smooth": 0.5 } },
+        "scale": 1,
+        "speed": 0.15
+      }
+    },
+    { "type": "swirl", "params": { "amount": 0.08, "scale": 1, "speed": 0.1 } }
+  ],
+  "layers": [
+    { "type": "particles", "opacity": 0.55, "blend": "add", "params": { "shape": "dot", "brightness": 0.8, "size": 2.4 } },
+    {
+      "type": "shape",
+      "opacity": 0.8,
+      "blend": "add",
+      "params": {
+        "baseShape": "circle",
+        "size": 0.5,
+        "effectType": "waveform",
+        "audioSource": "scope",
+        "sampleCount": 128,
+        "effectLength": 0.2,
+        "thickness": 2,
+        "colorMode": "palette",
+        "glow": 0.6
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.5,
+    "bloomThreshold": 0.5,
+    "colourMap": 0.5,
+    "colourMapBy": "brightness",
+    "colourMapGradient": "ocean",
+    "colourMapGradient2": "aurora",
+    "colourMapMix": { "value": 0, "morph": { "to": 1, "rate": 0.03 } },
+    "vignette": 0.4
+  }
+}

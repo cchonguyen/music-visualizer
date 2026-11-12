@@ -54,6 +54,10 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     '24-mirror-tunnel',
     '25-deep-field',
     '26-scope-bloom',
+    '27-ink-flow',
+    '28-julia-drift',
+    '29-orbit-hall',
+    '30-corridor-glide',
   ];
 
   const EXPECTED_FLAGSHIP_IDS = [
@@ -88,7 +92,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   });
 
   it('categorizes all 45+ built-in presets accurately into their subfolders', () => {
-    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(14);
+    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(18);
     expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(11);
     expect(EXPECTED_CLASSICS_IDS).toHaveLength(6);
 
@@ -112,7 +116,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   });
 
   it('ensures every built-in preset in ALL_PRESETS belongs to exactly one subfolder', () => {
-    expect(ALL_PRESETS.length).toBe(31);
+    expect(ALL_PRESETS.length).toBe(35);
     const validSubfolders: SystemSubfolder[] = ['showcase', 'flagship', 'classics'];
 
     const seenIds = new Set<string>();
@@ -217,10 +221,15 @@ describe('Stage 18 showcase presets 21 to 24 (Slice 18.10)', () => {
     expect(post('24-mirror-tunnel').vignetteShape!.value).toBe('box');
   });
 
+  const STAGE_20_IDS = ['27-ink-flow', '28-julia-drift', '29-orbit-hall', '30-corridor-glide'];
   it('every earlier preset is untouched: none has a warp stack, a colour map or a new bloom option', () => {
     for (const p of ALL_PRESETS) {
       // The four flagships below were tuned in slice 20.8 on purpose, so they are exempt here.
-      if (NEW_IDS.includes(p.id) || ['01-curl-fluid-warp', '02-kaleidoscopic-mandala', '03-solarized-contour-rings', '04-mobius-dual-vortex'].includes(p.id)) continue;
+      if (
+        NEW_IDS.includes(p.id) ||
+        STAGE_20_IDS.includes(p.id) ||
+        ['01-curl-fluid-warp', '02-kaleidoscopic-mandala', '03-solarized-contour-rings', '04-mobius-dual-vortex'].includes(p.id)
+      ) continue;
       expect(p.preset.warp, p.id).toBeUndefined();
       expect(p.preset.post.colourMap!.value, p.id).toBe(0);
       expect(p.preset.post.bloomSize!.value, p.id).toBe(0);
@@ -331,5 +340,37 @@ describe('Slice 20.7: every built-in preset has a theme, a mood and a cost level
     expect(presetHasRetiredLayer(old)).toBe(true);
     const scene = buildScene('old', old);
     expect(scene.layers).toHaveLength(1);
+  });
+});
+
+describe('Slice 20.9: generator showcase presets 27 to 30', () => {
+  const ids = ['27-ink-flow', '28-julia-drift', '29-orbit-hall', '30-corridor-glide'];
+  const entries = ids.map((id) => ALL_PRESETS.find((e) => e.id === id));
+
+  it('all four exist, read with no warnings, and sit in the showcase folder', () => {
+    for (const [i, entry] of entries.entries()) {
+      expect(entry, ids[i]).toBeDefined();
+      expect(entry!.warnings, ids[i]).toEqual([]);
+      expect(getSystemSubfolder(ids[i]!)).toBe('showcase');
+    }
+  });
+
+  it('each one uses its generator: flow warp, Julia with fold, Orbit, Architecture', () => {
+    const typesOf = (id: string) => ALL_PRESETS.find((e) => e.id === id)!.preset.layers.map((l) => l.type);
+    const warpOf = (id: string) => (ALL_PRESETS.find((e) => e.id === id)!.preset.warp ?? []).map((w) => w.type);
+    expect(warpOf('27-ink-flow')).toContain('flow');
+    expect(typesOf('28-julia-drift')).toContain('julia');
+    expect(warpOf('28-julia-drift')).toContain('fold');
+    expect(typesOf('29-orbit-hall')).toContain('orbit');
+    expect(typesOf('30-corridor-glide')).toContain('architecture');
+  });
+
+  it('each one has a theme that matches its generator, a mood and a cost level', () => {
+    const themes = entries.map((e) => e!.preset.theme);
+    expect(themes).toEqual(['fluid', 'fractal', 'orbit', 'architecture']);
+    for (const e of entries) {
+      expect(e!.preset.mood).toBeTruthy();
+      expect(['light', 'medium', 'heavy']).toContain(presetCost(e!.preset).level);
+    }
   });
 });

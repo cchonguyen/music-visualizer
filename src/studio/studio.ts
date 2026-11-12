@@ -12,7 +12,7 @@ import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
 import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
-import { MAX_LAYER_SEED, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
+import { MAX_LAYER_SEED, applyMashup, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
 import { attachSwipeDismiss, exportLibraryFile, importLibraryFromPicker } from '../ui/controls';
 import { isSpecVisible, layoutFeedbackPost, type ParamSpec, type ParamValue } from '../presets/schema';
@@ -977,6 +977,18 @@ export class Studio {
     pane.addButton({ title: 'Randomise (within safe ranges)' }).on('click', () => this.vary('random'));
     pane.addButton({ title: 'Mutate (±10%)' }).on('click', () => this.vary('mutate'));
 
+    // --- Mashup (Slice 20.10): keep these layers, take another preset's Feedback and Post look ---------
+    const mashupOptions = this.mashupOptions();
+    const mashupIds = Object.values(mashupOptions);
+    if (mashupIds.length > 0) {
+      if (!mashupIds.includes(this.mashupFrom)) this.mashupFrom = mashupIds[0]!;
+      const holder = { from: this.mashupFrom };
+      pane.addBinding(holder, 'from', { label: 'Look from', options: mashupOptions }).on('change', (ev) => {
+        this.mashupFrom = String(ev.value);
+      });
+      pane.addButton({ title: 'Mashup: use that look on these layers' }).on('click', () => this.mashup());
+    }
+
     // --- Global Director (Sector 483, Slice 7.32) -----------------------------------
     const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
     this.sectionFolders.push(dirFolder);
@@ -1428,6 +1440,36 @@ export class Studio {
     for (const folder of this.sectionFolders) {
       folder.expanded = false;
     }
+  }
+
+  /** Preset whose Feedback and Post look the Mashup button copies. */
+  private mashupFrom = '';
+
+  /** Other presets the Mashup can copy a look from, as { label: id }. A repeated name gets its id added. */
+  private mashupOptions(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const e of this.opts.session.list()) {
+      if (e.id === this.id) continue;
+      const label = out[e.preset.name] === undefined ? e.preset.name : `${e.preset.name} (${e.id})`;
+      out[label] = e.id;
+    }
+    return out;
+  }
+
+  /** Copies the chosen preset's look (Feedback, Post, warp, reactions) onto this preset's layers, as one undo step. */
+  private mashup(): void {
+    const session = this.opts.session;
+    const entry = session.get(this.id);
+    const source = session.get(this.mashupFrom);
+    if (!entry || !source || source.id === entry.id) {
+      showToast('Pick a different preset to take the look from');
+      return;
+    }
+    applyMashup(entry.preset, source.preset);
+    session.commit(this.id, Date.now(), true);
+    session.rebuild(this.id);
+    this.bind(this.id);
+    showToast(`Look taken from ${source.preset.name} (undo to go back)`);
   }
 
   /** Seed for "Randomise this layer". 0 picks a new one each click. */
