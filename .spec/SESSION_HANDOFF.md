@@ -16,10 +16,13 @@
 - The spec's three "Done when" checks were not run on the live site. They remain Charlie's optional check.
 
 ## Open items
-1. Dust Wave Sample count 512 or 1024: Charlie may try them and say whether the migrated Waveform default (256) should rise. Frame cost at 512 and 1024 on a real GPU is not measured.
-2. Older enhancement issues #18 to #29 are untriaged. Likely already covered by built work: #25 (per-pixel warp, Slices 20.1 and 20.2), #26 (polygons, Shape), #23 (frame-rate watchdog, `src/render/frameBudget.ts`), #27 (blend modes exist in `src/presets/format.ts`). Not yet verified one by one. Likely still open: #24 transitions, #28 beat and bar tracker, #29 second-window Control Deck, #18 to #22.
+1. Dust Wave Sample count 512 and 1024: Charlie tried them on 2026-11-12 and said they look good. The migrated Waveform default stays 256 unless he asks to raise it.
+2. Issues #18 to #29 checked against the code on 2026-11-12 (no issue closed yet, waiting on Charlie):
+   - Covered, propose closing: #18 (`src/audio/envelope.ts`), #22 (superseded by Stages 18 and 20 and the 2026-11-08 projectM decision), #23 (`frameBudget.ts`, `qualityGovernor.ts`), #24 (`TRANSITIONS` in `compositor.ts`: crossfade, wipe, dissolve, zoom, morph), #25 (`warpField.frag.glsl`), #26 (Shape layer), #27 (layer `opacity` and `blend` in `format.ts`).
+   - Partly covered: #19 (Reactions kick response exists, a bloom burst on bass onset was not found), #28 (`tempo.ts` has beat count and bar phase, scene changes are not phrase-aligned; auto-cycle beat mode uses strong beats).
+   - Still open: #20 (no camera motion or kick zoom), #21 (no energy-tier palette), #29 (no second-window Control Deck).
 3. No lint script exists in the repo, so Verify lines omit lint.
 
 ## Next Steps
-1. Charlie says what to do with issues #18 to #29 (check each against the code and propose closing the covered ones).
+1. Charlie says whether to close the covered issues, and which open ones to plan next.
 2. After confirmation: `/spec` for any new slices, then `/implement` one slice at a time.
