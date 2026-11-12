@@ -611,6 +611,15 @@ describe('admin system preset mutation & authorization (Slice 11.3)', () => {
   });
 });
 
+describe('legacy Waveform layers load as Shape (Slice 19.15)', () => {
+  it('an imported preset with a Waveform layer in any mode becomes a Shape layer', () => {
+    const data = structuredClone(session.get('crown')!.preset);
+    data.layers = [{ ...data.layers[0]!, type: 'waveform', params: { mode: { value: 'lissajous' } } as never }];
+    const { id } = session.importJson(JSON.stringify(data));
+    expect(session.get(id)!.preset.layers.map((l) => l.type)).toEqual(['shape']);
+  });
+});
+
 describe('remote system preset sync engine applyRemoteSystemPresets (Slice 11.3)', () => {
   it('loads a Waveform line layer from a remote system preset as a Shape layer (Slice 19.11)', () => {
     const data = structuredClone(session.get('crown')!.preset);

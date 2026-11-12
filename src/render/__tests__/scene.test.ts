@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Scene } from '../scene';
-import { WaveformLayer } from '../layers/waveform';
 import { ParticleLayer } from '../layers/particles';
 import { MoireLayer } from '../layers/moire';
 import { buildScene, hasCrownLayer } from '../../presets/loader';
@@ -242,30 +241,6 @@ describe('Scene blend state ownership and transitions (Slice 7.8)', () => {
     expect(layer2.currentOpacity).toBe(0.85);
     expect(receivedOptions1).toEqual({ opacity: 0.35, uLayerOpacity: 0.35 });
     expect(receivedOptions2).toEqual({ opacity: 0.85, uLayerOpacity: 0.85 });
-  });
-
-  it('WaveformLayer applies opacity to uAlpha uniform and has no conflicting blendFunc calls', () => {
-    const gl = createMockGl();
-    const waveform = new WaveformLayer();
-    waveform.init(gl);
-
-    const uniformCalls: [string, number][] = [];
-    (gl.uniform1f as ReturnType<typeof vi.fn>).mockImplementation((loc, val) => {
-      if (loc && typeof loc === 'object' && 'name' in loc) {
-        uniformCalls.push([(loc as { name: string }).name, val]);
-      }
-    });
-
-    const target: RenderTarget = { kind: 'canvas', width: 800, height: 600 };
-    waveform.draw(makeMockFrame(), mockClock, target, { opacity: 0.42, uLayerOpacity: 0.42 });
-
-    const alphaCall = uniformCalls.find(([name]) => name === 'uAlpha');
-    expect(alphaCall).toBeDefined();
-    expect(alphaCall![1]).toBe(0.42);
-
-    // WaveformLayer must NOT call gl.blendFunc or gl.enable(gl.BLEND) directly
-    expect(gl.blendFunc).not.toHaveBeenCalled();
-    expect(gl.enable).not.toHaveBeenCalled();
   });
 
   it('ParticleLayer applies opacity to uBrightness uniform and has no conflicting blendFunc calls', () => {

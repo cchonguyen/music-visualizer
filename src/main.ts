@@ -8,7 +8,6 @@ import type { RenderLayer } from './render/layer';
 import type { Preset } from './presets/format';
 import { GlHost } from './gl/context';
 import { BassPulseLayer } from './render/layers/bassPulse';
-import { WaveformLayer } from './render/layers/waveform';
 import { TrailTestLayer } from './render/layers/trailTest';
 import { Compositor } from './render/compositor';
 import { Scene } from './render/scene';
@@ -19,7 +18,8 @@ import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
 import { PresetSession } from './presets/session';
-import { applyLinkedPreset, hasCrownLayer, hasLinks, presetHasRetiredLayer, restoreBasePreset } from './presets/loader';
+import { applyLinkedPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES, presetHasRetiredLayer, restoreBasePreset, valuesOf } from './presets/loader';
+import { migrateLegacyLayerToShape } from './presets/legacyShapeMigration';
 import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
 import { LinkRunner, ReactionBank } from './presets/links';
 import { AutoCycler, DEFAULT_CYCLE, eligible, loadCycleSettings, saveCycleSettings, type CycleOptions } from './presets/autoCycle';
@@ -50,6 +50,12 @@ import { adminGateway, AdminGateway } from './presets/adminGateway';
 // pull admin code into the startup bundle. Keep these values in sync with that file.
 const ADMIN_AUTH_CHANNEL = 'mv-admin-auth';
 const ADMIN_AUTH_STORAGE_KEY = 'mv.adminAuthSignal';
+/** The old default Waveform line, built as the Shape layer that replaced it (Slice 19.15). Used by the demo scenes. */
+function defaultWaveLayer(): RenderLayer {
+  const shape = migrateLegacyLayerToShape({ type: 'waveform', enabled: true, opacity: 1, blend: 'add', params: {} });
+  return LAYER_FACTORIES.shape!(valuesOf(shape.params));
+}
+
 function isVerifiedAdminSignal(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
@@ -321,13 +327,13 @@ function start(): void {
   } else if (params.has('scenes')) {
     compositor = new Compositor([
       new Scene('pulse', [new BassPulseLayer()]),
-      new Scene('wave', [new WaveformLayer()]),
+      new Scene('wave', [defaultWaveLayer()]),
     ]);
     compositor.setWeights({ pulse: 1 });
     host.addLayer(compositor);
   } else if (params.has('tracer')) {
     host.addLayer(new BassPulseLayer());
-    host.addLayer(new WaveformLayer());
+    host.addLayer(defaultWaveLayer());
   } else {
     // Presets: the session owns every preset's working copy and scene. Built-ins come first, so
     // keys 0 / 1 / 2 keep their old meaning (Crown / Flight / Bars).
