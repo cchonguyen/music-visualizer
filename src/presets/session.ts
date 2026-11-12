@@ -13,6 +13,7 @@ import {
 } from './format';
 import type { Scene } from '../render/scene';
 import { valuesOf } from './loader';
+import { migrateWaveformsInPreset } from './legacyShapeMigration';
 import type { ParamValue } from './schema';
 import {
   GlobalDirector,
@@ -1082,7 +1083,8 @@ export class PresetSession {
       let parsedPreset: Preset;
       try {
         const parsed = parsePreset(record.preset_data, this.registry);
-        parsedPreset = parsed.preset;
+        // Synced copies keep the legacy Waveform layer in the database. Load them as Shape like the bundled ones (Slice 19.11).
+        parsedPreset = migrateWaveformsInPreset(parsed).preset;
       } catch {
         continue;
       }
