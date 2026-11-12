@@ -1,16 +1,18 @@
-# Session Handoff: Stage 19 Shape slices finished
+# Session Handoff: Shape tuning and legacy Waveform removed
 
 ## Last Active State
 - **Last Active Platform**: Claude Code (web)
 - **Branch**: `claude/project-thread-1jqqjf`, restarted from `main` after each merge.
-- **Active Task**: none. Every Stage 19 slice is done and merged to `main`.
-- **Status**: Slices 19.9a to 19.9d and 19.10 merged as PRs #294, #296, #297, #298 and #299. Slice 19.4 was removed (owner decision, Charlie). Checks were green on each. Lint is not run because the repo has no lint script.
+- **Active Task**: none. Slices 19.11 to 19.15 are merged to `main` (PRs #301, #305, #309, #310). Checks were green on each. Lint is not run because the repo has no lint script.
+- **Status**: Charlie confirmed Dust Wave looks acceptable after the tuning.
 
-## What changed in Shape
-- Punch option for the spectrum source (19.9a), band texture along the path (19.9b), a rotating 3D curve base shape (19.9c), loudness-driven rings in concentric mode (19.9d).
-- Dust Wave, Ripple Field and the starter Circle Wave now load as Shape layers (19.10). Their JSON files are unchanged. Legacy Waveform, Bars and Rings layer code is still in place.
+## What changed
+- Remote (database) system presets override the built-in ones at app start. They are now migrated to Shape too (19.11), which fixed Dust Wave still showing a Waveform layer.
+- Shape feels sharper (19.12, 19.13): faster attack and release defaults, reactivity default 1.25, migrated Waveform uses 256 points, and each audio bucket keeps its largest swing instead of an average.
+- Shape sample cap is now 1024 (19.14). The default stays 64 and migrated Waveform stays 256. Frame cost at 512 and 1024 on a real GPU is not measured.
+- The legacy Waveform layer is gone (19.15). Any Waveform layer, in any mode, loads as Shape wherever a preset enters the app. The `waveform` schema stays so old saved presets still parse. Bars, Rings, Crown and Shockwave still use their legacy layers.
+- Issues #287 to #290 were closed. Issue #295 is an automatic alarm about a pre-gate commit and is informational.
 
 ## Next Steps
-1. Charlie compares Dust Wave, Ripple Field and Circle Wave on the live site against before. Known differences: band texture also scales height by the mid band, and Shape draws up to 256 points.
-2. After that comparison, a later slice can remove the legacy layers. Not started. Lissajous Waveform layers, Bars, Rings and saved user presets still use the legacy layers.
-3. Next roadmap stage is Stage 21 (`.spec/specs/roadmap/stage-21-public-release.md`). Triage it before building.
+1. Charlie may try Sample count 512 or 1024 on Dust Wave and say whether to raise the migrated Waveform default.
+2. Stage 21 (`.spec/specs/roadmap/stage-21-public-release.md`) is next. Triage it before building. Older enhancement issues #18 to #29 are untriaged.
