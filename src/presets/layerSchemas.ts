@@ -423,6 +423,7 @@ export interface ShapeParams {
   // Category 4 — Propagation ("Propagation")
   propMode: ShapePropMode;
   propCount: number;      // 1..16
+  loudnessRings: boolean; // concentric only: loudness sets how many rings show (propCount is the most) and how wide the stroke is (Slice 19.9d)
   propSpacing: number;    // 0.05..1.0
   propSpeed: number;      // -2.0..2.0
   propDirection: ShapePropDirection;
@@ -475,6 +476,7 @@ export const SHAPE_DEFAULTS: ShapeParams = {
 
   propMode: 'single',
   propCount: 4,
+  loudnessRings: false,
   propSpacing: 0.22,
   propSpeed: 0.65,
   propDirection: 'outward',
@@ -530,6 +532,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   // Category 4 — Propagation ("Propagation")
   { type: 'enum', name: 'propMode', label: 'Propagation mode', group: 'Propagation', default: SHAPE_DEFAULTS.propMode, options: ['single', 'concentric', 'shockwave', 'stream', 'orbit', 'polar'], description: 'Configures instance propagation behavior through space and time.' },
   { type: 'int', name: 'propCount', label: 'Instance count', group: 'Propagation', default: SHAPE_DEFAULTS.propCount, min: 1, max: 16, step: 1, showWhen: { propMode: ['concentric', 'stream', 'orbit', 'polar'] }, description: 'Sets the number of duplicated propagating instances.' },
+  { type: 'bool', name: 'loudnessRings', label: 'Loudness-driven rings', group: 'Propagation', default: SHAPE_DEFAULTS.loudnessRings, showWhen: { propMode: 'concentric' }, description: 'Lets the music set how many rings show, up to the instance count, and how wide their stroke is. Louder and punchier passages show more rings with a wider stroke. Concentric mode only.' },
   { type: 'float', name: 'propSpacing', label: 'Instance spacing / Orbit distance', group: 'Propagation', default: SHAPE_DEFAULTS.propSpacing, min: 0.05, max: 1.5, step: 0.02, showWhen: { propMode: ['concentric', 'orbit', 'polar'] }, description: 'Adjusts spatial separation distance or orbit radius from center.' },
   { type: 'float', name: 'propSpeed', label: 'Propagation speed', group: 'Propagation', default: SHAPE_DEFAULTS.propSpeed, min: -2.0, max: 2.0, step: 0.05, showWhen: { propMode: ['shockwave', 'stream', 'orbit', 'polar'] }, description: 'Controls traveling velocity of propagating geometric waves.' },
   { type: 'enum', name: 'propDirection', label: 'Propagation direction', group: 'Propagation', default: SHAPE_DEFAULTS.propDirection, options: ['outward', 'inward', 'cw', 'ccw', 'alternating'], showWhen: { propMode: ['concentric', 'shockwave', 'stream', 'orbit', 'polar'] }, description: 'Chooses directional travel vector for propagating instances.' },
