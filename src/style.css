@@ -478,10 +478,7 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     height: 44px;
     --slider-thumb-d: 28px;
   }
-  .exp-render-row[hidden] { display: none; }
-.exp-cycle-interval-row { grid-template-columns: 1fr; }
-
-.exp-checkbox-field {
+  .exp-checkbox-field {
     min-height: 44px;
   }
   .exp-checkbox-field input[type="checkbox"] {
@@ -511,6 +508,8 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     max-width: 100%;
     min-width: 0;
     padding: .6rem;
+    max-height: none;
+    overflow: visible;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -534,12 +533,16 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 .experience-panel {
   left: 50%;
   transform: translateX(-50%);
-  width: 320px;
+  /* Sizes itself to the screen (slice 21.14): wider when there is room, scrolls instead of falling off the page. */
+  width: min(30rem, calc(100vw - 2.5rem));
   max-width: calc(100vw - 2.5rem);
-  padding: 0.85rem;
+  max-height: calc(100vh - 8rem);
+  max-height: calc(100dvh - 8rem);
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.45rem;
   animation: panelSlideUpCenter 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -557,10 +560,10 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 .exp-header { display: flex; justify-content: space-between; align-items: center; }
 .exp-title { font-weight: 600; font-size: var(--ui-text-size); color: var(--text); }
 .exp-hint { font-size: .8em; color: var(--muted); font-variant-numeric: tabular-nums; }
-.exp-modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.exp-modes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .35rem; }
 .exp-mode-btn {
   font-size: var(--ui-text-size);
-  padding: .4rem .5rem;
+  padding: .25rem .4rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 4px);
   background: rgba(255, 255, 255, .05);
@@ -575,12 +578,12 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   background: rgba(255, 255, 255, .15);
   font-weight: 600;
 }
-.exp-controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-.exp-field { display: flex; flex-direction: column; gap: .25rem; font-size: .8em; color: var(--muted); }
+.exp-controls-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .4rem; }
+.exp-field { display: flex; flex-direction: column; gap: .15rem; font-size: .8em; color: var(--muted); }
 .exp-field select {
   width: 100%;
   font-size: var(--ui-text-size);
-  padding: .3rem .4rem;
+  padding: .2rem .35rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 4px);
   background: var(--surface);
@@ -588,17 +591,15 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 }
 
 .exp-sliders-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.3rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.4rem 0.7rem;
 }
 
 .exp-slider-item {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.1rem;
 }
 
 .exp-slider-header {
@@ -615,12 +616,12 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 
 .exp-render-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.4rem;
   align-items: end;
-  padding: 0.3rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+.exp-render-row[hidden] { display: none; }
+.exp-cycle-interval-row { grid-template-columns: 1fr; }
 
 .exp-checkbox-field {
   display: flex;
@@ -629,7 +630,7 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   font-size: var(--ui-text-size);
   color: var(--text);
   cursor: pointer;
-  padding-bottom: 0.3rem;
+  padding-bottom: 0.2rem;
   margin: 0;
 }
 
@@ -644,15 +645,13 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: .4rem;
-  padding-top: .3rem;
-  border-top: 1px solid var(--border);
 }
 .exp-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: .8em;
-  padding: .35rem .5rem;
+  padding: .25rem .5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 4px);
   background: transparent;
@@ -662,6 +661,19 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 }
 .exp-action-btn:hover { color: var(--text); border-color: var(--text); }
 .exp-import-label { margin: 0; }
+/* Library buttons are added by controls.ts. They match the look buttons above and sit in two columns. */
+.experience-panel .library-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+.experience-panel .library-actions button {
+  font-size: .8em;
+  padding: .25rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.experience-panel .library-actions button:hover { color: var(--text); border-color: var(--text); }
+@media (max-height: 600px) { .experience-panel { padding: .45rem .55rem; gap: .3rem; } }
 
 /* Startup Onboarding Toast (Slice 12.2) */
 .onboarding-toast {
