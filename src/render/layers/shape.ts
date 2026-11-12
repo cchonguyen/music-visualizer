@@ -168,11 +168,13 @@ export function peakBandValues(smoothed: Float32Array, edges: { loBin: number; h
 
 /** Frames of smoothed audio kept for per-element delay. */
 export const SHAPE_HISTORY_FRAMES = 32;
+/** Texels in the audio and peak textures, and the highest sample count a Shape layer can use (Slice 19.14). */
+export const SHAPE_TEXELS = 1024;
 
 /** Frames of lag for the element at texel j (0..255) at delay amount d (0..1). */
 export function elementLagFrames(delay: number, j: number): number {
   const d = Math.min(1, Math.max(0, delay));
-  return Math.round(d * (SHAPE_HISTORY_FRAMES - 1) * (j / 255));
+  return Math.round(d * (SHAPE_HISTORY_FRAMES - 1) * (j / (SHAPE_TEXELS - 1)));
 }
 
 export class ShapeLayer implements RenderLayer {
@@ -251,18 +253,18 @@ export class ShapeLayer implements RenderLayer {
   private uInstOffset: WebGLUniformLocation | null = null;
   private uInstTransform: WebGLUniformLocation | null = null;
 
-  // Audio envelope & peak hold buffers (256 samples)
-  readonly smoothedSamples = new Float32Array(256);
-  readonly peakHoldSamples = new Float32Array(256);
-  readonly peakVelocities = new Float32Array(256);
-  private raw256 = new Float32Array(256);
+  // Audio envelope & peak hold buffers (SHAPE_TEXELS samples)
+  readonly smoothedSamples = new Float32Array(SHAPE_TEXELS);
+  readonly peakHoldSamples = new Float32Array(SHAPE_TEXELS);
+  readonly peakVelocities = new Float32Array(SHAPE_TEXELS);
+  private rawTexels = new Float32Array(SHAPE_TEXELS);
   /** Per-texel 2.5 s averages for the punch option (Slice 19.9a). */
-  private slow256: SlowFollower[] = Array.from({ length: 256 }, () => new SlowFollower(2.5));
+  private slowTexels: SlowFollower[] = Array.from({ length: SHAPE_TEXELS }, () => new SlowFollower(2.5));
   /** Ring of recent smoothed frames, newest at historyHead. */
-  private readonly history = new Float32Array(256 * SHAPE_HISTORY_FRAMES);
+  private readonly history = new Float32Array(SHAPE_TEXELS * SHAPE_HISTORY_FRAMES);
   private historyHead = 0;
   /** What is uploaded to the audio texture: smoothedSamples with per-element delay. */
-  readonly delayedSamples = new Float32Array(256);
+  readonly delayedSamples = new Float32Array(SHAPE_TEXELS);
 
   // Frequency bar edge cache
   private edges: BarEdge[] = [];
@@ -333,15 +335,15 @@ export class ShapeLayer implements RenderLayer {
     this.uInstOffset = gl.getUniformLocation(this.program, 'uInstOffset[0]');
     this.uInstTransform = gl.getUniformLocation(this.program, 'uInstTransform[0]');
 
-    this.audioTex = createDataTexture(gl, 256);
-    this.peakTex = createDataTexture(gl, 256);
+    this.audioTex = createDataTexture(gl, SHAPE_TEXELS);
+    this.peakTex = createDataTexture(gl, SHAPE_TEXELS);
     this.vao = createVao(gl);
 
     this.smoothedSamples.fill(0);
     this.peakHoldSamples.fill(0);
     this.peakVelocities.fill(0);
-    this.raw256.fill(0);
-    for (const f of this.slow256) f.reset();
+    this.rawTexels.fill(0);
+    for (const f of this.slowTexels) f.reset();
     this.slowLoud.reset();
     this.slowSubEnv.reset();
     this.history.fill(0);
@@ -370,7 +372,7 @@ export class ShapeLayer implements RenderLayer {
     bindTarget(gl, target);
 
     const dt = Math.max(0, clock.dtSec);
-    const sampleCount = Math.min(256, Math.max(16, Math.round(this.p.sampleCount)));
+    const sampleCount = Math.min(SHAPE_TEXELS, Math.max(16, Math.round(this.p.sampleCount)));
 
     // 1. Advance motion phases
     this.spinPhase += this.p.spinSpeed * dt;
@@ -434,25 +436,25 @@ export class ShapeLayer implements RenderLayer {
       }
     }
 
-    // Apply reactivity & map to 256 texel buffer
+    // Apply reactivity & map to the texel buffer
     const reactivity = this.p.reactivity;
     const signed = this.p.audioSource === 'scope';
     // Punch (Slice 19.9a): spectrum only. Same shaping as the Bars layer: a widened
     // absolute range plus the rise above each texel's own 2.5 s average, scaled by visual gain.
     const usePunch = this.p.punch && this.p.audioSource === 'spectrum';
     const visualGain = usePunch ? getVisualGain() : 1;
-    for (let j = 0; j < 256; j++) {
-      const binIdx = Math.min(sampleCount - 1, Math.floor((j / 256) * sampleCount));
+    for (let j = 0; j < SHAPE_TEXELS; j++) {
+      const binIdx = Math.min(sampleCount - 1, Math.floor((j / SHAPE_TEXELS) * sampleCount));
       let v: number;
       if (usePunch) {
         const x = rawBins[binIdx] ?? 0;
-        const base = this.slow256[j]!.step(x, dt);
+        const base = this.slowTexels[j]!.step(x, dt);
         const expanded = Math.min(1, Math.max(0, (x - 0.3) / 0.4));
         v = shapeReaction(0.6 * expanded + 0.8 * punch(x, base, 6), visualGain) * reactivity;
       } else {
         v = (rawBins[binIdx] ?? 0) * reactivity;
       }
-      this.raw256[j] = signed ? Math.max(-SHAPE_AMP_MAX, Math.min(SHAPE_AMP_MAX, v)) : Math.min(SHAPE_AMP_MAX, v);
+      this.rawTexels[j] = signed ? Math.max(-SHAPE_AMP_MAX, Math.min(SHAPE_AMP_MAX, v)) : Math.min(SHAPE_AMP_MAX, v);
     }
 
     // 3. Asymmetric envelope smoothing & gravity peak caps
@@ -462,8 +464,8 @@ export class ShapeLayer implements RenderLayer {
     const alphaRel = 1 - Math.exp(-dt / releaseSec);
     const gravity = 1.25;
 
-    for (let j = 0; j < 256; j++) {
-      const targetVal = this.raw256[j]!;
+    for (let j = 0; j < SHAPE_TEXELS; j++) {
+      const targetVal = this.rawTexels[j]!;
       const prevVal = this.smoothedSamples[j]!;
       if (signed) {
         // A trace has no rise or fall direction, so it uses the attack time both ways.
@@ -495,12 +497,12 @@ export class ShapeLayer implements RenderLayer {
 
     // Upload audio & peak textures
     this.historyHead = (this.historyHead + 1) % SHAPE_HISTORY_FRAMES;
-    this.history.set(this.smoothedSamples, this.historyHead * 256);
+    this.history.set(this.smoothedSamples, this.historyHead * SHAPE_TEXELS);
     if (this.p.elementDelay > 0) {
-      for (let j = 0; j < 256; j++) {
+      for (let j = 0; j < SHAPE_TEXELS; j++) {
         const lag = elementLagFrames(this.p.elementDelay, j);
         const slot = (this.historyHead - lag + SHAPE_HISTORY_FRAMES) % SHAPE_HISTORY_FRAMES;
-        this.delayedSamples[j] = this.history[slot * 256 + j]!;
+        this.delayedSamples[j] = this.history[slot * SHAPE_TEXELS + j]!;
       }
     } else {
       this.delayedSamples.set(this.smoothedSamples);

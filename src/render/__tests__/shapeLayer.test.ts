@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, elementLagFrames, applyCopyMotion, bucketExtreme, peakBandValues } from '../layers/shape';
+import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, SHAPE_TEXELS, elementLagFrames, applyCopyMotion, bucketExtreme, peakBandValues } from '../layers/shape';
 import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
 import { getVisualGain, setVisualGain } from '../gainStore';
 import type { AudioFrame } from '../../audio/types';
@@ -475,7 +475,7 @@ describe('ShapeLayer', () => {
       const layer = new ShapeLayer({ audioSource: 'scope', reactivity: 1.0 });
       layer.init(gl);
       layer.draw(makeMockFrame(), mockClock, mockTarget);
-      for (let j = 0; j < 256; j++) expect(layer.smoothedSamples[j]).toBe(0);
+      for (let j = 0; j < SHAPE_TEXELS; j++) expect(layer.smoothedSamples[j]).toBe(0);
     });
 
     it('keeps the sign of the waveform, unlike the unsigned waveform source', () => {
@@ -484,13 +484,13 @@ describe('ShapeLayer', () => {
       const scope = new ShapeLayer({ audioSource: 'scope', reactivity: 1.0, attackMs: 5 });
       scope.init(gl);
       for (let k = 0; k < 20; k++) scope.draw(makeMockFrame({ waveform: wf }), mockClock, mockTarget);
-      expect(scope.smoothedSamples[10]).toBeGreaterThan(0.4);
-      expect(scope.smoothedSamples[250]).toBeLessThan(-0.4);
+      expect(scope.smoothedSamples[40]).toBeGreaterThan(0.4);
+      expect(scope.smoothedSamples[1000]).toBeLessThan(-0.4);
 
       const legacy = new ShapeLayer({ audioSource: 'waveform', reactivity: 1.0, attackMs: 5 });
       legacy.init(gl);
       for (let k = 0; k < 20; k++) legacy.draw(makeMockFrame({ waveform: wf }), mockClock, mockTarget);
-      expect(legacy.smoothedSamples[250]).toBeGreaterThan(0);
+      expect(legacy.smoothedSamples[1000]).toBeGreaterThan(0);
     });
 
     it('clamps to the amplitude ceiling both ways', () => {
@@ -732,9 +732,9 @@ describe('ShapeLayer', () => {
 
     it('lag grows from zero at the first element to the full window at the last', () => {
       expect(elementLagFrames(1, 0)).toBe(0);
-      expect(elementLagFrames(1, 255)).toBe(SHAPE_HISTORY_FRAMES - 1);
-      expect(elementLagFrames(0.5, 255)).toBe(Math.round((SHAPE_HISTORY_FRAMES - 1) / 2));
-      expect(elementLagFrames(0, 255)).toBe(0);
+      expect(elementLagFrames(1, 1023)).toBe(SHAPE_HISTORY_FRAMES - 1);
+      expect(elementLagFrames(0.5, 1023)).toBe(Math.round((SHAPE_HISTORY_FRAMES - 1) / 2));
+      expect(elementLagFrames(0, 1023)).toBe(0);
     });
 
     it('later elements see an older frame after a sudden jump', () => {
@@ -832,5 +832,21 @@ describe('Peak-preserving sampling (Slice 19.13)', () => {
     const smoothed = new Float32Array([0, 0, 1, 0]);
     const v = peakBandValues(smoothed, [{ loBin: 0, hiBin: 4 }]);
     expect(v[0]).toBeCloseTo(0.7 + 0.3 * 0.25);
+  });
+});
+
+describe('Raised sample cap (Slice 19.14)', () => {
+  it('holds 1024 texels and accepts a 1024 sample count', () => {
+    expect(SHAPE_TEXELS).toBe(1024);
+    const layer = new ShapeLayer({ audioSource: 'scope', sampleCount: 1024 });
+    const gl = createMockGl();
+    layer.init(gl);
+    expect(() => layer.draw(makeMockFrame(), mockClock, mockTarget)).not.toThrow();
+    expect(layer.smoothedSamples.length).toBe(1024);
+  });
+
+  it('spreads the per-element delay across all 1024 texels', () => {
+    expect(elementLagFrames(1, 1023)).toBe(SHAPE_HISTORY_FRAMES - 1);
+    expect(elementLagFrames(1, 0)).toBe(0);
   });
 });

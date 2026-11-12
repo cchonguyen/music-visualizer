@@ -408,7 +408,7 @@ export interface ShapeParams {
 
   // Category 2 — Reactive Effect ("Effect")
   effectType: ShapeEffectType;
-  sampleCount: number;    // 16..256
+  sampleCount: number;    // 16..1024
   effectLength: number;   // 0.05..1.5
   thickness: number;      // 0.5..10.0
   barGap: number;         // 0..0.8
@@ -517,7 +517,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
 
   // Category 2 — Reactive Effect ("Effect")
   { type: 'enum', name: 'effectType', label: 'Effect type', group: 'Effect', default: SHAPE_DEFAULTS.effectType, options: ['solidLine', 'pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'], description: 'Selects reactive visual rendering mode drawn along the blueprint curve.' },
-  { type: 'int', name: 'sampleCount', label: 'Sample count', group: 'Effect', default: SHAPE_DEFAULTS.sampleCount, min: 16, max: 256, step: 4, showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Sets the number of audio analysis bins sampled along the curve.' },
+  { type: 'int', name: 'sampleCount', label: 'Sample count', group: 'Effect', default: SHAPE_DEFAULTS.sampleCount, min: 16, max: 1024, step: 4, showWhen: { effectType: ['waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Sets the number of audio analysis bins sampled along the curve.' },
   { type: 'float', name: 'effectLength', label: 'Effect length', group: 'Effect', default: SHAPE_DEFAULTS.effectLength, min: 0.05, max: 1.5, step: 0.02, showWhen: { effectType: ['pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'] }, description: 'Controls maximum outward projection length of reactive visual elements.' },
   { type: 'float', name: 'thickness', label: 'Thickness', group: 'Effect', default: SHAPE_DEFAULTS.thickness, min: 0.5, max: 10.0, step: 0.25, description: 'Sets the stroke thickness of rendered reactive vectors.' },
   { type: 'float', name: 'barGap', label: 'Bar gap', group: 'Effect', default: SHAPE_DEFAULTS.barGap, min: 0, max: 0.8, step: 0.02, showWhen: { effectType: ['bars', 'segmentedBars'] }, description: 'Adjusts spacing gap width between adjacent frequency bars.' },
