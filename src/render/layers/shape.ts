@@ -12,6 +12,8 @@ import { getCurrentPalette } from '../paletteStore';
 import { blendAccents } from '../colourSwap';
 import { buildBarEdges, type BarEdge } from '../logScale';
 import { barValues } from '../barsState';
+import { SlowFollower, punch } from '../dynamics';
+import { getVisualGain, shapeReaction } from '../gainStore';
 import { kickGrant } from './shockwave';
 import {
   SHAPE_DEFAULTS,
@@ -200,6 +202,8 @@ export class ShapeLayer implements RenderLayer {
   readonly peakHoldSamples = new Float32Array(256);
   readonly peakVelocities = new Float32Array(256);
   private raw256 = new Float32Array(256);
+  /** Per-texel 2.5 s averages for the punch option (Slice 19.9a). */
+  private slow256: SlowFollower[] = Array.from({ length: 256 }, () => new SlowFollower(2.5));
   /** Ring of recent smoothed frames, newest at historyHead. */
   private readonly history = new Float32Array(256 * SHAPE_HISTORY_FRAMES);
   private historyHead = 0;
@@ -275,6 +279,7 @@ export class ShapeLayer implements RenderLayer {
     this.peakHoldSamples.fill(0);
     this.peakVelocities.fill(0);
     this.raw256.fill(0);
+    for (const f of this.slow256) f.reset();
     this.history.fill(0);
     this.historyHead = 0;
     this.delayedSamples.fill(0);
@@ -373,9 +378,21 @@ export class ShapeLayer implements RenderLayer {
     // Apply reactivity & map to 256 texel buffer
     const reactivity = this.p.reactivity;
     const signed = this.p.audioSource === 'scope';
+    // Punch (Slice 19.9a): spectrum only. Same shaping as the Bars layer: a widened
+    // absolute range plus the rise above each texel's own 2.5 s average, scaled by visual gain.
+    const usePunch = this.p.punch && this.p.audioSource === 'spectrum';
+    const visualGain = usePunch ? getVisualGain() : 1;
     for (let j = 0; j < 256; j++) {
       const binIdx = Math.min(sampleCount - 1, Math.floor((j / 256) * sampleCount));
-      const v = (rawBins[binIdx] ?? 0) * reactivity;
+      let v: number;
+      if (usePunch) {
+        const x = rawBins[binIdx] ?? 0;
+        const base = this.slow256[j]!.step(x, dt);
+        const expanded = Math.min(1, Math.max(0, (x - 0.3) / 0.4));
+        v = shapeReaction(0.6 * expanded + 0.8 * punch(x, base, 6), visualGain) * reactivity;
+      } else {
+        v = (rawBins[binIdx] ?? 0) * reactivity;
+      }
       this.raw256[j] = signed ? Math.max(-SHAPE_AMP_MAX, Math.min(SHAPE_AMP_MAX, v)) : Math.min(SHAPE_AMP_MAX, v);
     }
 

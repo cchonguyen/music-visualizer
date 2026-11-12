@@ -433,6 +433,7 @@ export interface ShapeParams {
   // Category 5 — Audio & Style Tuning ("Audio & Style")
   audioSource: ShapeAudioSource;
   reactivity: number;     // 0..15.0 (old ceiling 3.0, raised 5x in Slice 15.8)
+  punch: boolean;         // spectrum only: range expansion plus rise above each bin's 2.5 s average, with visual gain (Slice 19.9a)
   attackMs: number;       // 5..200
   releaseMs: number;      // 20..600
   elementDelay: number;   // 0..1 (0 = every element reacts together)
@@ -481,6 +482,7 @@ export const SHAPE_DEFAULTS: ShapeParams = {
 
   audioSource: 'spectrum',
   reactivity: 1.0,
+  punch: false,
   attackMs: 12,
   releaseMs: 180,
   elementDelay: 0,
@@ -534,6 +536,7 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   // Category 5 — Audio & Style Tuning ("Audio & Style")
   { type: 'enum', name: 'audioSource', label: 'Audio source', group: 'Audio & Style', default: SHAPE_DEFAULTS.audioSource, options: ['spectrum', 'waveform', 'sub', 'bass', 'mid', 'treble', 'energy', 'scope'], description: 'Selects audio signal driving reactive modulation. Scope is a signed oscilloscope trace: silence draws a flat line and the signal swings both ways.' },
   { type: 'float', name: 'reactivity', label: 'Reactivity', group: 'Audio & Style', default: SHAPE_DEFAULTS.reactivity, min: 0, max: 15.0, step: 0.05, description: 'Scales overall dynamic sensitivity to audio input peaks.' },
+  { type: 'bool', name: 'punch', label: 'Punch', group: 'Audio & Style', default: SHAPE_DEFAULTS.punch, showWhen: { audioSource: 'spectrum' }, description: 'Makes hits and swells stand out. Each element reacts to how far it rises above its own recent average, and the global visual gain scales the result. Spectrum source only.' },
   { type: 'float', name: 'attackMs', label: 'Attack (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.attackMs, min: 5, max: 200, step: 5, description: 'Sets smoothing attack response time in milliseconds for transient swells.' },
   { type: 'float', name: 'releaseMs', label: 'Release (ms)', group: 'Audio & Style', default: SHAPE_DEFAULTS.releaseMs, min: 20, max: 600, step: 10, description: 'Sets smoothing decay release time in milliseconds for sustained tails.' },
   { type: 'float', name: 'elementDelay', label: 'Element delay', group: 'Audio & Style', default: SHAPE_DEFAULTS.elementDelay, min: 0, max: 1, step: 0.05, description: 'Lags each bar or dot behind the one before it, so the reaction ripples along the shape. 0 keeps every element in step.' },
