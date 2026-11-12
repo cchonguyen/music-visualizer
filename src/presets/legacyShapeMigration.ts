@@ -1,7 +1,7 @@
 // Legacy Layer Migration Shim (Sector 485, Slice 9.3)
 // Translates legacy layers ('crown', 'waveform', 'bars', 'rings', 'shockwave')
 // into unified 'shape' LayerEntry representations.
-import type { LayerEntry, Setting, Settings } from './format';
+import type { LayerEntry, Preset, Setting, Settings } from './format';
 import { SHAPE_DEFAULTS, type ShapeParams } from './layerSchemas';
 
 const LEGACY_LAYER_TYPES = new Set(['crown', 'waveform', 'bars', 'rings', 'shockwave']);
@@ -69,9 +69,12 @@ export function migrateLegacyLayerToShape(layer: LayerEntry): LayerEntry {
           : mode === 'star7'
           ? 'star'
           : mode === 'lissajous'
-          ? 'figure8'
+          ? 'knot3d'
           : 'centerLine';
       const amp = typeof extractVal(p.amplitude) === 'number' ? Number(extractVal(p.amplitude)) : 1.0;
+      // Legacy band texture is on by default. Shape's version (Slice 19.9b) takes one strength, 0 for off.
+      const texOn = extractVal(p.texture) !== false;
+      const texGain = typeof extractVal(p.textureGain) === 'number' ? Number(extractVal(p.textureGain)) : 1;
       const radius = typeof extractVal(p.radius) === 'number' ? Number(extractVal(p.radius)) : (mode === 'line' ? 0.8 : 0.45);
       const thick = typeof extractVal(p.thickness) === 'number' ? Number(extractVal(p.thickness)) : 2.0;
       const colMode = String(extractVal(p.colorMode) ?? 'white');
@@ -89,7 +92,9 @@ export function migrateLegacyLayerToShape(layer: LayerEntry): LayerEntry {
         extrudeDirection: 'bilateral',
         symmetry: 'wrap',
         propMode: 'single',
-        audioSource: 'waveform',
+        // The signed trace keeps silence flat, like the legacy line. The unsigned waveform source drew silence at half height.
+        audioSource: 'scope',
+        bandTexture: texOn ? Math.min(2, Math.max(0, texGain)) : 0,
         colorMode: colMode === 'white' ? 'solid' : colMode === 'gradient' ? 'frequencyGradient' : 'palette',
         solidColor: '#ffffff',
       };
@@ -168,6 +173,9 @@ export function migrateLegacyLayerToShape(layer: LayerEntry): LayerEntry {
   if (p.radius?.link && migratedParams.size && !migratedParams.size.link) {
     migratedParams.size.link = p.radius.link;
   }
+  if (layer.type === 'waveform' && p.textureGain?.link && migratedParams.bandTexture && !migratedParams.bandTexture.link) {
+    migratedParams.bandTexture.link = p.textureGain.link;
+  }
 
   return {
     type: 'shape',
@@ -187,4 +195,25 @@ export const migrateLegacyLayerEntry = migrateLegacyLayerToShape;
  */
 export function migrateLegacyLayers(layers: LayerEntry[]): LayerEntry[] {
   return layers.map(migrateLegacyLayerToShape);
+}
+
+/**
+ * Waveform modes that Shape now matches (Slice 19.10, legacy-layer audit). Lissajous stays on the legacy layer
+ * until its before and after have been compared, and Bars and Rings keep their legacy layers for the same reason.
+ */
+const SHAPE_READY_WAVEFORM_MODES = new Set(['line', 'circle', 'star7']);
+
+/** True for a Waveform layer in a mode that Shape covers. */
+export function isShapeReadyWaveform(layer: LayerEntry): boolean {
+  return layer.type === 'waveform' && SHAPE_READY_WAVEFORM_MODES.has(String(extractVal(layer.params?.mode) ?? 'line'));
+}
+
+/**
+ * Migrates the Waveform layers (line, circle, star7) of a parsed preset to Shape layers. Every other layer is
+ * left as it is, and a preset without such a layer comes back as the same object. The saved file is never touched.
+ */
+export function migrateWaveformsInPreset<T extends { preset: Preset }>(parsed: T): T {
+  if (!parsed.preset.layers.some(isShapeReadyWaveform)) return parsed;
+  const layers = parsed.preset.layers.map((l) => (isShapeReadyWaveform(l) ? migrateLegacyLayerToShape(l) : l));
+  return { ...parsed, preset: { ...parsed.preset, layers } };
 }

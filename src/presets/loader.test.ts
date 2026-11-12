@@ -4,14 +4,14 @@ import { LinkRunner, ReactionBank } from './links';
 import { previewPreset } from './session';
 import type { AudioFrame } from '../audio/types';
 import type { Preset } from './format';
-import { BUILTIN_PRESETS } from './builtin';
+import { ALL_PRESETS, BUILTIN_PRESETS, REVIEW_PRESETS } from './builtin';
 import { parsePreset, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
 import { defaultsFor } from './schema';
 import { ShapeLayer } from '../render/layers/shape';
 import { TunnelLayer } from '../render/layers/tunnel';
 import { ParticleLayer } from '../render/layers/particles';
-import { migrateLegacyLayerToShape, migrateLegacyLayers } from './legacyShapeMigration';
+import { isShapeReadyWaveform, migrateLegacyLayerToShape, migrateLegacyLayers, migrateWaveformsInPreset } from './legacyShapeMigration';
 
 const schemas = { feedback: [], post: [], layers: LAYER_SPECS };
 const byId = (id: string) => BUILTIN_PRESETS.find((p) => p.id === id)!.preset;
@@ -171,6 +171,69 @@ describe('legacyShapeMigration', () => {
     const migratedStar = migrateLegacyLayerToShape(legacyStar);
     expect(migratedStar.params.baseShape?.value).toBe('star');
     expect(migratedStar.params.sides?.value).toBe(7);
+  });
+
+  describe('Waveform to Shape (Slice 19.10)', () => {
+    const waveform = (params: Record<string, { value: unknown; link?: unknown }>) => ({
+      type: 'waveform',
+      enabled: true,
+      opacity: 0.9,
+      blend: 'add' as const,
+      params: params as never,
+    });
+
+    it('uses the signed scope source so silence stays flat', () => {
+      for (const mode of ['line', 'circle', 'star7']) {
+        const m = migrateLegacyLayerToShape(waveform({ mode: { value: mode } }));
+        expect(m.params.audioSource?.value).toBe('scope');
+      }
+    });
+
+    it('maps lissajous to the 3D curve base', () => {
+      expect(migrateLegacyLayerToShape(waveform({ mode: { value: 'lissajous' } })).params.baseShape?.value).toBe('knot3d');
+    });
+
+    it('carries band texture over as one strength, and 0 when it was off', () => {
+      expect(migrateLegacyLayerToShape(waveform({ mode: { value: 'line' } })).params.bandTexture?.value).toBe(1);
+      expect(migrateLegacyLayerToShape(waveform({ texture: { value: true }, textureGain: { value: 1.6 } })).params.bandTexture?.value).toBe(1.6);
+      expect(migrateLegacyLayerToShape(waveform({ texture: { value: false }, textureGain: { value: 1.6 } })).params.bandTexture?.value).toBe(0);
+    });
+
+    it('keeps the layer settings and moves the amplitude, radius and texture links', () => {
+      const link = { source: 'mid', gain: 1 } as never;
+      const m = migrateLegacyLayerToShape(waveform({ amplitude: { value: 1.2, link }, radius: { value: 0.5, link }, textureGain: { value: 1, link }, thickness: { value: 3, link } }));
+      expect(m.type).toBe('shape');
+      expect(m.opacity).toBe(0.9);
+      expect(m.blend).toBe('add');
+      expect(m.params.reactivity?.link).toBe(link);
+      expect(m.params.size?.link).toBe(link);
+      expect(m.params.bandTexture?.link).toBe(link);
+      expect(m.params.thickness?.link).toBe(link);
+    });
+
+    it('migrateWaveformsInPreset moves line, circle and star7 only', () => {
+      const parsed = BUILTIN_PRESETS.find((p) => p.id === 'tex-dust-wave')!;
+      const base = { ...parsed, preset: { ...parsed.preset, layers: [waveform({ mode: { value: 'line' } }), waveform({ mode: { value: 'circle' } }), waveform({ mode: { value: 'star7' } }), waveform({ mode: { value: 'lissajous' } }), ...parsed.preset.layers.filter((l) => l.type === 'particles')] } };
+      const out = migrateWaveformsInPreset(base);
+      expect(out.preset.layers.map((l) => l.type)).toEqual(['shape', 'shape', 'shape', 'waveform', 'particles']);
+      expect(base.preset.layers[0]!.type).toBe('waveform'); // the input is not changed
+    });
+
+    it('returns the same object when there is nothing to migrate', () => {
+      const parsed = BUILTIN_PRESETS.find((p) => p.id === 'crown')!;
+      expect(migrateWaveformsInPreset(parsed)).toBe(parsed);
+      expect(isShapeReadyWaveform(waveform({ mode: { value: 'lissajous' } }))).toBe(false);
+      expect(isShapeReadyWaveform(waveform({}))).toBe(true);
+    });
+
+    it('the built-in presets with a Waveform line load as Shape layers and build a scene', () => {
+      for (const id of ['tex-dust-wave', 'tex-ripple-field', 'starter-circle-wave']) {
+        const preset = [...ALL_PRESETS, ...REVIEW_PRESETS].find((p) => p.id === id)!.preset;
+        expect(preset.layers.some((l) => l.type === 'waveform')).toBe(false);
+        expect(preset.layers.some((l) => l.type === 'shape')).toBe(true);
+        expect(() => buildScene(id, preset)).not.toThrow();
+      }
+    });
   });
 
   it('migrates legacy bars layer to edgeLine bars shape', () => {
