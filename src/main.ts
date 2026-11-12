@@ -22,7 +22,7 @@ import { PresetSession } from './presets/session';
 import { applyLinkedPreset, hasCrownLayer, hasLinks, presetHasRetiredLayer, restoreBasePreset } from './presets/loader';
 import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
 import { LinkRunner, ReactionBank } from './presets/links';
-import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from './presets/autoCycle';
+import { AutoCycler, DEFAULT_CYCLE, eligible, loadCycleSettings, saveCycleSettings, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
 import { advanceCrown } from './render/crownStore';
 import { cycleIndex, indexForDigit, readStoredPresetId, safeStorage, storePresetId, stepForKey } from './presets/library';
@@ -292,6 +292,8 @@ function start(): void {
   const director = getGlobalDirector();
   // Auto-cycle (T2): timer mode by default. Keys: C timer (C again turns it off), B beat, X shuffle.
   const cycle: CycleOptions = { ...DEFAULT_CYCLE };
+  // The Visuals menu saves the choice (slice 21.13); a saved choice wins over the default.
+  loadCycleSettings(cycle, safeStorage());
   const cycler = new AutoCycler();
   let switchShown: ((id: string) => void) | null = null;
   // Single-layer debug options (?tunnel, ?particles) and the preset scenes. Arrays, so TypeScript
@@ -496,7 +498,8 @@ function start(): void {
         if (k === 'c') cycle.mode = cycle.mode === 'timer' ? 'off' : 'timer';
         if (k === 'b') cycle.mode = cycle.mode === 'beat' ? 'off' : 'beat';
         if (k === 'x') cycle.shuffle = !cycle.shuffle;
-        const label = cycle.mode === 'off' ? 'Auto-cycle off' : `Auto-cycle: ${cycle.mode === 'timer' ? 'every 20 s' : 'on strong beats'}${cycle.shuffle ? ', shuffled' : ''}`;
+        saveCycleSettings(cycle, safeStorage());
+        const label = cycle.mode === 'off' ? 'Auto-cycle off' : `Auto-cycle: ${cycle.mode === 'timer' ? `every ${cycle.intervalSec} s` : 'on strong beats'}${cycle.shuffle ? ', shuffled' : ''}`;
         if (k !== 'x' || cycle.mode !== 'off') showToast(label);
         else showToast(`Shuffle ${cycle.shuffle ? 'on' : 'off'}`);
         return;
@@ -532,7 +535,7 @@ function start(): void {
   // Reduced intensity apply. Turning it off undoes only what it turned on, so a viewer's own
   // Calm or intensity choice is kept.
   const reduceQuery = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-  const state: ControlsState = { calm: director.isCalm(), fileName: '', intensity: 'full' };
+  const state: ControlsState = { calm: director.isCalm(), fileName: '', intensity: 'full', cycle };
   let reduceSetCalm = false;
   let reduceSetIntensity = false;
   const applyReducedMotion = (reduce: boolean): void => {

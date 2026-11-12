@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { AutoCycler, DEFAULT_CYCLE, PREPARE_LEAD_SEC, eligible, type CycleOptions } from './autoCycle';
+import {
+  AutoCycler,
+  CYCLE_STORAGE_KEY,
+  DEFAULT_CYCLE,
+  MAX_INTERVAL_SEC,
+  MIN_INTERVAL_SEC,
+  PREPARE_LEAD_SEC,
+  clampInterval,
+  eligible,
+  loadCycleSettings,
+  saveCycleSettings,
+  type CycleOptions,
+} from './autoCycle';
 import { maxCostForTier } from './cost';
 
 const opts = (over: Partial<CycleOptions>): CycleOptions => ({ ...DEFAULT_CYCLE, ...over });
@@ -193,5 +205,50 @@ describe('eligible with a cost limit (Slice 16.11)', () => {
       { id: 'c', tags: ['calm'], cost: 'heavy' as const },
     ];
     expect(eligible(list, opts({ maxCost: 'medium', calmOnly: true }))).toEqual(['a', 'b']);
+  });
+});
+
+describe('saved Visuals menu settings (Slice 21.13)', () => {
+  const store = (initial?: string) => {
+    const data = new Map<string, string>(initial === undefined ? [] : [[CYCLE_STORAGE_KEY, initial]]);
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  };
+
+  it('clamps the timer length to 5 to 120 s', () => {
+    expect(clampInterval(1)).toBe(MIN_INTERVAL_SEC);
+    expect(clampInterval(500)).toBe(MAX_INTERVAL_SEC);
+    expect(clampInterval(30.4)).toBe(30);
+    expect(clampInterval('x')).toBe(DEFAULT_CYCLE.intervalSec);
+    expect(clampInterval(NaN)).toBe(DEFAULT_CYCLE.intervalSec);
+  });
+
+  it('round-trips mode, shuffle and timer length', () => {
+    const s = store();
+    saveCycleSettings(opts({ mode: 'beat', shuffle: true, intervalSec: 45 }), s);
+    const target = opts({});
+    loadCycleSettings(target, s);
+    expect([target.mode, target.shuffle, target.intervalSec]).toEqual(['beat', true, 45]);
+  });
+
+  it('keeps the defaults when nothing is saved', () => {
+    const target = opts({});
+    loadCycleSettings(target, store());
+    expect(target).toEqual(DEFAULT_CYCLE);
+    loadCycleSettings(target, undefined);
+    expect(target).toEqual(DEFAULT_CYCLE);
+  });
+
+  it('ignores bad JSON and bad values', () => {
+    const target = opts({});
+    loadCycleSettings(target, store('{nope'));
+    expect(target).toEqual(DEFAULT_CYCLE);
+    loadCycleSettings(target, store(JSON.stringify({ mode: 'sideways', shuffle: 'yes', intervalSec: 9999 })));
+    expect([target.mode, target.shuffle, target.intervalSec]).toEqual(['timer', false, MAX_INTERVAL_SEC]);
+  });
+
+  it('does not throw when storage fails', () => {
+    const bad = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('full'); } };
+    expect(() => saveCycleSettings(opts({}), bad)).not.toThrow();
+    expect(() => loadCycleSettings(opts({}), bad)).not.toThrow();
   });
 });

@@ -19,6 +19,8 @@ import {
 } from '../render/globalDirector';
 import { INTENSITY_OPTIONS, isIntensity, type Intensity } from '../render/safety';
 import { getActiveSession, type PresetSession } from '../presets/session';
+import { clampInterval, saveCycleSettings, type CycleOptions } from '../presets/autoCycle';
+import { safeStorage } from '../presets/library';
 
 export const EXPERIENCE_LABELS: Record<string, string> = {
   cinematic: 'Cinematic',
@@ -201,6 +203,8 @@ export interface ControlsState {
   fileName: string;
   /** Viewer intensity (slice 21.3). Optional, so older callers keep working; missing means Full. */
   intensity?: Intensity;
+  /** Shared auto-cycle settings (slice 21.13). The same object main.ts reads each frame, so the Visuals menu and keys C, B and X change one state. */
+  cycle?: CycleOptions;
 }
 
 export const INTENSITY_LABELS: Readonly<Record<Intensity, string>> = {
@@ -428,6 +432,44 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   };
 
   syncExperienceUI();
+
+  // Preset auto-cycle, Shuffle and timer length (slice 21.13). Writes the shared state and saves it.
+  const cycleModeSelect = document.getElementById('exp-cycle-mode') as HTMLSelectElement | null;
+  const cycleShuffle = document.getElementById('exp-cycle-shuffle') as HTMLInputElement | null;
+  const cycleIntervalRow = document.getElementById('exp-cycle-interval-row') as HTMLElement | null;
+  const cycleInterval = document.getElementById('exp-cycle-interval') as HTMLInputElement | null;
+  const cycleIntervalValue = document.getElementById('exp-cycle-interval-value') as HTMLElement | null;
+  const syncCycleUI = () => {
+    const cycle = state.cycle;
+    if (!cycle) return;
+    if (cycleModeSelect && cycleModeSelect.value !== cycle.mode) cycleModeSelect.value = cycle.mode;
+    if (cycleShuffle && cycleShuffle.checked !== cycle.shuffle) cycleShuffle.checked = cycle.shuffle;
+    if (cycleIntervalRow) cycleIntervalRow.hidden = cycle.mode !== 'timer';
+    if (cycleInterval && cycleInterval.value !== String(cycle.intervalSec)) cycleInterval.value = String(cycle.intervalSec);
+    if (cycleIntervalValue) cycleIntervalValue.textContent = `${cycle.intervalSec} s`;
+  };
+  const saveCycle = () => {
+    if (state.cycle) saveCycleSettings(state.cycle, safeStorage());
+  };
+  cycleModeSelect?.addEventListener('change', () => {
+    if (!state.cycle) return;
+    const mode = cycleModeSelect.value;
+    if (mode === 'off' || mode === 'timer' || mode === 'beat') state.cycle.mode = mode;
+    saveCycle();
+    syncCycleUI();
+  });
+  cycleShuffle?.addEventListener('change', () => {
+    if (!state.cycle) return;
+    state.cycle.shuffle = cycleShuffle.checked;
+    saveCycle();
+  });
+  cycleInterval?.addEventListener('input', () => {
+    if (!state.cycle) return;
+    state.cycle.intervalSec = clampInterval(Number(cycleInterval.value));
+    saveCycle();
+    syncCycleUI();
+  });
+  syncCycleUI();
 
   for (const btn of modeButtons) {
     btn.addEventListener('click', () => {
@@ -934,6 +976,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     tick() {
       // Reduced-motion changes made in main.ts show up here (slice 21.3).
       syncIntensitySelect();
+      // Keys C, B and X change the same state, so the menu follows them (slice 21.13).
+      syncCycleUI();
       const media = engine.media;
       if (playback) playback.hidden = !media;
       if (!media) return;

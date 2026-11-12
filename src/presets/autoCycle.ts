@@ -125,3 +125,37 @@ export class AutoCycler {
     return pool[(at + 1) % pool.length]!;
   }
 }
+
+// Visuals menu settings (Slice 21.13): the choice is kept in browser storage under one key.
+export const CYCLE_STORAGE_KEY = 'mv.autoCycle';
+export const MIN_INTERVAL_SEC = 5;
+export const MAX_INTERVAL_SEC = 120;
+
+/** Keeps the timer length inside 5 to 120 s. A non-number gives the default. */
+export function clampInterval(sec: unknown): number {
+  if (typeof sec !== 'number' || !Number.isFinite(sec)) return DEFAULT_CYCLE.intervalSec;
+  return Math.min(MAX_INTERVAL_SEC, Math.max(MIN_INTERVAL_SEC, Math.round(sec)));
+}
+
+/** Reads the saved choice into `target`. Anything missing or invalid leaves the current value alone. */
+export function loadCycleSettings(target: CycleOptions, storage: Pick<Storage, 'getItem'> | undefined): void {
+  try {
+    const raw = storage?.getItem(CYCLE_STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) as Partial<Record<'mode' | 'shuffle' | 'intervalSec', unknown>>;
+    if (saved.mode === 'off' || saved.mode === 'timer' || saved.mode === 'beat') target.mode = saved.mode;
+    if (typeof saved.shuffle === 'boolean') target.shuffle = saved.shuffle;
+    if (saved.intervalSec !== undefined) target.intervalSec = clampInterval(saved.intervalSec);
+  } catch {
+    // Blocked storage or bad JSON: keep the defaults.
+  }
+}
+
+/** Saves mode, shuffle and timer length. Failure only means the choice is not remembered. */
+export function saveCycleSettings(opts: CycleOptions, storage: Pick<Storage, 'setItem'> | undefined): void {
+  try {
+    storage?.setItem(CYCLE_STORAGE_KEY, JSON.stringify({ mode: opts.mode, shuffle: opts.shuffle, intervalSec: opts.intervalSec }));
+  } catch {
+    // Private mode or a full store.
+  }
+}
