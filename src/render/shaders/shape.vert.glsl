@@ -22,7 +22,7 @@ uniform int uNormalMode;       // 0: radial, 1: perpendicular
 uniform int uSymmetry;         // 0: wrap, 1: mirror, 2: repeat2, 3: repeat4
 uniform int uExtrudeDir;       // 0: outward, 1: inward, 2: bilateral, 3: alternating
 uniform int uEffectType;       // 0: solidLine, 1: pulsingLine, 2: waveform, 3: harmonicWave, 4: bars, 5: segmentedBars, 6: dots, 7: auroraFill
-uniform int uSampleCount;      // 16..256
+uniform int uSampleCount;      // 16..1024
 uniform float uEffectLength;   // 0.05..1.5
 uniform float uThickness;      // 0.5..10.0
 uniform int uPeakCaps;         // 0 or 1
