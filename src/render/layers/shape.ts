@@ -12,6 +12,7 @@ import { getCurrentPalette } from '../paletteStore';
 import { blendAccents } from '../colourSwap';
 import { buildBarEdges, type BarEdge } from '../logScale';
 import { barValues } from '../barsState';
+import { BandTexture } from '../bandTexture';
 import { SlowFollower, punch } from '../dynamics';
 import { getVisualGain, shapeReaction } from '../gainStore';
 import { kickGrant } from './shockwave';
@@ -28,6 +29,9 @@ import {
 } from '../../presets/layerSchemas';
 import vertSrc from '../shaders/shape.vert.glsl?raw';
 import fragSrc from '../shaders/shape.frag.glsl?raw';
+
+/** First texture unit for the band textures (sub, mid, high take the next two). Units 0 and 1 hold the audio and peak rows. */
+const BAND_UNIT = 2;
 
 const BASE_SHAPE_MAP: Record<ShapeBaseType, number> = {
   centerLine: 0,
@@ -194,6 +198,12 @@ export class ShapeLayer implements RenderLayer {
   private uIsRibbon: WebGLUniformLocation | null = null;
   private uAudioTex: WebGLUniformLocation | null = null;
   private uPeakTex: WebGLUniformLocation | null = null;
+  private uTexGain: WebGLUniformLocation | null = null;
+  private uTexMid: WebGLUniformLocation | null = null;
+  private uTexHigh: WebGLUniformLocation | null = null;
+  /** Band textures for the band texture option (Slice 19.9b). Created on first use. */
+  private readonly band = new BandTexture();
+  private bandReady = false;
   private uInstOffset: WebGLUniformLocation | null = null;
   private uInstTransform: WebGLUniformLocation | null = null;
 
@@ -268,6 +278,10 @@ export class ShapeLayer implements RenderLayer {
     this.uIsRibbon = gl.getUniformLocation(this.program, 'uIsRibbon');
     this.uAudioTex = gl.getUniformLocation(this.program, 'uAudioTex');
     this.uPeakTex = gl.getUniformLocation(this.program, 'uPeakTex');
+    this.uTexGain = gl.getUniformLocation(this.program, 'uTexGain');
+    this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
+    this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
+    this.bandReady = false; // a fresh context needs fresh band textures
     this.uInstOffset = gl.getUniformLocation(this.program, 'uInstOffset[0]');
     this.uInstTransform = gl.getUniformLocation(this.program, 'uInstTransform[0]');
 
@@ -671,6 +685,24 @@ export class ShapeLayer implements RenderLayer {
     gl.bindTexture(gl.TEXTURE_2D, this.peakTex.texture);
     gl.uniform1i(this.uPeakTex, 1);
 
+    // Band texture (Slice 19.9b): mid sets height and high sets brightness along the path.
+    // Strength 0 leaves the output identical to before and never creates the textures.
+    const texGain = this.p.bandTexture;
+    gl.uniform1f(this.uTexGain, texGain);
+    if (texGain > 0) {
+      if (!this.bandReady) {
+        this.band.init(gl);
+        this.bandReady = true;
+      }
+      this.band.update(gl, frame.bandWaveforms);
+      const texUnit = this.band.bind(gl, BAND_UNIT);
+      gl.uniform1i(this.uTexMid, texUnit + 1);
+      gl.uniform1i(this.uTexHigh, texUnit + 2);
+    } else {
+      gl.uniform1i(this.uTexMid, 0);
+      gl.uniform1i(this.uTexHigh, 0);
+    }
+
     // 7. Dispatch draw call
     gl.bindVertexArray(this.vao);
 
@@ -704,7 +736,9 @@ export class ShapeLayer implements RenderLayer {
       if (this.vao) gl.deleteVertexArray(this.vao);
       if (this.audioTex) gl.deleteTexture(this.audioTex.texture);
       if (this.peakTex) gl.deleteTexture(this.peakTex.texture);
+      if (this.bandReady) this.band.dispose(gl);
     }
+    this.bandReady = false;
     this.program = null;
     this.vao = null;
     this.audioTex = null;

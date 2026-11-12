@@ -33,6 +33,10 @@ uniform int uIsRibbon;         // 1: ribbon (TRIANGLE_STRIP), 0: discrete quads
 uniform sampler2D uAudioTex;
 uniform sampler2D uPeakTex;
 
+uniform float uTexGain;        // 0..2: band texture strength (0 = off, output identical to before)
+uniform sampler2D uTexMid;     // mid-band row, sampled along the path (element height)
+uniform sampler2D uTexHigh;    // high-band row, sampled along the path (element brightness)
+
 out vec2 vLocalUv;
 out float vAudioAmp;
 out float vPeakHold;
@@ -289,6 +293,17 @@ void main() {
   audioAmp *= delayScale;
   peakHold *= delayScale;
 
+  // Band texture (Slice 19.9b): mid sets height, high sets brightness, both by position along the path.
+  float brightMul = 1.0;
+  if (uTexGain > 0.0) {
+    float midS = texture(uTexMid, vec2(uAudio, 0.5)).r;
+    float highS = texture(uTexHigh, vec2(uAudio, 0.5)).r;
+    float heightMul = max(0.0, 1.0 + uTexGain * (midS - 0.5));
+    audioAmp *= heightMul;
+    peakHold *= heightMul;
+    brightMul = max(0.0, 1.0 + uTexGain * (highS - 0.5));
+  }
+
   float effSize = uSize * (1.0 + uBasePulse * uKickEnergy);
 
   vec2 P0, T0, N0;
@@ -399,7 +414,7 @@ void main() {
   // Colour uses the size of the signal; the scope source can be negative.
   vAudioAmp = abs(audioAmp);
   vPeakHold = peakHold;
-  vAlpha = instAlpha;
+  vAlpha = instAlpha * brightMul;
   vU = u;
   vUAudio = uAudio;
 }
