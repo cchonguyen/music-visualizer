@@ -221,14 +221,18 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
 
     const pDust = BUILTIN_PRESETS.find((p) => p.id === 'tex-dust-wave')!.preset;
     expect(pDust.feedback.stretchY?.value).toBe(1.36);
-    const dustWave = pDust.layers.find((l) => l.type === 'waveform')!;
-    expect(dustWave.params.mode?.value).toBe('line');
+    // The Waveform line loads as a Shape layer (Slice 19.10): signed trace on a centre line, band texture carried over.
+    expect(pDust.layers.some((l) => l.type === 'waveform')).toBe(false);
+    const dustWave = pDust.layers.find((l) => l.type === 'shape')!;
+    expect(dustWave.params.baseShape?.value).toBe('centerLine');
+    expect(dustWave.params.audioSource?.value).toBe('scope');
+    expect(dustWave.params.bandTexture?.value).toBe(1.6);
     const dustPart = pDust.layers.find((l) => l.type === 'particles')!;
     expect(dustPart.params.mode?.value).toBe('phyllotaxis');
     expect(dustPart.params.seedShape?.value).toBe('orb');
 
     const pRipple = BUILTIN_PRESETS.find((p) => p.id === 'tex-ripple-field')!.preset;
-    const ripWave = pRipple.layers.find((l) => l.type === 'waveform')!;
+    const ripWave = pRipple.layers.find((l) => l.type === 'shape')!;
     expect(ripWave.params.thickness?.value).toBe(2.2);
     const ripPart = pRipple.layers.find((l) => l.type === 'particles')!;
     expect(ripPart).toBeDefined();

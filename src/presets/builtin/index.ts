@@ -1,6 +1,7 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
 import { BLEND_MODES, parsePreset, type Preset, type PresetMood, type PresetTheme, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
+import { migrateWaveformsInPreset } from '../legacyShapeMigration';
 import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
@@ -188,8 +189,9 @@ export const BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
   { id: 'flight', group: 'classic', subfolder: 'classics', ...parsePreset(flight, SCHEMAS) },
   { id: 'bars', group: 'classic', subfolder: 'classics', ...parsePreset(bars, SCHEMAS) },
   { id: 'starter-vortex', group: 'archive', subfolder: 'classics', ...parsePreset(starter_vortex, SCHEMAS) },
-  { id: 'tex-ripple-field', group: 'textures', subfolder: 'classics', ...parsePreset(tex_ripple_field, SCHEMAS) },
-  { id: 'tex-dust-wave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_dust_wave, SCHEMAS) },
+  // Waveform line, circle and star7 layers load as Shape layers (Slice 19.10). The JSON files stay as they are.
+  { id: 'tex-ripple-field', group: 'textures', subfolder: 'classics', ...migrateWaveformsInPreset(parsePreset(tex_ripple_field, SCHEMAS)) },
+  { id: 'tex-dust-wave', group: 'textures', subfolder: 'classics', ...migrateWaveformsInPreset(parsePreset(tex_dust_wave, SCHEMAS)) },
 ];
 
 
@@ -231,7 +233,7 @@ export const REVIEW_PRESETS: readonly BuiltinPresetEntry[] = [
   { id: 'starter-stripe-drift', group: 'archive', subfolder: 'classics', ...parsePreset(starter_stripe_drift, SCHEMAS) },
   { id: 'starter-kaleido', group: 'archive', subfolder: 'classics', ...parsePreset(starter_kaleido, SCHEMAS) },
   { id: 'starter-soft-smoke', group: 'archive', subfolder: 'classics', ...parsePreset(starter_soft_smoke, SCHEMAS) },
-  { id: 'starter-circle-wave', group: 'archive', subfolder: 'classics', ...parsePreset(starter_circle_wave, SCHEMAS) },
+  { id: 'starter-circle-wave', group: 'archive', subfolder: 'classics', ...migrateWaveformsInPreset(parsePreset(starter_circle_wave, SCHEMAS)) },
   { id: 'starter-ember', group: 'archive', subfolder: 'classics', ...parsePreset(starter_ember, SCHEMAS) },
   { id: 'starter-quiet-tunnel', group: 'archive', subfolder: 'classics', ...parsePreset(starter_quiet_tunnel, SCHEMAS) },
   { id: 'tex-glass-tunnel', group: 'textures', subfolder: 'classics', ...parsePreset(tex_glass_tunnel, SCHEMAS) },

@@ -16,7 +16,7 @@ Slice 19.4 (per-Shape glow) was removed on 2026-11-11. Post Bloom (Slice 18.7) a
 - [x] **Slice 19.9c: Rotating 3D curve base in Shape** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/layers/shape.ts`, `src/render/shaders/shape.vert.glsl`, `src/presets/layerSchemas.ts`, `src/render/__tests__/shapeLayer.test.ts` | Verify: npm run typecheck && npm test && npm run build
 - [x] **Slice 19.9d: Loudness-driven copy count and stroke width for concentric mode in Shape** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/render/layers/shape.ts`, `src/presets/layerSchemas.ts`, `src/render/__tests__/shapeLayer.test.ts` | Verify: npm run typecheck && npm test && npm run build
 Audit decisions (Charlie, 2026-11-11): audit accepted. Items 1 to 4 go into Shape. orbitTriangles and polarGrid stay on Rings and are not ported.
-- [ ] **Slice 19.10: Fold legacy layers into Shape with preset migration** [IN_PROGRESS] 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/presets/legacyShapeMigration.ts`, `src/presets/loader.ts`, `src/presets/loader.test.ts`, `src/presets/builtin/index.ts` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 19.10: Fold legacy layers into Shape with preset migration** 🖐 `[CORE / DATA]` worker: engineer-sonnet (Sonnet) Target files: `src/presets/legacyShapeMigration.ts`, `src/presets/loader.ts`, `src/presets/loader.test.ts`, `src/presets/builtin/index.ts` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 20 — Generators and preset overhaul (.spec/specs/roadmap/stage-20-generators-presets.md)
 No lint script exists in this repo, so Verify omits it. Slice 20.9 preset numbers moved to 27, 28, 29 (25 and 26 are taken).
