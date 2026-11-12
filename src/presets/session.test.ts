@@ -612,6 +612,15 @@ describe('admin system preset mutation & authorization (Slice 11.3)', () => {
 });
 
 describe('remote system preset sync engine applyRemoteSystemPresets (Slice 11.3)', () => {
+  it('loads a Waveform line layer from a remote system preset as a Shape layer (Slice 19.11)', () => {
+    const data = structuredClone(session.get('crown')!.preset);
+    data.layers = [{ ...data.layers[0]!, type: 'waveform', params: {} }];
+    session.applyRemoteSystemPresets([
+      { id: 'remote-wave', name: 'Remote Wave', subfolder: 'classics', preset_data: data, sort_order: 1, tags: [], updated_at: new Date().toISOString() },
+    ]);
+    expect(session.get('remote-wave')!.preset.layers.map((l) => l.type)).toEqual(['shape']);
+  });
+
   it('applies newly discovered remote system presets and adds them to categories', () => {
     const samplePreset = structuredClone(session.get('crown')!.preset);
     samplePreset.name = 'Remote Cosmic Portal';
