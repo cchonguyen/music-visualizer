@@ -372,6 +372,31 @@ export function renderPresetSelectHierarchy(
   }
 }
 
+type FolderLike = { title?: string; expanded?: boolean; children?: unknown[] };
+
+function folderChildren(node: unknown): FolderLike[] {
+  const kids = (node as FolderLike | null | undefined)?.children;
+  return Array.isArray(kids) ? (kids as FolderLike[]).filter((k) => typeof k?.expanded === 'boolean') : [];
+}
+
+/** Paths ("Section/Group") of every folder currently open, so a rebuild can reopen them. */
+function collectOpenFolders(pane: unknown, prefix = '', out = new Set<string>()): Set<string> {
+  for (const f of folderChildren(pane)) {
+    const path = `${prefix}/${f.title ?? ''}`;
+    if (f.expanded) out.add(path);
+    collectOpenFolders(f, path, out);
+  }
+  return out;
+}
+
+function restoreOpenFolders(pane: unknown, open: Set<string>, prefix = ''): void {
+  for (const f of folderChildren(pane)) {
+    const path = `${prefix}/${f.title ?? ''}`;
+    if (open.has(path)) f.expanded = true;
+    restoreOpenFolders(f, open, path);
+  }
+}
+
 export class Studio {
   private pane: Pane | null = null;
   private id = '';
@@ -675,6 +700,23 @@ export class Studio {
 
   /** (Re)build the panel for preset `id`. Call after every switch or structure change. */
   bind(id: string): void {
+    const scroller = this.container;
+    const scrollTop = scroller?.scrollTop ?? 0;
+    const open = collectOpenFolders(this.pane);
+    this.buildPanel(id);
+    if (open.size > 0) restoreOpenFolders(this.pane, open);
+    if (scroller && scrollTop > 0) {
+      scroller.scrollTop = scrollTop;
+      // Folders animate open, so the content may still be short on this frame. Re-apply once it settles.
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => {
+          scroller.scrollTop = scrollTop;
+        });
+      }
+    }
+  }
+
+  private buildPanel(id: string): void {
     this.id = id;
     this.disarmDelete();
     this.deleteBtn = null;
