@@ -87,7 +87,11 @@ export function migrateLegacyLayerToShape(layer: LayerEntry): LayerEntry {
         effectType: 'waveform',
         size: radius,
         thickness: thick,
-        effectLength: 0.35 * amp,
+        // 256 points follow the trace sample by sample. 64 stretched over the curve smoothed the peaks away.
+        sampleCount: 256,
+        attackMs: 5,
+        releaseMs: 40,
+        effectLength: 0.5 * amp,
         reactivity: amp,
         extrudeDirection: 'bilateral',
         symmetry: 'wrap',

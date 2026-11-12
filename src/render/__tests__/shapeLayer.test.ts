@@ -460,7 +460,7 @@ describe('ShapeLayer', () => {
       expect(spec.max).toBe(SHAPE_REACTIVITY_MAX);
       expect(spec.max).toBe(15.0);
       expect(SHAPE_AMP_MAX).toBe(10.0);
-      expect(SHAPE_DEFAULTS.reactivity).toBe(1.0);
+      expect(SHAPE_DEFAULTS.reactivity).toBe(1.25);
     });
 
     it('GLSL AMP_MAX constant matches the TypeScript constant', () => {
