@@ -60,8 +60,8 @@ describe('buildScene', () => {
   });
 
   it('every registered layer type has a factory and a schema', () => {
-    // reactionDiffusion is retired (Slice 15.10): schema kept for old presets, no factory.
-    expect(Object.keys(LAYER_FACTORIES).sort()).toEqual(Object.keys(LAYER_SPECS).filter((k) => k !== 'reactionDiffusion').sort());
+    // reactionDiffusion is retired (Slice 15.10) and waveform is retired (Slice 19.15): schemas kept for old presets, no factory.
+    expect(Object.keys(LAYER_FACTORIES).sort()).toEqual(Object.keys(LAYER_SPECS).filter((k) => k !== 'reactionDiffusion' && k !== 'waveform').sort());
   });
 
   it('registers shape as the FIRST factory in LAYER_FACTORIES', () => {
@@ -218,18 +218,18 @@ describe('legacyShapeMigration', () => {
       expect(m.params.thickness?.link).toBe(link);
     });
 
-    it('migrateWaveformsInPreset moves line, circle and star7 only', () => {
+    it('migrateWaveformsInPreset moves every Waveform mode', () => {
       const parsed = BUILTIN_PRESETS.find((p) => p.id === 'tex-dust-wave')!;
       const base = { ...parsed, preset: { ...parsed.preset, layers: [waveform({ mode: { value: 'line' } }), waveform({ mode: { value: 'circle' } }), waveform({ mode: { value: 'star7' } }), waveform({ mode: { value: 'lissajous' } }), ...parsed.preset.layers.filter((l) => l.type === 'particles')] } };
       const out = migrateWaveformsInPreset(base);
-      expect(out.preset.layers.map((l) => l.type)).toEqual(['shape', 'shape', 'shape', 'waveform', 'particles']);
+      expect(out.preset.layers.map((l) => l.type)).toEqual(['shape', 'shape', 'shape', 'shape', 'particles']);
       expect(base.preset.layers[0]!.type).toBe('waveform'); // the input is not changed
     });
 
     it('returns the same object when there is nothing to migrate', () => {
       const parsed = BUILTIN_PRESETS.find((p) => p.id === 'crown')!;
       expect(migrateWaveformsInPreset(parsed)).toBe(parsed);
-      expect(isShapeReadyWaveform(waveform({ mode: { value: 'lissajous' } }))).toBe(false);
+      expect(isShapeReadyWaveform(waveform({ mode: { value: 'lissajous' } }))).toBe(true);
       expect(isShapeReadyWaveform(waveform({}))).toBe(true);
     });
 

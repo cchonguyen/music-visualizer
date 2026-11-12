@@ -180,7 +180,7 @@ export function parseLibraryFile(text: string, registry: SchemaRegistry): Parsed
     }
     let parsed: { preset: Preset; warnings: string[] };
     try {
-      parsed = parsePreset(item.preset, registry);
+      parsed = migrateWaveformsInPreset(parsePreset(item.preset, registry));
     } catch (err) {
       throw libraryError(`preset "${id}" is not a valid preset (${(err as Error).message})`);
     }
@@ -414,7 +414,7 @@ export class PresetSession {
         const id = String((item as { id: unknown }).id);
         const rawFolderId = (item as { folderId?: unknown }).folderId;
         const folderId = typeof rawFolderId === 'string' && rawFolderId.trim() ? rawFolderId.trim() : undefined;
-        const { preset } = parsePreset((item as { preset: unknown }).preset, this.registry);
+        const { preset } = migrateWaveformsInPreset(parsePreset((item as { preset: unknown }).preset, this.registry));
         this.entries.set(id, {
           id,
           builtin: false,
@@ -1082,9 +1082,8 @@ export class PresetSession {
 
       let parsedPreset: Preset;
       try {
-        const parsed = parsePreset(record.preset_data, this.registry);
         // Synced copies keep the legacy Waveform layer in the database. Load them as Shape like the bundled ones (Slice 19.11).
-        parsedPreset = migrateWaveformsInPreset(parsed).preset;
+        parsedPreset = migrateWaveformsInPreset(parsePreset(record.preset_data, this.registry)).preset;
       } catch {
         continue;
       }
@@ -1373,7 +1372,7 @@ export class PresetSession {
     } catch {
       throw new PresetFormatError('the file is not valid JSON');
     }
-    const { preset, warnings } = parsePreset(raw, this.registry);
+    const { preset, warnings } = migrateWaveformsInPreset(parsePreset(raw, this.registry));
     const id = `user-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
     this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset) });
     this.persist();
@@ -1461,7 +1460,7 @@ export class PresetSession {
       if (Array.isArray(asset.presets)) {
         for (const p of asset.presets) {
           try {
-            const { preset, warnings: w } = parsePreset(p, this.registry);
+            const { preset, warnings: w } = migrateWaveformsInPreset(parsePreset(p, this.registry));
             warnings.push(...w);
             const id = `user-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
             this.entries.set(id, { id, builtin: false, preset, savedJson: JSON.stringify(preset) });

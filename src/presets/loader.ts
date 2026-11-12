@@ -10,7 +10,6 @@ import { ParticleLayer } from '../render/layers/particles';
 import { RingsLayer } from '../render/layers/rings';
 import { ShockwaveLayer } from '../render/layers/shockwave';
 import { TunnelLayer } from '../render/layers/tunnel';
-import { WaveformLayer } from '../render/layers/waveform';
 import { MoireLayer } from '../render/layers/moire';
 import { SpectralTerrainLayer } from '../render/layers/spectralTerrain';
 import { ChladniSandLayer } from '../render/layers/chladniSand';
@@ -25,7 +24,7 @@ import { LinkRunner, type LinkInputs } from './links';
 import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ParamSpec, type ParamValue } from './schema';
-import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, WaveformParams, ShapeParams, JuliaParams, OrbitParams, ArchitectureParams } from './layerSchemas';
+import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, ShapeParams, JuliaParams, OrbitParams, ArchitectureParams } from './layerSchemas';
 import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
 
 // Register moire and spectralTerrain in LAYER_SPECS for loader consumers
@@ -109,7 +108,6 @@ export const LAYER_FACTORIES: Readonly<Record<string, LayerFactory>> = {
   shockwave: (p) => new ShockwaveLayer(p as Partial<ShockwaveParams>),
   bars: (p) => new BarsLayer(p as Partial<BarsParams>),
   bassPulse: (p) => new BassPulseLayer(p as Partial<BassPulseParams>),
-  waveform: (p) => new WaveformLayer(p as Partial<WaveformParams>),
   moire: (p) => new MoireLayer(p as Partial<MoireParams>),
   spectralTerrain: (p) => new SpectralTerrainLayer(p as Partial<SpectralTerrainParams>),
   chladniSand: (p) => new ChladniSandLayer(p as Partial<ChladniSandParams>),
@@ -179,7 +177,6 @@ export function applyValues(layer: RenderLayer, values: Record<string, ParamValu
   else if (layer instanceof CrownLayer) layer.setParams(values as Partial<CrownParams>);
   else if (layer instanceof RingsLayer) layer.setParams(values as Partial<RingsParams>);
   else if (layer instanceof ShockwaveLayer) layer.setParams(values as Partial<ShockwaveParams>);
-  else if (layer instanceof WaveformLayer) layer.setParams(values as Partial<WaveformParams>);
   else if (layer instanceof MoireLayer) layer.setParams(values as Partial<MoireParams>);
   else if (layer instanceof SpectralTerrainLayer) layer.setParams(values as Partial<SpectralTerrainParams>);
   else if (layer instanceof ChladniSandLayer) layer.setParams(values as Partial<ChladniSandParams>);

@@ -201,20 +201,14 @@ export function migrateLegacyLayers(layers: LayerEntry[]): LayerEntry[] {
   return layers.map(migrateLegacyLayerToShape);
 }
 
-/**
- * Waveform modes that Shape now matches (Slice 19.10, legacy-layer audit). Lissajous stays on the legacy layer
- * until its before and after have been compared, and Bars and Rings keep their legacy layers for the same reason.
- */
-const SHAPE_READY_WAVEFORM_MODES = new Set(['line', 'circle', 'star7']);
-
-/** True for a Waveform layer in a mode that Shape covers. */
+/** True for a Waveform layer. Every mode (line, circle, star7, lissajous) has a Shape equivalent since Slice 19.15. */
 export function isShapeReadyWaveform(layer: LayerEntry): boolean {
-  return layer.type === 'waveform' && SHAPE_READY_WAVEFORM_MODES.has(String(extractVal(layer.params?.mode) ?? 'line'));
+  return layer.type === 'waveform';
 }
 
 /**
- * Migrates the Waveform layers (line, circle, star7) of a parsed preset to Shape layers. Every other layer is
- * left as it is, and a preset without such a layer comes back as the same object. The saved file is never touched.
+ * Migrates the Waveform layers of a parsed preset to Shape layers. Every other layer is left as it is, and a
+ * preset without a Waveform layer comes back as the same object. The saved file is never touched.
  */
 export function migrateWaveformsInPreset<T extends { preset: Preset }>(parsed: T): T {
   if (!parsed.preset.layers.some(isShapeReadyWaveform)) return parsed;
