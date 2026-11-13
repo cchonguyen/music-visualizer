@@ -1199,3 +1199,99 @@ describe('Director uniforms without per-frame allocation (Slice 16.8)', () => {
     expect(a).toEqual(copy);
   });
 });
+
+describe('Slice 22.2: kick-impulse zoom', () => {
+  const DT = 1 / 60;
+  const KICK = { energy: 0.5, kickPulse: true };
+  const QUIET = { energy: 0.5 };
+  // craneSway has a constant zoom (1 + 0.15 * intensity), so any zoom change is the kick impulse.
+  function craneDirector(cameraIntensity = 1, experienceMode: 'custom' | 'calm' = 'custom'): GlobalDirector {
+    if (experienceMode === 'calm') return new GlobalDirector({ experienceMode: 'calm' });
+    return new GlobalDirector({
+      experienceMode: 'custom',
+      cameraMode: 'craneSway',
+      cameraIntensity,
+      colorMood: 'native',
+      colorIntensity: 0,
+    });
+  }
+
+  it('raises zoom on a kick and decays back to the base zoom', () => {
+    const d = craneDirector(1);
+    d.advance(DT, QUIET);
+    const base = d.getCameraUniforms().zoom;
+    d.advance(DT, KICK);
+    expect(d.getCameraUniforms().zoom).toBeGreaterThan(base + 0.04);
+    for (let i = 0; i < 15; i++) d.advance(DT, QUIET); // 0.25 s
+    expect(d.getCameraUniforms().zoom - base).toBeLessThan(0.01);
+    for (let i = 0; i < 45; i++) d.advance(DT, QUIET); // to 1 s
+    expect(d.getCameraUniforms().zoom).toBeCloseTo(base, 3);
+  });
+
+  it('never exceeds the 0.05 peak offset', () => {
+    const d = craneDirector(1);
+    d.advance(DT, QUIET);
+    const base = d.getCameraUniforms().zoom;
+    let maxOffset = 0;
+    for (let i = 0; i < 600; i++) {
+      d.advance(DT, i % 7 === 0 ? KICK : QUIET);
+      maxOffset = Math.max(maxOffset, d.getCameraUniforms().zoom - base);
+    }
+    expect(maxOffset).toBeGreaterThan(0.04);
+    expect(maxOffset).toBeLessThanOrEqual(0.05 + 1e-9);
+  });
+
+  it('fires at most 3 impulses in any one second under rapid kicks', () => {
+    const d = craneDirector(1);
+    d.advance(DT, QUIET);
+    let prev = d.getCameraUniforms().zoom;
+    const rises: number[] = [];
+    for (let i = 0; i < 180; i++) {
+      d.advance(DT, KICK); // a kick on every frame for 3 s
+      const z = d.getCameraUniforms().zoom;
+      // Between impulses the offset only decays, so a rise marks a new impulse.
+      if (z > prev + 1e-12) rises.push(i);
+      prev = z;
+    }
+    expect(rises.length).toBe(9);
+    for (let start = 0; start + 60 <= 180; start++) {
+      const inWindow = rises.filter((f) => f >= start && f < start + 60).length;
+      expect(inWindow).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('adds no impulse in Director Calm', () => {
+    const kicked = craneDirector(1, 'calm');
+    const quiet = craneDirector(1, 'calm');
+    for (let i = 0; i < 120; i++) {
+      kicked.advance(DT, KICK);
+      quiet.advance(DT, QUIET);
+      expect(kicked.getCameraUniforms().zoom).toBe(quiet.getCameraUniforms().zoom);
+    }
+  });
+
+  function peakOffsetAtScale(scale: number, cameraIntensity = 1): number {
+    const d = craneDirector(cameraIntensity);
+    d.setKickZoomScale(scale);
+    d.advance(DT, QUIET);
+    const base = d.getCameraUniforms().zoom;
+    d.advance(DT, KICK);
+    return d.getCameraUniforms().zoom - base;
+  }
+
+  it('scale 1 gives the full impulse, 0.5 half, 0 none', () => {
+    expect(peakOffsetAtScale(1)).toBeCloseTo(0.05, 9);
+    expect(peakOffsetAtScale(0.5)).toBeCloseTo(0.025, 9);
+    expect(peakOffsetAtScale(0)).toBeCloseTo(0, 9);
+  });
+
+  it('scales the impulse with camera intensity', () => {
+    expect(peakOffsetAtScale(1, 0.5)).toBeCloseTo(0.025, 9);
+  });
+
+  it('clamps the scale to 0..1 and treats a non-finite scale as off', () => {
+    expect(peakOffsetAtScale(2)).toBeCloseTo(0.05, 9);
+    expect(peakOffsetAtScale(-1)).toBeCloseTo(0, 9);
+    expect(peakOffsetAtScale(Number.NaN)).toBeCloseTo(0, 9);
+  });
+});
