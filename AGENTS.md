@@ -23,3 +23,5 @@ Your mission is to coordinate work with minimal context bloat. Do NOT explore ra
 - **Zero Local Deploys:** Never run `npm run deploy` or `wrangler deploy` locally from a worktree. Production deployments happen exclusively via GitHub Actions when a PR merges into `main`.
 - **Merge Gate:** Before merging any PR (`gh pr merge`), always run `git fetch origin main && git rebase origin/main`, verify `git merge-base --is-ancestor origin/main HEAD` passes, and re-run quiet verification commands.
 <!-- <<< harness <<< -->
+
+UI follows Harness UI. Read its README.md, voice.md, principles.md, and this project's design-system/profile.md before changing a screen. Never edit tokens.css or bundle.css directly.
