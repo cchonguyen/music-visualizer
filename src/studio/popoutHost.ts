@@ -133,6 +133,11 @@ export function createPopoutHost(options: PopoutHostOptions): PopoutHost {
 
   let connected = false;
   let lastHeardAt: number | null = null;
+  // Signature of the preset list as of the last snapshot sent. PresetSession has no change event, so the timer compares.
+  let sentSignature: string | null = null;
+
+  const listSignature = (list: ReturnType<PresetSession['list']>): string =>
+    JSON.stringify(list.map((entry) => [entry.id, entry.preset.name]));
 
   const setConnected = (on: boolean): void => {
     if (connected === on) return;
@@ -144,11 +149,13 @@ export function createPopoutHost(options: PopoutHostOptions): PopoutHost {
     const shownId = options.getShownId();
     const shown = shownId ? session.get(shownId) : undefined;
     if (!shown) return;
+    const list = session.list();
     channel.send('snapshot', {
-      presets: session.list().map((entry) => ({ id: entry.id, name: entry.preset.name })),
+      presets: list.map((entry) => ({ id: entry.id, name: entry.preset.name })),
       shownPresetId: shown.id,
       shownPresetJson: JSON.stringify(shown.preset),
     });
+    sentSignature = listSignature(list);
   };
 
   const unsubscribe = channel.onMessage((message) => {
@@ -174,6 +181,8 @@ export function createPopoutHost(options: PopoutHostOptions): PopoutHost {
     channel.send('heartbeat');
     if (connected && (lastHeardAt === null || now() - lastHeardAt > POPOUT_DISCONNECT_TIMEOUT_MS)) {
       setConnected(false);
+    } else if (connected && listSignature(session.list()) !== sentSignature) {
+      sendSnapshot();
     }
   }, POPOUT_HEARTBEAT_INTERVAL_MS);
 
