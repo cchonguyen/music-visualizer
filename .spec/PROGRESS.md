@@ -46,8 +46,8 @@ Status 2026-11-13: slices 22.1 to 22.7 built and merged (PRs #324 to #330). Deta
 
 ## Stage 24 — Harness UI adoption (.spec/specs/roadmap/stage-24-harness-ui-adoption.md)
 Confirmed by Charlie, 2026-11-13. Slice lines (hub slices H24.2 to H24.4 (H24.1 dropped), spoke slices 24.1 to 24.10) are in that file. Slice lines are added here one at a time when started.
-Done: 24.1 (PR #340), 24.2 (PR #343), 24.3 (PR #345), 24.4 (PR #347), 24.5 (PR #351), 24.9 (PR #349). Hub slices H24.2 to H24.4 dropped 2026-11-13: the profile path was already consistent, and the unused tokens are reference values. Charlie chose 2026-11-13 to move controls onto kit buttons and segmented controls (`ui-btn`, `ui-segmented`; `ui-pill` is a status chip and stays out of controls).
-- [x] **Slice 24.6: Visuals menu experience-mode picker onto kit ui-segmented (radiogroup with arrow keys)** Issue: #352 `[UI / VISUAL]` worker: engineer (Haiku) Target files: `index.html`, `src/ui/controls.ts`, `src/ui/controls.test.ts`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+Done: 24.1 (PR #340), 24.2 (PR #343), 24.3 (PR #345), 24.4 (PR #347), 24.5 (PR #351), 24.6 (PR #353), 24.9 (PR #349). Hub slices H24.2 to H24.4 dropped 2026-11-13: the profile path was already consistent, and the unused tokens are reference values. Charlie chose 2026-11-13 to move controls onto kit buttons and segmented controls (`ui-btn`, `ui-segmented`; `ui-pill` is a status chip and stays out of controls).
+- [x] **Slice 24.7: Close, dismiss and guide buttons onto kit ui-btn and ui-icon-btn (revised scope for 24.7 and 24.8: toast, dialog and Studio containers stay custom, recorded in the profile)** Issue: #354 `[UI / VISUAL]` worker: engineer (Haiku) Target files: `index.html`, `src/style.css`, `design-system/profile.md` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 23 — Polish after Stage 22 (.spec/specs/roadmap/stage-23-polish.md)
 Order (Charlie, 2026-11-13): 23.1, 23.2, 23.3, then 23.4 (a throwaway browser run, no repo change). Issues: #331 to #333.

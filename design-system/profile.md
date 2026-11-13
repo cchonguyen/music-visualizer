@@ -12,6 +12,8 @@ This file is the app's own. Sync never touches it. Each line below is a departur
 - **theme-lock: dark.** The visuals are drawn on black. `data-theme="dark"` is set on `<html>` in `index.html` and `popout.html`, and the app has no light theme and no theme picker.
 - **Canvas and overlays:** the WebGL canvas, the start screen scrim and the HUD panels sit on pure black or translucent black, not on `--bg`. Reason: the visual must not be tinted.
 - **Tweakpane (Preset Studio parameter controls):** stays on its own look. Reason: it is a third-party control set and restyling it is out of scope.
+- **Toast, shortcuts dialog and HUD panels (Source, Visuals, Studio):** the containers stay custom. Reason: the kit's `ui-toast` and `ui-dialog` are bottom-sheet patterns with a display font and a separate scrim, and ours are a floating toast, a native `<dialog>` with a key table, and anchored panels. The buttons inside them use kit `ui-btn`, `ui-icon-btn` and `ui-segmented`.
+- **Control bar pill group:** the segmented pill container is app-only. Its buttons are kit `ui-btn ui-btn--ghost`. The kit's `ui-pill` is a status chip and is not used for controls.
 - **Icons:** inline SVG in the kit's style (Lucide look, stroke 1.75), written by hand. No icon package or font. Reason: no dependency for a few glyphs.
 
 ## States

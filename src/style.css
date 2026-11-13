@@ -717,27 +717,6 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   font-weight: 600;
 }
 
-.onboarding-toast-dismiss {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 0.2rem 0.4rem;
-  font-size: 0.9rem;
-  line-height: 1;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: color 0.15s, background 0.15s;
-}
-
-.onboarding-toast-dismiss:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
 @media (max-width: 599px) {
   /* Onboarding toast on phone docks at the top */
   .onboarding-toast {
@@ -770,22 +749,6 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 
 .shortcuts-actions {
   margin: 0 0 0.75rem;
-}
-
-.shortcuts-guide-btn {
-  font-size: var(--ui-text-size);
-  padding: 0.4rem 0.8rem;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.shortcuts-guide-btn:hover {
-  background: var(--hover);
-  border-color: var(--accent);
 }
 
 .toast { position: fixed; top: 1rem; right: 1rem; z-index: 10; background: rgba(18, 18, 18, .85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
@@ -916,7 +879,7 @@ dialog#shortcuts .short { display: none; }
   dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
 }
 /* One close pattern (slice 11.2): Studio, Shortcuts and the controls bar each close with .close-btn at the top right. 44 px square under 600px. */
-.close-btn { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .4rem .8rem; cursor: pointer; flex: 0 0 auto; }
+.close-btn { flex: 0 0 auto; }
 .close-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Controls close sits in the sheet header: top right on desktop (the bar does not scroll), sticky on phones (see 599px block). */
 .controls-head { position: absolute; top: .5rem; right: .5rem; background: none; }
