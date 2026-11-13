@@ -28,12 +28,12 @@ Source documents: `.spec/SCOPE_BRIEF.md` (v2 brief, phone-focused, superseded fo
 Facts: Harness UI (`.harness/design-system/`) is identical in hub and spoke, but the visualizer did not load it: no `ui-` classes, no `design-system/profile.md`, no `app.css`, own tokens in `src/style.css`.
 Decisions:
 1. **Adopt.** Load `tokens.css` then `bundle.css` then `src/app.css`. Move controls, pills and Studio surfaces onto `ui-` components one surface per slice. App-only styles go in `app.css`. The app is dark-only (`theme-lock: dark`). WebGL canvas, visual behaviour and all tests stay green. Never edit `tokens.css` or `bundle.css` here.
-2. **New blue accent in the kit.** Hub change in `claude-harness-hub` (tokens.css and docs), its own hub slice, delivered by sync. Spoke slices that use the blue wait for that sync. Current app blue is `#2a6ae0`. The hue must keep the 40 degree spacing rule in `adopting.md`.
+2. **Accent: the kit's `neon-azure`** (revised 2026-11-13). No new blue is added to the hub.
 3. **`design-system/profile.md` at the project root** (dark lock, accent, density, focus, states). Hub slice fixes the README and harness-rules path to say project root.
 4. **Focus ring:** the 3px yellow ring becomes the kit's 2px `focus` outline, offset 2px.
 5. **Small fixes:** emoji icons in `index.html` replaced; reduced-motion covers `.pill-segment`, `.source-card`, `.exp-mode-btn`, `.onboarding-toast`.
 6. **Hub, low priority:** remove unused tokens (`--measure`, `--duration-enter`, `--z-pop`, `--bp-*`) or document them; record offer-back candidates (segmented pill, value-button slider, sheet handle).
-Open questions: (a) the kit ships no icon files, only the rule "Lucide, inline SVG, stroke 1.75". Is hand-inlining the few needed Lucide SVGs (no package) allowed? (b) `#2a6ae0` is about OKLCH hue 262, 7 degrees from `neon-azure` (255), so a distinct blue breaks the 40 degree rule unless the visualizer shares azure or the hub moves a hue. Which?
+Answers (Charlie, 2026-11-13): (a) yes, hand-inline the few needed Lucide SVGs, no package. (b) use the kit's `neon-azure`; the hub gets no new blue and slice H24.1 is dropped.
 
 ## 2. Out of Scope (Do NOT Build)
 
