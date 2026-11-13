@@ -6,3 +6,16 @@ body {
   font-size: 1rem;
   line-height: normal;
 }
+
+/* Slice 24.9: inline SVG icons, Lucide style, stroke 1.75. Size follows the surrounding font size. */
+.ui-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.125em;
+}

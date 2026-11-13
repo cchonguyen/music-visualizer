@@ -173,11 +173,11 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
 
 describe('source formatting helpers (Slice 12.3)', () => {
   it('returns appropriate icon for each source kind', () => {
-    expect(getSourceIcon('mic')).toBe('🎙️');
-    expect(getSourceIcon('display')).toBe('🖥️');
-    expect(getSourceIcon('file')).toBe('🎵');
-    expect(getSourceIcon('test:kick')).toBe('⚡');
-    expect(getSourceIcon('none')).toBe('🔊');
+    expect(getSourceIcon('mic')).toContain('data-icon="mic"');
+    expect(getSourceIcon('display')).toContain('data-icon="monitor"');
+    expect(getSourceIcon('file')).toContain('data-icon="music"');
+    expect(getSourceIcon('test:kick')).toContain('data-icon="zap"');
+    expect(getSourceIcon('none')).toContain('data-icon="volume"');
   });
 
   it('formats source labels appropriately', () => {
