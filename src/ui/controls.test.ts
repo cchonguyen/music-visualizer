@@ -153,7 +153,7 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
 
   it('starts with timeline scrubber and action button hidden until source is active', () => {
     expect(pillsRow).toContain('id="playback-scrubber-segment" class="pill-segment scrubber-segment" hidden');
-    expect(pillsRow).toContain('id="playback-action-btn" class="pill-segment action-btn" aria-label="Playback action" hidden');
+    expect(pillsRow).toContain('id="playback-action-btn" class="ui-btn ui-btn--ghost pill-segment action-btn" aria-label="Playback action" hidden');
     expect(pillsRow).toContain('id="playback" hidden');
   });
 
