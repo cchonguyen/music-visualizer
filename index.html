@@ -170,6 +170,7 @@
               <option value="off">Off</option>
               <option value="timer">Timer</option>
               <option value="beat">Beat</option>
+              <option value="phrase">Phrase</option>
             </select>
           </label>
           <label class="exp-checkbox-field">
@@ -185,6 +186,16 @@
           <label class="exp-field">
             <span>Switch every <output id="exp-cycle-interval-value">20 s</output></span>
             <input id="exp-cycle-interval" type="range" min="5" max="120" step="1" value="20" aria-label="Seconds between preset switches" />
+          </label>
+        </div>
+        <div id="exp-cycle-bars-row" class="exp-render-row exp-cycle-interval-row" hidden>
+          <label class="exp-field">
+            <span>Phrase length</span>
+            <select id="exp-cycle-bars" aria-label="Bars per phrase">
+              <option value="4">4 bars</option>
+              <option value="8" selected>8 bars</option>
+              <option value="16">16 bars</option>
+            </select>
           </label>
         </div>
         <div class="exp-actions-row">

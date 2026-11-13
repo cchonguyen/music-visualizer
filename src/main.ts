@@ -22,7 +22,7 @@ import { applyLinkedPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES, presetHasR
 import { migrateLegacyLayerToShape } from './presets/legacyShapeMigration';
 import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
 import { LinkRunner, ReactionBank } from './presets/links';
-import { AutoCycler, DEFAULT_CYCLE, eligible, loadCycleSettings, saveCycleSettings, type CycleOptions } from './presets/autoCycle';
+import { AutoCycler, DEFAULT_CYCLE, eligible, loadCycleSettings, phraseBarsOf, saveCycleSettings, type CycleOptions } from './presets/autoCycle';
 import { advanceSway } from './render/swayStore';
 import { advanceCrown } from './render/crownStore';
 import { cycleIndex, indexForDigit, readStoredPresetId, safeStorage, storePresetId, stepForKey } from './presets/library';
@@ -505,7 +505,8 @@ function start(): void {
         if (k === 'b') cycle.mode = cycle.mode === 'beat' ? 'off' : 'beat';
         if (k === 'x') cycle.shuffle = !cycle.shuffle;
         saveCycleSettings(cycle, safeStorage());
-        const label = cycle.mode === 'off' ? 'Auto-cycle off' : `Auto-cycle: ${cycle.mode === 'timer' ? `every ${cycle.intervalSec} s` : 'on strong beats'}${cycle.shuffle ? ', shuffled' : ''}`;
+        const modeText = cycle.mode === 'timer' ? `every ${cycle.intervalSec} s` : cycle.mode === 'phrase' ? `Phrase, every ${phraseBarsOf(cycle)} bars` : 'on strong beats';
+        const label = cycle.mode === 'off' ? 'Auto-cycle off' : `Auto-cycle: ${modeText}${cycle.shuffle ? ', shuffled' : ''}`;
         if (k !== 'x' || cycle.mode !== 'off') showToast(label);
         else showToast(`Shuffle ${cycle.shuffle ? 'on' : 'off'}`);
         return;
@@ -827,7 +828,7 @@ function start(): void {
       const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags, cost: presetCost(e.preset).level })), cycleOpts);
       const strongBeat = frame.beat && frame.beatStrength >= 0.8;
       // A few seconds before a switch, compile the next preset while it is still hidden (Slice 16.3).
-      const upcoming = cycler.upcoming(shownId, pool, cycleOpts);
+      const upcoming = cycler.upcoming(shownId, pool, cycleOpts, undefined, frame);
       if (upcoming && upcoming !== preparedId && compositor) {
         preparedId = upcoming;
         session.sceneOf(upcoming);
@@ -835,7 +836,7 @@ function start(): void {
       } else if (!upcoming) {
         preparedId = null;
       }
-      const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycleOpts);
+      const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycleOpts, frame);
       if (pick) switchShown(pick);
     }
     // Audio links (E2): the shown preset's linked settings follow the music, once per frame.

@@ -9,8 +9,10 @@ import {
   clampInterval,
   eligible,
   loadCycleSettings,
+  phraseBarsOf,
   saveCycleSettings,
   type CycleOptions,
+  type CycleTempo,
 } from './autoCycle';
 import { maxCostForTier } from './cost';
 
@@ -250,5 +252,95 @@ describe('saved Visuals menu settings (Slice 21.13)', () => {
     const bad = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('full'); } };
     expect(() => saveCycleSettings(opts({}), bad)).not.toThrow();
     expect(() => loadCycleSettings(opts({}), bad)).not.toThrow();
+  });
+});
+
+describe('phrase mode (Slice 22.1)', () => {
+  const pool = ['a', 'b', 'c'];
+  const phrase = (over: Partial<CycleOptions> = {}) => opts({ mode: 'phrase', intervalSec: 100, minGapSec: 1, ...over });
+  const tempoAt = (beatCount: number, bpm = 120, tempoConfidence = 0.9): CycleTempo => ({ beatCount, bpm, tempoConfidence });
+  const storeWith = (raw: string) => {
+    const data = new Map<string, string>([[CYCLE_STORAGE_KEY, raw]]);
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  };
+
+  it('switches on the first beat of every 4-bar phrase and not on other beats', () => {
+    const c = new AutoCycler();
+    const o = phrase({ phraseBars: 4 });
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(0))).toBeNull();
+    for (let beat = 1; beat < 16; beat++) {
+      expect(c.next(0.5, false, 'a', pool, o, tempoAt(beat))).toBeNull();
+    }
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(16))).toBe('b');
+  });
+
+  it('uses 16-bar phrases when asked', () => {
+    const c = new AutoCycler();
+    const o = phrase({ phraseBars: 16 });
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(0))).toBeNull();
+    for (let beat = 1; beat < 64; beat++) {
+      expect(c.next(0.5, false, 'a', pool, o, tempoAt(beat))).toBeNull();
+    }
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(64))).toBe('b');
+  });
+
+  it('keeps the minimum gap, so a reset beat count cannot switch twice', () => {
+    const c = new AutoCycler();
+    const o = phrase({ phraseBars: 4, minGapSec: 5 });
+    expect(c.next(0, false, 'a', pool, o, tempoAt(0))).toBeNull();
+    for (let beat = 1; beat <= 15; beat++) c.next(0.5, false, 'a', pool, o, tempoAt(beat));
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(16))).toBe('b');
+    // The count resets and climbs back to a boundary within the gap: no second switch.
+    expect(c.next(0.1, false, 'b', pool, o, tempoAt(0))).toBeNull();
+    for (let beat = 1; beat <= 16; beat++) {
+      expect(c.next(0.1, false, 'b', pool, o, tempoAt(beat))).toBeNull();
+    }
+  });
+
+  it('falls back to the Timer rule without a usable tempo', () => {
+    const noGrid: Array<CycleTempo | undefined> = [
+      undefined, // no beat count on the frame
+      { beatCount: 16, bpm: 120, tempoConfidence: 0.3 }, // low confidence
+      { beatCount: 16, bpm: 0, tempoConfidence: 0.9 }, // no bpm
+    ];
+    for (const tempo of noGrid) {
+      const c = new AutoCycler();
+      const o = phrase({ phraseBars: 4, intervalSec: 2 });
+      expect(c.next(1, false, 'a', pool, o, tempo)).toBeNull();
+      expect(c.next(1.1, false, 'a', pool, o, tempo)).toBe('b');
+    }
+  });
+
+  it('upcoming names the same preset that next switches to on the boundary', () => {
+    const c = new AutoCycler(() => 0.99);
+    const o = phrase({ phraseBars: 4, shuffle: true });
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(0))).toBeNull();
+    for (let beat = 1; beat <= 14; beat++) c.next(0.5, false, 'a', pool, o, tempoAt(beat));
+    expect(c.upcoming('a', pool, o, undefined, tempoAt(14))).toBeNull();
+    c.next(0.5, false, 'a', pool, o, tempoAt(15));
+    const announced = c.upcoming('a', pool, o, undefined, tempoAt(15));
+    expect(announced).toBe('c');
+    expect(c.upcoming('a', pool, o, undefined, tempoAt(15))).toBe(announced);
+    expect(c.next(0.5, false, 'a', pool, o, tempoAt(16))).toBe(announced);
+  });
+
+  it('loads saved settings without phraseBars with the default of 8 bars', () => {
+    const target = opts({});
+    loadCycleSettings(target, storeWith(JSON.stringify({ mode: 'phrase', shuffle: true, intervalSec: 30 })));
+    expect([target.mode, target.shuffle, target.intervalSec]).toEqual(['phrase', true, 30]);
+    expect(phraseBarsOf(target)).toBe(8);
+  });
+
+  it('saves and loads 4 and 16 bars, and ignores other bar counts', () => {
+    for (const bars of [4, 16]) {
+      const s = storeWith('{}');
+      saveCycleSettings(phrase({ phraseBars: bars }), s);
+      const target = opts({});
+      loadCycleSettings(target, s);
+      expect(target.phraseBars).toBe(bars);
+    }
+    const target = opts({});
+    loadCycleSettings(target, storeWith(JSON.stringify({ mode: 'phrase', phraseBars: 5 })));
+    expect(phraseBarsOf(target)).toBe(8);
   });
 });
