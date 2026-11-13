@@ -1,0 +1,21 @@
+# Stage 24: Harness UI adoption (confirmed by Charlie, 2026-11-13)
+
+Scope and decisions: `.spec/SYSTEM_SPEC.md`, entry "Stage 24". Verify for every spoke slice: `npm run typecheck && npm test && npm run build`. No slice is IN_PROGRESS. Target files marked "confirm" are located by grep at slice start (and the list stays under 5).
+
+## Hub repo (claude-harness-hub): separate slices, delivered to this repo by sync. Not built here.
+- [x] **Slice H24.1: Dropped (Charlie, 2026-11-13).** The visualizer uses the kit's existing `neon-azure` accent, so the hub gets no new blue. Hub work remains H24.2 to H24.4 only.
+- [ ] **Slice H24.2: Fix the profile path to say project root (README vs harness-rules)** `[CORE / DATA]` HUB REPO. Target files: `.harness/design-system/README.md`, `.claude/harness-rules.md` (hub copy). | Verify: hub verification commands
+- [ ] **Slice H24.3: Remove or document unused tokens (`--measure`, `--duration-enter`, `--z-pop`, `--bp-*`)** `[UI / VISUAL]` HUB REPO, low priority. Target files: `.harness/design-system/tokens.css`, `.harness/design-system/README.md`. | Verify: hub verification commands
+- [ ] **Slice H24.4: Record offer-back candidates (segmented pill, value-button slider, sheet handle)** `[CORE / DATA]` HUB REPO, low priority. Target files: `.harness/design-system/adopting.md`. | Verify: hub verification commands
+
+## Spoke repo (music-visualizer)
+- [ ] **Slice 24.1: Reduced-motion covers `.pill-segment`, `.source-card`, `.exp-mode-btn`, `.onboarding-toast`** `[UI / VISUAL]` Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.2: Load the kit and set `data-theme="dark"`, `data-density`; add empty `src/app.css` loaded after `bundle.css`** `[UI / VISUAL]` Target files: `index.html`, `popout.html`, `src/main.ts`, `src/app.css` [NEW] | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.3: Write `design-system/profile.md` (dark lock, accent, density, focus, states) and the `AGENTS.md` adoption line** `[CORE / DATA]` Accent is the kit's `neon-azure`. Waits for H24.2 sync (profile path). `AGENTS.md` is a red-tripwire path. Target files: `design-system/profile.md` [NEW], `AGENTS.md` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.4: Focus ring becomes the kit 2px `focus` outline, offset 2px; accent switches to the kit's `neon-azure`** `[UI / VISUAL]` Waits for 24.2. Target files: `src/style.css`, `src/app.css`, `src/ui/style.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.5: Top pill bar and buttons onto `ui-pill`, `ui-btn`, `ui-icon-btn` (keep ids and handlers)** `[UI / VISUAL]` Waits for 24.4. Target files: `index.html`, `src/ui/controls.ts`, `src/style.css`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.6: Source picker cards and the Visuals and experience menus onto `ui-btn`, `ui-segmented`, `ui-menu`** `[UI / VISUAL]` Waits for 24.5. Target files: `index.html`, `src/ui/controls.ts`, `src/style.css`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.7: Onboarding toast, shortcuts dialog and pop-out onto `ui-toast`, `ui-dialog`, `ui-scrim`** `[UI / VISUAL]` Waits for 24.6. Target files: `index.html`, `popout.html`, `src/style.css`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.8: Studio chrome (head, footer, admin buttons, badges) onto `ui-btn`, `ui-pill`, `surface-card`; Tweakpane stays unstyled** `[UI / VISUAL]` Waits for 24.7. Target files: `src/studio/studio.ts`, `src/style.css`, `src/ui/style.css`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.9: Replace emoji icons in `index.html` with inline Lucide-style SVG (stroke 1.75, 16px)** `[UI / VISUAL]` Inline hand-written SVGs allowed, no package (Charlie, 2026-11-13). Target files: `index.html`, `src/ui/controls.ts`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+- [ ] **Slice 24.10: Prune `src/style.css` rules and tokens now served by the kit** `[UI / VISUAL]` Waits for 24.8. Target files: `src/style.css`, `src/ui/style.css`, `src/app.css` | Verify: npm run typecheck && npm test && npm run build

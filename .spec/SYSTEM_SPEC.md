@@ -24,6 +24,17 @@ Source documents: `.spec/SCOPE_BRIEF.md` (v2 brief, phone-focused, superseded fo
 
 **Studio scroll jump (2026-11-12, triage, not yet confirmed):** Picking a Layer in the Studio rebuilds the whole panel (`bind` in `src/studio/studio.ts:677`, called from the Layer dropdown at `:1020` and from `structure()` at `:1527`). The rebuild collapses sections and resets the scroll to the top. Sliders do not rebuild. Fix: keep the scroll position and which sections are open across a rebuild, or update the layer section in place.
 
+**Stage 24: Harness UI adoption (Charlie, confirmed 2026-11-13; from the design system review; slices in `.spec/specs/roadmap/stage-24-harness-ui-adoption.md`):**
+Facts: Harness UI (`.harness/design-system/`) is identical in hub and spoke, but the visualizer did not load it: no `ui-` classes, no `design-system/profile.md`, no `app.css`, own tokens in `src/style.css`.
+Decisions:
+1. **Adopt.** Load `tokens.css` then `bundle.css` then `src/app.css`. Move controls, pills and Studio surfaces onto `ui-` components one surface per slice. App-only styles go in `app.css`. The app is dark-only (`theme-lock: dark`). WebGL canvas, visual behaviour and all tests stay green. Never edit `tokens.css` or `bundle.css` here.
+2. **Accent: the kit's `neon-azure`** (revised 2026-11-13). No new blue is added to the hub.
+3. **`design-system/profile.md` at the project root** (dark lock, accent, density, focus, states). Hub slice fixes the README and harness-rules path to say project root.
+4. **Focus ring:** the 3px yellow ring becomes the kit's 2px `focus` outline, offset 2px.
+5. **Small fixes:** emoji icons in `index.html` replaced; reduced-motion covers `.pill-segment`, `.source-card`, `.exp-mode-btn`, `.onboarding-toast`.
+6. **Hub, low priority:** remove unused tokens (`--measure`, `--duration-enter`, `--z-pop`, `--bp-*`) or document them; record offer-back candidates (segmented pill, value-button slider, sheet handle).
+Answers (Charlie, 2026-11-13): (a) yes, hand-inline the few needed Lucide SVGs, no package. (b) use the kit's `neon-azure`; the hub gets no new blue and slice H24.1 is dropped.
+
 ## 2. Out of Scope (Do NOT Build)
 
 Until moved into a stage above:
@@ -43,6 +54,8 @@ Until moved into a stage above:
 - Visuals menu auto-cycle and shuffle (2026-11-12): no new cycling or shuffle engine (reuse `src/presets/autoCycle.ts`), no new key bindings, no changes to Studio favourite/skip tags, no changes to the colour "Auto-cycle" option, no beat minimum-gap editor (8 s stays; only the timer length is adjustable), no render or safety pipeline changes.
 - Studio scroll jump (2026-11-12): no new state store or framework, no virtual scroller, no changes to presets, schema or render code, no rewrite of every `bind` call site. Only the Studio panel's scroll and open-section state are kept across rebuilds.
 - Third-party 3D engines (three.js and similar) in v1. Reason: we build on raw WebGL2 so the render layer stays small and fully understood. Revisit only if a slice proves it necessary.
+- Stage 24 Harness UI adoption (2026-11-13): no icon package or icon font (only inline SVG, pending question), no rail or collapsible sidebar, no theme picker or light theme, no Newsreader or JetBrains font loading unless the profile asks, no Tweakpane restyling, no new hub components until a second app needs them, no edits to `tokens.css` or `bundle.css` in this repo, no WebGL, render, preset or audio changes.
+- Module boundaries (Stage 24): `src/app.css` is the only new app stylesheet (kit-derived overrides and app-only components); `src/style.css` shrinks as surfaces move; `design-system/profile.md` at project root; markup in `index.html`, `popout.html`, `src/ui/controls.ts`, `src/studio/studio.ts`.
 
 ## 3. Guiding Principles
 
