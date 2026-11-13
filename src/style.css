@@ -880,6 +880,10 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   .hud-panel { animation: none; }
   .source-panel { animation: none; }
   .experience-panel { animation: none; }
+  .pill-segment,
+  .source-card,
+  .exp-mode-btn,
+  .onboarding-toast { transition: none; }
 }
 dialog#shortcuts { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); max-width: min(34rem, 92vw); padding: 1rem 1.25rem; }
 dialog#shortcuts::backdrop { background: rgba(0, 0, 0, .6); }

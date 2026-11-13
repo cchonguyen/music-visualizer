@@ -45,7 +45,8 @@ Status 2026-11-12: closed by Charlie. Slices 21.1 to 21.15 built and merged. Det
 Status 2026-11-13: slices 22.1 to 22.7 built and merged (PRs #324 to #330). Details archived in `.spec/HISTORY.md`.
 
 ## Stage 24 — Harness UI adoption (.spec/specs/roadmap/stage-24-harness-ui-adoption.md)
-Confirmed by Charlie, 2026-11-13. Slice lines (hub slices H24.2 to H24.4 (H24.1 dropped), spoke slices 24.1 to 24.10) are in that file. None started.
+Confirmed by Charlie, 2026-11-13. Slice lines (hub slices H24.2 to H24.4 (H24.1 dropped), spoke slices 24.1 to 24.10) are in that file. Slice lines are added here one at a time when started.
+- [x] **Slice 24.1: Reduced-motion covers `.pill-segment`, `.source-card`, `.exp-mode-btn`, `.onboarding-toast`** Issue: #339 `[UI / VISUAL]` worker: engineer (Haiku) Target files: `src/style.css` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 23 — Polish after Stage 22 (.spec/specs/roadmap/stage-23-polish.md)
 Order (Charlie, 2026-11-13): 23.1, 23.2, 23.3, then 23.4 (a throwaway browser run, no repo change). Issues: #331 to #333.
