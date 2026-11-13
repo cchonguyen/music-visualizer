@@ -30,6 +30,7 @@ import { showToast } from './ui/toast';
 import { TouchGestureRecognizer } from './ui/gestures';
 // Studio is type-only here. Its code (and Tweakpane) loads with import() on first open.
 import type { Studio } from './studio/studio';
+import { createPopoutHost, type PopoutHost } from './studio/popoutHost';
 import { ShockwaveLayer } from './render/layers/shockwave';
 import { makeSlowLoudness, sectionContrast } from './render/sectionContrast';
 import { ColourSwap } from './render/colourSwap';
@@ -374,6 +375,10 @@ function start(): void {
     const remembered = readStoredPresetId();
     let currentId = remembered && liveSession.get(remembered) ? remembered : 'crown';
     let retiredNoticeShown = false;
+    // Pop-out (slice 22.7): the host is created below, after switchTo. While a pop-out is connected the in-page Studio hides.
+    let popoutHost: PopoutHost | null = null;
+    let popoutConnected = false;
+    let popoutWindow: Window | null = null;
     const switchTo = (id: string, announce = false) => {
       currentId = id;
       cycler.reset();
@@ -389,6 +394,7 @@ function start(): void {
       storePresetId(id);
       if (announce) showToast(liveSession.get(id)!.preset.name);
       if (isStudioOpen()) studioPanel?.bind(id);
+      popoutHost?.notifyShownChanged();
     };
     // Preset Studio loads on first open (Slice 21.8). Until then there is no panel and nothing is drawn.
     let studioPanel: Studio | null = null;
@@ -423,6 +429,15 @@ function start(): void {
     };
     switchTo(currentId);
     switchShown = (id) => switchTo(id, true);
+    popoutHost = createPopoutHost({
+      session: liveSession,
+      switchTo: (id) => switchTo(id, true),
+      getShownId: () => currentId,
+      onConnectionChange: (connected) => {
+        popoutConnected = connected;
+        if (connected) setStudioOpen(false);
+      },
+    });
 
     // Show the browser on the main screen. Benchmark mode keeps it hidden, since it drives the presets itself.
     const browserRoot = document.getElementById('preset-browser');
@@ -488,7 +503,26 @@ function start(): void {
     const toggleStudio = () => {
       setStudioOpen(!isStudioOpen());
     };
-    document.getElementById('studio-open')!.addEventListener('click', toggleStudio);
+    // Pop-out window (slice 22.7). Opened from a click or key, so the browser allows it. While connected, the Studio button and E focus it.
+    const openPopout = (): void => {
+      if (popoutConnected && popoutWindow && !popoutWindow.closed) {
+        popoutWindow.focus();
+        return;
+      }
+      const win = window.open('/popout.html', 'mv-studio-popout', 'popup,width=520,height=900');
+      if (!win) {
+        showToast('Pop-out blocked. Allow pop-ups for this site, then press Shift+E again.');
+        return;
+      }
+      popoutWindow = win;
+      win.focus();
+    };
+    const studioOrPopout = (): void => {
+      if (popoutConnected) openPopout();
+      else toggleStudio();
+    };
+    document.getElementById('studio-open')!.addEventListener('click', studioOrPopout);
+    document.getElementById('popout-open')!.addEventListener('click', openPopout);
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !isStudioOpen()) return;
       const shortcuts = document.getElementById('shortcuts');
@@ -511,8 +545,12 @@ function start(): void {
         else showToast(`Shuffle ${cycle.shuffle ? 'on' : 'off'}`);
         return;
       }
+      if (e.key === 'E' && e.shiftKey) {
+        openPopout();
+        return;
+      }
       if (e.key === 'e' || e.key === 'E') {
-        toggleStudio();
+        studioOrPopout();
         return;
       }
       const step = stepForKey(e.key);
@@ -536,7 +574,10 @@ function start(): void {
   }
 
   // The Studio button only works with the preset session (not the single-layer debug URLs).
-  if (!session) document.getElementById('studio-open')!.hidden = true;
+  if (!session) {
+    document.getElementById('studio-open')!.hidden = true;
+    document.getElementById('popout-open')!.hidden = true;
+  }
 
   // Reduced motion (slice 21.3): read at start and followed live. While it is on, Calm and
   // Reduced intensity apply. Turning it off undoes only what it turned on, so a viewer's own

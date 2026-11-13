@@ -323,3 +323,34 @@ describe('createPopoutChannel', () => {
     expect(FakeBroadcastChannel.instances[0]?.name).toBe('mv-studio-popout');
   });
 });
+
+describe('edit messages outside layers (slice 22.7)', () => {
+  const base = VALID_FIELDS.edit ?? {};
+
+  it('accepts a null layer index for feedbackPost and warp sections', () => {
+    expect(validateMessage(envelope('edit', { ...base, section: 'feedbackPost', layerIndex: null }), ORIGIN)).toMatchObject({
+      section: 'feedbackPost',
+      layerIndex: null,
+    });
+    expect(validateMessage(envelope('edit', { ...base, section: 'warp0', layerIndex: null }), ORIGIN)).toMatchObject({
+      section: 'warp0',
+      layerIndex: null,
+    });
+  });
+
+  it('still rejects a null layer index on a layer section', () => {
+    expect(validateMessage(envelope('edit', { ...base, section: 'layer', layerIndex: null }), ORIGIN)).toBeNull();
+  });
+
+  it('still rejects negative, fractional or non-number layer indices', () => {
+    for (const layerIndex of [-1, 1.5, Number.NaN, '0', undefined]) {
+      expect(validateMessage(envelope('edit', { ...base, section: 'feedbackPost', layerIndex }), ORIGIN)).toBeNull();
+    }
+  });
+
+  it('rejects a section that is not a short plain name', () => {
+    for (const section of ['', 'layer; drop', 'a'.repeat(65), 'warp-1', '__proto__', 42]) {
+      expect(validateMessage(envelope('edit', { ...base, section, layerIndex: null }), ORIGIN)).toBeNull();
+    }
+  });
+});

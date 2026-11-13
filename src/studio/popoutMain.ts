@@ -1,4 +1,4 @@
-// Slice 22.6: Studio in its own window (popout.html). A controller only: it builds a PresetSession with a
+// Slice 22.6 (edits sent in 22.7): Studio in its own window (popout.html). A controller only: it builds a PresetSession with a
 // no-op SceneHost, so it never draws and needs no WebGL. The main window applies the edits it receives (slice 22.7).
 // Admin state is per window: the admin gateway is decided by the server for this window, never by a channel
 // message. No remote writer is set here, so this window does not write to the server.
@@ -75,8 +75,7 @@ function startPopout(): void {
     adminGateway,
     // frameMs and linkMeter are not set: this window draws nothing, so there is no frame time or link meter to show.
     onEdit: (edit: StudioEdit) => {
-      // The edit message carries a layer index only (see popoutChannel.ts). Feedback, post and warp edits stay local.
-      if (edit.layerIndex === null) return;
+      // layerIndex is null for Feedback and post ('feedbackPost') and warp operator ('warp<n>') edits.
       channel.send('edit', {
         presetId: edit.presetId,
         section: edit.section,
