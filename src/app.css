@@ -19,3 +19,16 @@ body {
   stroke-linejoin: round;
   vertical-align: -0.125em;
 }
+
+/* Slice 24.6: the experience-mode picker is a kit ui-segmented row that fills the panel width. */
+.exp-modes-grid.ui-segmented {
+  display: flex;
+  width: 100%;
+}
+.exp-modes-grid .exp-mode-btn.ui-segmented__opt {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--space-2);
+  font-size: var(--ui-text-size);
+  line-height: 1.15;
+}
