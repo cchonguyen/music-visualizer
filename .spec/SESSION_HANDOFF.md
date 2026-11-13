@@ -25,5 +25,5 @@
 3. No lint script exists in the repo, so Verify lines omit lint.
 
 ## Next Steps
-1. Charlie reviews the Stage 22 spec (`.spec/specs/roadmap/stage-22-director-and-popout.md`) and merges the spec pull request.
+1. Charlie replies "go" to start building (Stage 22 spec is merged; he chose "halve it": 22.2 kick zoom is halved in Reduced).
 2. Then `/implement` one slice at a time in the order 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7 (22.2 before 22.4, 22.6 before 22.7).
