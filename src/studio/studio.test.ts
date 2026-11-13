@@ -2310,6 +2310,46 @@ describe('Studio Expand All and Collapse All buttons', () => {
   });
 });
 
+describe('Slice 23.3: Studio Display time control', () => {
+  it('shows a Display time binding that defaults to 0 when the preset has no displaySec', () => {
+    const { studio, getPane } = setupTest();
+    studio.bind('user-1');
+    const pane = getPane();
+    const displayBinding = pane.bindings.find((b: any) => b.options?.label === 'Display time (s, 0 = auto-cycle timer)');
+    expect(displayBinding).toBeDefined();
+    expect(displayBinding.target.displaySec).toBe(0);
+    expect(displayBinding.options).toEqual(expect.objectContaining({ min: 0, max: 300, step: 1 }));
+  });
+
+  it('stores displaySec on the preset and commits when set to 45', () => {
+    const { studio, getPane, session } = setupTest();
+    studio.bind('user-1');
+    const displayBinding = getPane().bindings.find((b: any) => b.options?.label === 'Display time (s, 0 = auto-cycle timer)');
+    displayBinding.fire('change', 45);
+    expect(session.get('user-1').preset.displaySec).toBe(45);
+    expect(session.commit).toHaveBeenCalledWith('user-1');
+  });
+
+  it('removes displaySec when set to 0', () => {
+    const { studio, getPane, session } = setupTest();
+    studio.bind('user-1');
+    session.get('user-1').preset.displaySec = 45;
+    const displayBinding = getPane().bindings.find((b: any) => b.options?.label === 'Display time (s, 0 = auto-cycle timer)');
+    displayBinding.fire('change', 0);
+    expect('displaySec' in session.get('user-1').preset).toBe(false);
+    expect(session.commit).toHaveBeenCalledWith('user-1');
+  });
+
+  it('removes displaySec when set below the 5 second minimum', () => {
+    const { studio, getPane, session } = setupTest();
+    studio.bind('user-1');
+    session.get('user-1').preset.displaySec = 45;
+    const displayBinding = getPane().bindings.find((b: any) => b.options?.label === 'Display time (s, 0 = auto-cycle timer)');
+    displayBinding.fire('change', 3);
+    expect('displaySec' in session.get('user-1').preset).toBe(false);
+  });
+});
+
 describe('Slice 11.7: Non-Disruptive Studio Admin Login Popup & Background Session Detection', () => {
   it('Studio.setVisible(true) triggers adminGateway.checkCloudflareAccess() when not yet admin', async () => {
     const { container, studio, adminGateway } = setupTest({ admin: false });
