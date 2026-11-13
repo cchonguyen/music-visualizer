@@ -3,6 +3,12 @@
 
 import type { Preset } from '../presets/format';
 import type { AudioFrame } from '../audio/types';
+import { MIN_FLASH_GAP_SEC } from './safety';
+
+/** Kick zoom impulse: peak offset of zoom before intensity scaling (slice 22.2). */
+export const KICK_ZOOM_PEAK = 0.05;
+/** Kick zoom impulse: time for the offset to fall to about 5% of its peak. */
+export const KICK_ZOOM_DECAY_SEC = 0.25;
 
 export const EXPERIENCE_MODES = [
   'cinematic',
@@ -455,6 +461,12 @@ export class GlobalDirector {
   private cycleAngle: number = 0;
   private burstIntensity: number = 0;
 
+  // Kick zoom impulse state (slice 22.2). Envelope 0..1, scaled by KICK_ZOOM_PEAK on use.
+  private kickClockSec: number = 0;
+  private lastKickZoomSec: number = -Infinity;
+  private kickZoomEnv: number = 0;
+  private kickZoomScale: number = 1;
+
   private currentPresetWeights: PresetMotionWeights;
   private fromPresetWeights: PresetMotionWeights;
   private targetPresetWeights: PresetMotionWeights;
@@ -769,18 +781,24 @@ export class GlobalDirector {
     this.cycleAngle = (this.cycleAngle + dtSec * energySpeed) % (2 * Math.PI);
     if (this.cycleAngle < 0) this.cycleAngle += 2 * Math.PI;
 
+    // Kick zoom envelope decays first, so a kick fired below sets it to its full value for this frame.
+    this.kickClockSec += dtSec;
+    this.kickZoomEnv *= Math.pow(0.05, dtSec / KICK_ZOOM_DECAY_SEC);
+
     // Burst intensity on musical transients (kick onset, strong section flux) that decays smoothly
     if (!this.isCalm()) {
       const kickHit = frame?.kickPulse || (frame?.beat && (frame.beatStrength ?? 0) >= 0.7);
       const fluxHit = (frame?.flux ?? 0) > 0.4 || (sectionContrast ?? 0) > 0.1;
       if (kickHit) {
         this.burstIntensity = Math.min(1.0, this.burstIntensity + 0.35);
+        this.fireKickZoom();
       }
       if (fluxHit) {
         this.burstIntensity = Math.min(1.0, this.burstIntensity + 0.5);
       }
     } else {
       this.burstIntensity = 0;
+      this.kickZoomEnv = 0;
     }
     // Smooth decay of burst over ~0.8s
     this.burstIntensity *= Math.pow(0.15, dtSec);
@@ -839,6 +857,25 @@ export class GlobalDirector {
     }
   }
 
+  /** Starts a kick zoom impulse unless one fired less than MIN_FLASH_GAP_SEC ago (max 3 per second). */
+  private fireKickZoom(): void {
+    if (this.kickClockSec - this.lastKickZoomSec < MIN_FLASH_GAP_SEC - 1e-9) return;
+    this.lastKickZoomSec = this.kickClockSec;
+    this.kickZoomEnv = 1;
+  }
+
+  /**
+   * Viewer Intensity gate for the kick zoom: 1 for Full, 0.5 for Reduced, 0 for Calm.
+   * Clamped to 0..1; a non-finite value turns the impulse off.
+   */
+  setKickZoomScale(scale: number): void {
+    if (!Number.isFinite(scale)) {
+      this.kickZoomScale = 0;
+      return;
+    }
+    this.kickZoomScale = Math.max(0, Math.min(1, scale));
+  }
+
   // Scratch poses for the two moves being blended, reused every call.
   private readonly fromPose: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
   private readonly toPose: CameraUniforms = { panX: 0, panY: 0, zoom: 1, roll: 0, tiltX: 0, tiltY: 0 };
@@ -872,6 +909,10 @@ export class GlobalDirector {
     const tiltY = rawTiltY * effectiveIntensity * calmDamp;
 
     let zoom = 1.0 + (rawZoom - 1.0) * effectiveIntensity;
+    // Kick zoom impulse (slice 22.2): scaled by camera intensity, zero in Director Calm, before the floor clamp.
+    if (!this.isCalm() && this.kickZoomEnv > 0) {
+      zoom += KICK_ZOOM_PEAK * this.kickZoomScale * this.kickZoomEnv * effectiveIntensity;
+    }
     const isStill = this.toMove === 'stillAnchor' && (this.fromMove === 'stillAnchor' || alpha >= 1.0);
     const minFloor = isStill ? 1.03 : Math.max(1.03, 1.0 + 0.08 * effectiveIntensity);
     zoom = Math.max(minFloor, zoom);
@@ -951,6 +992,8 @@ export class GlobalDirector {
     this.beatCount = 0;
     this.smoothedEnergy = 0;
     this.gradAngle = 0;
+    this.kickZoomEnv = 0;
+    this.lastKickZoomSec = -Infinity;
 
     const initWeights = analyzePresetMotion(null);
     this.currentPresetWeights = { ...initWeights };

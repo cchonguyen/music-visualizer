@@ -805,6 +805,8 @@ function start(): void {
       compositor.calm = state.calm;
       // Intensity only tightens the brightness limiter (slice 21.3).
       compositor.brightnessLimiter.setIntensity(state.intensity ?? 'full');
+      // Kick zoom follows the same viewer Intensity (slice 22.2): Full 1, Reduced 0.5, Calm 0.
+      director.setKickZoomScale(state.intensity === 'calm' ? 0 : state.intensity === 'reduced' ? 0.5 : 1);
       compositor.setDirectorState(director.getCameraUniforms(camScratch), director.getColorUniforms(colourScratch));
     }
 
