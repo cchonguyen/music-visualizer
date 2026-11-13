@@ -274,6 +274,62 @@ describe('no save, promote, remove or remote writer', () => {
   });
 });
 
+describe('preset list changes', () => {
+  /** Adds a preset to the session list through the builtin path (no save spy is involved). */
+  function addPreset(session: PresetSession, id: string): void {
+    const preset = structuredClone(BUILTIN_PRESETS[0]!.preset);
+    preset.name = `Extra ${id}`;
+    session.addBuiltin(id, preset);
+  }
+
+  it('sends exactly one new snapshot when the list changes while connected', () => {
+    const h = harness('crown');
+    h.popout.send('hello');
+    const before = snapshots(h.popout.received).length;
+    addPreset(h.session, 'extra-test');
+    h.popout.send('heartbeat');
+    vi.advanceTimersByTime(POPOUT_HEARTBEAT_INTERVAL_MS);
+    const all = snapshots(h.popout.received);
+    expect(all).toHaveLength(before + 1);
+    expect(all.at(-1)!.presets.map((p) => p.id)).toContain('extra-test');
+    // Unchanged list on the next tick: no further snapshot.
+    h.popout.send('heartbeat');
+    vi.advanceTimersByTime(POPOUT_HEARTBEAT_INTERVAL_MS);
+    expect(snapshots(h.popout.received)).toHaveLength(before + 1);
+  });
+
+  it('sends no snapshot from the timer when the list is unchanged', () => {
+    const h = harness('crown');
+    h.popout.send('hello');
+    for (let i = 0; i < 3; i++) {
+      h.popout.send('heartbeat');
+      vi.advanceTimersByTime(POPOUT_HEARTBEAT_INTERVAL_MS);
+    }
+    expect(snapshots(h.popout.received)).toHaveLength(1);
+  });
+
+  it('sends nothing when the list changes while not connected', () => {
+    const h = harness('crown');
+    addPreset(h.session, 'extra-test');
+    vi.advanceTimersByTime(POPOUT_HEARTBEAT_INTERVAL_MS * 2);
+    expect(snapshots(h.popout.received)).toHaveLength(0);
+    expect(h.connection).toEqual([]);
+  });
+
+  it('carries the changed list in the hello snapshot after a reconnect', () => {
+    const h = harness('crown');
+    h.popout.send('hello');
+    h.popout.send('bye');
+    addPreset(h.session, 'extra-test');
+    vi.advanceTimersByTime(POPOUT_HEARTBEAT_INTERVAL_MS * 2);
+    const countBeforeHello = snapshots(h.popout.received).length;
+    h.popout.send('hello');
+    const all = snapshots(h.popout.received);
+    expect(all).toHaveLength(countBeforeHello + 1);
+    expect(all.at(-1)!.presets.map((p) => p.id)).toContain('extra-test');
+  });
+});
+
 describe('close', () => {
   it('sends bye, stops the heartbeat and closes the channel', () => {
     const h = harness('crown');
