@@ -32,3 +32,32 @@ body {
   font-size: var(--ui-text-size);
   line-height: 1.15;
 }
+
+/* Slice 24.8: Studio (Tweakpane) text and sliders match the HUD. Text uses the shared settings size, and the slider knob
+   is the shared 20 px round thumb. Phone sizes stay in style.css (44 px rows, 28 px knob). */
+.studio .tp-lblv_l,
+.studio .tp-txtv_i,
+.studio .tp-lstv_s,
+.studio .tp-fldv_t,
+.studio .tp-rotv_t,
+.studio .tp-btnv_b {
+  font-size: var(--ui-text-size);
+  line-height: var(--ui-text-lh);
+}
+/* Action tiles keep their 44 px height, so long names wrap instead of clipping at the larger size. */
+.studio .studio-tiles .tp-btnv_t,
+.studio .studio-tiles .tp-btnv_b {
+  white-space: normal;
+  text-overflow: clip;
+  line-height: 1.1;
+}
+@media (min-width: 600px) {
+  /* Rows are 24 px tall so 12.8 px text fits (phones keep 44 px). */
+  .studio { --tp-container-unit-size: 24px; }
+  .studio .tp-sldv_k::after {
+    width: var(--slider-thumb-d);
+    height: var(--slider-thumb-d);
+    right: calc(var(--slider-thumb-d) / -2);
+    border-radius: 50%;
+  }
+}
