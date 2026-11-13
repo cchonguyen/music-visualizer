@@ -22,7 +22,9 @@ import {
   sanitizeDirectorSettings,
   getGlobalDirector,
   resetGlobalDirector,
+  TIER_MIN_DWELL_SEC,
   type CameraMove,
+  type EnergyTier,
 } from '../globalDirector';
 import {
   parsePreset,
@@ -1293,5 +1295,145 @@ describe('Slice 22.2: kick-impulse zoom', () => {
     expect(peakOffsetAtScale(2)).toBeCloseTo(0.05, 9);
     expect(peakOffsetAtScale(-1)).toBeCloseTo(0, 9);
     expect(peakOffsetAtScale(Number.NaN)).toBeCloseTo(0, 9);
+  });
+});
+
+describe('Slice 22.4: energy tiers with hysteresis', () => {
+  const DT = 1 / 60;
+  const LOUD = { energy: 0.9 };
+  const QUIET = { energy: 0.1 };
+
+  function colourDirector(colorIntensity = 0.45): GlobalDirector {
+    return new GlobalDirector({
+      experienceMode: 'custom',
+      cameraMode: 'stillAnchor',
+      cameraIntensity: 0.2,
+      colorMood: 'cyberpunk',
+      colorIntensity,
+    });
+  }
+
+  /** Advances `seconds` of frames and returns the tier after each frame. */
+  function runTiers(d: GlobalDirector, seconds: number, frameFor: (i: number) => { energy: number }): EnergyTier[] {
+    const tiers: EnergyTier[] = [];
+    const n = Math.round(seconds / DT);
+    for (let i = 0; i < n; i++) {
+      d.advance(DT, frameFor(i));
+      tiers.push(d.getEnergyTier());
+    }
+    return tiers;
+  }
+
+  it('stays chill under low energy', () => {
+    const d = colourDirector();
+    const tiers = runTiers(d, 30, () => QUIET);
+    expect(tiers.every((t) => t === 'chill')).toBe(true);
+  });
+
+  it('rises from chill to build to drop under sustained energy', () => {
+    const d = colourDirector();
+    const tiers = runTiers(d, 12, () => LOUD);
+    const firstBuild = tiers.indexOf('build');
+    const firstDrop = tiers.indexOf('drop');
+    expect(firstBuild).toBeGreaterThan(0);
+    expect(firstDrop).toBeGreaterThan(firstBuild);
+    expect(d.getEnergyTier()).toBe('drop');
+  });
+
+  it('does not flicker when energy hovers across the build threshold', () => {
+    // 4 s blocks at 0.46 and 0.34 average 0.40, so the slow level crosses 0.40 again and again
+    // but stays above the 0.35 leave line. Without hysteresis this would switch on every crossing.
+    const d = colourDirector();
+    const tiers = runTiers(d, 120, (i) => ({ energy: Math.floor(i / (4 * 60)) % 2 === 0 ? 0.46 : 0.34 }));
+    const changes = tiers.filter((t, i) => i > 0 && t !== tiers[i - 1]).length;
+    expect(changes).toBeLessThanOrEqual(1);
+    const firstBuild = tiers.indexOf('build');
+    if (firstBuild >= 0) {
+      expect(tiers.slice(firstBuild).every((t) => t === 'build')).toBe(true);
+    }
+  });
+
+  it('keeps at least the dwell time between tier changes', () => {
+    // A slow swing from low to high energy crosses every threshold repeatedly.
+    const d = colourDirector();
+    const tiers = runTiers(d, 120, (i) => ({ energy: 0.5 + 0.5 * Math.sin(0.25 * i * DT) }));
+    const changeFrames: number[] = [];
+    for (let i = 1; i < tiers.length; i++) {
+      if (tiers[i] !== tiers[i - 1]) changeFrames.push(i);
+    }
+    expect(changeFrames.length).toBeGreaterThanOrEqual(2);
+    for (let k = 1; k < changeFrames.length; k++) {
+      expect((changeFrames[k]! - changeFrames[k - 1]!) * DT).toBeGreaterThanOrEqual(TIER_MIN_DWELL_SEC - 1e-6);
+    }
+  });
+
+  it('eases the tier blend and the colour intensity instead of stepping', () => {
+    const d = colourDirector();
+    const blends: number[] = [];
+    const intensities: number[] = [];
+    const tiers: EnergyTier[] = [];
+    for (let i = 0; i < Math.round(12 / DT); i++) {
+      d.advance(DT, LOUD);
+      blends.push(d.getTierBlend());
+      intensities.push(d.getColorUniforms().intensity);
+      tiers.push(d.getEnergyTier());
+    }
+    for (let i = 1; i < blends.length; i++) {
+      expect(Math.abs(blends[i]! - blends[i - 1]!)).toBeLessThan(0.1);
+      expect(Math.abs(intensities[i]! - intensities[i - 1]!)).toBeLessThan(0.01);
+    }
+    expect(blends.some((b) => b > 0.2 && b < 0.8)).toBe(true);
+
+    // Entering drop: the blend starts near neutral and reaches most of the way to +1 in about 1.5 s.
+    const dropIdx = tiers.indexOf('drop');
+    expect(dropIdx).toBeGreaterThan(0);
+    expect(Math.abs(blends[dropIdx]!)).toBeLessThan(0.1);
+    expect(blends[dropIdx + 30]!).toBeGreaterThan(0.5);
+    expect(blends[dropIdx + 30]!).toBeLessThan(0.75);
+    expect(blends[dropIdx + 90]!).toBeGreaterThan(0.94);
+  });
+
+  it('raises intensity in drop and lowers it in chill, within the 1.0 bound', () => {
+    const drop = colourDirector();
+    runTiers(drop, 14, () => LOUD); // drop at about 6.4 s, blend settled well before 14 s
+    expect(drop.getColorUniforms().intensity).toBeCloseTo(0.45 * 1.2 * 1.15, 6);
+
+    const chill = colourDirector();
+    runTiers(chill, 40, () => QUIET);
+    expect(chill.getColorUniforms().intensity).toBeCloseTo(0.45 * 1.2 * 0.9, 6);
+  });
+
+  it('never pushes intensity above 1.0, even in drop with kicks', () => {
+    const d = colourDirector(1.0);
+    let max = 0;
+    for (let i = 0; i < 12 / DT; i++) {
+      d.advance(DT, i % 10 === 0 ? { energy: 0.9, kickPulse: true } : LOUD);
+      max = Math.max(max, d.getColorUniforms().intensity);
+    }
+    expect(max).toBeLessThanOrEqual(1.0);
+    expect(d.getEnergyTier()).toBe('drop');
+  });
+
+  it('gives Calm no drop boost, though the tier still tracks energy', () => {
+    const d = new GlobalDirector({ experienceMode: 'calm' });
+    const tiers = runTiers(d, 15, () => LOUD);
+    expect(tiers).toContain('drop');
+    expect(d.getColorUniforms().intensity).toBeCloseTo(Math.min(1, 0.3 * 1.2), 6);
+    expect(d.getColorUniforms().spatialSpread).toBeCloseTo(DIRECTOR_PALETTES.biolum.spatialSpread, 6);
+  });
+
+  it('reset clears the tier, the blend and the slow energy level', () => {
+    const d = colourDirector();
+    runTiers(d, 12, () => LOUD);
+    expect(d.getEnergyTier()).toBe('drop');
+
+    d.reset({ experienceMode: 'custom', cameraMode: 'stillAnchor', cameraIntensity: 0.2, colorMood: 'cyberpunk', colorIntensity: 0.45 });
+    expect(d.getEnergyTier()).toBe('chill');
+    expect(d.getTierBlend()).toBe(0);
+
+    // With the level cleared, 2.2 s of loud input stays under the build threshold (about 0.38).
+    // A stale level would have switched to build at the 2 s dwell.
+    const tiers = runTiers(d, 2.2, () => LOUD);
+    expect(tiers.every((t) => t === 'chill')).toBe(true);
   });
 });

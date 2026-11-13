@@ -10,6 +10,27 @@ export const KICK_ZOOM_PEAK = 0.05;
 /** Kick zoom impulse: time for the offset to fall to about 5% of its peak. */
 export const KICK_ZOOM_DECAY_SEC = 0.25;
 
+/** Energy tier (slice 22.4): chill, build or drop, from a slow energy level. */
+export type EnergyTier = 'chill' | 'build' | 'drop';
+/** Time constant of the slow energy level that drives the tier (seconds). Slower than smoothedEnergy (1/3 s). */
+export const TIER_ENERGY_TAU_SEC = 4.0;
+/** Hysteresis: chill to build at or above BUILD_ENTER; build to chill below BUILD_LEAVE (gap 0.05). */
+export const TIER_BUILD_ENTER = 0.40;
+export const TIER_BUILD_LEAVE = 0.35;
+/** Hysteresis: build to drop at or above DROP_ENTER; drop to build below DROP_LEAVE (gap 0.07). */
+export const TIER_DROP_ENTER = 0.72;
+export const TIER_DROP_LEAVE = 0.65;
+/** A tier may change only after this many seconds in the current tier. */
+export const TIER_MIN_DWELL_SEC = 2.0;
+/** Time constant of the eased blend toward the tier target (settles in about 1.5 s, three constants). */
+export const TIER_BLEND_TAU_SEC = 0.5;
+/** Tier effects at full blend. Drop raises colour intensity and spread; chill lowers them and slows the colour shift. */
+export const TIER_INTENSITY_DROP = 0.15;
+export const TIER_INTENSITY_CHILL = 0.10;
+export const TIER_SPREAD_DROP = 0.08;
+export const TIER_SPREAD_CHILL = 0.05;
+export const TIER_SHIFT_CHILL_SLOW = 0.35;
+
 export const EXPERIENCE_MODES = [
   'cinematic',
   'calm',
@@ -439,6 +460,16 @@ export function saveDirectorSettings(settings: GlobalDirectorSettings): void {
   }
 }
 
+/** Next tier from the slow level, using separate enter and leave thresholds. Moves one tier at a time. */
+function nextEnergyTier(current: EnergyTier, level: number): EnergyTier {
+  if (current === 'chill') return level >= TIER_BUILD_ENTER ? 'build' : 'chill';
+  if (current === 'build') {
+    if (level >= TIER_DROP_ENTER) return 'drop';
+    return level < TIER_BUILD_LEAVE ? 'chill' : 'build';
+  }
+  return level < TIER_DROP_LEAVE ? 'build' : 'drop';
+}
+
 export class GlobalDirector {
   private settings: GlobalDirectorSettings;
   private calm: boolean = false;
@@ -466,6 +497,12 @@ export class GlobalDirector {
   private lastKickZoomSec: number = -Infinity;
   private kickZoomEnv: number = 0;
   private kickZoomScale: number = 1;
+
+  // Energy tier state (slice 22.4). tierBlend: -1 chill, 0 build (neutral), +1 drop, eased toward the tier.
+  private tierEnergy: number = 0;
+  private energyTier: EnergyTier = 'chill';
+  private tierDwellSec: number = 0;
+  private tierBlend: number = 0;
 
   private currentPresetWeights: PresetMotionWeights;
   private fromPresetWeights: PresetMotionWeights;
@@ -777,7 +814,10 @@ export class GlobalDirector {
     if (this.gradAngle < 0) this.gradAngle += 2 * Math.PI;
 
     // Organic continuous breathing color shift (subtle ~0.10 rad/s baseline, accelerated slightly by energy)
-    const energySpeed = 0.08 + 0.16 * Math.max(0, Math.min(1, this.smoothedEnergy));
+    // Chill slows the colour shift (slice 22.4). Zero in Calm.
+    const chillSlow = this.isCalm() ? 0 : Math.max(0, -this.tierBlend);
+    const energySpeed =
+      (0.08 + 0.16 * Math.max(0, Math.min(1, this.smoothedEnergy))) * (1 - TIER_SHIFT_CHILL_SLOW * chillSlow);
     this.cycleAngle = (this.cycleAngle + dtSec * energySpeed) % (2 * Math.PI);
     if (this.cycleAngle < 0) this.cycleAngle += 2 * Math.PI;
 
@@ -806,7 +846,10 @@ export class GlobalDirector {
     if (frame?.energy !== undefined) {
       const alpha = 1.0 - Math.exp(-dtSec * 3.0);
       this.smoothedEnergy += (frame.energy - this.smoothedEnergy) * alpha;
+      const tierAlpha = 1.0 - Math.exp(-dtSec / TIER_ENERGY_TAU_SEC);
+      this.tierEnergy += (frame.energy - this.tierEnergy) * tierAlpha;
     }
+    this.updateEnergyTier(dtSec);
 
     if (this.presetWeightMorphSec <= 4.0) {
       const wT = Math.min(1.0, this.presetWeightMorphSec / 4.0);
@@ -855,6 +898,29 @@ export class GlobalDirector {
     if (shouldTrigger && this.moveMorphSec >= 6.0) {
       this.triggerMacro();
     }
+  }
+
+  /** Updates the energy tier (with dwell) and eases the tier blend toward its target. Slice 22.4. */
+  private updateEnergyTier(dtSec: number): void {
+    this.tierDwellSec += dtSec;
+    const desired = nextEnergyTier(this.energyTier, this.tierEnergy);
+    if (desired !== this.energyTier && this.tierDwellSec >= TIER_MIN_DWELL_SEC) {
+      this.energyTier = desired;
+      this.tierDwellSec = 0;
+    }
+    const target = this.energyTier === 'drop' ? 1 : this.energyTier === 'chill' ? -1 : 0;
+    const blendAlpha = 1.0 - Math.exp(-dtSec / TIER_BLEND_TAU_SEC);
+    this.tierBlend += (target - this.tierBlend) * blendAlpha;
+  }
+
+  /** Current energy tier (slice 22.4). */
+  getEnergyTier(): EnergyTier {
+    return this.energyTier;
+  }
+
+  /** Signed, eased tier weight: -1 chill, 0 build, +1 drop (slice 22.4). */
+  getTierBlend(): number {
+    return this.tierBlend;
   }
 
   /** Starts a kick zoom impulse unless one fired less than MIN_FLASH_GAP_SEC ago (max 3 per second). */
@@ -945,10 +1011,18 @@ export class GlobalDirector {
       highlightTint[i] = (1 - beta) * pFrom.highlightTint[i]! + beta * pTo.highlightTint[i]!;
     }
 
-    const spatialSpread = Math.min(1.0, (1 - beta) * pFrom.spatialSpread + beta * pTo.spatialSpread + 0.3 * this.burstIntensity);
+    // Energy tier weights (slice 22.4). Calm applies no tier effect.
+    const chillW = this.isCalm() ? 0 : Math.max(0, -this.tierBlend);
+    const dropW = this.isCalm() ? 0 : Math.max(0, this.tierBlend);
 
-    // Boosted baseline intensity + reactive flare on big hits
-    const dynamicIntensity = Math.min(1.0, this.settings.colorIntensity * (1.2 + 0.5 * this.burstIntensity));
+    const spatialSpread = Math.min(
+      1.0,
+      Math.max(0, (1 - beta) * pFrom.spatialSpread + beta * pTo.spatialSpread + 0.3 * this.burstIntensity + TIER_SPREAD_DROP * dropW - TIER_SPREAD_CHILL * chillW),
+    );
+
+    // Boosted baseline intensity + reactive flare on big hits, scaled by the energy tier
+    const tierScale = 1 + TIER_INTENSITY_DROP * dropW - TIER_INTENSITY_CHILL * chillW;
+    const dynamicIntensity = Math.min(1.0, this.settings.colorIntensity * (1.2 + 0.5 * this.burstIntensity) * tierScale);
 
     out.spatialSpread = spatialSpread;
     out.gradAngle = this.gradAngle;
@@ -994,6 +1068,10 @@ export class GlobalDirector {
     this.gradAngle = 0;
     this.kickZoomEnv = 0;
     this.lastKickZoomSec = -Infinity;
+    this.tierEnergy = 0;
+    this.energyTier = 'chill';
+    this.tierDwellSec = 0;
+    this.tierBlend = 0;
 
     const initWeights = analyzePresetMotion(null);
     this.currentPresetWeights = { ...initWeights };
