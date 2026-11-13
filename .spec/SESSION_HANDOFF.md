@@ -4,7 +4,7 @@
 - **Last Active Platform**: Claude Code (web)
 - **Branch**: `claude/project-thread-cvtfkr`, from `main` at `4572288` (PR #311 merged).
 - **Active Task**: none. No `[IN_PROGRESS]` slice. No open pull requests.
-- **Status**: Stage 21 closed on 2026-11-12. Stage 22 (slices 22.1 to 22.7) is specced on 2026-11-13 and not built.
+- **Status**: Stage 21 closed on 2026-11-12. Stage 22 (slices 22.1 to 22.7) is specced. Slice 22.1 (Phrase auto-cycle, PR #324) is built and merged on 2026-11-13. 22.2 to 22.7 are not started.
 
 ## What changed (recent)
 - Shape work is finished: Slices 19.9a to 19.15 are merged (PRs #294 to #311). The legacy Waveform layer is gone; any Waveform layer loads as Shape. Bars, Rings, Crown and Shockwave still use their legacy layers.
@@ -25,5 +25,6 @@
 3. No lint script exists in the repo, so Verify lines omit lint.
 
 ## Next Steps
-1. Charlie replies "go" to start building (Stage 22 spec is merged; he chose "halve it": 22.2 kick zoom is halved in Reduced).
-2. Then `/implement` one slice at a time in the order 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7 (22.2 before 22.4, 22.6 before 22.7).
+1. Charlie tries Phrase mode on the live site (Visuals menu, Auto-cycle, Phrase, play a steady-beat track) and says whether to start 22.2.
+2. Then `/implement` one slice at a time: 22.2 (kick zoom, halved in Reduced), 22.3, 22.4, then 22.5 to 22.7 (22.2 before 22.4, 22.6 before 22.7).
+3. 22.1 note: `minGapSec` (8 s) also gates phrase boundaries, so 4-bar phrases at about 170 BPM or faster can be skipped.
