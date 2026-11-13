@@ -19,7 +19,7 @@ import {
 } from '../render/globalDirector';
 import { INTENSITY_OPTIONS, isIntensity, type Intensity } from '../render/safety';
 import { getActiveSession, type PresetSession } from '../presets/session';
-import { clampInterval, saveCycleSettings, type CycleOptions } from '../presets/autoCycle';
+import { PHRASE_BAR_OPTIONS, clampInterval, phraseBarsOf, saveCycleSettings, type CycleOptions } from '../presets/autoCycle';
 import { safeStorage } from '../presets/library';
 
 export const EXPERIENCE_LABELS: Record<string, string> = {
@@ -439,14 +439,19 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const cycleIntervalRow = document.getElementById('exp-cycle-interval-row') as HTMLElement | null;
   const cycleInterval = document.getElementById('exp-cycle-interval') as HTMLInputElement | null;
   const cycleIntervalValue = document.getElementById('exp-cycle-interval-value') as HTMLElement | null;
+  const cycleBarsRow = document.getElementById('exp-cycle-bars-row') as HTMLElement | null;
+  const cycleBars = document.getElementById('exp-cycle-bars') as HTMLSelectElement | null;
   const syncCycleUI = () => {
     const cycle = state.cycle;
     if (!cycle) return;
     if (cycleModeSelect && cycleModeSelect.value !== cycle.mode) cycleModeSelect.value = cycle.mode;
     if (cycleShuffle && cycleShuffle.checked !== cycle.shuffle) cycleShuffle.checked = cycle.shuffle;
-    if (cycleIntervalRow) cycleIntervalRow.hidden = cycle.mode !== 'timer';
+    // Phrase mode also uses the timer length when there is no tempo, so the row shows for it too.
+    if (cycleIntervalRow) cycleIntervalRow.hidden = cycle.mode !== 'timer' && cycle.mode !== 'phrase';
     if (cycleInterval && cycleInterval.value !== String(cycle.intervalSec)) cycleInterval.value = String(cycle.intervalSec);
     if (cycleIntervalValue) cycleIntervalValue.textContent = `${cycle.intervalSec} s`;
+    if (cycleBarsRow) cycleBarsRow.hidden = cycle.mode !== 'phrase';
+    if (cycleBars && cycleBars.value !== String(phraseBarsOf(cycle))) cycleBars.value = String(phraseBarsOf(cycle));
   };
   const saveCycle = () => {
     if (state.cycle) saveCycleSettings(state.cycle, safeStorage());
@@ -454,7 +459,14 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   cycleModeSelect?.addEventListener('change', () => {
     if (!state.cycle) return;
     const mode = cycleModeSelect.value;
-    if (mode === 'off' || mode === 'timer' || mode === 'beat') state.cycle.mode = mode;
+    if (mode === 'off' || mode === 'timer' || mode === 'beat' || mode === 'phrase') state.cycle.mode = mode;
+    saveCycle();
+    syncCycleUI();
+  });
+  cycleBars?.addEventListener('change', () => {
+    if (!state.cycle) return;
+    const bars = Number(cycleBars.value);
+    if ((PHRASE_BAR_OPTIONS as readonly number[]).includes(bars)) state.cycle.phraseBars = bars;
     saveCycle();
     syncCycleUI();
   });
