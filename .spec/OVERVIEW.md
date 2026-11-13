@@ -31,3 +31,4 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 - Earlier phone-focused brief (superseded for scope): `.spec/SCOPE_BRIEF.md`
 - Long-term research RFC: `docs/RFC-milkdrop-next.md`
 - Decisions: `.spec/DECISIONS.md`
+- 2026-11-13: triage only. Reviewed the shared Harness UI design system and drafted a list of proposed tweaks, mostly small. The visualizer does not use the kit yet, so the main open question is whether it adopts it or keeps its own styles as a documented exception. Not yet confirmed by Charlie.
