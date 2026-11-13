@@ -668,7 +668,7 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     const modeBtns = domElements['experience-panel']?.querySelectorAll('.exp-mode-btn') ?? [];
     const cinematicBtn = modeBtns.find((b) => b.dataset.mode === 'cinematic');
     expect(cinematicBtn?.classList.contains('active')).toBe(true);
-    expect(cinematicBtn?.getAttribute('aria-pressed')).toBe('true');
+    expect(cinematicBtn?.getAttribute('aria-checked')).toBe('true');
   });
 
   it('sets Experience mode and updates button states on click', () => {

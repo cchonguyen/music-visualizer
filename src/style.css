@@ -557,24 +557,6 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 .exp-header { display: flex; justify-content: space-between; align-items: center; }
 .exp-title { font-weight: 600; font-size: var(--ui-text-size); color: var(--text); }
 .exp-hint { font-size: .8em; color: var(--muted); font-variant-numeric: tabular-nums; }
-.exp-modes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: .35rem; }
-.exp-mode-btn {
-  font-size: var(--ui-text-size);
-  padding: .25rem .4rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 4px);
-  background: rgba(255, 255, 255, .05);
-  color: var(--text);
-  cursor: pointer;
-  text-align: center;
-  transition: border-color .15s, background .15s;
-}
-.exp-mode-btn:hover { background: rgba(255, 255, 255, .1); }
-.exp-mode-btn.active {
-  border-color: var(--accent);
-  background: rgba(255, 255, 255, .15);
-  font-weight: 600;
-}
 .exp-controls-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .4rem; }
 .exp-field { display: flex; flex-direction: column; gap: .15rem; font-size: .8em; color: var(--muted); }
 .exp-field select {

@@ -436,7 +436,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     for (const btn of modeButtons) {
       const isActive = btn.dataset.mode === currentMode;
       btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-pressed', String(isActive));
+      btn.setAttribute('aria-checked', String(isActive));
+      btn.tabIndex = isActive ? 0 : -1;
     }
     const settings = director.getSettings();
     if (expCameraSelect) expCameraSelect.value = settings.cameraMode;
@@ -495,13 +496,27 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   });
   syncCycleUI();
 
-  for (const btn of modeButtons) {
+  for (const [index, btn] of modeButtons.entries()) {
     btn.addEventListener('click', () => {
       const mode = btn.dataset.mode as ExperienceMode | undefined;
       if (!mode) return;
       getGlobalDirector().setExperienceMode(mode);
       syncExperienceUI(mode);
       triggerExperienceToast(mode);
+    });
+    // Radiogroup keys (kit ui-segmented): arrows move the choice, Home and End jump to the ends.
+    btn.addEventListener('keydown', (event: KeyboardEvent) => {
+      const last = modeButtons.length - 1;
+      let next = -1;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = index === last ? 0 : index + 1;
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = index === 0 ? last : index - 1;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = last;
+      const target = next < 0 ? undefined : modeButtons[next];
+      if (!target) return;
+      event.preventDefault();
+      target.focus();
+      target.click();
     });
   }
 
