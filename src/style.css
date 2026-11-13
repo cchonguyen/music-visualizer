@@ -10,9 +10,6 @@
   --border: #707070;
   --text: #eee;
   --muted: #9a9a9a;
-  --accent: #2a6ae0;
-  --on-accent: #fff;
-  --focus: #ffd54a;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 20px;
@@ -40,9 +37,9 @@ html, body { margin: 0; height: 100%; background: #000; color: var(--text); over
 button, .btn, select { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .4rem .8rem; cursor: pointer; }
 button.primary { font-size: 1.2rem; padding: .7rem 2rem; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Sliders and checkboxes show the same --focus ring as buttons (slice 11.5). */
-input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .controls {
   position: fixed;
   left: 0;
@@ -938,7 +935,7 @@ dialog#shortcuts .short { display: none; }
 }
 /* One close pattern (slice 11.2): Studio, Shortcuts and the controls bar each close with .close-btn at the top right. 44 px square under 600px. */
 .close-btn { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .4rem .8rem; cursor: pointer; flex: 0 0 auto; }
-.close-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.close-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* Controls close sits in the sheet header: top right on desktop (the bar does not scroll), sticky on phones (see 599px block). */
 .controls-head { position: absolute; top: .5rem; right: .5rem; background: none; }
 #controls-show { position: fixed; right: 1rem; bottom: .75rem; z-index: 6; }
@@ -1010,15 +1007,15 @@ dialog#shortcuts .short { display: none; }
 .preset-browser-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .preset-browser-count { color: var(--muted); }
 .preset-browser-theme { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 6px; min-height: 32px; }
-.preset-browser-theme:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.preset-browser-theme:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .preset-browser-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 6px; }
 .preset-group-title { margin: 0 0 4px; font-size: .85em; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .preset-card { display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); min-height: 44px; }
 .preset-card-pick { flex: 1; min-width: 0; text-align: left; font: inherit; color: var(--text); background: none; border: 0; padding: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preset-card-pick:hover { color: var(--focus); }
-/* Slice 21.11: 3px ring, same as the app-wide focus ring. The list's padding keeps the ring from being clipped. */
-.preset-card-pick:focus-visible, .preset-card-fav:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* Slice 21.11: 2px ring, same as the app-wide focus ring. The list's padding keeps the ring from being clipped. */
+.preset-card-pick:focus-visible, .preset-card-fav:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .preset-card-meta { flex: none; }
 .preset-cost { display: inline-block; font-size: .7em; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); }
 .preset-cost-light { background: rgba(60, 170, 90, 0.25); }
