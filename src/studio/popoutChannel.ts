@@ -13,7 +13,6 @@ export const POPOUT_DISCONNECT_TIMEOUT_MS = 6000;
 const MAX_DEPTH = 8;
 const MAX_ID_LENGTH = 64;
 const MAX_NAME_LENGTH = 256;
-const MAX_SECTION_LENGTH = 64;
 const MAX_CONTROL_LENGTH = 64;
 const MAX_VALUE_STRING_LENGTH = 256;
 const MAX_PRESETS = 500;
@@ -41,10 +40,15 @@ export interface SelectPresetFields {
   presetId: string;
 }
 export type EditValue = number | boolean | string;
+/** Section name for layer controls. Layer edits must carry a layer index. */
+export const LAYER_SECTION = 'layer';
+/** Sections are short ASCII names: 'layer', 'feedbackPost', 'warp<n>'. */
+const SECTION_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,63}$/;
 export interface EditFields {
   presetId: string;
   section: string;
-  layerIndex: number;
+  /** Index in preset.layers for section 'layer'. null for edits outside layers ('feedbackPost', 'warp<n>'). */
+  layerIndex: number | null;
   control: string;
   value: EditValue;
 }
@@ -96,8 +100,15 @@ function readString(obj: Raw, key: string, min: number, max: number): string | n
   return typeof value === 'string' && value.length >= min && value.length <= max ? value : null;
 }
 
-function readLayerIndex(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+/** A layer index (0 or more), null for an edit outside layers, or undefined when the value is not allowed. */
+function readLayerIndex(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+function readSection(obj: Raw, key: string): string | null {
+  const value = obj[key];
+  return typeof value === 'string' && SECTION_PATTERN.test(value) ? value : null;
 }
 
 function readEditValue(value: unknown): EditValue | null {
@@ -140,13 +151,15 @@ function readFields(type: PopoutMessageType, raw: Raw): AnyFields | null {
     }
     case 'edit': {
       const presetId = readString(raw, 'presetId', 1, MAX_ID_LENGTH);
-      const section = readString(raw, 'section', 1, MAX_SECTION_LENGTH);
+      const section = readSection(raw, 'section');
       const layerIndex = readLayerIndex(raw['layerIndex']);
       const control = readString(raw, 'control', 1, MAX_CONTROL_LENGTH);
       const value = readEditValue(raw['value']);
-      if (presetId === null || section === null || layerIndex === null || control === null || value === null) {
+      if (presetId === null || section === null || layerIndex === undefined || control === null || value === null) {
         return null;
       }
+      // A layer control needs its layer. Other sections carry null.
+      if (section === LAYER_SECTION && layerIndex === null) return null;
       return { presetId, section, layerIndex, control, value };
     }
     default:

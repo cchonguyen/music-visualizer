@@ -2,11 +2,13 @@
  * Caches the app shell and hashed build assets (which include the builtin presets).
  * Never caches /admin routes, non-GET requests, or cross-origin requests.
  * Bump CACHE_VERSION when the shell strategy changes; old caches are removed on activate. */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_PREFIX = 'mv-shell-';
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const SHELL_PATHS = ['/', '/index.html', '/manifest.webmanifest'];
 const SHELL_KEY = '/index.html';
+// The pop-out Studio page is cached under its own key so it never replaces the app shell (slice 22.7).
+const POPOUT_PATH = '/popout.html';
 
 function isAdminPath(pathname) {
   return pathname.startsWith('/admin');
@@ -52,16 +54,16 @@ async function cacheFirst(request, key) {
   return res;
 }
 
-async function networkFirst(request) {
+async function networkFirst(request, key = SHELL_KEY) {
   const cache = await caches.open(CACHE_NAME);
   try {
     const res = await fetch(request);
     if (res.ok && res.type === 'basic') {
-      cache.put(SHELL_KEY, res.clone()).catch(() => undefined);
+      cache.put(key, res.clone()).catch(() => undefined);
     }
     return res;
   } catch (err) {
-    const fallback = await cache.match(SHELL_KEY);
+    const fallback = await cache.match(key);
     if (fallback) return fallback;
     throw err;
   }
@@ -74,7 +76,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (isAdminPath(url.pathname)) return;
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, url.pathname === POPOUT_PATH ? POPOUT_PATH : SHELL_KEY));
     return;
   }
   if (isCacheFirstPath(url.pathname)) {

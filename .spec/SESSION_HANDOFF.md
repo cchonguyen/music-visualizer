@@ -1,10 +1,10 @@
-# Session Handoff: Stage 21 closed, Shape work finished
+# Session Handoff: Stage 22 built
 
 ## Last Active State
 - **Last Active Platform**: Claude Code (web)
-- **Branch**: `claude/project-thread-cvtfkr`, from `main` at `4572288` (PR #311 merged).
-- **Active Task**: none. No `[IN_PROGRESS]` slice. No open pull requests.
-- **Status**: Stage 21 closed on 2026-11-12. Stage 22 (slices 22.1 to 22.7) is specced. Slice 22.1 (Phrase auto-cycle, PR #324) is built and merged on 2026-11-13. 22.2 to 22.7 are not started.
+- **Branch**: `claude/project-thread-cvtfkr`, restarted from `main` after each merge.
+- **Active Task**: none. No `[IN_PROGRESS]` slice.
+- **Status**: Stage 22 (slices 22.1 to 22.7, issues #315 to #321) is built and merged on 2026-11-13. Nothing is in progress.
 
 ## What changed (recent)
 - Shape work is finished: Slices 19.9a to 19.15 are merged (PRs #294 to #311). The legacy Waveform layer is gone; any Waveform layer loads as Shape. Bars, Rings, Crown and Shockwave still use their legacy layers.
@@ -24,7 +24,18 @@
    - Still open: #20, #21, #19, #28, #29. All five are specced as Stage 22 (slices 22.1 to 22.7, issues #315 to #321), not built.
 3. No lint script exists in the repo, so Verify lines omit lint.
 
+## Stage 22 (built 2026-11-13, PRs #324 to #329 and the 22.7 PR)
+- 22.1 Phrase auto-cycle mode: Off, Timer, Beat, Phrase. Switches on the first beat of every N bars (4, 8 or 16, default 8). `minGapSec` (8 s) also gates it, so 4-bar phrases at about 170 BPM or faster can be skipped.
+- 22.2 Kick zoom in the Director camera: peak 0.05, at most 3 per second, halved in Reduced intensity, zero in Calm.
+- 22.3 Bloom pulse on strong beats in Punchy and Wild, through the shared flash limiter (so it shares the 3 flashes per second with Shockwave and Tunnel).
+- 22.4 Energy tiers (chill, build, drop) in Director colour, with hysteresis. The mood weighting is a spread nudge, not a palette change.
+- 22.5 to 22.7 Studio in a second window: `/popout.html` runs the Studio without a GPU and sends edits over a BroadcastChannel; the visual window applies them with clamped, narrow setters and never saves or writes to the server. A "Pop out" button and Shift+E open it. The in-page Studio hides while a pop-out is connected. The service worker keeps `/popout.html` out of the app-shell cache.
+- Not tested in a real browser: the pop-out window, blocked-popup toast, narrow-screen label, and admin login from the pop-out (needs Charlie's hand test). The snapshot is not resent when the preset list changes, only when the shown preset changes or the pop-out says hello.
+
+## Open items
+1. Issues #19, #20, #21, #28 and #29 are now built; close them if not already closed.
+2. No lint script exists in the repo, so Verify lines omit lint.
+
 ## Next Steps
-1. Charlie tries Phrase mode on the live site (Visuals menu, Auto-cycle, Phrase, play a steady-beat track) and says whether to start 22.2.
-2. Then `/implement` one slice at a time: 22.2 (kick zoom, halved in Reduced), 22.3, 22.4, then 22.5 to 22.7 (22.2 before 22.4, 22.6 before 22.7).
-3. 22.1 note: `minGapSec` (8 s) also gates phrase boundaries, so 4-bar phrases at about 170 BPM or faster can be skipped.
+1. Charlie tries Phrase mode, the pop-out Studio, Punchy/Wild bloom and the kick zoom on the live site and reports what looks wrong.
+2. Plan the next stage with `/triage`.
