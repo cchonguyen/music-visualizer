@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets } from './pr-scope-check.mjs';
+import { AGENTS_MARKERS } from './lib/sync-core.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(here, 'pr-scope-check.mjs');
@@ -609,4 +610,44 @@ test('analyze: template-copy workflow is not a tripwire; a differing workflow is
   assert.equal(same.tripwireFired, false);
   assert.ok(same.notes.some((n) => n.includes('Sync-delivered harness file')));
   assert.equal(run('b').tripwireFired, true);
+});
+
+test('parseActiveTargets reads the "| Target files:" and "— Target files:" forms', () => {
+  const pipe = '- [ ] **Slice 1.2: T** [IN_PROGRESS] [CORE / DATA] desc | Target files: a.js, ./b.js, `c.js` [NEW] | Verify: npm test';
+  assert.deepEqual(parseActiveTargets(pipe), ['a.js', 'b.js', 'c.js']);
+  const dash = '- [ ] **Slice 1.3: T** [IN_PROGRESS] [UI / VISUAL] desc — Target files: x.js, y/z.js';
+  assert.deepEqual(parseActiveTargets(dash), ['x.js', 'y/z.js']);
+  assert.deepEqual(parseActiveTargets(''), []);
+});
+
+test('Approved-Tripwire trailer: a listed path is approved, an unlisted one still fires', () => {
+  const msg = 'fix thing\n\nApproved-Tripwire: AGENTS.md\n';
+  const ok = analyze({ changed: ['AGENTS.md'], headMessage: msg });
+  assert.equal(ok.tripwireFired, false);
+  assert.ok(!ok.problems.some((p) => p.includes('Red tripwire')));
+  assert.ok(ok.notes.includes('Approved tripwire (AGENTS.md): AGENTS.md — approved by Approved-Tripwire trailer'));
+  const bad = analyze({ changed: ['AGENTS.md', 'db/schema.sql'], headMessage: msg });
+  assert.equal(bad.tripwireFired, true);
+  assert.ok(bad.problems.includes('Red tripwire (schema file): db/schema.sql'));
+});
+
+test('Approved-Tripwire trailer: multiple trailers and deleted files', () => {
+  const msg = 'x\n\nApproved-Tripwire: AGENTS.md\nApproved-Tripwire: old/auth.js\n';
+  const r = analyze({ changed: ['AGENTS.md'], deleted: ['old/auth.js'], headMessage: msg });
+  assert.equal(r.tripwireFired, false);
+  assert.equal(r.notes.filter((n) => n.startsWith('Approved tripwire')).length, 2);
+  assert.equal(analyze({ changed: ['AGENTS.md'], deleted: ['other.js'], headMessage: msg }).tripwireFired, true);
+});
+
+test('AGENTS.md line cap ignores the harness block; spoke-owned lines still count', () => {
+  const thresholds = { line_budgets: { soft_caps: { 'AGENTS.md': 40 } } };
+  const lines = (n, p) => Array.from({ length: n }, (_, i) => `${p} ${i}`);
+  const [S, E] = AGENTS_MARKERS;
+  const build = (own, block) => [...lines(own, 'own'), S, ...lines(block - 2, 'blk'), E, ''].join('\n');
+  const fits = build(27, 40);
+  assert.equal(fits.split('\n').length - 1, 67);
+  const ok = analyze({ changed: ['AGENTS.md'], agentsBlockOnly: false, thresholds, fileContents: { 'AGENTS.md': fits }, headMessage: 'Approved-Tripwire: AGENTS.md' });
+  assert.ok(!ok.problems.some((p) => p.includes('Line budget')));
+  const over = analyze({ changed: ['AGENTS.md'], thresholds, fileContents: { 'AGENTS.md': build(45, 40) }, headMessage: 'Approved-Tripwire: AGENTS.md' });
+  assert.ok(over.problems.some((p) => p.includes('AGENTS.md has 45 lines')));
 });

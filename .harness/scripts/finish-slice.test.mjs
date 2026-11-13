@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { finishSlice, restampSlice, parseActiveTargets, bootstrapException, autoVerify, CI_VERIFIED_REASON } from './finish-slice.mjs';
-import { startSlice, startFromScope } from './start-slice.mjs';
+import { startSlice, startFromScope, startAdhoc } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 import { appendCall, readCalls } from './lib/telemetry.mjs';
 
@@ -34,6 +34,23 @@ test('a scope-bypass anchor copies Spec-Bypass trailers onto the finish commit',
   assert.match(body, /^Spec-Bypass: \.spec\/scope\.md$/m);
   assert.match(body, /^Spec-Bypass-Reason: settled in review$/m);
   assert.match(body, /^Referee-Verdict: VERIFIED$/m);
+});
+
+test('an on-the-fly anchor copies Spec-Bypass trailers onto the finish commit and closes the line', () => {
+  const dir = makeScopeRepo('- [x] **Slice 3.1: Old** Target files: test.txt\n');
+  startAdhoc(dir, {
+    title: 'Fix', tag: 'core', targets: 'test.txt', verify: 'node --test', issue: '77', reason: 'bug blocks work',
+    originUrl: 'git@github.com:o/claude-harness-hub.git', lsRemote: () => '', mainProgress: null,
+  });
+  fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
+  finishSlice(dir, 'fix: finish slice 3.2', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Spec-Bypass: on-the-fly Issue #77$/m);
+  assert.match(body, /^Spec-Bypass-Reason: bug blocks work$/m);
+  const line = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8').split('\n').find((l) => /Slice 3\.2:/.test(l));
+  assert.match(line, /^- \[x\]/);
+  assert.doesNotMatch(line, /\[IN_PROGRESS\]/);
 });
 
 test('a normal anchor produces no Spec-Bypass trailers on the finish commit', () => {

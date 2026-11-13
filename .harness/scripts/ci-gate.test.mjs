@@ -96,6 +96,29 @@ test('checkPullRequest fails when the head commit has no Referee trailer', () =>
   assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
 });
 
+test('checkPullRequest passes a docs-only PR with no Referee trailer', () => {
+  const dir = makeRepo();
+  fs.mkdirSync(path.join(dir, 'docs'));
+  fs.writeFileSync(path.join(dir, 'docs', 'plan.md'), '# Plan\n');
+  fs.writeFileSync(path.join(dir, 'docs', 'diagram.svg'), '<svg/>\n');
+  fs.writeFileSync(path.join(dir, 'README.md'), '# Readme\n');
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '- [ ] **Slice 1.1: First**\n- [ ] **Slice 1.2: Next**\n');
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'Plan only']);
+  const r = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.deepEqual(r, { problems: [], warnings: [], notes: ['Docs-only PR: no slice or Referee trailer needed.'] });
+});
+
+test('checkPullRequest still fails docs plus a source file with no Referee trailer', () => {
+  const dir = makeRepo();
+  fs.writeFileSync(path.join(dir, 'README.md'), '# Readme\n');
+  fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'Docs and code']);
+  const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
 test('checkPullRequest fails when the commit changed after its verdict', () => {
   const dir = makeRepo();
   fs.writeFileSync(path.join(dir, 'app.txt'), 'v2\n');
@@ -197,5 +220,47 @@ test('checkPullRequest treats a workflow that differs from its template as a rea
   writeEngine(dir, 'name: changed\n');
   commitPlain(dir);
   const { problems } = checkPullRequest({ base: 'main', head: 'feature', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
+function writePkg(dir, obj) {
+  fs.writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify(obj, null, 2)}\n`);
+}
+
+function makePkgRepo() {
+  const dir = makeRepo();
+  sh(dir, ['checkout', '-q', 'main']);
+  writePkg(dir, { name: 'x', version: '0.2.0', dependencies: { a: '1.0.0' } });
+  sh(dir, ['add', '-A']);
+  sh(dir, ['commit', '-q', '-m', 'add package.json']);
+  sh(dir, ['checkout', '-q', '-b', 'sync']);
+  return dir;
+}
+
+test('checkPullRequest passes engine files plus a version-only package.json bump', () => {
+  const dir = makePkgRepo();
+  writeEngine(dir, 'name: labels\n');
+  writePkg(dir, { name: 'x', version: '0.2.1', dependencies: { a: '1.0.0' } });
+  commitPlain(dir);
+  const r = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
+  assert.deepEqual(r.problems, []);
+  assert.match(r.notes[0], /Engine sync PR/);
+  assert.equal(r.notes.length, 2);
+});
+
+test('checkPullRequest still fails engine files plus a package.json dependency change', () => {
+  const dir = makePkgRepo();
+  writeEngine(dir, 'name: labels\n');
+  writePkg(dir, { name: 'x', version: '0.2.1', dependencies: { a: '2.0.0' } });
+  commitPlain(dir);
+  const { problems } = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
+  assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
+test('checkPullRequest still fails a package.json version bump alone', () => {
+  const dir = makePkgRepo();
+  writePkg(dir, { name: 'x', version: '0.2.1', dependencies: { a: '1.0.0' } });
+  commitPlain(dir);
+  const { problems } = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
   assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
 });

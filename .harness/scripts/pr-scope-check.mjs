@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { parseSliceLine } from './lib/slice-parser.mjs';
+import { AGENTS_MARKERS } from './lib/sync-core.mjs';
 
 const ACTIVE_TASK = /^\s*-\s*\[.\].*\[IN_PROGRESS\]/;
 const SLICE_TYPE = /\[(UI \/ VISUAL|CORE \/ DATA)\]/;
@@ -116,17 +118,45 @@ export function outsideHarnessBlock(text) {
 
 export function parseActiveTargets(line) {
   if (!line) return [];
-  const targetPart = line.split('|')[0];
-  const match = targetPart.match(/Target files:\s*([^\n]+)/i);
-  if (!match) return [];
-  return match[1]
-    .replace(/\[NEW\]/gi, '')
-    .replace(/\[IN_PROGRESS\]/gi, '')
-    .replace(/\[DELETE\]/gi, '')
-    .replace(/[`*]/g, '')
-    .split(',')
-    .map((s) => s.trim().replace(/^\.\//, ''))
+  return parseSliceLine(line).targets
+    .map((t) =>
+      t
+        .replace(/\[NEW\]/gi, '')
+        .replace(/\[IN_PROGRESS\]/gi, '')
+        .replace(/\[DELETE\]/gi, '')
+        .replace(/[`*]/g, '')
+        .trim()
+        .replace(/^\.\//, ''))
     .filter(Boolean);
+}
+
+// `Approved-Tripwire: <path>` trailer lines in a commit message -> the set of approved paths
+export function parseApprovedTripwires(message) {
+  const approved = new Set();
+  if (!message) return approved;
+  for (const line of String(message).split('\n')) {
+    const m = line.match(/^\s*Approved-Tripwire:\s*(.+?)\s*$/i);
+    if (m) approved.add(m[1].replace(/^\.\//, ''));
+  }
+  return approved;
+}
+
+// Line count for a budget file. AGENTS.md does not count the hub-sync block (marker lines included).
+export function countBudgetLines(budgetFile, content) {
+  let text = content;
+  if (budgetFile === 'AGENTS.md') {
+    const [startMark, endMark] = AGENTS_MARKERS;
+    const start = text.indexOf(startMark);
+    const end = text.indexOf(endMark);
+    if (start !== -1 && end !== -1 && end >= start) {
+      const lineStart = text.lastIndexOf('\n', start) + 1;
+      const nl = text.indexOf('\n', end);
+      const lineEnd = nl === -1 ? text.length : nl + 1;
+      text = text.slice(0, lineStart) + text.slice(lineEnd);
+    }
+  }
+  if (text === '') return 0;
+  return text.endsWith('\n') ? text.slice(0, -1).split('\n').length : text.split('\n').length;
 }
 
 // `git diff --name-status -M` output -> changed paths and deleted paths (a rename deletes its old path)
@@ -177,10 +207,15 @@ export function analyze({
   hubSync = false,
   agentsBlockOnly = false,
   readHead = null,
+  headMessage = null,
 }) {
   const problems = [];
   const notes = [];
   let tripwireFired = false;
+  const approvedTripwires = parseApprovedTripwires(headMessage);
+  const approve = (name, file) => {
+    notes.push(`Approved tripwire (${name}): ${file} — approved by Approved-Tripwire trailer`);
+  };
 
   // A deletion-only PR still changed files, so count deletions as touched
   const touched = [...new Set([...changed, ...deleted])];
@@ -189,10 +224,15 @@ export function analyze({
   for (const file of changed) {
     if (agentsBlockOnly && file === 'AGENTS.md') continue;
     for (const t of TRIPWIRES) {
-      if (t.test(file, diff, readHead)) { problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true; }
+      if (!t.test(file, diff, readHead)) continue;
+      if (approvedTripwires.has(file)) { approve(t.name, file); continue; }
+      problems.push(`Red tripwire (${t.name}): ${file}`); tripwireFired = true;
     }
   }
-  for (const file of deleted) { problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true; }
+  for (const file of deleted) {
+    if (approvedTripwires.has(file)) { approve('file deleted', file); continue; }
+    problems.push(`Red tripwire (file deleted): ${file}`); tripwireFired = true;
+  }
 
   if (hubSync && touched.some(isEngineFile)) {
     notes.push('Hub sync: every engine file change matches its hash in .harness/managed.json.');
@@ -285,7 +325,7 @@ export function analyze({
           }
         }
         if (content !== null) {
-          const lines = content.endsWith('\n') ? content.slice(0, -1).split('\n').length : content.split('\n').length;
+          const lines = countBudgetLines(budgetFile, content);
           if (lines > maxLines) {
             problems.push(`Line budget exceeded: ${budgetFile} has ${lines} lines (soft cap: ${maxLines})`);
           }
@@ -449,7 +489,9 @@ function main(argv) {
   const readHead = (file) => {
     try { return fs.readFileSync(path.join(root, file), 'utf8'); } catch { return null; }
   };
-  const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly, readHead });
+  let headMessage = '';
+  try { headMessage = git('log', '-1', '--format=%B', head); } catch { /* no head message: no approvals */ }
+  const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly, readHead, headMessage });
 
   const verdict = formatJsonVerdict({
     changed,

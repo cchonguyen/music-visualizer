@@ -61,6 +61,8 @@ test('manager mode with no active slice warns but allows source edits (PLAN LOCK
   const r = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' });
   assert.equal(r.status, 0);
   assert.match(r.stderr, /WARN: PLAN LOCK/);
+  assert.match(r.stderr, /start-slice\.mjs --adhoc/);
+  assert.doesNotMatch(r.stdout || '', /"decision":\s*"block"/);
   const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8');
   assert.match(events, /"kind":"plan_lock_warn"/);
 });
@@ -294,6 +296,62 @@ test('a coordinator edit over the fast-path budget warns, logs fast_path_warn an
   const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8')
     .split('\n').filter(Boolean).map((l) => JSON.parse(l));
   assert.ok(events.some((e) => e.kind === 'fast_path_warn' && e.source === 'pre-tool-guard'));
+});
+
+const readCounters = (dir) => JSON.parse(fs.readFileSync(path.join(dir, '.spec', '.session-telemetry.json'), 'utf8'));
+
+test('subagent edits (agent_id) are not counted against the coordinator fast-path budget', () => {
+  const dir = makeRepo({
+    files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': SLICE('src/app.js'), 'src/app.js': 'a\n' },
+  });
+  const first = runHook(GUARD, dir, edit(dir, 'src/app.js'));
+  assert.equal(first.status, 0);
+  assert.doesNotMatch(first.stderr, /FAST-PATH BUDGET EXCEEDED/);
+  assert.equal(readCounters(dir).coordinator_edits, 1);
+
+  const sub = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_id: 'abc', agent_type: 'harness:gf-coder' });
+  assert.equal(sub.status, 0);
+  assert.doesNotMatch(sub.stderr, /FAST-PATH BUDGET EXCEEDED/);
+  const subOnlyId = runHook(GUARD, dir, { ...edit(dir, 'src/app.js'), agent_id: 'abc' });
+  assert.doesNotMatch(subOnlyId.stderr, /FAST-PATH BUDGET EXCEEDED/);
+  assert.equal(readCounters(dir).coordinator_edits, 1);
+
+  const second = runHook(GUARD, dir, edit(dir, 'src/app.js'));
+  assert.match(second.stderr, /FAST-PATH BUDGET EXCEEDED: Coordinator attempted 2 source edits/);
+});
+
+test('coordinator counters reset when the active slice changes and when the slice finishes', () => {
+  const stored = (slice) => JSON.stringify({
+    sessionId: 's1', currentSlice: slice, coordinator_reads: 2, coordinator_searches: 1, coordinator_edits: 1, goldfish_searches: 2,
+  });
+  const dir = makeRepo({
+    files: {
+      '.spec/harness.json': '{"workMode":"manager"}\n',
+      '.spec/PROGRESS.md': SLICE('src/app.js'),
+      'src/app.js': 'a\n',
+      '.spec/.session-telemetry.json': stored('3.2'),
+    },
+  });
+  // Slice changed 3.2 -> 3.3: this edit is the first of the new slice.
+  const r = runHook(GUARD, dir, edit(dir, 'src/app.js'));
+  assert.doesNotMatch(r.stderr, /FAST-PATH BUDGET EXCEEDED/);
+  let t = readCounters(dir);
+  assert.equal(t.currentSlice, '3.3');
+  assert.equal(t.coordinator_edits, 1);
+  assert.equal(t.coordinator_reads, 0);
+  assert.equal(t.coordinator_searches, 0);
+  assert.equal(t.goldfish_searches, 0);
+
+  // Slice finished: no [IN_PROGRESS] line, stored slice was non-empty. Counters reset, then this edit counts once.
+  fs.writeFileSync(path.join(dir, '.spec', 'PROGRESS.md'), '# Progress\n- [x] **Slice 3.3** done\n');
+  fs.writeFileSync(path.join(dir, '.spec', '.session-telemetry.json'), stored('3.3'));
+  const r2 = runHook(GUARD, dir, edit(dir, 'src/app.js'));
+  assert.doesNotMatch(r2.stderr, /FAST-PATH BUDGET EXCEEDED/);
+  t = readCounters(dir);
+  assert.equal(t.currentSlice, '');
+  assert.equal(t.coordinator_edits, 1);
+  assert.equal(t.coordinator_reads, 0);
+  assert.equal(t.goldfish_searches, 0);
 });
 
 test('bash-guard warn events carry the session_id and land in that session file', () => {
