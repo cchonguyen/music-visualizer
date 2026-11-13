@@ -88,12 +88,24 @@ const SOURCE_NAMES: Record<string, string> = {
   mic: 'Microphone',
 };
 
+const ICON_PATHS: Record<string, string> = {
+  volume: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+};
+
+function iconSvg(name: string): string {
+  return `<svg class="ui-icon" data-icon="${name}" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
+}
+
 export function getSourceIcon(kind: SourceKind): string {
-  if (kind === 'mic') return '🎙️';
-  if (kind === 'display') return '🖥️';
-  if (kind === 'file') return '🎵';
-  if (kind.startsWith('test:')) return '⚡';
-  return '🔊';
+  if (kind === 'mic') return iconSvg('mic');
+  if (kind === 'display') return iconSvg('monitor');
+  if (kind === 'file') return iconSvg('music');
+  if (kind.startsWith('test:')) return iconSvg('zap');
+  return iconSvg('volume');
 }
 
 export function formatSourceLabel(kind: SourceKind, fileName = ''): string {
@@ -910,7 +922,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       sourceLabel.textContent = formatSourceLabel(kind, state.fileName);
     }
     if (sourceIcon) {
-      sourceIcon.textContent = getSourceIcon(kind);
+      sourceIcon.innerHTML = getSourceIcon(kind);
     }
     for (const btn of sourceButtons) {
       btn.setAttribute('aria-pressed', String(btn.dataset.source === kind));
