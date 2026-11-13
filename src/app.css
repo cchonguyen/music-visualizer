@@ -1,0 +1,8 @@
+/* App-only styles and kit overrides. Loads after style.css. Never edit the kit's tokens.css or bundle.css. */
+
+/* Slice 24.2: keep the app's own body type until the screens move onto the kit (slices 24.5 to 24.10). */
+body {
+  font-family: var(--ui-font);
+  font-size: 1rem;
+  line-height: normal;
+}

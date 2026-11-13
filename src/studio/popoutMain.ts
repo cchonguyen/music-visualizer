@@ -2,7 +2,10 @@
 // no-op SceneHost, so it never draws and needs no WebGL. The main window applies the edits it receives (slice 22.7).
 // Admin state is per window: the admin gateway is decided by the server for this window, never by a channel
 // message. No remote writer is set here, so this window does not write to the server.
+import '../../.harness/design-system/tokens.css';
+import '../../.harness/design-system/bundle.css';
 import '../style.css';
+import '../app.css';
 import { ALL_PRESETS, SCHEMAS } from '../presets/builtin';
 import { PresetSession, type SceneHost } from '../presets/session';
 import { parsePreset, type Preset, type SchemaRegistry } from '../presets/format';
