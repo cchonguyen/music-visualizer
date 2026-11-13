@@ -1,0 +1,155 @@
+/* Harness UI tokens. Hub-owned: change them in claude-harness-hub, never in a project.
+   Dark is the default. Light applies when the device asks for it or when <html data-theme="light"> is set.
+   <html data-theme="dark"> forces dark on a light device. A project that is dark-native or light-native
+   sets data-theme once and declares theme-lock in design-system/profile.md.
+   Font roles: components read --font-display, --font-sans and --font-mono and never name a typeface.
+   An app overrides a role in its own app.css, loaded after bundle.css. */
+:root {
+  color-scheme: dark;
+  --bg: #0f0f12;
+  --surface: #17171b;
+  --surface-raised: #1f1f25;
+  --surface-sunken: #0a0a0c;
+  --line: #2a2a32;
+  --line-strong: #70707b;
+  --text: #ececf1;
+  --text-muted: #a1a1aa;
+  --text-faint: #85858f;
+  --mid: #2a2640;
+  --mid-line: #4a4273;
+  --mid-text: #c3baf0;
+  --neon-violet: #aa89fc;
+  --neon-magenta: #ff7ad9;
+  --neon-azure: #67aafe;
+  --neon-cyan: #4fd8eb;
+  --neon-lime: #b6f23c;
+  --accent: var(--neon-violet);
+  --accent-strong: #b9a6ff;
+  --accent-tint: #211c38;
+  --on-accent: #14121f;
+  --focus: var(--accent);
+  --good: #34d3a6;
+  --good-tint: #0f2a22;
+  --warn: #fbbf24;
+  --warn-tint: #2c2210;
+  --bad: #ff7a8a;
+  --bad-tint: #30151b;
+  --scrim: rgba(6,6,9,0.62);
+  --shadow-pop: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-dialog: 0 24px 64px rgba(0,0,0,0.6);
+  --glow-accent: 0 0 0 1px rgba(170,137,252,0.5), 0 0 24px rgba(170,137,252,0.28);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --surface-sunken: #f1f1f3;
+    --line: #e4e4e7;
+    --line-strong: #85858f;
+    --text: #18181b;
+    --text-muted: #52525b;
+    --text-faint: #6b6b76;
+    --mid: #eceaf8;
+    --mid-line: #cdc7ec;
+    --mid-text: #453a8f;
+    --neon-violet: #7433cb;
+    --neon-magenta: #b0188a;
+    --neon-azure: #0063cd;
+    --neon-cyan: #0b7285;
+    --neon-lime: #4d7c0f;
+    --accent-strong: #4a31b8;
+    --accent-tint: #f0edfd;
+    --on-accent: #ffffff;
+    --good: #0b7a5c;
+    --good-tint: #e4f6ef;
+    --warn: #8a4b08;
+    --warn-tint: #fdf2d5;
+    --bad: #c01540;
+    --bad-tint: #fde7eb;
+    --scrim: rgba(24,24,27,0.38);
+    --shadow-pop: 0 8px 24px rgba(24,24,27,0.12);
+    --shadow-dialog: 0 24px 64px rgba(24,24,27,0.18);
+    --glow-accent: 0 0 0 1px rgba(116,51,203,0.35);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f1f1f3;
+  --line: #e4e4e7;
+  --line-strong: #85858f;
+  --text: #18181b;
+  --text-muted: #52525b;
+  --text-faint: #6b6b76;
+  --mid: #eceaf8;
+  --mid-line: #cdc7ec;
+  --mid-text: #453a8f;
+  --neon-violet: #7433cb;
+  --neon-magenta: #b0188a;
+  --neon-azure: #0063cd;
+  --neon-cyan: #0b7285;
+  --neon-lime: #4d7c0f;
+  --accent: var(--neon-violet);
+  --accent-strong: #4a31b8;
+  --accent-tint: #f0edfd;
+  --on-accent: #ffffff;
+  --focus: var(--accent);
+  --good: #0b7a5c;
+  --good-tint: #e4f6ef;
+  --warn: #8a4b08;
+  --warn-tint: #fdf2d5;
+  --bad: #c01540;
+  --bad-tint: #fde7eb;
+  --scrim: rgba(24,24,27,0.38);
+  --shadow-pop: 0 8px 24px rgba(24,24,27,0.12);
+  --shadow-dialog: 0 24px 64px rgba(24,24,27,0.18);
+  --glow-accent: 0 0 0 1px rgba(116,51,203,0.35);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-dialog: 16px;
+  --radius-pill: 999px;
+  --touch-phone: 44px;
+  --touch-desktop: 36px;
+  --touch-dismiss: 40px;
+  --control-h: var(--touch-phone);
+  --control-fs: 16px;
+  --control-h-compact: 32px;
+  --control-fs-compact: 13px;
+  --sidebar-width: 248px;
+  --measure: 68ch;
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1100px;
+  --duration-fast: 150ms;
+  --duration-enter: 200ms;
+  --duration-toast: 6000ms;
+  --z-sticky: 10;
+  --z-pop: 30;
+  --z-dialog: 40;
+  --z-toast: 50;
+  /* Font roles */
+  --font-display: Newsreader, ui-serif, Georgia, serif;
+  --font-sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --font-mono: JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Control size steps down together at the desktop breakpoint: button, input, select and textarea read these two. */
+@media (min-width: 640px) {
+  :root {
+    --control-h: var(--touch-desktop);
+    --control-fs: 14px;
+  }
+}

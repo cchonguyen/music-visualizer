@@ -45,14 +45,48 @@ function isTemplateCopyAt(file, head, cwd) {
   return template !== null && template === show(file);
 }
 
+// True when package.json differs between the merge base and head only in its top-level `version`.
+// Spokes that demand a version bump on every PR add this to engine sync PRs. Any error returns false.
+export function isVersionOnlyPackageChange(file, base, head, cwd = process.cwd()) {
+  if (file !== 'package.json') return false;
+  try {
+    const mergeBase = git(['merge-base', base, head], cwd).trim();
+    const before = JSON.parse(git(['show', `${mergeBase}:package.json`], cwd));
+    const after = JSON.parse(git(['show', `${head}:package.json`], cwd));
+    if (!before || !after || typeof before !== 'object' || typeof after !== 'object') return false;
+    if (before.version === after.version) return false;
+    const { version: _a, ...restBefore } = before;
+    const { version: _b, ...restAfter } = after;
+    return JSON.stringify(sortKeys(restBefore)) === JSON.stringify(sortKeys(restAfter));
+  } catch {
+    return false;
+  }
+}
+
+function sortKeys(value) {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((k) => [k, sortKeys(value[k])]));
+  }
+  return value;
+}
+
 export function checkPullRequest({ base, head, cwd = process.cwd() }) {
   const problems = [];
   const warnings = [];
   const notes = [];
   const changedFiles = git(['diff', '--name-only', `${base}...${head}`], cwd).split('\n').filter(Boolean);
+  const isSyncFile = (f) => isBookkeepingCommit({ subject: '', files: [f] }) || isTemplateCopyAt(f, head, cwd);
+  const versionBump = changedFiles.includes('package.json') && isVersionOnlyPackageChange('package.json', base, head, cwd);
   if (changedFiles.length > 0 && changedFiles.every((f) =>
-    isBookkeepingCommit({ subject: '', files: [f] }) || isTemplateCopyAt(f, head, cwd))) {
+    isSyncFile(f) || (f === 'package.json' && versionBump))
+    && (!versionBump || changedFiles.some((f) => f !== 'package.json'))) {
     notes.push('Engine sync PR: no slice or Referee trailer needed.');
+    if (versionBump) notes.push('package.json version bump allowed in an engine sync PR.');
+    return { problems, warnings, notes };
+  }
+  if (changedFiles.length > 0 && changedFiles.every((f) => isDocFile(f) || isSyncFile(f))) {
+    notes.push('Docs-only PR: no slice or Referee trailer needed.');
     return { problems, warnings, notes };
   }
   const progressDiff = git(['diff', '-U0', `${base}...${head}`, '--', '.spec/PROGRESS.md'], cwd);
@@ -75,7 +109,13 @@ export function checkPullRequest({ base, head, cwd = process.cwd() }) {
 
 const SPEC_FILE = /^\.spec\//;
 const ENGINE_FILE = /^(\.harness\/|\.claude\/|\.harness-version$|AGENTS\.md$|plugins\/harness\/)/;
-const SYNC_SUBJECT = /^(chore\(harness\): sync|Sync harness engine)/;
+const DOC_FILE = /(^docs\/|\.md$)/;
+
+// True for documentation: anything under docs/ or any Markdown file. A docs-only PR needs no Referee trailer.
+export function isDocFile(file) {
+  return DOC_FILE.test(String(file));
+}
+const SYNC_SUBJECT =/^(chore\(harness\): sync|Sync harness engine)/;
 
 // True for commits that need no Referee trailer: sync subjects, commits with no changed files,
 // and commits whose files are all under .spec/ or are engine sync files.

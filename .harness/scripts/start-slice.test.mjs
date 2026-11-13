@@ -138,3 +138,117 @@ test('refuses absolute and parent-traversal target paths', () => {
   assertRefused(dir, { targets: '/abs/x.mjs' }, /must be repo-relative, not absolute/);
   assertRefused(dir, { targets: '.harness/../../escape.mjs' }, /must not contain "\.\."/);
 });
+
+// ---- --adhoc (on-the-fly slices, SYSTEM_SPEC 4.A.6) ----
+import { startAdhoc } from './start-slice.mjs';
+
+const HUB = 'git@github.com:cchonguyen/claude-harness-hub.git';
+const ADHOC = {
+  title: 'Fix the thing',
+  tag: 'core',
+  targets: 'src/a.mjs, src/a.test.mjs',
+  verify: 'node --test src/a.test.mjs',
+  issue: '42',
+  reason: 'bug blocks current work',
+  originUrl: HUB,
+  lsRemote: () => '',
+  mainProgress: null,
+};
+
+function assertAdhocRefused(dir, overrides, pattern) {
+  const before = head(dir);
+  const progressBefore = progressText(dir);
+  assert.throws(() => startAdhoc(dir, { ...ADHOC, ...overrides }), pattern);
+  assert.equal(head(dir), before, 'HEAD must not move on refusal');
+  assert.equal(progressText(dir), progressBefore, 'PROGRESS.md must not change on refusal');
+}
+
+test('adhoc: id is the next minor under the highest major in the working tree', () => {
+  const dir = makeRepo({ progress: '# P\n- [x] **Slice 3.4: A** Target files: a\n- [x] **Slice 3.5a: B** Target files: b\n- [x] **Slice 2.9: C** Target files: c\n' });
+  assert.equal(startAdhoc(dir, ADHOC).sliceId, '3.6');
+});
+
+test('adhoc: origin/main ahead of the working tree raises the major', () => {
+  const dir = makeRepo();
+  const res = startAdhoc(dir, { ...ADHOC, mainProgress: '- [x] **Slice 7.2: Ahead** Target files: z\n' });
+  assert.equal(res.sliceId, '7.3');
+});
+
+test('adhoc: --id overrides the rule and a taken id is refused', () => {
+  const dir = makeRepo();
+  assert.equal(startAdhoc(dir, { ...ADHOC, id: '9.1' }).sliceId, '9.1');
+  const dir2 = makeRepo();
+  assertAdhocRefused(dir2, { id: '2.0.1' }, /--id must look like/);
+  assertAdhocRefused(dir2, { id: '1' }, /--id must look like/);
+  assertAdhocRefused(makeRepo({ progress: `${BASE_PROGRESS}- [x] **Slice 5.1: T** Target files: t\n` }), { id: '5.1' }, /already exists/);
+});
+
+test('adhoc: written line parses back and the anchor carries both trailers and a batch event', () => {
+  const dir = makeRepo();
+  const res = startAdhoc(dir, { ...ADHOC, tag: 'ui', gateChange: true });
+  assert.equal(res.sliceId, '2.1');
+  const line = progressText(dir).split('\n').find((l) => /Slice 2\.1:/.test(l));
+  assert.match(line, /\[UI \/ VISUAL\] GATE CHANGE\. On-the-fly: bug blocks current work Target files:/);
+  const p = parseSliceLine(line);
+  assert.equal(p.id, '2.1');
+  assert.equal(p.status, '[IN_PROGRESS]');
+  assert.deepEqual(p.targets, ['src/a.mjs', 'src/a.test.mjs']);
+  assert.equal(p.issue, 42);
+  assert.equal(p.verify, 'node --test src/a.test.mjs');
+  const subject = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: dir, encoding: 'utf8' }).trim();
+  assert.equal(subject, 'docs(spec): anchor Slice 2.1 [IN_PROGRESS]');
+  const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
+  assert.match(body, /^Spec-Bypass: on-the-fly Issue #42$/m);
+  assert.match(body, /^Spec-Bypass-Reason: bug blocks current work$/m);
+  assert.ok(readBatchEvents(dir).some((e) => e.event === 'adhoc_slice_start' && e.slice === 'Slice 2.1'));
+});
+
+test('adhoc: refuses bad issue numbers and newline or pipe values', () => {
+  const dir = makeRepo();
+  for (const issue of ['0', '-3', 'abc', '1.5', '']) assertAdhocRefused(dir, { issue }, /--issue must be a positive integer/);
+  assertAdhocRefused(dir, { title: 'a|b' }, /one line/);
+  assertAdhocRefused(dir, { reason: 'a\nb' }, /one line/);
+  assertAdhocRefused(dir, { verify: 'x | y' }, /one line/);
+  assertAdhocRefused(dir, { targets: 'a|b' }, /one line/);
+});
+
+test('adhoc: refuses another IN_PROGRESS slice', () => {
+  const dir = makeRepo({ progress: `${BASE_PROGRESS}- [ ] **Slice 2.5: Active** [IN_PROGRESS] Target files: b.txt\n` });
+  assertAdhocRefused(dir, {}, /already \[IN_PROGRESS\]/);
+});
+
+test('adhoc: refuses empty, 5 or more, absolute, parent and PROGRESS.md targets', () => {
+  const dir = makeRepo();
+  assertAdhocRefused(dir, { targets: undefined }, /--targets is required/);
+  assertAdhocRefused(dir, { targets: 'a,,b' }, /empty entry/);
+  assertAdhocRefused(dir, { targets: 'a,b,c,d,e' }, /5 or more/);
+  assertAdhocRefused(dir, { targets: '/abs/x' }, /not absolute/);
+  assertAdhocRefused(dir, { targets: 'a/../../x' }, /must not contain "\.\."/);
+  assertAdhocRefused(dir, { targets: 'src/a.mjs, .spec/PROGRESS.md' }, /PROGRESS\.md/);
+});
+
+test('adhoc: refuses a Red tripwire target', () => {
+  const dir = makeRepo();
+  assertAdhocRefused(dir, { targets: 'package.json' }, /Red tripwire/);
+  assertAdhocRefused(dir, { targets: 'AGENTS.md' }, /Red tripwire/);
+  assertAdhocRefused(dir, { targets: 'src/auth.ts' }, /Red tripwire/);
+});
+
+test('adhoc: engine-locked targets are refused in a spoke but allowed in the hub', () => {
+  const dir = makeRepo();
+  assertAdhocRefused(dir, { originUrl: 'git@github.com:o/some-spoke.git', targets: '.harness/x.mjs' }, /engine-locked/);
+  assert.equal(startAdhoc(dir, { ...ADHOC, targets: '.harness/x.mjs' }).sliceId, '2.1');
+});
+
+test('adhoc: refuses while main is red; a failing ls-remote is ignored', () => {
+  const dir = makeRepo();
+  assertAdhocRefused(dir, { lsRemote: () => 'abc123\trefs/tags/harness-main-red\n' }, /main is red/);
+  assert.equal(startAdhoc(dir, { ...ADHOC, lsRemote: () => { throw new Error('offline'); } }).sliceId, '2.1');
+});
+
+test('adhoc: restores PROGRESS.md when the commit fails', () => {
+  const dir = makeRepo();
+  fs.mkdirSync(path.join(dir, '.git', 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  assertAdhocRefused(dir, {}, /git commit failed/);
+});

@@ -251,6 +251,14 @@ test('role resolution identifies subagents vs coordinator', () => {
   assert.equal(resolveRole({ agent_type: 'gf-coder' }), 'goldfish');
 });
 
+test('role resolution never returns coordinator for subagent events (agent_id, plugin-prefixed agent_type)', () => {
+  assert.notEqual(resolveRole({ agent_id: 'x' }), 'coordinator');
+  assert.equal(resolveRole({ agent_id: 'x', agent_type: 'harness:gf-coder' }), 'goldfish');
+  assert.equal(resolveRole({ agent_type: 'harness:gf-coder' }), 'goldfish');
+  assert.equal(resolveRole({ agent_id: '' }), 'coordinator');
+  assert.equal(resolveRole({}), 'coordinator');
+});
+
 // --- Slice 4.3 Tests: el-architect Exit Gate ---
 
 test('el exit gate passes when all slices have valid Target files, Coords, and Verify', () => {

@@ -53,6 +53,8 @@ export function resolveRole(event = {}) {
   if (agentField.includes('elephant') || agentField.includes('architect') || agentField.includes('el-')) return 'elephant';
   if (agentField.includes('librarian') || agentField.includes('navigator')) return 'librarian';
   if (agentField.includes('git-clerk') || agentField.includes('gitclerk') || agentField.includes('gf-clerk')) return 'git-clerk';
+  // Claude Code sends agent_id on hook events fired inside a subagent: never the coordinator.
+  if (typeof event.agent_id === 'string' && event.agent_id.trim()) return 'goldfish';
   return 'coordinator';
 }
 
@@ -255,8 +257,10 @@ if (isDirectRun) {
       try {
         const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
         data = { ...data, ...parsed };
-        if (currentSlice && data.currentSlice !== currentSlice) {
-          data.currentSlice = currentSlice;
+        const sliceChanged = currentSlice && data.currentSlice !== currentSlice;
+        const sliceFinished = !currentSlice && data.currentSlice;
+        if (sliceChanged || sliceFinished) {
+          data.currentSlice = currentSlice || '';
           data.goldfish_searches = 0;
           data.coordinator_reads = 0;
           data.coordinator_searches = 0;
@@ -538,7 +542,7 @@ if (isDirectRun) {
 
   if (modeOf(root) === 'locked') {
     // Plan lock is a soft warn: log it on stderr and to the event log, then let the edit proceed.
-    console.error('WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /triage or /spec first.');
+    console.error('WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /spec, or open an on-the-fly slice: node .harness/scripts/start-slice.mjs --adhoc (see CLAUDE.md, Work modes).');
     appendEvent(root, {
       session: event.session_id,
       kind: 'plan_lock_warn',
