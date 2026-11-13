@@ -82,9 +82,19 @@ describe("reaction styles", () => {
   it("builds up: Gentle zoom and hue, Punchy adds rotation kicks and a flip every 8 beats, Wild adds warp and colour picks", () => {
     const names = (s: Parameters<typeof reactionsForStyle>[0]) => reactionsForStyle(s).map((r) => `${r.trigger.type}:${r.response}:${r.target.name}`);
     expect(names("gentle")).toEqual(["beat:kick:zoom", "everyNSeconds:drift:hueShift"]);
-    expect(names("punchy")).toEqual(["beat:kick:zoom", "beat:kick:rotate", "everyNBeats:flip:rotate"]);
+    expect(names("punchy")).toEqual(["beat:kick:zoom", "beat:kick:rotate", "everyNBeats:flip:rotate", "strongBeat:kick:bloom"]);
     expect(reactionsForStyle("punchy").find((r) => r.response === "flip")!.trigger.n).toBe(8);
     expect(names("wild")).toEqual([...names("punchy"), "section:step:warp", "strongBeat:pick:hueShift"]);
+  });
+
+  it("Punchy and Wild swell Post bloom on strong beats (0.2 of range, ease 0.3); Gentle and Off do not", () => {
+    const bloomKick = (s: Parameters<typeof reactionsForStyle>[0]) =>
+      reactionsForStyle(s).filter((r) => r.target.group === "post" && r.target.name === "bloom");
+    for (const style of ["punchy", "wild"] as const) {
+      expect(bloomKick(style)).toEqual([{ trigger: { type: "strongBeat" }, response: "kick", target: { group: "post", name: "bloom" }, amount: 0.2, ease: 0.3 }]);
+    }
+    expect(bloomKick("gentle")).toHaveLength(0);
+    expect(bloomKick("off")).toHaveLength(0);
   });
 
   it("with a steady kick signal, Punchy kicks the zoom on each beat and Off does nothing", () => {

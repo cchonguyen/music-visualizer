@@ -6,6 +6,7 @@
 // result. Evaluation order lives in links.ts (Slice 17.4): base value, audio link, reaction, clamp to range.
 import type { AudioFrame } from '../audio/types';
 import type { ParamSpec } from './schema';
+import { flashGovernor as sharedFlashGovernor, type FlashGovernor } from '../render/safety';
 
 export const TRIGGER_TYPES = ['beat', 'strongBeat', 'everyNBeats', 'everyNSeconds', 'section', 'loudJump'] as const;
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
@@ -161,11 +162,20 @@ interface ReactionState {
   rand: () => number;
 }
 
+export interface ReactionEngineOptions {
+  /**
+   * Gate for kick reactions that target Post bloom. Defaults to the shared screen-wide governor, the same one
+   * the shockwave uses, so the whole screen stays within the flash limit.
+   */
+  flashGovernor?: FlashGovernor;
+}
+
 /** Runs a preset's reactions. One engine per preset; call update() once per frame, then apply() per control. */
 export class ReactionEngine {
   private reactions: readonly Reaction[] = [];
   private states: ReactionState[] = [];
   private seed: number;
+  private readonly governor: FlashGovernor;
 
   // Shared trigger state, advanced once per frame.
   private beatsSeen = 0;
@@ -175,8 +185,9 @@ export class ReactionEngine {
   private lastSectionFire = -Infinity;
   private lastJumpFire = -Infinity;
 
-  constructor(reactions: readonly Reaction[] = [], seed = 1) {
+  constructor(reactions: readonly Reaction[] = [], seed = 1, options: ReactionEngineOptions = {}) {
     this.seed = seed;
+    this.governor = options.flashGovernor ?? sharedFlashGovernor;
     this.setReactions(reactions);
   }
 
@@ -253,6 +264,8 @@ export class ReactionEngine {
       this.jumpArmed = true;
     }
 
+    // One flash decision per frame, shared by every bloom kick that fires on it.
+    let bloomGrant: boolean | undefined;
     for (let i = 0; i < n; i += 1) {
       const r = this.reactions[i]!;
       const s = this.states[i]!;
@@ -284,6 +297,12 @@ export class ReactionEngine {
         case 'loudJump':
           fired = jump;
           break;
+      }
+
+      // A bloom kick is a flash, so it must be granted by the flash limiter. A refused pulse is skipped, not delayed.
+      if (fired && r.response === 'kick' && r.target.group === 'post' && r.target.name === 'bloom') {
+        if (bloomGrant === undefined) bloomGrant = this.governor.tryFlash(timeSec);
+        fired = bloomGrant;
       }
 
       let k = approach(dtSec, r.ease);

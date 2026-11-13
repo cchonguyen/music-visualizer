@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { AudioFrame } from "../audio/types";
 import { parseReactions, ReactionEngine, seededRandom, type Reaction } from "./reactions";
+import { FlashGovernor, flashGovernor } from "../render/safety";
 import { FEEDBACK_SPECS, POST_SPECS } from "./layerSchemas";
 
 const SPECS = { feedback: FEEDBACK_SPECS, post: POST_SPECS };
@@ -230,5 +231,88 @@ describe("parseReactions", () => {
     expect(warnings).toHaveLength(5);
     expect(parseReactions("x", SPECS, [])).toEqual([]);
     expect(parseReactions(undefined, SPECS, [])).toEqual([]);
+  });
+});
+
+describe("bloom kicks and the flash limiter", () => {
+  const BLOOM = { min: 0, max: 2 };
+  const bloomKick = (over: Partial<Reaction> = {}) =>
+    react({ trigger: { type: "strongBeat" }, response: "kick", target: { group: "post", name: "bloom" }, amount: 0.2, ease: 0.3, ...over });
+  /** Strong beats every `gapSec` for `seconds`; returns the bloom value after each frame. */
+  function beatTrain(engine: ReactionEngine, gapSec: number, seconds: number, base = 0): number[] {
+    const out: number[] = [];
+    const frames = Math.round(seconds / DT);
+    const every = Math.round(gapSec / DT);
+    for (let i = 0; i < frames; i += 1) {
+      const isBeat = i % every === 0;
+      engine.update(frame({ onset: isBeat, onsetStrength: isBeat ? 0.9 : 0 }), i * DT, DT, 0);
+      out.push(engine.apply("post", "bloom", base, BLOOM));
+    }
+    return out;
+  }
+  /** Counts visible pulses: frames where the value jumps up. */
+  const pulses = (values: number[]) => values.filter((v, i) => v > (i === 0 ? 0 : values[i - 1]!) + 1e-9).length;
+
+  it("a fast beat train (strong beat every 0.1 s) shows at most 3 bloom pulses in one second", () => {
+    const e = new ReactionEngine([bloomKick()], 1, { flashGovernor: new FlashGovernor() });
+    expect(pulses(beatTrain(e, 0.1, 1))).toBe(3);
+  });
+
+  it("a refused pulse leaves the bloom value unchanged", () => {
+    const g = new FlashGovernor();
+    g.tryFlash(0);
+    const e = new ReactionEngine([bloomKick()], 1, { flashGovernor: g });
+    e.update(frame({ onset: true, onsetStrength: 0.9 }), 0.1, DT, 0);
+    expect(e.apply("post", "bloom", 0, BLOOM)).toBe(0);
+    e.update(frame({ onset: true, onsetStrength: 0.9 }), 0.2, DT, 0);
+    expect(e.apply("post", "bloom", 0.5, BLOOM)).toBe(0.5);
+  });
+
+  it("a granted pulse swells bloom from base 0 by 0.2 of the range (0.4)", () => {
+    const e = new ReactionEngine([bloomKick()], 1, { flashGovernor: new FlashGovernor() });
+    e.update(frame({ onset: true, onsetStrength: 0.9 }), 0, DT, 0);
+    expect(e.apply("post", "bloom", 0, BLOOM)).toBeCloseTo(0.4, 6);
+  });
+
+  it("non-bloom kick reactions are not gated by the flash limiter", () => {
+    const g = new FlashGovernor();
+    g.tryFlash(0);
+    const e = new ReactionEngine([react({ trigger: { type: "strongBeat" }, response: "kick", ease: 0.05 })], 1, { flashGovernor: g });
+    const zoomRises: number[] = [];
+    let prev = 1;
+    for (const t of [0, 0.1, 0.2]) {
+      e.update(frame({ onset: true, onsetStrength: 0.9 }), t, DT, 0);
+      const z = e.apply("feedback", "zoom", 1, ZOOM);
+      if (z > prev + 1e-9) zoomRises.push(t);
+      prev = z;
+      for (let k = 0; k < 5; k += 1) {
+        e.update(frame(), t + (k + 1) * DT, DT, 0);
+        prev = e.apply("feedback", "zoom", 1, ZOOM);
+      }
+    }
+    expect(zoomRises).toEqual([0, 0.1, 0.2]);
+  });
+
+  it("by default bloom kicks use the shared screen-wide governor", () => {
+    flashGovernor.reset();
+    const e = new ReactionEngine([bloomKick()], 1);
+    e.update(frame({ onset: true, onsetStrength: 0.9 }), 0, DT, 0);
+    expect(e.apply("post", "bloom", 0, BLOOM)).toBeCloseTo(0.4, 6);
+    expect(flashGovernor.tryFlash(0.1)).toBe(false);
+    flashGovernor.reset();
+  });
+
+  it("the sum of a preset's bloom and a bloom kick is clamped to the control maximum", () => {
+    const e = new ReactionEngine([bloomKick({ amount: 1 })], 1, { flashGovernor: new FlashGovernor() });
+    e.update(frame({ onset: true, onsetStrength: 0.9 }), 0, DT, 0);
+    expect(e.apply("post", "bloom", 1.9, BLOOM)).toBe(2);
+    expect(e.apply("post", "bloom", 0, BLOOM)).toBe(2);
+  });
+
+  it("leaves the preset's own bloomPulse control alone", () => {
+    const e = new ReactionEngine([bloomKick()], 1, { flashGovernor: new FlashGovernor() });
+    e.update(frame({ onset: true, onsetStrength: 0.9 }), 0, DT, 0);
+    expect(e.targets("post", "bloomPulse")).toBe(false);
+    expect(e.apply("post", "bloomPulse", 0.5, BLOOM)).toBe(0.5);
   });
 });
