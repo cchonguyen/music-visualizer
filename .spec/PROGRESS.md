@@ -46,8 +46,8 @@ Status 2026-11-13: slices 22.1 to 22.7 built and merged (PRs #324 to #330). Deta
 
 ## Stage 24 — Harness UI adoption (.spec/specs/roadmap/stage-24-harness-ui-adoption.md)
 Confirmed by Charlie, 2026-11-13. Slice lines (hub slices H24.2 to H24.4 (H24.1 dropped), spoke slices 24.1 to 24.10) are in that file. Slice lines are added here one at a time when started.
-Done: 24.1 (PR #340). Hub slices H24.2 to H24.4 dropped 2026-11-13: the profile path was already consistent, and the unused tokens are reference values.
-- [x] **Slice 24.2: Load the kit and set data-theme, data-accent and data-density; add empty src/app.css after style.css** Issue: #342 `[UI / VISUAL]` worker: engineer (Haiku) Target files: `index.html`, `popout.html`, `src/main.ts`, `src/studio/popoutMain.ts`, `src/app.css` [NEW] | Verify: npm run typecheck && npm test && npm run build
+Done: 24.1 (PR #340), 24.2 (PR #343). Hub slices H24.2 to H24.4 dropped 2026-11-13: the profile path was already consistent, and the unused tokens are reference values.
+- [ ] **Slice 24.3: Write design-system/profile.md and the Harness UI line in AGENTS.md** [IN_PROGRESS] Issue: #344 `[CORE / DATA]` worker: engineer (Haiku) Target files: `design-system/profile.md` [NEW], `AGENTS.md` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 23 — Polish after Stage 22 (.spec/specs/roadmap/stage-23-polish.md)
 Order (Charlie, 2026-11-13): 23.1, 23.2, 23.3, then 23.4 (a throwaway browser run, no repo change). Issues: #331 to #333.
