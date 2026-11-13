@@ -1,24 +1,24 @@
-# Session Handoff: Stage 23 built
+# Session Handoff: Stage 24 Harness UI adoption
 
 ## Last Active State
 - **Last Active Platform**: Claude Code (web)
-- **Branch**: `claude/project-thread-cvtfkr`, restarted from `main` after each merge.
-- **Active Task**: none. No `[IN_PROGRESS]` slice after 23.3 merges.
-- **Status**: Stage 22 (PRs #324 to #330) and Stage 23 slices 23.1 to 23.3 (issues #331 to #333) are built. 23.1 (#335) and 23.2 (#338) are merged. 23.3 is in its pull request.
+- **Branch**: `claude/project-thread-qj51zp`, restarted from `main` after each merge.
+- **Active Task**: none. No `[IN_PROGRESS]` slice.
+- **Status**: Stage 24 slices 24.1 to 24.7 and 24.9 are merged (PRs #340, #343, #345, #347, #351, #353, #355, #349). 24.8 was folded into 24.7. 24.10 is deferred.
 
 ## What changed (recent)
-- Stage 22: Phrase auto-cycle, kick zoom, strong-beat bloom in Punchy and Wild, energy tiers, and the pop-out Studio (`/popout.html`, BroadcastChannel `mv-studio-popout`). Charlie confirmed it works on the live site (2026-11-13).
-- 23.1: the pop-out host resends its snapshot within about 2 s when the preset list (ids and names) changes.
-- 23.2: optional per-preset `displaySec` (5 to 300 s). Timer mode uses it instead of the global interval for that preset. Beat and Phrase modes ignore it. Blend time already exists as the Transition "Crossfade" seconds, so no `blendSec`.
-- 23.3: Studio "Display time (s, 0 = auto-cycle timer)" slider after "Transition seconds". Values under 5 remove `displaySec`.
-- 23.4 (throwaway Playwright run on the built site, nothing committed, 2026-11-13): the pop-out opens, connects (hello, snapshot and heartbeat seen) and sends edits (3 seen after one change). The blocked-popup toast shows. The Pop out button fits at 360 and 480 px with no horizontal overflow. No page errors.
-- Finding from 23.4: buttons such as Duplicate inside the pop-out only change the pop-out's own headless session. They send no message to the visual window, so a list change cannot start from the pop-out. The 23.1 refresh is covered by unit tests only. Admin login from the pop-out was not tested.
+- The kit (`tokens.css`, `bundle.css`) loads before `style.css`, then `src/app.css`. `<html>` carries `data-theme="dark"`, `data-accent="azure"`, `data-density="comfortable"`.
+- The app's own accent and yellow focus tokens are gone. Accent is the kit's azure and focus is the kit's 2px outline.
+- Control bar buttons use `ui-btn ui-btn--ghost`. The experience-mode picker is a `ui-segmented` radiogroup with arrow keys. Close, dismiss and guide buttons use kit buttons. Emoji icons are inline SVG.
+- `design-system/profile.md` records the departures: dark lock, custom toast, dialog and HUD panels, Tweakpane, system fonts.
+- Hub slices H24.1 to H24.4 were dropped: no new blue (Charlie chose azure), the profile path was already consistent, the unused tokens are reference values.
 
 ## Open items
-1. Issue #295 is an automatic alarm about the pre-gate commit `df9939d3afa1`. It is informational.
-2. No lint script exists in the repo, so Verify lines omit lint.
-3. Decide whether pop-out Duplicate, rename and delete should reach the visual window (a Stage 24 candidate).
+1. Charlie reviews the live look (accent is a lighter azure, Start text is dark, bar is about 5px taller).
+2. The kit's hue table lists azure for Media Recommendation too. The hub README table could add Music Visualizer (hub change, not done).
+3. Slice 24.10 prune of `src/style.css` waits for that review. Still custom: pill group, source cards, HUD panels, `dialog#shortcuts`.
+4. Studio crown and warning emoji are unchanged.
 
 ## Next Steps
-1. Charlie tries per-preset Display time in Timer mode on the live site.
-2. Plan the next stage with `/triage`.
+1. Charlie reviews the live site.
+2. Then decide on slice 24.10 and any follow-up tweaks.
