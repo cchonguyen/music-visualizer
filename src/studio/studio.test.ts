@@ -33,7 +33,8 @@ import type { Vec3Spec } from '../presets/schema';
 import { LAYER_SPECS, POST_SPECS, tierOf } from '../presets/layerSchemas';
 import type { ParamSpec } from '../presets/schema';
 import { FEEDBACK_POST_LAYOUT, feedbackPostGroupOf, layoutFeedbackPost } from '../presets/schema';
-import { SCHEMAS } from '../presets/builtin';
+import { ALL_PRESETS, SCHEMAS } from '../presets/builtin';
+import { isMainSilent, NOOP_SCENE_HOST, POPOUT_WAITING_TEXT, readShownPreset } from './popoutMain';
 import { parsePreset } from '../presets/format';
 import { AdminGateway } from '../presets/adminGateway';
 import {
@@ -3259,5 +3260,141 @@ describe('warp editor helpers (Slice 18.4)', () => {
     expect(op.params.amount!.value).toBe(0.3);
     expect(describeWarpOperator(op, 1)).toBe('2. Tile and mirror');
     expect(describeWarpOperator({ ...op, enabled: false }, 0)).toBe('1. Tile and mirror (off)');
+  });
+});
+
+// Slice 22.6: edit hook for the pop-out window, and the pure helpers of popoutMain.ts.
+describe('Studio onEdit hook (Slice 22.6)', () => {
+  function bindingsOf(pane: any): any[] {
+    const out: any[] = [...pane.bindings];
+    for (const f of pane.folders) out.push(...bindingsOf(f.folder));
+    return out;
+  }
+
+  function editSession() {
+    const preset = {
+      name: 'Crown',
+      tags: [],
+      transition: { style: 'crossfade', seconds: 0.3 },
+      feedback: {},
+      post: {},
+      layers: [],
+    };
+    const entry = { id: 'crown', builtin: true, preset, savedJson: '{}' };
+    return {
+      get: vi.fn((id: string) => (id === 'crown' ? entry : undefined)),
+      list: vi.fn(() => [entry]),
+      listCategorized: vi.fn(() => ({
+        system: { showcase: [], flagship: [], classics: [entry] },
+        user: { folders: [], unfiled: [] },
+      })),
+      getFolders: vi.fn(() => []),
+      isDirty: () => false,
+      commit: vi.fn(),
+      save: vi.fn(),
+      saveAs: vi.fn(),
+      remove: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+      canUndo: () => false,
+      canRedo: () => false,
+      exportJson: () => '{}',
+      importAsset: () => ({ kind: 'preset', warnings: [] }),
+      sceneOf: () => ({ layers: [], setFeedback: vi.fn() }),
+      refreshPost: vi.fn(),
+      rebuild: vi.fn(),
+      monitorOf: () => undefined,
+    } as any;
+  }
+
+  it('calls onEdit with preset id, section, layer index, name and value when a control changes', () => {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+    const session = editSession();
+    let pane: any = null;
+    const onEdit = vi.fn();
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      onEdit,
+      paneFactory: () => (pane = createMockPane()),
+    });
+    studio.bind('crown');
+
+    const spec = SCHEMAS.feedback.find((s) => s.type === 'float')!;
+    const binding = bindingsOf(pane).find((b) => b.prop === spec.name)!;
+    expect(binding).toBeDefined();
+    binding.target[spec.name] = 0.25;
+    binding.fire('change', 0.25);
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledWith({
+      presetId: 'crown',
+      section: 'feedbackPost',
+      layerIndex: null,
+      name: spec.name,
+      value: 0.25,
+    });
+    expect(session.commit).toHaveBeenCalledWith('crown');
+  });
+
+  it('without onEdit a control change only commits, as before', () => {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+    const session = editSession();
+    let pane: any = null;
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory: () => (pane = createMockPane()),
+    });
+    studio.bind('crown');
+
+    const spec = SCHEMAS.feedback.find((s) => s.type === 'float')!;
+    const binding = bindingsOf(pane).find((b) => b.prop === spec.name)!;
+    binding.target[spec.name] = 0.25;
+    expect(() => binding.fire('change', 0.25)).not.toThrow();
+    expect(session.commit).toHaveBeenCalledWith('crown');
+  });
+
+  it('bindSection reports only primitive values to onEdit', () => {
+    const pane = createMockPane();
+    const spec = SCHEMAS.feedback.find((s) => s.type === 'float')!;
+    const settings: Record<string, any> = { [spec.name]: 0.5 };
+    const onEdit = vi.fn();
+    bindSection(pane, 'test', [spec], settings, undefined, undefined, undefined, onEdit);
+    const binding = bindingsOf(pane).find((b) => b.prop === spec.name)!;
+    binding.target[spec.name] = 0.75;
+    binding.fire('change', 0.75);
+    expect(onEdit).toHaveBeenCalledWith(spec, 0.75);
+  });
+});
+
+describe('popoutMain helpers (Slice 22.6)', () => {
+  it('treats the main window as silent when it has never spoken or is past the timeout', () => {
+    expect(isMainSilent(null, 1000)).toBe(true);
+    expect(isMainSilent(1000, 1000 + 5999)).toBe(false);
+    expect(isMainSilent(1000, 1000 + 6001)).toBe(true);
+    expect(POPOUT_WAITING_TEXT).toBe('Waiting for the visual window');
+  });
+
+  it('reads a valid shown-preset JSON and rejects anything else', () => {
+    const json = JSON.stringify(ALL_PRESETS[0]!.preset);
+    expect(readShownPreset(json, SCHEMAS)).not.toBeNull();
+    expect(readShownPreset('not json', SCHEMAS)).toBeNull();
+    expect(readShownPreset('{"name":"x"}', SCHEMAS)).toBeNull();
+  });
+
+  it('no-op scene host accepts every call and draws nothing', () => {
+    expect(() => {
+      NOOP_SCENE_HOST.setFadeSeconds(0.1);
+      NOOP_SCENE_HOST.setWeights({ a: 1 });
+      NOOP_SCENE_HOST.setPost({});
+      NOOP_SCENE_HOST.setTransition('crossfade');
+    }).not.toThrow();
   });
 });

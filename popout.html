@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Studio</title>
+    <meta name="theme-color" content="#111111" />
+    <style>
+      /* The pop-out window is the Studio: fill the window instead of the docked panel. */
+      html, body { margin: 0; height: 100%; }
+      body { overflow: hidden; }
+      #studio.studio { top: 0; right: 0; bottom: 0; left: 0; width: auto; max-width: none; border-radius: 0; border: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="studio" class="studio">
+      <div class="studio-head sheet-head">
+        <span class="studio-title">Studio</span>
+        <span id="popout-status" class="popout-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="studio-body"></div>
+    </div>
+    <script type="module" src="/src/studio/popoutMain.ts"></script>
+  </body>
+</html>

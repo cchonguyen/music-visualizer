@@ -54,10 +54,21 @@ import {
 
 export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES, ADMIN_BADGE_LABEL };
 
+/** One control change, reported through StudioOptions.onEdit. layerIndex is the index in preset.layers, or null outside layers. */
+export interface StudioEdit {
+  presetId: string;
+  section: string;
+  layerIndex: number | null;
+  name: string;
+  value: number | boolean | string;
+}
+
 export interface StudioOptions {
   session: PresetSession;
   /** Make a preset the one on screen (main.ts keeps the key handling and the toast). */
   switchTo: (id: string) => void;
+  /** Called after a control changes. Used by the pop-out (slice 22.6). Unset in the main window, so nothing changes there. */
+  onEdit?: (edit: StudioEdit) => void;
   /** Latest frame time in ms, for the readout. */
   frameMs?: () => number;
   /** Live link value (0..1) for a key `${presetId}L${layerIndexAmongEnabled}.${name}` or `${presetId}F.${name}`. */
@@ -1149,7 +1160,7 @@ export class Studio {
       this.bindSection(pane, title, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
         const current = session.sceneOf(id).layers[k];
         if (current) applyValues(current, valuesOf(layerEntry.params));
-      });
+      }, { section: 'layer', layerIndex: i });
     }
     // Slice 15.2: Feedback and Post share one section with four groups (Motion, Warp, Trails, Colour).
     const postNames = new Set(SCHEMAS.post.map((s) => s.name));
@@ -1162,6 +1173,7 @@ export class Studio {
         session.sceneOf(id).setFeedback(valuesOf(preset.feedback));
         session.refreshPost(id);
       },
+      { section: 'feedbackPost', layerIndex: null },
     );
 
     // --- Warp field operators (Slice 18.4) ----------------------------------------------
@@ -1328,7 +1340,7 @@ export class Studio {
       live();
       onEdit();
     });
-    this.bindSection(pane, `Warp operator ${this.warpIndex + 1}: ${WARP_OP_LABELS[op.type]}`, warpOpSpecs(op.type), op.params, live);
+    this.bindSection(pane, `Warp operator ${this.warpIndex + 1}: ${WARP_OP_LABELS[op.type]}`, warpOpSpecs(op.type), op.params, live, { section: `warp${this.warpIndex}`, layerIndex: null });
     pane.addButton({ title: 'Remove warp operator' }).on('click', () => {
       session.commit(id);
       list.splice(this.warpIndex, 1);
@@ -1455,7 +1467,15 @@ export class Studio {
     });
   }
 
-  private bindSection(pane: Pane, title: string, specs: readonly ParamSpec[], settings: Settings, apply: () => void): void {
+  private bindSection(
+    pane: Pane,
+    title: string,
+    specs: readonly ParamSpec[],
+    settings: Settings,
+    apply: () => void,
+    edit: { section: string; layerIndex: number | null },
+  ): void {
+    const onEdit = this.opts.onEdit;
     const res = bindSection(
       pane,
       title,
@@ -1464,6 +1484,9 @@ export class Studio {
       apply,
       () => this.opts.session.commit(this.id),
       (spec) => renderHelperContent(this.helperBar, spec),
+      onEdit
+        ? (spec, value) => onEdit({ presetId: this.id, section: edit.section, layerIndex: edit.layerIndex, name: spec.name, value })
+        : undefined,
     );
     if (res.folders) {
       this.sectionFolders.push(...res.folders);
@@ -2011,6 +2034,7 @@ export function bindSection(
   apply?: () => void,
   onCommit?: () => void,
   onHelperUpdate?: (spec: ParamSpec | null) => void,
+  onEdit?: (spec: ParamSpec, value: number | boolean | string) => void,
 ): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void; folders: any[] } {
   if (specs.length === 0) return { specBindings: [], updateVisibility: () => {}, folders: [] };
   const folders: any[] = [];
@@ -2113,6 +2137,10 @@ export function bindSection(
         }
         updateVisibility();
         apply?.();
+        const value = holder[spec.name];
+        if (onEdit && (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string')) {
+          onEdit(spec, value);
+        }
       };
       const binding = bindSpec(target, spec.label, spec, holder, push, onHelperUpdate);
       const blades = Array.isArray(binding) ? binding : [binding];
