@@ -10,7 +10,7 @@ import { LAYER_FACTORIES, applyPresetToScene, applyValues, readWarpOps, valuesOf
 import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, clampDisplaySec, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { MAX_LAYER_SEED, applyMashup, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
@@ -956,6 +956,15 @@ export class Studio {
       options: Object.fromEntries(TRANSITION_STYLES.map((t) => [t, t])),
     }).on('change', () => session.commit(id));
     pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 }).on('change', () => session.commit(id));
+    // Display time (slice 23.3): 0 means auto-cycle timer. Values below the minimum remove the stored field.
+    const displayHolder = { displaySec: preset.displaySec ?? 0 };
+    pane.addBinding(displayHolder, 'displaySec', { label: 'Display time (s, 0 = auto-cycle timer)', min: 0, max: PRESET_DISPLAY_MAX_SEC, step: 1 }).on('change', (ev) => {
+      const value = Number(ev.value);
+      const clamped = clampDisplaySec(value);
+      if (value < PRESET_DISPLAY_MIN_SEC || clamped === undefined) delete preset.displaySec;
+      else preset.displaySec = clamped;
+      session.commit(id);
+    });
     // Action buttons share one grid wrapper (slice 10.2). Each button's element is collected, then moved into the wrapper below.
     const tiles: HTMLElement[] = [];
     const tile = <T extends ButtonApi>(btn: T): T => {
