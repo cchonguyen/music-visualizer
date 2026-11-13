@@ -1,6 +1,9 @@
 // App entry: start screen → AudioEngine (inside the click) → GlHost with the scenes
 // and layers → debug panel and controls.
+import '../.harness/design-system/tokens.css';
+import '../.harness/design-system/bundle.css';
 import './style.css';
+import './app.css';
 import { AudioEngine } from './audio/engine';
 import { estimateLatencyMs } from './audio/latency';
 import type { AudioFrame } from './audio/types';
