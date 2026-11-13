@@ -8,6 +8,7 @@ import {
   PREPARE_LEAD_SEC,
   clampInterval,
   eligible,
+  effectiveCycleOptions,
   loadCycleSettings,
   phraseBarsOf,
   saveCycleSettings,
@@ -342,5 +343,33 @@ describe('phrase mode (Slice 22.1)', () => {
     const target = opts({});
     loadCycleSettings(target, storeWith(JSON.stringify({ mode: 'phrase', phraseBars: 5 })));
     expect(phraseBarsOf(target)).toBe(8);
+  });
+});
+
+describe('effectiveCycleOptions (Slice 23.2)', () => {
+  it('uses the display time as the timer length in timer mode', () => {
+    expect(effectiveCycleOptions(opts({ mode: 'timer', intervalSec: 20 }), 10).intervalSec).toBe(10);
+  });
+
+  it('ignores the display time in beat and phrase modes', () => {
+    const beat = opts({ mode: 'beat', intervalSec: 20 });
+    const phrase = opts({ mode: 'phrase', intervalSec: 20 });
+    expect(effectiveCycleOptions(beat, 10)).toBe(beat);
+    expect(effectiveCycleOptions(phrase, 10)).toBe(phrase);
+  });
+
+  it('returns the options unchanged when there is no display time', () => {
+    const timer = opts({ mode: 'timer', intervalSec: 20 });
+    expect(effectiveCycleOptions(timer, undefined)).toBe(timer);
+  });
+
+  it('switches after the preset display time, not the global interval', () => {
+    const pool = ['a', 'b', 'c'];
+    const c = new AutoCycler();
+    const global = opts({ mode: 'timer', intervalSec: 20 });
+    const o = effectiveCycleOptions(global, 10);
+    expect(c.next(5, false, 'a', pool, o)).toBeNull();
+    expect(c.next(4.9, false, 'a', pool, o)).toBeNull();
+    expect(c.next(0.2, false, 'a', pool, o)).toBe('b');
   });
 });

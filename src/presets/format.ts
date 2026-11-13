@@ -86,10 +86,28 @@ export function isPresetMood(value: unknown): value is PresetMood {
   return typeof value === "string" && (PRESET_MOODS as readonly string[]).includes(value);
 }
 
+/** Slice 23.2: per-preset display time in Timer mode, in seconds. Missing means the global timer. */
+export const PRESET_DISPLAY_MIN_SEC = 5;
+export const PRESET_DISPLAY_MAX_SEC = 300;
+
+/** A finite number clamped to 5..300 and rounded to 0.1 s. Anything else gives undefined. */
+export function clampDisplaySec(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const clamped = Math.min(PRESET_DISPLAY_MAX_SEC, Math.max(PRESET_DISPLAY_MIN_SEC, value));
+  return Math.round(clamped * 10) / 10;
+}
+
+/** The preset's display time in seconds (clamped), or undefined when it uses the global timer. */
+export function presetDisplaySec(preset: { displaySec?: number } | undefined): number | undefined {
+  return clampDisplaySec(preset?.displaySec);
+}
+
 export interface Preset {
   version: typeof PRESET_VERSION;
   name: string;
   tags: string[];
+  /** Slice 23.2: how long this preset shows in Timer mode, 5..300 s. Missing means the global timer. */
+  displaySec?: number;
   /** Slice 20.7: what the preset is mostly about. Missing means untagged. */
   theme?: PresetTheme;
   /** Slice 20.7: how the preset feels. Missing means untagged. */
@@ -385,12 +403,16 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
   const mood = isPresetMood(raw.mood) ? raw.mood : undefined;
   if (raw.mood !== undefined && !mood) warnings.push(`mood: unknown mood "${String(raw.mood)}", ignored`);
 
+  const displaySec = clampDisplaySec(raw.displaySec);
+  if (raw.displaySec !== undefined && displaySec === undefined) warnings.push(`displaySec: not a number, ignored`);
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
     tags,
     ...(theme ? { theme } : {}),
     ...(mood ? { mood } : {}),
+    ...(displaySec !== undefined ? { displaySec } : {}),
     transition,
     feedback,
     layers,

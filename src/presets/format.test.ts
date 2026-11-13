@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePreset, PresetFormatError, PRESET_VERSION, type SchemaRegistry } from "./format";
+import { parsePreset, presetDisplaySec, PresetFormatError, PRESET_VERSION, type SchemaRegistry } from "./format";
 import type { ParamSpec } from "./schema";
 
 const zoom: ParamSpec = { type: "float", name: "zoom", label: "Zoom", group: "Feedback", default: 1, min: 0.5, max: 2, step: 0.01 };
@@ -306,5 +306,49 @@ describe("preset theme and mood (Slice 20.7)", () => {
     const again = parsePreset(JSON.parse(JSON.stringify(first)), registry).preset;
     expect(again.theme).toBe("orbit");
     expect(again.mood).toBe("calm");
+  });
+});
+
+describe("parsePreset: per-preset display time (Slice 23.2)", () => {
+  it("keeps a valid displaySec", () => {
+    const { preset, warnings } = parsePreset({ ...minimal, displaySec: 42 }, registry);
+    expect(preset.displaySec).toBe(42);
+    expect(warnings).toEqual([]);
+  });
+
+  it("clamps displaySec to 5 and 300 and rounds to 0.1", () => {
+    expect(parsePreset({ ...minimal, displaySec: 1 }, registry).preset.displaySec).toBe(5);
+    expect(parsePreset({ ...minimal, displaySec: 9999 }, registry).preset.displaySec).toBe(300);
+    expect(parsePreset({ ...minimal, displaySec: 12.34 }, registry).preset.displaySec).toBe(12.3);
+  });
+
+  it("drops a non-number or non-finite displaySec with a warning", () => {
+    for (const bad of ["20", NaN, Infinity, null, true]) {
+      const { preset, warnings } = parsePreset({ ...minimal, displaySec: bad }, registry);
+      expect(preset).not.toHaveProperty("displaySec");
+      expect(warnings).toContain("displaySec: not a number, ignored");
+    }
+  });
+
+  it("keeps an absent displaySec absent", () => {
+    const { preset } = parsePreset(minimal, registry);
+    expect(preset).not.toHaveProperty("displaySec");
+  });
+
+  it("round-trips through JSON", () => {
+    const first = parsePreset({ ...minimal, displaySec: 60 }, registry).preset;
+    const second = parsePreset(JSON.parse(JSON.stringify(first)), registry).preset;
+    expect(second).toEqual(first);
+  });
+});
+
+describe("presetDisplaySec (Slice 23.2)", () => {
+  it("returns the clamped value or undefined", () => {
+    expect(presetDisplaySec({ displaySec: 2 })).toBe(5);
+    expect(presetDisplaySec({ displaySec: 30 })).toBe(30);
+    expect(presetDisplaySec({ displaySec: 1000 })).toBe(300);
+    expect(presetDisplaySec({})).toBeUndefined();
+    expect(presetDisplaySec({ displaySec: NaN })).toBeUndefined();
+    expect(presetDisplaySec(undefined)).toBeUndefined();
   });
 });

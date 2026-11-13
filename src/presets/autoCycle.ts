@@ -184,6 +184,15 @@ export const CYCLE_STORAGE_KEY = 'mv.autoCycle';
 export const MIN_INTERVAL_SEC = 5;
 export const MAX_INTERVAL_SEC = 120;
 
+/**
+ * Slice 23.2: the options for this preset's own display time. Only Timer mode uses it: with a display time
+ * the timer length becomes that time. Beat and Phrase modes, and no display time, return opts unchanged.
+ */
+export function effectiveCycleOptions(opts: CycleOptions, displaySec: number | undefined): CycleOptions {
+  if (displaySec === undefined || opts.mode !== 'timer') return opts;
+  return { ...opts, intervalSec: displaySec };
+}
+
 /** Keeps the timer length inside 5 to 120 s. A non-number gives the default. */
 export function clampInterval(sec: unknown): number {
   if (typeof sec !== 'number' || !Number.isFinite(sec)) return DEFAULT_CYCLE.intervalSec;

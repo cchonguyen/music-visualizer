@@ -22,7 +22,8 @@ import { applyLinkedPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES, presetHasR
 import { migrateLegacyLayerToShape } from './presets/legacyShapeMigration';
 import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
 import { LinkRunner, ReactionBank } from './presets/links';
-import { AutoCycler, DEFAULT_CYCLE, eligible, loadCycleSettings, phraseBarsOf, saveCycleSettings, type CycleOptions } from './presets/autoCycle';
+import { AutoCycler, DEFAULT_CYCLE, eligible, effectiveCycleOptions, loadCycleSettings, phraseBarsOf, saveCycleSettings, type CycleOptions } from './presets/autoCycle';
+import { presetDisplaySec } from './presets/format';
 import { advanceSway } from './render/swayStore';
 import { advanceCrown } from './render/crownStore';
 import { cycleIndex, indexForDigit, readStoredPresetId, safeStorage, storePresetId, stepForKey } from './presets/library';
@@ -871,7 +872,9 @@ function start(): void {
       const pool = eligible(session.list().map((e) => ({ id: e.id, tags: e.preset.tags, cost: presetCost(e.preset).level })), cycleOpts);
       const strongBeat = frame.beat && frame.beatStrength >= 0.8;
       // A few seconds before a switch, compile the next preset while it is still hidden (Slice 16.3).
-      const upcoming = cycler.upcoming(shownId, pool, cycleOpts, undefined, frame);
+      // Slice 23.2: a preset's own display time replaces the timer length (Timer mode only).
+      const shownCycleOpts = effectiveCycleOptions(cycleOpts, presetDisplaySec(session.get(shownId)?.preset));
+      const upcoming = cycler.upcoming(shownId, pool, shownCycleOpts, undefined, frame);
       if (upcoming && upcoming !== preparedId && compositor) {
         preparedId = upcoming;
         session.sceneOf(upcoming);
@@ -879,7 +882,7 @@ function start(): void {
       } else if (!upcoming) {
         preparedId = null;
       }
-      const pick = cycler.next(dtSec, strongBeat, shownId, pool, cycleOpts, frame);
+      const pick = cycler.next(dtSec, strongBeat, shownId, pool, shownCycleOpts, frame);
       if (pick) switchShown(pick);
     }
     // Audio links (E2): the shown preset's linked settings follow the music, once per frame.
