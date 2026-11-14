@@ -74,7 +74,7 @@
     --glow-accent: 0 0 0 1px rgba(116,51,203,0.35);
   }
 }
-:root[data-theme="light"] {
+[data-theme="light"] {
   color-scheme: light;
   --bg: #fafafa;
   --surface: #ffffff;
@@ -93,11 +93,9 @@
   --neon-azure: #0063cd;
   --neon-cyan: #0b7285;
   --neon-lime: #4d7c0f;
-  --accent: var(--neon-violet);
   --accent-strong: #4a31b8;
   --accent-tint: #f0edfd;
   --on-accent: #ffffff;
-  --focus: var(--accent);
   --good: #0b7a5c;
   --good-tint: #e4f6ef;
   --warn: #8a4b08;
