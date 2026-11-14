@@ -18,6 +18,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
   --mid-text:color-mix(in oklch,var(--accent) 50%,var(--text));
   --glow-accent:0 0 0 1px color-mix(in oklch,var(--accent) 50%,transparent),0 0 24px color-mix(in oklch,var(--accent) 28%,transparent);
 }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"])[data-accent]:not([data-accent="violet"]) { --glow-accent: 0 0 0 1px color-mix(in oklch, var(--accent) 35%, transparent); } }
+[data-theme="light"][data-accent]:not([data-accent="violet"]) { --glow-accent: 0 0 0 1px color-mix(in oklch, var(--accent) 35%, transparent); }
 
 /* Density: <html data-density="comfortable|compact">. Comfortable is the default. */
 :root{--pad-card:var(--space-4)}

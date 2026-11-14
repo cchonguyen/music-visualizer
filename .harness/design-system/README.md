@@ -202,7 +202,7 @@ A modal surface: a centred card from 640 px up and a bottom sheet below it.
 You provide the title, the body, and the footer buttons. You also provide the behaviour: move focus inside on open, trap Tab, close on Escape and on a press outside, and return focus to the opener.
 
 - Markup is `ui-scrim` wrapping `ui-dialog`, with `ui-dialog__head`, `__body` and `__foot`.
-- The title is set in the display face. It is the one place inside a component where the display face appears.
+- The title is set in the display face. It is the one place inside a floating component where the display face appears.
 - Use `role="dialog"` with `aria-modal="true"`. A confirmation uses `role="alertdialog"`.
 - A confirmation is only for what cannot be undone. Its title is a question, its body says what is lost and what is kept, and its button names the action. The safe choice is the ghost button on the left.
 - On phones the same markup becomes a sheet: full width, top corners at `radius-dialog`, bottom padding for the safe area, at most 90% of the screen height.
@@ -240,12 +240,17 @@ Set `data-accent` and `data-density` once on `<html>`, for example `<html data-a
 | --- | --- | --- | --- |
 | AppShell | `ui-shell` | `data-shell="minimal"` with `ui-topbar`; parts `ui-sidebar`, `ui-main` (`ui-main--bleed`), `ui-tabbar`, `ui-nav-item`, `ui-tab` | `aria-current="page"` on the current destination, in the sidebar and the tab bar alike |
 | Button | `ui-btn` | `--primary`, `--ghost`, `--danger`; `ui-icon-btn` (`--dismiss`); `ui-link` | `type="button"`; an icon-only control needs `aria-label` and `title` |
+| Card | `ui-card`, `surface-card` | `--glow` | none |
+| Control pair | `ui-control-pair` | none | none |
 | Dialog | `ui-scrim` around `ui-dialog` | parts `__head`, `__title`, `__body`, `__foot` | `role="dialog"` or `"alertdialog"`, `aria-modal="true"`, `aria-labelledby` |
 | Field | `ui-field` | `ui-input`, `ui-textarea`, `ui-select` in `ui-select-wrap`, `ui-check`, `ui-switch`, `ui-segmented`; `ui-help` (`--bad`) | label `for` matches input `id`; invalid sets `aria-invalid="true"` and `aria-describedby`; a switch sets `role="switch"` and shows On or Off in `ui-switch__state`; a segmented control is `role="radiogroup"` with `role="radio"` and `aria-checked` options |
 | Menu | `ui-menu` | `ui-menu-item`, `ui-menu-item__hint`, `ui-menu__rule` | trigger has `aria-haspopup` and `aria-expanded`; list is `role="listbox"`, rows `role="option"` with `aria-selected` |
 | Notice | `ui-notice` | `--good`, `--warn`, `--bad`; part `__body`, `__actions` | `role="alert"` for warn and bad, `role="status"` for the rest |
 | Pill | `ui-pill` | `--mid`, `--active`, `--good`, `--warn`, `--bad` | a word, and an icon on every state pill |
 | Popover | `ui-popover` | none | `role="dialog"` and `aria-label`; trigger has `aria-expanded` |
+| Surface well | `surface-well` | `--tight` | none |
+| Table | `ui-table` | none | none |
+| Table scroll | `table-scroll` | none | none |
 | Toast | `ui-toast` inside `ui-toasts` | parts `__msg`, `__action` | `ui-toasts` is `aria-live="polite"`; each toast is `role="status"` |
 
 ## Core rules, condensed
