@@ -2,7 +2,7 @@
 import { BLEND_MODES, parsePreset, type Preset, type PresetMood, type PresetTheme, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
 import { migrateWaveformsInPreset } from '../legacyShapeMigration';
-import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, POST_CRT_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
+import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
 import bars from './bars.json';
@@ -86,13 +86,6 @@ const waveformSpecs = LAYER_SPECS.waveform;
 const waveformModeSpec = waveformSpecs?.find((s) => s.name === 'mode') as EnumSpec | undefined;
 if (waveformModeSpec && !waveformModeSpec.options.includes('star7')) {
   waveformModeSpec.options = [...waveformModeSpec.options, 'star7', 'lissajous'];
-}
-
-// Extend post schema with CRT scanlines and barrel distortion
-for (const spec of POST_CRT_SPECS) {
-  if (!POST_SPECS.some((s) => s.name === spec.name)) {
-    (POST_SPECS as ParamSpec[]).push(spec);
-  }
 }
 
 // Allow low decay values down to 0.0 for flagships (07 uses 0.25, 08 uses 0.15)

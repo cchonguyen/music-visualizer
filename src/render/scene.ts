@@ -43,7 +43,6 @@ export const FEEDBACK_WARP_DEFAULTS = {
   radialFold: 0.0,
   mandalaTile: 0.0,
   mandalaCounterSpin: 0.25,
-  mandalaKickFlare: 0.35,
   mandalaPattern: 'auto',
   contourFreq: 7.85,
   contourWidth: 0.45,
@@ -60,7 +59,7 @@ const UNIFORMS = [
   'uWarpMode', 'uKaleidoN', 'uPortalRadius', 'uRgbSplit', 'uDecayRgb', 'uSobel', 'uSolarize',
   'uSolarizePhase', 'uMobiusPoleOffset', 'uWarpAmp',
   'uCurlOctaves', 'uCurlTurbulence', 'uCurlFlowPattern',
-  'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin', 'uMandalaKickFlare',
+  'uRadialFold', 'uMandalaTile', 'uMandalaCounterSpin',
   'uContourFreq', 'uContourWidth', 'uColorSpread',
   'uMobiusPoleA', 'uMobiusPoleB', 'uMobiusFlow', 'uMobiusSwirl', 'uMobiusMode',
   'uHigh', 'uField', 'uWarpFieldOn',
@@ -610,7 +609,6 @@ export class Scene {
     gl.uniform1f?.(this.loc('uRadialFold')!, Number(this.fb.radialFold ?? 0.0));
     gl.uniform1f?.(this.loc('uMandalaTile')!, Number(this.fb.mandalaTile ?? 0.0));
     gl.uniform1f?.(this.loc('uMandalaCounterSpin')!, Number(this.fb.mandalaCounterSpin ?? 0.25));
-    gl.uniform1f?.(this.loc('uMandalaKickFlare')!, Number(this.fb.mandalaKickFlare ?? 0.35));
 
     // Slice 7.22 Solarize uniforms:
     gl.uniform1f?.(this.loc('uContourFreq')!, Number(this.fb.contourFreq ?? 7.85));

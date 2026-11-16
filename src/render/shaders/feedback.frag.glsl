@@ -49,7 +49,6 @@ uniform int uCurlFlowPattern;   // 0: plumes, 1: eddies, 2: outflow, 3: inflow
 uniform float uRadialFold;      // 0.0..1.0, default 0.0
 uniform float uMandalaTile;     // 0.0..1.0, default 0.0
 uniform float uMandalaCounterSpin; // -1.0..1.0, default 0.25
-uniform float uMandalaKickFlare;// 0.0..1.0, default 0.35
 
 uniform float uContourFreq;     // 2.0..16.0, default 7.85
 uniform float uContourWidth;    // 0.1..1.0, default 0.45
