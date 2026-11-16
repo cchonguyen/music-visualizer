@@ -1,9 +1,9 @@
 {
   "schemaVersion": "2.2",
-  "updatedAt": "2026-11-08T13:13:58.012Z",
+  "updatedAt": "2026-11-16T22:23:44.421Z",
   "projectId": "music-visualizer",
-  "worktreeId": "consolidate_hud_popups",
-  "branch": "hardened_ci_cd_deployment_guardrails",
+  "worktreeId": "visual_improvements_tooltips_audit",
+  "branch": "stage-25-spec",
   "currentIntent": "Hardened CI/CD Deployment Guardrails and Worktree Isolation",
   "stage": "Claimed",
   "pendingDecisions": [],
