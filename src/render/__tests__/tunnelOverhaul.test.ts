@@ -129,7 +129,7 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
       expect(TUNNEL_DEFAULTS.wallTexture).toBe(0.55);
       expect(TUNNEL_DEFAULTS.zoomPunch).toBe(0.0);
       expect(TUNNEL_DEFAULTS.swirlPulse).toBe(0.35);
-      expect(TUNNEL_DEFAULTS.horizonDrift).toBe(0.40);
+      expect(TUNNEL_DEFAULTS).not.toHaveProperty('horizonDrift');
       expect(TUNNEL_DEFAULTS.texture).toBe(false);
 
       const flightModeSpec = TUNNEL_SPECS.find(s => s.name === 'flightMode');
@@ -152,7 +152,7 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
       expect(swirlPulseSpec?.type).toBe('float');
 
       const horizonDriftSpec = TUNNEL_SPECS.find(s => s.name === 'horizonDrift');
-      expect(horizonDriftSpec?.type).toBe('float');
+      expect(horizonDriftSpec).toBeUndefined();
     });
   });
 
@@ -276,7 +276,7 @@ describe('Tunnel Overhaul (Slice 7.21)', () => {
 
     it('locks vanishing point dead-center with zero drift', () => {
       const state = new TunnelState({ vanishX: 0 });
-      stepTunnel(state, { norm: { sub: 0.5 } }, 0.5, { horizonDrift: 0.6 });
+      stepTunnel(state, { norm: { sub: 0.5 } }, 0.5, {});
       expect(state.horizonSwayPhase).toBeCloseTo(0.5 * (0.45 + 0.5 * 0.85), 3);
       expect(state.vanishX).toBe(0);
       expect(state.vanishY).toBe(0);

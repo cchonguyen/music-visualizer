@@ -21,7 +21,6 @@ export interface TunnelParams {
   wallTexture: number;
   zoomPunch: number;
   swirlPulse: number;
-  horizonDrift: number;
   beatReactivity?: number;
 }
 
@@ -41,7 +40,6 @@ export const TUNNEL_DEFAULTS: TunnelParams = {
   wallTexture: 0.55,
   zoomPunch: 0.0,
   swirlPulse: 0.35,
-  horizonDrift: 0.40,
   beatReactivity: 0.5,
 };
 
@@ -61,7 +59,6 @@ export const TUNNEL_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'wallTexture', label: 'Cosmic star-streaks & wall glow', group: 'Texture', default: TUNNEL_DEFAULTS.wallTexture, min: 0, max: 1, step: 0.05, description: 'Adjusts cosmic star-streak density and ambient wall glow luminescence.' },
   { type: 'float', name: 'zoomPunch', label: 'Kick FOV warp & depth ripple', group: 'Motion', default: TUNNEL_DEFAULTS.zoomPunch, min: 0, max: 1, step: 0.05, description: 'Modulates kick drum field-of-view shock compression.' },
   { type: 'float', name: 'swirlPulse', label: 'Mid corkscrew swirl', group: 'Motion', default: TUNNEL_DEFAULTS.swirlPulse, min: 0, max: 1, step: 0.05, description: 'Couples mid-frequency energy into rotational corkscrew swirling.' },
-  { type: 'float', name: 'horizonDrift', label: 'Bass horizon curve sway', group: 'Motion', default: TUNNEL_DEFAULTS.horizonDrift, min: 0, max: 1, step: 0.05, description: 'Sways tunnel horizon alignment based on sub-bass oscillations.' },
   { type: 'float', name: 'beatReactivity', label: 'Beat glow & pulse', group: 'Beat', default: TUNNEL_DEFAULTS.beatReactivity ?? 0.5, min: 0, max: 2, step: 0.05, description: 'Scales visual pulsation and glow sensitivity to musical beats.' },
 ];
 export const TUNNEL_SCHEMA = TUNNEL_SPECS;
@@ -84,6 +81,7 @@ export interface ParticleParams {
   count: number; // 50..4000: how many particles (600 = as before); thinned on weaker devices
   spawnArea: string; // centre | ring | fullScreen | edges
   twinkleRate: number; // 0..3: multiplies twinkle speed (1 = as before)
+  terrainDisplace?: number; // 0..1: rides the spectral terrain height
   twinkleDepth: number; // 0..1: how far a twinkle dims a particle (0.55 = as before)
 }
 
@@ -106,6 +104,7 @@ export const PARTICLE_DEFAULTS: ParticleParams = {
   spawnArea: 'centre',
   twinkleRate: 1,
   twinkleDepth: 0.55,
+  terrainDisplace: 0,
 };
 
 export const PARTICLE_SPECS: readonly ParamSpec[] = [
@@ -127,6 +126,7 @@ export const PARTICLE_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'spawnArea', label: 'Spawn area', group: 'Motion', default: PARTICLE_DEFAULTS.spawnArea, options: ['centre', 'ring', 'fullScreen', 'edges'], description: 'Chooses where particles are born: the centre, a ring, anywhere on screen, or the screen edges.' },
   { type: 'float', name: 'twinkleRate', label: 'Twinkle speed', group: 'Sparkle', default: PARTICLE_DEFAULTS.twinkleRate, min: 0, max: 3, step: 0.05, description: 'Multiplies how fast particles twinkle. 0 stops the twinkle.' },
   { type: 'float', name: 'twinkleDepth', label: 'Twinkle depth', group: 'Sparkle', default: PARTICLE_DEFAULTS.twinkleDepth, min: 0, max: 1, step: 0.01, description: 'Sets how far a twinkle dims a particle. 0 is steady, 1 blinks fully off.' },
+  { type: 'float', name: 'terrainDisplace', label: 'Ride spectral terrain', group: 'Motion', default: PARTICLE_DEFAULTS.terrainDisplace ?? 0, min: 0, max: 1, step: 0.05, description: 'Lifts particles along the spectral terrain height field. 0 leaves them flat.' },
 ];
 export const PARTICLES_SCHEMA = PARTICLE_SPECS;
 
@@ -142,13 +142,11 @@ export const BASS_PULSE_SPECS: readonly ParamSpec[] = [
 
 export interface CrownParams {
   /** How far the sway moves the crown centre, as a share of its full size (1 = full sway). */
-  rimFactor: number;
   texture: boolean; // band texture (6.4): bar light from mid (angle)
   textureGain: number; // 0..2, how strongly the band texture modulates
   size?: number;
 }
 export const CROWN_DEFAULTS: CrownParams = {
-  rimFactor: 1 - 0.16,
   size: 2.0,
   texture: true,
   textureGain: 1,
@@ -169,7 +167,6 @@ export const CROWN_SIZE_SPEC = {
 };
 
 export const CROWN_SPECS: readonly ParamSpec[] = [
-  { type: 'float', name: 'rimFactor', label: 'Sway amount on rim', group: 'Position', default: CROWN_DEFAULTS.rimFactor, min: 0, max: 1, step: 0.01, description: 'Controls how far radial sway displaces the crown rim relative to its radius.' },
   CROWN_SIZE_SPEC,
   { type: 'bool', name: 'texture', label: 'Band texture on', group: 'Texture', default: CROWN_DEFAULTS.texture, description: 'Enables mid-band angular texture modulation on crown bars.' },
   { type: 'float', name: 'textureGain', label: 'Texture strength', group: 'Texture', default: CROWN_DEFAULTS.textureGain, min: 0, max: 2, step: 0.01, description: 'Scales the strength of mid-frequency texture modulation.' },

@@ -235,6 +235,9 @@ function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink |
   return link;
 }
 
+/** Retired layer params (Tunnel.horizonDrift, Crown.rimFactor): dropped silently so old presets load identically. */
+const REMOVED_LAYER_SETTINGS: readonly string[] = ["horizonDrift", "rimFactor", "mandalaKickFlare"];
+
 /** Fills every known setting (defaults for missing ones), and reports unknown or bad ones. */
 function parseSettings(raw: unknown, specs: readonly ParamSpec[], where: string, warnings: string[], removed: readonly string[] = []): Settings {
   if (raw !== undefined && !isRecord(raw)) warnings.push(`${where}: expected an object, using defaults`);
@@ -362,7 +365,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
       opacity: opacity.value as number,
       blend: blendValue,
       trails: (trails.value as boolean) ?? true,
-      params: parseSettings(rawLayer.params, specs, `${where}.params`, warnings),
+      params: parseSettings(rawLayer.params, specs, `${where}.params`, warnings, REMOVED_LAYER_SETTINGS),
     });
   });
 
