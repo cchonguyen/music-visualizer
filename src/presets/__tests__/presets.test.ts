@@ -168,8 +168,8 @@ describe('Flagship Presets 01–06 (Slice 7.12)', () => {
     expect(waveLayer).toBeDefined();
     expect(waveLayer.params.baseShape?.value).toBe('figure8');
     expect(waveLayer.params.thickness?.value).toBe(2.2);
-    expect(p6.post.crtScanlines?.value).toBe(0.25);
-    expect(p6.post.crtBarrel?.value).toBe(0.08);
+    expect(p6.post).not.toHaveProperty('crtScanlines');
+    expect(p6.post).not.toHaveProperty('crtBarrel');
     expect(p6.post.bloom?.value).toBe(0.7);
   });
 

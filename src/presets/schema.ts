@@ -154,7 +154,7 @@ export const FEEDBACK_POST_LAYOUT: Readonly<Record<string, readonly string[]>> =
   Colour: [
     "hueDrift", "hueShift", "saturation", "contrast", "gamma", "brightness",
     "contourFreq", "contourWidth", "colorSpread", "solarize",
-    "bloom", "bloomThreshold", "bloomSize", "bloomTintAmount", "bloomTintHue", "bloomPulse", "colourMap", "colourMapBy", "colourMapGradient", "colourMapGradient2", "colourMapMix", "vignette", "vignetteShape", "vignetteSoftness", "vignetteBlend", "vignetteColour", "vignetteGradient", "crtScanlines", "crtBarrel",
+    "bloom", "bloomThreshold", "bloomSize", "bloomTintAmount", "bloomTintHue", "bloomPulse", "colourMap", "colourMapBy", "colourMapGradient", "colourMapGradient2", "colourMapMix", "vignette", "vignetteShape", "vignetteSoftness", "vignetteBlend", "vignetteColour", "vignetteGradient",
   ],
 };
 
@@ -535,31 +535,8 @@ export const RINGS_MODE_SPEC: ParamSpec = {
   description: "Switches between concentric rings, orbiting triangles, and polar grid layouts.",
 };
 
-/** Post CRT scanline and barrel distortion options (Slice 7.12). */
-export const POST_CRT_SPECS: readonly ParamSpec[] = [
-  {
-    type: "float",
-    name: "crtScanlines",
-    label: "CRT scanlines",
-    group: "CRT",
-    default: 0.0,
-    min: 0.0,
-    max: 1.0,
-    step: 0.01,
-    description: "Overlays horizontal retro CRT television scanline rasterization.",
-  },
-  {
-    type: "float",
-    name: "crtBarrel",
-    label: "CRT barrel distortion",
-    group: "CRT",
-    default: 0.0,
-    min: 0.0,
-    max: 0.2,
-    step: 0.005,
-    description: "Simulates curved glass cathode-ray tube screen barrel distortion.",
-  },
-];
+/** Retired post keys (CRT controls never reached the compositor); old presets still load silently. */
+export const REMOVED_POST_SETTINGS: readonly string[] = ["crtScanlines", "crtBarrel"];
 
 import { LAYER_SPECS } from "./layerSchemas";
 

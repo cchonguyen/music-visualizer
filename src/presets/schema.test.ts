@@ -12,7 +12,6 @@ import {
   CHLADNI_SPECS,
   FERROFLUID_SPECS,
   REACTION_DIFFUSION_SPECS,
-  POST_CRT_SPECS,
   RINGS_MODE_SPEC,
   PARTICLE_MODE_SPEC,
   type ParamSpec,
@@ -187,7 +186,6 @@ describe("Parameter Descriptors & Warning Schema Contracts", () => {
       CHLADNI_SPECS,
       FERROFLUID_SPECS,
       REACTION_DIFFUSION_SPECS,
-      POST_CRT_SPECS,
       [RINGS_MODE_SPEC, PARTICLE_MODE_SPEC],
     ];
 
@@ -242,7 +240,7 @@ describe("Removed Mandala kick flare control", () => {
   });
 
   it("an old preset that carries it loads, drops it, and keeps its other settings", () => {
-    const registry = { feedback: FEEDBACK_WARP_SPECS, post: POST_CRT_SPECS, layers: {} };
+    const registry = { feedback: FEEDBACK_WARP_SPECS, post: [], layers: {} };
     const raw = {
       version: 1,
       name: "Old mandala",
@@ -319,5 +317,15 @@ describe("Feedback warp control visibility (Slice 15.1)", () => {
     expect(isSpecVisible(spec, { dep: 0.01 })).toBe(true);
     expect(isSpecVisible(spec, { dep: { value: 0.5 } })).toBe(true);
     expect(isSpecVisible(spec, { dep: "a" })).toBe(false);
+  });
+});
+
+describe("Retired CRT post controls", () => {
+  it("a preset carrying crtScanlines/crtBarrel loads with no warnings", () => {
+    const registry = { feedback: FEEDBACK_WARP_SPECS, post: [], layers: {} };
+    const raw = { version: 1, name: "Old CRT", post: { crtScanlines: { value: 0.25 }, crtBarrel: 0.08 }, layers: [] };
+    const { preset, warnings } = parsePreset(raw, registry);
+    expect(warnings).toEqual([]);
+    expect(preset.post).not.toHaveProperty("crtScanlines");
   });
 });

@@ -1,6 +1,6 @@
 // Preset format: the shape of a preset as a JSON file, and the checker that turns
 // any JSON (hand-edited, imported, or saved by an older version) into a safe Preset.
-import { AUDIO_SOURCES, REMOVED_FEEDBACK_SETTINGS, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
+import { AUDIO_SOURCES, REMOVED_FEEDBACK_SETTINGS, REMOVED_POST_SETTINGS, type AudioSource, coerceValue, type ParamSpec, type ParamValue, type NumberSpec, type EnumSpec, type BoolSpec } from "./schema";
 import type { GlobalDirectorSettings } from "../render/globalDirector";
 import { parseReactions, type Reaction } from "./reactions";
 import { parseReactionStyle, type ReactionStyle } from "./reactionStyles";
@@ -419,7 +419,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     transition,
     feedback,
     layers,
-    post: parseSettings(raw.post, registry.post, "post", warnings),
+    post: parseSettings(raw.post, registry.post, "post", warnings, REMOVED_POST_SETTINGS),
     ...(warp.length > 0 ? { warp } : {}),
     ...(reactions.length > 0 ? { reactions } : {}),
     ...(reactionStyle ? { reactionStyle } : {}),

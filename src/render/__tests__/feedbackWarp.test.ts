@@ -185,7 +185,6 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
         radialFold: 0.0,
         mandalaTile: 0.0,
         mandalaCounterSpin: 0.25,
-        mandalaKickFlare: 0.35,
         mandalaPattern: 'auto',
         contourFreq: 7.85,
         contourWidth: 0.45,
@@ -428,7 +427,6 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
         radialFold: 0.65,
         mandalaTile: 0.45,
         mandalaCounterSpin: 0.35,
-        mandalaKickFlare: 0.55,
         contourFreq: 10.5,
         contourWidth: 0.6,
         colorSpread: 0.8,
@@ -458,7 +456,6 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(findFloat('uRadialFold')).toBe(0.65);
       expect(findFloat('uMandalaTile')).toBe(0.45);
       expect(findFloat('uMandalaCounterSpin')).toBe(0.35);
-      expect(findFloat('uMandalaKickFlare')).toBe(0.55);
 
       expect(findFloat('uContourFreq')).toBe(10.5);
       expect(findFloat('uContourWidth')).toBe(0.6);
