@@ -224,6 +224,12 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
   - **Time step clamp**: every per-frame `dt` is clamped to `0..MAX_DT_SEC` = 0.1 s (`clampDt` in `src/render/clock.ts`), used in `src/main.ts`, `src/gl/context.ts`, the scene and the global director, so a pause, seek or hidden tab cannot jump motion.
   - **Per-second feedback**: feedback zoom, rotate, drift and decay are rates per 1/60 s scaled by the real `dt` (`pow(value, dt * 60)` in `feedback.frag.glsl`). Output at 60 Hz matches the old per-frame behavior; other refresh rates now look the same.
   - **Morph phase**: the morph LFO integrates its phase (`phase += rate * dt`, `dt` clamped to `MORPH_MAX_DT_SEC` = 0.1 s) in `src/presets/morph.ts`, so changing the rate never makes the wave jump. The dead Mandala kick flare control was removed, with a preset migration.
+- **Stage 25 — Visual Improvements, Warp/Feedback Responsiveness, Tooltips & Studio Cleanup (2026-11-16; Sector 490):**
+  - **Dead Control & Uniform Pruning**: Removes `Tunnel.horizonDrift`, `Crown.rimFactor`, `POST_CRT_SPECS` (`crtScanlines`, `crtBarrel`), and `uMandalaKickFlare`, while silently ignoring retired keys in `parseSettings`.
+  - **Half-Wired Feature Activation**: Wires `'morph'` into `TRANSITION_STYLES`, exposes all 7 `ChladniSand` `plateMode` options, wires `PARTICLE_DISPLACE_SPEC` and `PHYLLOTAXIS_SPECS` `showWhen`, and unifies `SPECTRAL_TERRAIN_DEFAULTS.skirtOpacity = 0.15`.
+  - **Feedback & Warp Responsiveness**: Adds CPU-envelope-smoothed `warpAudioSource`, `warpReactivity`, `warpAttackMs`, `warpReleaseMs` in `Scene`, enables morph-only presets in `hasLinks()`, and unifies Visual Gain / Calm scaling via `applyVisualGainAndCalm()`.
+  - **100% Tooltips & Studio Helper Bar**: Completes `ParamSpec.description` across `warpOps.ts` and `format.ts`, wires `attachControlHelper` across all Studio rows, and adds Harness UI `[data-tooltip]` popovers in `src/app.css` and `src/ui/controls.ts`.
+  - **Studio Cleanup & Inline UX**: Clears `Studio` `setInterval` on dispose, deduplicates Admin buttons, prunes legacy hidden HUD elements, humanizes labels, adds `[Linked]`/`[Morphed]` markers, and replaces `window.prompt`/`confirm` with inline Studio DOM controls.
 
 
 
