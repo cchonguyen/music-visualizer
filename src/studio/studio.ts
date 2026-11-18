@@ -57,6 +57,8 @@ import {
   deleteSystemPresetAction,
   setSystemPresetSubfolderAction,
   promoteUserPresetAction,
+  createStudioIconSvg,
+  attachButtonIcon,
 } from './adminControls';
 
 export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES, ADMIN_BADGE_LABEL };
@@ -278,7 +280,13 @@ export function renderHelperContent(helperBar: HTMLElement, spec: ParamSpec | Co
     const warnRow = doc.createElement('div');
     warnRow.className = 'helper-warning';
     const warnText = spec.warning || 'High-intensity effect';
-    warnRow.textContent = `⚠️ ${warnText}`;
+    const warnIcon = createStudioIconSvg(doc, 'alert-triangle');
+    if (warnIcon) {
+      warnRow.append(warnIcon);
+    }
+    const warnSpan = doc.createElement('span');
+    warnSpan.textContent = warnText;
+    warnRow.append(warnSpan);
     helperBar.append(warnRow);
   }
 }
@@ -1414,6 +1422,7 @@ export class Studio {
           'Save System Preset',
           'Overwrite this built-in system preset with your current edits.',
         );
+        attachButtonIcon(saveSysBtn, 'crown', true);
         this.saveBtn = saveSysBtn;
         saveSysBtn.on('click', () => {
           this.runAdmin(() => {
@@ -1457,11 +1466,13 @@ export class Studio {
       del.on('click', () => this.onDeleteTap(del, id));
     }
     if (!entry.builtin && isAdmin) {
-      tile(
-        pane.addButton({ title: 'Promote to System Preset 👑' }),
+      const promoteBtn = tile(
+        pane.addButton({ title: 'Promote to System Preset' }),
         'Promote to System Preset',
         'Promote this user preset into a built-in system preset.',
-      ).on('click', () =>
+      );
+      attachButtonIcon(promoteBtn, 'crown', true);
+      promoteBtn.on('click', () =>
         this.handlePromoteUserPreset(id),
       );
     }
@@ -1735,6 +1746,7 @@ export class Studio {
     pane.addBlade({ view: 'separator' });
     const adminActionTitle = getAdminActionLabel(isAdmin);
     const adminBtn = pane.addButton({ title: adminActionTitle });
+    attachButtonIcon(adminBtn, 'crown', isAdmin);
     adminBtn.on('click', () => {
       if (this.isAdmin()) {
         adminLogout(this.adminGateway);
@@ -2295,7 +2307,7 @@ export class Studio {
 
   private formatSaveTitle(id: string, isSystemAdmin: boolean): string {
     const dirty = this.opts.session.isDirty(id) ? ' *' : '';
-    return isSystemAdmin ? `Save System Preset 👑${dirty}` : `Save${dirty}`;
+    return isSystemAdmin ? `Save System Preset${dirty}` : `Save${dirty}`;
   }
 
   private refreshDirtyState(): void {
