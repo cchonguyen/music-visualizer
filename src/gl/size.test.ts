@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   canvasSize,
   clampRenderScale,
@@ -9,6 +9,10 @@ import {
   getAutoScale,
   setAutoScale,
   getEffectiveRenderScale,
+  getLowPowerMode,
+  setLowPowerMode,
+  LOW_POWER_SCALE,
+  LOW_POWER_STORAGE_KEY,
   MIN_RENDER_SCALE,
 } from "./size";
 
@@ -126,5 +130,72 @@ describe("automatic scale and the effective scale (Slice 16.5)", () => {
 
   it("is 1 by default", () => {
     expect(getEffectiveRenderScale()).toBe(1);
+  });
+});
+
+describe("low-power mode (Slice 26.9)", () => {
+  it("exposes LOW_POWER_SCALE and LOW_POWER_STORAGE_KEY and defaults to false", () => {
+    expect(LOW_POWER_SCALE).toBe(0.5);
+    expect(LOW_POWER_STORAGE_KEY).toBe("mv.lowPowerMode");
+    expect(getLowPowerMode()).toBe(false);
+  });
+
+  it("caps effective render scale at 0.5 without mutating mv.renderScale", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, v),
+    });
+    try {
+      setRenderScale(1);
+      setAutoScale(1);
+      expect(store.get("mv.renderScale")).toBe("1");
+
+      expect(setLowPowerMode(true)).toBe(true);
+      expect(getLowPowerMode()).toBe(true);
+      expect(store.get(LOW_POWER_STORAGE_KEY)).toBe("1");
+      expect(getEffectiveRenderScale()).toBe(0.5);
+      // mv.renderScale must remain untouched in memory and storage.
+      expect(getRenderScale()).toBe(1);
+      expect(store.get("mv.renderScale")).toBe("1");
+
+      setRenderScale(0.75);
+      expect(getEffectiveRenderScale()).toBe(0.5);
+      expect(getRenderScale()).toBe(0.75);
+
+      // Smaller autoScale still wins below 0.5.
+      setAutoScale(0.35);
+      expect(getEffectiveRenderScale()).toBe(0.35);
+
+      // Disabling low-power mode restores the normal ceiling.
+      setAutoScale(1);
+      expect(setLowPowerMode(false)).toBe(false);
+      expect(store.get(LOW_POWER_STORAGE_KEY)).toBe("0");
+      expect(getEffectiveRenderScale()).toBe(0.75);
+    } finally {
+      setLowPowerMode(false);
+      setRenderScale(1);
+      setAutoScale(1);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("reads persisted mv.lowPowerMode on module load", async () => {
+    const store = new Map<string, string>([[LOW_POWER_STORAGE_KEY, "1"], ["mv.renderScale", "1"]]);
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, v),
+    });
+    try {
+      vi.resetModules();
+      const mod = await import("./size");
+      expect(mod.getLowPowerMode()).toBe(true);
+      expect(mod.getRenderScale()).toBe(1);
+      expect(mod.getEffectiveRenderScale()).toBe(0.5);
+      mod.setLowPowerMode(false);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 });

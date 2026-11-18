@@ -5,6 +5,7 @@ import type { AudioFrame } from '../audio/types';
 import type { RenderLayer, RenderTarget } from './layer';
 import compositeSrc from './shaders/composite.frag.glsl?raw';
 import postSrc from './shaders/post.frag.glsl?raw';
+import blurSrc from './shaders/blur.frag.glsl?raw';
 import copySrc from './shaders/copy.frag.glsl?raw';
 import { setAutoScale, setRenderScale } from '../gl/size';
 
@@ -807,5 +808,83 @@ describe('0s instant cut (Slice 26.4)', () => {
     expect(comp.getWeight('a')).toBe(0);
     for (let i = 0; i < 6; i++) frame(0.1);
     expect(comp.isMorphing()).toBe(false);
+  });
+});
+
+describe('Low-Power Mode post-pass bypass & safety (Slice 26.9)', () => {
+  it('is off by default and toggles via setLowPower / isLowPower', () => {
+    const c = new Compositor([]);
+    expect(c.isLowPower()).toBe(false);
+    c.setLowPower(true);
+    expect(c.isLowPower()).toBe(true);
+    c.setLowPower(false);
+    expect(c.isLowPower()).toBe(false);
+  });
+
+  it('bypasses post.frag and BlurChain passes while keeping composite.frag WCAG safety active (uSafety = 1)', () => {
+    const gl = createMockGl() as unknown as Record<string, unknown>;
+    const fragOf = new Map<unknown, string>();
+    const shaderSrc = new Map<unknown, string>();
+    gl.createShader = vi.fn(() => ({}));
+    gl.shaderSource = vi.fn((sh: unknown, src: string) => shaderSrc.set(sh, src));
+    gl.createProgram = vi.fn(() => ({}));
+    gl.attachShader = vi.fn((p: unknown, sh: unknown) => {
+      const src = shaderSrc.get(sh) ?? '';
+      if (!src.includes('gl_VertexID')) fragOf.set(p, src);
+    });
+    const used: string[] = [];
+    gl.useProgram = vi.fn((p: unknown) => used.push(fragOf.get(p) ?? ''));
+    const uniforms: { name: string; value: number }[] = [];
+    gl.uniform1f = vi.fn((loc: { name: string } | null, value: number) => {
+      if (loc) uniforms.push({ name: loc.name, value });
+    });
+
+    const comp = new Compositor([new Scene('a', [spyLayer()])]);
+    comp.init(gl as unknown as WebGL2RenderingContext);
+    comp.resize(64, 36, 1);
+    comp.setPost({ bloom: 0.8, bloomSize: 1.5, saturation: 1.4, vignette: 0.5 });
+    comp.setDirectorState(
+      { panX: 0.1, panY: 0, zoom: 1.2, roll: 0.1, tiltX: 0, tiltY: 0 },
+      { shadowTint: [0.2, 0.2, 0.3], highlightTint: [0.9, 0.9, 1], spatialSpread: 0.5, gradAngle: 0, intensity: 0.8, cycleAngle: 0 },
+    );
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 3; i++) comp.draw(FRAME, clock(0.1), TARGET);
+
+    // Baseline: post + blur run when lowPower is off.
+    used.length = 0;
+    uniforms.length = 0;
+    comp.draw(FRAME, clock(0.1), TARGET);
+    expect(used).toContain(postSrc);
+    expect(used).toContain(blurSrc);
+
+    // Low-power on: post.frag and blur.frag are bypassed, composite.frag runs with uSafety = 1.
+    comp.setLowPower(true);
+    used.length = 0;
+    uniforms.length = 0;
+    comp.draw(FRAME, clock(0.1), TARGET);
+    expect(used).not.toContain(postSrc);
+    expect(used).not.toContain(blurSrc);
+    expect(used).toContain(compositeSrc);
+    const safetyUniforms = uniforms.filter((u) => u.name === 'uSafety');
+    expect(safetyUniforms).toHaveLength(1);
+    expect(safetyUniforms[0]!.value).toBe(1);
+  });
+
+  it('caps crossfades and skips redrawing the outgoing scene during transitions when low-power mode is on', () => {
+    const r = rig(['a', 'b']);
+    r.comp.setLowPower(true);
+    r.comp.setFadeSeconds(4);
+    r.comp.setWeights({ a: 1 });
+    for (let i = 0; i < 60; i++) r.frame(0.1);
+    r.comp.setWeights({ b: 1 });
+    r.frame(0.1); // gate frame: b is initialised
+    const aBefore = r.layers.get('a')!.draw.mock.calls.length;
+    const bBefore = r.layers.get('b')!.draw.mock.calls.length;
+    r.frame(0.1);
+    r.frame(0.1);
+    expect(r.layers.get('a')!.draw.mock.calls.length).toBe(aBefore);
+    expect(r.layers.get('b')!.draw.mock.calls.length).toBe(bBefore + 2);
+    for (let i = 0; i < 10; i++) r.frame(0.1);
+    expect(r.comp.getWeight('a')).toBeLessThan(0.2);
   });
 });

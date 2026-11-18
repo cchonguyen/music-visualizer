@@ -92,6 +92,8 @@ export function setRenderScale(v: number): RenderScale {
 // Automatic resolution scaling (slice 16.5 holds the value, 16.6 drives it). Unlike the owner's choice above it is not
 // limited to three steps. The owner's choice is a ceiling: the scale in use is the smaller of the two.
 export const MIN_RENDER_SCALE = 0.25;
+export const LOW_POWER_SCALE = 0.5;
+export const LOW_POWER_STORAGE_KEY = 'mv.lowPowerMode';
 
 /** Clamps any scale to MIN_RENDER_SCALE..1. Non-finite input gives 1. */
 export function clampAutoScale(v: number): number {
@@ -110,9 +112,35 @@ export function setAutoScale(v: number): number {
   return autoScale;
 }
 
-/** The scale the whole render chain runs at: the automatic scale, never above the owner's choice. */
+function loadLowPowerMode(): boolean {
+  try {
+    const saved = localStorage.getItem(LOW_POWER_STORAGE_KEY);
+    return saved === '1' || saved === 'true';
+  } catch {
+    return false;
+  }
+}
+
+let lowPowerMode = loadLowPowerMode();
+
+export function getLowPowerMode(): boolean {
+  return lowPowerMode;
+}
+
+export function setLowPowerMode(on: boolean): boolean {
+  lowPowerMode = Boolean(on);
+  try {
+    localStorage.setItem(LOW_POWER_STORAGE_KEY, lowPowerMode ? '1' : '0');
+  } catch {
+    // not saved; applies for this session
+  }
+  return lowPowerMode;
+}
+
+/** The scale the whole render chain runs at: the automatic scale, never above the owner's choice or low-power ceiling. */
 export function getEffectiveRenderScale(): number {
-  return Math.min(renderScale, autoScale);
+  const base = Math.min(renderScale, autoScale);
+  return lowPowerMode ? Math.min(base, LOW_POWER_SCALE) : base;
 }
 
 /** Buffer size at a render scale (any value from MIN_RENDER_SCALE to 1). Never smaller than 1x1. */
