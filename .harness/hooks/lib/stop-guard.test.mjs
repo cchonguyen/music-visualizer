@@ -522,3 +522,22 @@ test('hook run: decision card then a bare end emits a block on stdout', () => {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("stalledPlan: a stated step in a later turn is not covered by an earlier turn's question (tours thread 2026-11-18)", () => {
+  const earlierTurn = [
+    userPrompt('scope please'),
+    checklist('Scope\n\n✓ a\n✓ b'),
+    toolUse('q', 'mcp__hearthbot__post_message', { text: 'Of the 118 series, 88 are Festival. Which should change?' }),
+    noReply('nothing_to_add', 'q2'),
+  ];
+  const laterTurn = [
+    userPrompt('A and B, use the 9 above'),
+    toolUse('g', 'mcp__hearthbot__post_message', { text: "Got it. I'll check the type-change undo first, then spec option A and option B in the repo." }),
+    assistantText("Your message reached me. Next I'll check whether a series type change is logged and undoable, then write the spec."),
+  ];
+  const reason = stalledPlan(transcript(...earlierTurn, ...laterTurn));
+  assert.ok(reason.length > 0);
+  assert.match(reason, /I'll check|Next I'll check/);
+  assert.equal(stalledPlan(transcript(...earlierTurn)), '');
+  assert.equal(stalledPlan(transcript(...earlierTurn, ...laterTurn, toolUse('s', 'mcp__claude-code-remote__send_later', { delay_minutes: 10 }))), '');
+});
