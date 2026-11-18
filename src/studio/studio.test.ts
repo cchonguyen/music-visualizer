@@ -381,6 +381,7 @@ function createMockPane() {
     element.appendChild(labelEl);
 
     let selectEl: MockElement | null = null;
+    let inputEl: MockElement | null = null;
     if (options?.options) {
       selectEl = createMockElement('select');
       selectEl.className = 'tp-lstv_s';
@@ -395,7 +396,13 @@ function createMockPane() {
       }
       element.appendChild(selectEl);
     } else {
-      const inputEl = createMockElement('input');
+      inputEl = createMockElement('input');
+      if (options?.view === 'color') {
+        inputEl.setAttribute('type', 'color');
+        element.setAttribute('data-view', 'color');
+      } else if (typeof target[prop] === 'boolean') {
+        inputEl.setAttribute('type', 'checkbox');
+      }
       inputEl.value = String(target[prop] ?? '');
       if (options?.readonly) {
         inputEl.setAttribute('readonly', 'readonly');
@@ -410,7 +417,10 @@ function createMockPane() {
       listeners,
       hidden: false,
       element,
-      refresh: () => {},
+      refresh: () => {
+        if (selectEl) selectEl.value = String(target[prop] ?? '');
+        if (inputEl) inputEl.value = String(target[prop] ?? '');
+      },
       on: (event: string, fn: (ev: { value: any }) => void) => {
         listeners[event] = listeners[event] || [];
         listeners[event].push(fn);
@@ -420,6 +430,9 @@ function createMockPane() {
         target[prop] = value;
         if (selectEl) {
           selectEl.value = String(value);
+        }
+        if (inputEl) {
+          inputEl.value = String(value);
         }
         listeners[event]?.forEach((fn) => fn({ value }));
       },
@@ -736,16 +749,26 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
     resetGlobalDirector();
   });
 
-  it('creates 6 bindings on the folder with correct labels and configuration including experience mode', () => {
+  it('creates 9 bindings on the folder with correct labels and configuration including experience mode, palettes, and custom tints', () => {
     const folder = createMockPane();
     const director = getGlobalDirector();
     director.reset();
 
     buildGlobalDirectorControls(folder, director);
 
-    expect(folder.bindings).toHaveLength(6);
+    expect(folder.bindings).toHaveLength(9);
 
-    const [expModeB, camModeB, camIntensityB, colMoodB, colIntensityB, trigB] = folder.bindings;
+    const [
+      expModeB,
+      camModeB,
+      camIntensityB,
+      colMoodB,
+      colIntensityB,
+      customTintB,
+      shadowTintB,
+      highlightTintB,
+      trigB,
+    ] = folder.bindings;
 
     expect(expModeB!.options.label).toBe('Experience mode');
     expect(expModeB!.options.options).toEqual({
@@ -781,12 +804,27 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
       'Biolum': 'biolum',
       'Vapor': 'vapor',
       'Prismatic': 'prismatic',
+      'Monochrome Noir': 'noir',
+      'Acid Neon': 'acid',
+      'Nordic Aurora': 'aurora',
+      'Deep Sunset': 'sunset',
     });
 
     expect(colIntensityB!.options.label).toBe('Color intensity');
     expect(colIntensityB!.options.min).toBe(0);
     expect(colIntensityB!.options.max).toBe(1);
     expect(colIntensityB!.options.step).toBe(0.05);
+
+    expect(customTintB!.options.label).toBe('Custom tint');
+    expect(shadowTintB!.options.label).toBe('Shadow tint');
+    expect(shadowTintB!.options.view).toBe('color');
+    expect(shadowTintB!.element.getAttribute('data-view')).toBe('color');
+    expect(shadowTintB!.hidden).toBe(true);
+
+    expect(highlightTintB!.options.label).toBe('Highlight tint');
+    expect(highlightTintB!.options.view).toBe('color');
+    expect(highlightTintB!.element.getAttribute('data-view')).toBe('color');
+    expect(highlightTintB!.hidden).toBe(true);
 
     expect(trigB!.options.label).toBe('Transition trigger');
     expect(trigB!.options.options).toEqual({
@@ -805,7 +843,17 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
 
     buildGlobalDirectorControls(folder, director);
 
-    const [expModeB, camModeB, camIntensityB, colMoodB, colIntensityB, trigB] = folder.bindings;
+    const [
+      expModeB,
+      camModeB,
+      camIntensityB,
+      colMoodB,
+      colIntensityB,
+      customTintB,
+      shadowTintB,
+      highlightTintB,
+      trigB,
+    ] = folder.bindings;
 
     expModeB!.fire('change', 'calm');
     expect(director.getExperienceMode()).toBe('calm');
@@ -817,14 +865,70 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
     camIntensityB!.fire('change', 0.85);
     expect(director.getSettings().cameraIntensity).toBe(0.85);
 
-    colMoodB!.fire('change', 'biolum');
-    expect(director.getSettings().colorMood).toBe('biolum');
+    colMoodB!.fire('change', 'aurora');
+    expect(director.getSettings().colorMood).toBe('aurora');
 
     colIntensityB!.fire('change', 0.2);
     expect(director.getSettings().colorIntensity).toBe(0.2);
 
+    customTintB!.fire('change', true);
+    expect(director.getSettings().customTint).toBe(true);
+    expect(shadowTintB!.hidden).toBe(false);
+    expect(highlightTintB!.hidden).toBe(false);
+
+    shadowTintB!.fire('change', '#112233');
+    expect(director.getSettings().customShadowTint).toBe('#112233');
+
+    highlightTintB!.fire('change', '#aabbcc');
+    expect(director.getSettings().customHighlightTint).toBe('#aabbcc');
+
+    customTintB!.fire('change', false);
+    expect(director.getSettings().customTint).toBe(false);
+    expect(shadowTintB!.hidden).toBe(true);
+    expect(highlightTintB!.hidden).toBe(true);
+
     trigB!.fire('change', 'beats64');
     expect(director.getSettings().triggerCadence).toBe('beats64');
+  });
+
+  it('attaches helper bar descriptions to Custom tint, Shadow tint, and Highlight tint and syncs on external director updates', () => {
+    const folder = createMockPane();
+    const director = getGlobalDirector();
+    director.reset();
+    const helperSpy = vi.fn();
+
+    const controls = buildGlobalDirectorControls(folder, director, helperSpy);
+    const tintControls = [
+      controls.customTintBinding,
+      controls.customShadowTintBinding,
+      controls.customHighlightTintBinding,
+    ];
+
+    for (const binding of tintControls) {
+      helperSpy.mockClear();
+      binding.element.dispatchEvent({ type: 'mouseenter' });
+      expect(helperSpy).toHaveBeenCalledTimes(1);
+      const info = helperSpy.mock.calls[0]![0];
+      expect(info.label).toBe(binding.options.label);
+      expect(typeof info.description).toBe('string');
+      expect(info.description.length).toBeGreaterThan(10);
+      binding.element.dispatchEvent({ type: 'mouseleave' });
+      expect(helperSpy).toHaveBeenLastCalledWith(null);
+    }
+
+    director.updateSettings({
+      customTint: true,
+      customShadowTint: '#224466',
+      customHighlightTint: '#ff8844',
+    });
+    director.setExperienceMode('calm');
+    expect(controls.customTintBinding.target.customTint).toBe(true);
+    expect(controls.customShadowTintBinding.hidden).toBe(false);
+    expect(controls.customHighlightTintBinding.hidden).toBe(false);
+    expect(controls.customShadowTintBinding.target.customShadowTint).toBe('#224466');
+    expect(controls.customHighlightTintBinding.target.customHighlightTint).toBe('#ff8844');
+
+    controls.unsubscribe();
   });
 
   it('renders Global Director folder with title and collapsed state', () => {
@@ -835,7 +939,7 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
     expect(pane.folders).toHaveLength(1);
     expect(pane.folders[0]!.options.title).toBe('Global Director');
     expect(pane.folders[0]!.options.expanded).toBe(false);
-    expect(pane.folders[0]!.folder.bindings).toHaveLength(6);
+    expect(pane.folders[0]!.folder.bindings).toHaveLength(9);
   });
 });
 
