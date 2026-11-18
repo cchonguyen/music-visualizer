@@ -448,33 +448,31 @@ describe('render scale covers the whole chain (Slice 16.5)', () => {
 });
 
 describe('no per-frame lookups or rebuilds (Slice 16.8)', () => {
-  it('looks up the calm checkbox once, not on every frame', () => {
-    const getElementById = vi.fn(() => ({ checked: false }));
+  it('does not query #calm from the DOM during draw', () => {
+    const getElementById = vi.fn(() => ({ checked: true }));
     vi.stubGlobal('document', { getElementById });
     try {
       const { comp } = rig(['a']);
       comp.setWeights({ a: 1 });
       for (let i = 0; i < 6; i++) comp.draw(FRAME, clock(0.1), TARGET);
-      expect(getElementById).toHaveBeenCalledTimes(1);
+      expect(getElementById).not.toHaveBeenCalled();
+      expect(comp.brightnessLimiter.calm).toBe(false);
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it('follows the calm checkbox state when it is ticked', () => {
-    const box = { checked: false };
-    vi.stubGlobal('document', { getElementById: () => box });
-    try {
-      const { comp } = rig(['a']);
-      comp.setWeights({ a: 1 });
-      comp.draw(FRAME, clock(0.1), TARGET);
-      expect(comp.brightnessLimiter.calm).toBe(false);
-      box.checked = true;
-      comp.draw(FRAME, clock(0.1), TARGET);
-      expect(comp.brightnessLimiter.calm).toBe(true);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+  it('follows comp.calm / setCalm() directly', () => {
+    const { comp } = rig(['a']);
+    comp.setWeights({ a: 1 });
+    comp.draw(FRAME, clock(0.1), TARGET);
+    expect(comp.brightnessLimiter.calm).toBe(false);
+    comp.setCalm(true);
+    comp.draw(FRAME, clock(0.1), TARGET);
+    expect(comp.brightnessLimiter.calm).toBe(true);
+    comp.calm = false;
+    comp.draw(FRAME, clock(0.1), TARGET);
+    expect(comp.brightnessLimiter.calm).toBe(false);
   });
 
   it('setPost keeps values given and returns the rest to identity, in place', () => {

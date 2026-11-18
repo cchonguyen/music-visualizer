@@ -152,12 +152,20 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
     // Standalone obsolete elements are absent
     expect(nav).not.toContain('id="calm"');
     expect(nav).not.toContain('id="director-mode"');
+    expect(nav).not.toContain('id="play-btn"');
+    expect(nav).not.toContain('data-source="stop"');
+    expect(nav).not.toContain('id="time"');
+    expect(nav).not.toContain('id="playback"');
+    expect(nav).not.toContain('value-item');
+    expect(nav).not.toContain('value-panel');
   });
 
   it('starts with timeline scrubber and action button hidden until source is active', () => {
     expect(pillsRow).toContain('id="playback-scrubber-segment" class="pill-segment scrubber-segment" hidden');
     expect(pillsRow).toContain('id="playback-action-btn" class="ui-btn ui-btn--ghost pill-segment action-btn" aria-label="Playback action" hidden');
-    expect(pillsRow).toContain('id="playback" hidden');
+    expect(pillsRow).not.toContain('id="playback"');
+    expect(pillsRow).not.toContain('id="play-btn"');
+    expect(pillsRow).not.toContain('id="time"');
   });
 
   it('includes startup onboarding toast and guide re-summon button', () => {
@@ -404,11 +412,6 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     micSourceBtn.setAttribute('data-source', 'mic');
     sourcePanel.appendChild(micSourceBtn);
 
-    const stopSourceBtn = createMockElement('button');
-    stopSourceBtn.dataset.source = 'stop';
-    stopSourceBtn.setAttribute('data-source', 'stop');
-    sourcePanel.appendChild(stopSourceBtn);
-
     const fileBtn = register('file-btn', 'button');
     sourcePanel.appendChild(fileBtn);
     const fileInput = register('file-input', 'input');
@@ -429,7 +432,7 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
 
     // Experience panel
     const experiencePanel = register('experience-panel', 'div');
-    experiencePanel.className = 'value-panel experience-panel';
+    experiencePanel.className = 'hud-panel experience-panel';
     experiencePanel.hidden = true;
 
     for (const mode of ['cinematic', 'calm', 'minimal', 'colorWalk']) {
@@ -500,10 +503,6 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     playbackActionBtn.appendChild(actionLabel);
     audioPill.appendChild(playbackActionBtn);
 
-    const playBtn = register('play-btn', 'button');
-    playBtn.hidden = true;
-    audioPill.appendChild(playBtn);
-
     const timelineSep = register('timeline-separator', 'div');
     timelineSep.hidden = true;
     audioPill.appendChild(timelineSep);
@@ -516,17 +515,10 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     seek.value = '0';
     const timeTotal = register('time-total', 'span');
     timeTotal.textContent = '0:00';
-    const time = register('time', 'span');
-    time.textContent = '0:00';
     scrubberSeg.appendChild(timeCurrent);
     scrubberSeg.appendChild(seek);
     scrubberSeg.appendChild(timeTotal);
-    scrubberSeg.appendChild(time);
     audioPill.appendChild(scrubberSeg);
-
-    const playback = register('playback', 'div');
-    playback.hidden = true;
-    audioPill.appendChild(playback);
 
     pillsRow.appendChild(audioPill);
 
@@ -535,7 +527,7 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     visualsPill.className = 'pill-container';
 
     const expBtn = register('experience-btn', 'button');
-    expBtn.className = 'pill-segment value-btn';
+    expBtn.className = 'ui-btn ui-btn--ghost pill-segment';
     const expLabel = register('experience-label', 'span');
     expLabel.textContent = 'Experience: Cinematic';
     expBtn.appendChild(expLabel);
@@ -831,11 +823,6 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     micSourceBtn.setAttribute('data-source', 'mic');
     sourcePanel.appendChild(micSourceBtn);
 
-    const stopSourceBtn = createMockElement('button');
-    stopSourceBtn.dataset.source = 'stop';
-    stopSourceBtn.setAttribute('data-source', 'stop');
-    sourcePanel.appendChild(stopSourceBtn);
-
     const fileBtn = register('file-btn', 'button');
     sourcePanel.appendChild(fileBtn);
     const fileInput = register('file-input', 'input');
@@ -856,7 +843,7 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
 
     // Experience panel
     const experiencePanel = register('experience-panel', 'div');
-    experiencePanel.className = 'value-panel experience-panel';
+    experiencePanel.className = 'hud-panel experience-panel';
     experiencePanel.hidden = true;
 
     for (const mode of ['cinematic', 'calm', 'minimal', 'colorWalk']) {
@@ -927,10 +914,6 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     playbackActionBtn.appendChild(actionLabel);
     audioPill.appendChild(playbackActionBtn);
 
-    const playBtn = register('play-btn', 'button');
-    playBtn.hidden = true;
-    audioPill.appendChild(playBtn);
-
     const timelineSep = register('timeline-separator', 'div');
     timelineSep.hidden = true;
     audioPill.appendChild(timelineSep);
@@ -943,17 +926,10 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     seek.value = '0';
     const timeTotal = register('time-total', 'span');
     timeTotal.textContent = '0:00';
-    const time = register('time', 'span');
-    time.textContent = '0:00';
     scrubberSeg.appendChild(timeCurrent);
     scrubberSeg.appendChild(seek);
     scrubberSeg.appendChild(timeTotal);
-    scrubberSeg.appendChild(time);
     audioPill.appendChild(scrubberSeg);
-
-    const playback = register('playback', 'div');
-    playback.hidden = true;
-    audioPill.appendChild(playback);
 
     pillsRow.appendChild(audioPill);
 
@@ -1383,6 +1359,24 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     const micBtn = domElements['source-panel']!.querySelectorAll('button[data-source="mic"]')[0];
     micBtn?.dispatchEvent({ type: 'click' });
     expect(actionBtn.getAttribute('data-tooltip')).toBe('Stop audio input');
+  });
+
+  it('wires shortcuts dialog and keeps active HUD controls functional without legacy DOM elements (Slice 25.9)', () => {
+    expect(domElements['play-btn']).toBeUndefined();
+    expect(domElements['time']).toBeUndefined();
+    expect(domElements['playback']).toBeUndefined();
+
+    vi.stubGlobal('HTMLElement', class {});
+    try {
+      setupControls(mockEngine, { calm: false, fileName: '' });
+      const shortcuts = domElements['shortcuts']!;
+      domElements['shortcuts-btn']!.dispatchEvent({ type: 'click' });
+      expect(shortcuts.showModal).toHaveBeenCalled();
+      expect(domElements['fs-btn']!.hidden).toBe(false);
+      expect(domElements['studio-open']).toBeDefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
