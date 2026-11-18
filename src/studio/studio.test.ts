@@ -2421,6 +2421,80 @@ describe('Slice 23.3: Studio Display time control', () => {
   });
 });
 
+describe('Slice 26.5: Studio Blend time override controls', () => {
+  it('hides Blend time (s) when preset has no blendSec, and shows it when preset.blendSec is set (including 0)', () => {
+    const { studio, getPane, presets } = setupTest();
+    studio.bind('user-1');
+    let pane = getPane();
+    const customBlend = pane.bindings.find((b: any) => b.options?.label === 'Custom blend time');
+    const blendSec = pane.bindings.find((b: any) => b.options?.label === 'Blend time (s)');
+    expect(customBlend).toBeDefined();
+    expect(blendSec).toBeDefined();
+    expect(customBlend.target.customBlend).toBe(false);
+    expect(blendSec.hidden).toBe(true);
+    expect(blendSec.options).toEqual(expect.objectContaining({ min: 0, max: 10, step: 0.05 }));
+
+    presets['user-1'].preset.blendSec = 0;
+    studio.bind('user-1');
+    pane = getPane();
+    const customOn = pane.bindings.find((b: any) => b.options?.label === 'Custom blend time');
+    const blendOn = pane.bindings.find((b: any) => b.options?.label === 'Blend time (s)');
+    expect(customOn.target.customBlend).toBe(true);
+    expect(blendOn.hidden).toBe(false);
+    expect(blendOn.target.blendSec).toBe(0);
+  });
+
+  it('toggling Custom blend time and changing Blend time (s) updates/clears preset.blendSec and updates dirty badge', () => {
+    const { studio, getPane, session, presets } = setupTest();
+    session.isDirty.mockImplementation((id: string) => presets[id]?.preset.blendSec !== undefined);
+    studio.bind('user-1');
+    const pane = getPane();
+    const customBlend = pane.bindings.find((b: any) => b.options?.label === 'Custom blend time');
+    const blendSec = pane.bindings.find((b: any) => b.options?.label === 'Blend time (s)');
+    const saveBtn = pane.buttons.find((b: any) => b.title.startsWith('Save'));
+    expect(saveBtn?.title).toBe('Save');
+
+    // Toggle ON -> shows slider, stores preset.blendSec, commits, updates dirty *
+    customBlend.fire('change', true);
+    expect(blendSec.hidden).toBe(false);
+    expect(presets['user-1'].preset.blendSec).toBe(1);
+    expect(session.commit).toHaveBeenCalledWith('user-1');
+    expect(saveBtn?.title).toBe('Save *');
+
+    // Update slider (0s instant cut and out-of-range clamp)
+    blendSec.fire('change', 0);
+    expect(presets['user-1'].preset.blendSec).toBe(0);
+    blendSec.fire('change', 15);
+    expect(presets['user-1'].preset.blendSec).toBe(10);
+    blendSec.fire('change', 2.75);
+    expect(presets['user-1'].preset.blendSec).toBe(2.75);
+
+    // Toggle OFF -> hides slider, clears preset.blendSec = undefined, updates dirty *
+    customBlend.fire('change', false);
+    expect(blendSec.hidden).toBe(true);
+    expect(presets['user-1'].preset.blendSec).toBeUndefined();
+    expect(saveBtn?.title).toBe('Save');
+  });
+
+  it('attaches attachControlHelper descriptions to Custom blend time and Blend time (s)', () => {
+    const { container, studio, getPane } = setupTest();
+    studio.bind('user-1');
+    const pane = getPane();
+    const customBlend = pane.bindings.find((b: any) => b.options?.label === 'Custom blend time');
+    const blendSec = pane.bindings.find((b: any) => b.options?.label === 'Blend time (s)');
+    const helperBar = container.querySelector('.studio-helper-bar');
+    expect(helperBar).not.toBeNull();
+
+    customBlend.element.dispatchEvent({ type: 'mouseenter' });
+    expect(helperBar?.textContent).toContain('Custom blend time');
+    expect(helperBar?.textContent).toContain('Override the transition crossfade');
+
+    blendSec.element.dispatchEvent({ type: 'mouseenter' });
+    expect(helperBar?.textContent).toContain('Blend time (s)');
+    expect(helperBar?.textContent).toContain('per-preset blend time override');
+  });
+});
+
 describe('Slice 11.7: Non-Disruptive Studio Admin Login Popup & Background Session Detection', () => {
   it('Studio.setVisible(true) triggers adminGateway.checkCloudflareAccess() when not yet admin', async () => {
     const { container, studio, adminGateway } = setupTest({ admin: false });
