@@ -43,12 +43,12 @@ test('an on-the-fly anchor copies Spec-Bypass trailers onto the finish commit an
     originUrl: 'git@github.com:o/claude-harness-hub.git', lsRemote: () => '', mainProgress: null,
   });
   fs.writeFileSync(path.join(dir, 'test.txt'), 'changed');
-  finishSlice(dir, 'fix: finish slice 3.2', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
+  finishSlice(dir, 'fix: finish slice 3.77', { skipChecks: true, verify: () => ({ ran: false, reason: 'test' }) });
 
   const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
   assert.match(body, /^Spec-Bypass: on-the-fly Issue #77$/m);
   assert.match(body, /^Spec-Bypass-Reason: bug blocks work$/m);
-  const line = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8').split('\n').find((l) => /Slice 3\.2:/.test(l));
+  const line = fs.readFileSync(path.join(dir, '.spec', 'PROGRESS.md'), 'utf8').split('\n').find((l) => /Slice 3\.77:/.test(l)); // on-the-fly ids are <major>.<issue>
   assert.match(line, /^- \[x\]/);
   assert.doesNotMatch(line, /\[IN_PROGRESS\]/);
 });

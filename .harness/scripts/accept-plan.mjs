@@ -4,7 +4,7 @@
 // Read-only: never writes files. A plan merge records approval only.
 // Node built-ins only.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -49,9 +49,17 @@ export function checkSlices(progressText, sliceIds) {
   return { found, missing };
 }
 
+function safeRealpath(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
 function isInsidePlans(file) {
-  const plansDir = resolve(ROOT, '.spec', 'plans');
-  const rel = relative(plansDir, file);
+  const plansDir = safeRealpath(resolve(ROOT, '.spec', 'plans'));
+  const rel = relative(plansDir, safeRealpath(file));
   return rel !== '' && rel.split(sep)[0] !== '..' && !isAbsolute(rel);
 }
 
@@ -93,7 +101,7 @@ function main(args) {
 
 const isDirect =
   Boolean(process.argv[1]) &&
-  import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+  import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href;
 
 if (isDirect) {
   process.exitCode = main(process.argv.slice(2));

@@ -427,6 +427,27 @@ export function restampSlice(root, options = {}) {
   return { success: true, sliceId, commitSha, treeSha };
 }
 
+/**
+ * Baseline telemetry (slice 19.3): when a session receipt exists under .spec/.events, returns the two lines
+ * that tell the operator to add it to the PR body. Returns '' otherwise. Never throws.
+ */
+export async function receiptHint(root) {
+  try {
+    const dir = path.join(root, '.spec', '.events');
+    if (!fs.existsSync(dir)) return '';
+    const newest = fs.readdirSync(dir)
+      .filter((f) => /^receipt-.*\.json$/.test(f))
+      .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t)[0];
+    if (!newest) return '';
+    const receipt = JSON.parse(fs.readFileSync(path.join(dir, newest.f), 'utf8'));
+    const { receiptBlock } = await import('./receipt.mjs');
+    return `Add this receipt to the PR body:\n${receiptBlock(receipt)}`;
+  } catch {
+    return '';
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   ensureHarnessRoot();
   const root = resolveRoot();
@@ -455,6 +476,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     const res = finishSlice(root, commitMsg, { bootstrap: bootstrapReason });
     console.log(`✓ FINISH SLICE: ${res.sliceId} committed (${res.commitSha}). Referee-Verdict: VERIFIED.`);
+    const receiptLine = await receiptHint(root);
+    if (receiptLine) console.log(receiptLine);
     if (res.verification && res.verification.ran) {
       if (res.verification.passed) {
         console.log('✓ Verify: passed, card moves to Verified.');

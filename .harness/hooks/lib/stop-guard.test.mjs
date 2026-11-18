@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { stopDecision, hasUnfinishedSlice } from '../stop-guard.mjs';
+import { stopDecision, hasInProgressSlice } from '../stop-guard.mjs';
 
 const HOOK = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'stop-guard.mjs');
 
@@ -21,11 +21,20 @@ const makeRoot = (progress) => {
 const IN_PROGRESS = '- [ ] **Slice 1: Demo** [IN_PROGRESS] [CORE / DATA] Target files: a.mjs\n';
 const DONE_ONLY = '- [x] **Slice 1: Demo** [CORE / DATA] Target files: a.mjs\n';
 
-test('hasUnfinishedSlice detects IN_PROGRESS and unchecked slices only', () => {
-  assert.equal(hasUnfinishedSlice(IN_PROGRESS), true);
-  assert.equal(hasUnfinishedSlice('- [ ] **Slice 2: Next** Target files: b.mjs\n'), true);
-  assert.equal(hasUnfinishedSlice(DONE_ONLY), false);
-  assert.equal(hasUnfinishedSlice(''), false);
+test('hasInProgressSlice detects an [IN_PROGRESS] slice line only, not pending boxes', () => {
+  assert.equal(hasInProgressSlice(IN_PROGRESS), true);
+  assert.equal(hasInProgressSlice('- [ ] **Slice 2: Next** Target files: b.mjs\n'), false);
+  assert.equal(hasInProgressSlice(DONE_ONLY), false);
+  assert.equal(hasInProgressSlice(''), false);
+});
+
+test('pending-only slices (unchecked boxes, no IN_PROGRESS) allow stop', () => {
+  const root = makeRoot('- [x] **Slice 1: Done** [CORE / DATA] Target files: a.mjs\n- [ ] **Slice 2: Next** [CORE / DATA] Target files: b.mjs\n');
+  try {
+    assert.equal(stopDecision({ root, env: {} }), '');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('no IN_PROGRESS slice allows stop', () => {
@@ -51,7 +60,7 @@ test('IN_PROGRESS slice with no escape blocks stop', () => {
   try {
     const reason = stopDecision({ root, env: {} });
     assert.ok(reason.length > 0);
-    assert.match(reason, /unfinished slices/);
+    assert.match(reason, /Slice 1 is still \[IN_PROGRESS\]/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

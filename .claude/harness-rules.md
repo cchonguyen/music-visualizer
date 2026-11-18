@@ -69,6 +69,15 @@
 - The six floor rules in the README hold in every project. Everything else in it is a default: a project may depart from one by writing a line with the reason in `design-system/profile.md`.
 - No gate checks this. It is a starting kit, and existing screens move onto it when a change touches them.
 
+## Red Checks (one pattern)
+- Read the failing check output first. Find the cause.
+- Fix the cause and push. You get up to 3 tries.
+- Never offer the operator a bypass. Never present accepting a red check as an option.
+- After 3 failed tries, label the issue `status:blocked-on-operator`.
+- Comment a failure dossier on the issue. Include what was asked, each attempt and its result, the trimmed check output, files touched, likely cause and what is needed.
+- A bypass happens only on the operator's explicit words. Add the label `harness:bypass` to the PR.
+- Quote the operator's words in a PR comment.
+
 ## Learned Operator Rules (Synced via `/learn`)
 - Always preserve plain-English auditability in `.spec/OVERVIEW.md` at major feature milestones.
 - When giving the operator steps to run in Terminal, always use labelled, one-per-stage fenced code blocks with full absolute paths and the expected result after each block. Every command must be complete and paste-ready: never a partial snippet, never "run the same as before", and never a path the operator has not confirmed. Before writing Terminal steps, confirm the project folder with a directory listing.

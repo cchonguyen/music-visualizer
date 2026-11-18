@@ -49,7 +49,7 @@ function runHook(script, dir, event) {
     encoding: 'utf8',
     env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
-  return { status: res.status, stderr: res.stderr };
+  return { status: res.status, stdout: res.stdout || '', stderr: res.stderr };
 }
 
 const edit = (dir, rel, extra = {}) => ({
@@ -65,6 +65,25 @@ test('manager mode with no active slice warns but allows source edits (PLAN LOCK
   assert.doesNotMatch(r.stdout || '', /"decision":\s*"block"/);
   const events = fs.readFileSync(path.join(dir, '.spec', '.events', 's1.jsonl'), 'utf8');
   assert.match(events, /"kind":"plan_lock_warn"/);
+});
+
+test('plan lock puts one model-visible context JSON on the first warning, then stays silent for the session', () => {
+  const dir = makeRepo({ files: { '.spec/harness.json': '{"workMode":"manager"}\n', '.spec/PROGRESS.md': '# Progress\n', 'src/app.js': 'a\n' } });
+  const input = { ...edit(dir, 'src/app.js'), agent_type: 'gf-coder' };
+  const first = runHook(GUARD, dir, input);
+  assert.equal(first.status, 0);
+  const firstLines = first.stdout.trim().split('\n');
+  assert.equal(firstLines.length, 1);
+  const out = JSON.parse(firstLines[0]);
+  assert.equal(out.hookSpecificOutput.hookEventName, 'PreToolUse');
+  assert.match(out.hookSpecificOutput.additionalContext, /^HARNESS WARNING: .*PLAN LOCK/);
+  assert.match(out.hookSpecificOutput.additionalContext, /start-slice\.mjs --adhoc/);
+  assert.match(first.stderr, /WARN: PLAN LOCK/);
+
+  const second = runHook(GUARD, dir, input);
+  assert.equal(second.status, 0);
+  assert.equal(second.stdout, '');
+  assert.match(second.stderr, /WARN: PLAN LOCK/);
 });
 
 test('a new active slice resets the coordinator edit budget (regression: slice name was never read)', () => {

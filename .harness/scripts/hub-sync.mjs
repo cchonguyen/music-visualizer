@@ -7,14 +7,17 @@
 //   node .harness/scripts/hub-sync.mjs sync-agents     synchronize agent templates from .harness/agents
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { atomicWriteFileSync, ensureHarnessRoot } from './lib/fs-atomic.mjs';
 import {
   AGENTS_MARKERS, GITIGNORE_MARKERS, PROJECT_RULES, SETTINGS_SPOKE, TEMPLATE_ONLY,
   appendActiveRules, learnedRulesToKeep, listHubOwned, mergeBlock, mergeSettings,
   harvestSpokePermissions, readManifest, sha256, workflowDestination, writeManifest,
 } from './lib/sync-core.mjs';
+
+// CI callers that the spoke must always run the hub's current version of (refreshed when they differ)
+export const CALLER_WORKFLOWS = new Set(['harness-slice-gate.yml', 'harness-telemetry.yml']);
 
 // execFileSync passes arguments without a shell, so quotes, $ and backticks in a rule are inert
 export const gitIn = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -208,6 +211,27 @@ export function findSibling(root = (process.env.CLAUDE_PROJECT_DIR || gitRoot() 
   return candidates.map((c) => path.resolve(c)).find((c) => c !== path.resolve(root) && fs.existsSync(path.join(c, '.harness')) && isHubCheckout(c, hubConfig));
 }
 
+// Fetch the public hub next to the project when no checkout is attached. Returns the clone path, or null.
+export function cloneHub(root, hub, run = (args) => execFileSync('git', args, { stdio: 'pipe' })) {
+  if (!hub?.owner) return null;
+  const dest = path.join(path.dirname(root), hub.repo);
+  if (fs.existsSync(dest)) return dest;
+  const url = `https://github.com/${hub.owner}/${hub.repo}.git`;
+  try {
+    run(['clone', '--quiet', '--branch', hub.branch || 'main', url, dest]);
+    return dest;
+  } catch {
+    return null;
+  }
+}
+
+// Re-run once after a sync that replaced this script, so the new version does the rest of the work
+export function needsRerun(receipt, env = process.env) {
+  const written = receipt?.written || [];
+  const selfPath = '.harness/scripts/hub-sync.mjs';
+  return written.some((entry) => entry === selfPath || entry.startsWith(selfPath)) && env.HUB_SYNC_RERUN !== '1';
+}
+
 export const notAttached = (hubConfig = { repo: 'claude-harness-hub' }) => {
   console.log([
     'HUB_NOT_ATTACHED: no checkout of the harness hub was found next to this project.',
@@ -340,19 +364,31 @@ export function pullFromHub(hubRoot, spokeRoot = (process.env.CLAUDE_PROJECT_DIR
     }
   }
 
-  // CI workflow templates: copied to .github/workflows once when missing, then the spoke owns them
+  // CI workflow templates: copied to .github/workflows once when missing, then the spoke owns them.
+  // Exception: CALLER_WORKFLOWS are refreshed whenever they differ from the hub, so the gate and telemetry callers stay current.
   for (const rel of hubFiles) {
     const dest = workflowDestination(rel);
-    if (!dest || fs.existsSync(path.join(spokeRoot, dest))) continue;
+    if (!dest) continue;
+    const target = path.join(spokeRoot, dest);
+    const exists = fs.existsSync(target);
+    if (exists && !(CALLER_WORKFLOWS.has(path.basename(rel)) && !fs.readFileSync(target).equals(fs.readFileSync(path.join(hubRoot, rel))))) continue;
     fs.mkdirSync(path.join(spokeRoot, path.dirname(dest)), { recursive: true });
-    fs.copyFileSync(path.join(hubRoot, rel), path.join(spokeRoot, dest));
-    receipt.written.push(`${dest} (CI template, first copy)`);
+    fs.copyFileSync(path.join(hubRoot, rel), target);
+    receipt.written.push(exists ? `${dest} (CI caller, refreshed)` : `${dest} (CI template, first copy)`);
   }
 
   // Synchronize canonical subagent templates from .harness/agents/ to .claude/agents/ and .agents/
   const syncedAgents = syncAgents(spokeRoot);
   if (syncedAgents.length) {
     receipt.written.push(...syncedAgents);
+  }
+
+  // syncAgents recompiles runtime-payloads.json in the spoke, so record the compiled file's hash, not the hub copy's.
+  // Otherwise pr-scope-check sees a hash mismatch and does not recognise the PR as a hub sync.
+  const payloadRel = '.harness/agents/runtime-payloads.json';
+  const payloadAbs = path.join(spokeRoot, payloadRel);
+  if (files[payloadRel] !== undefined && fs.existsSync(payloadAbs)) {
+    files[payloadRel] = sha256(fs.readFileSync(payloadAbs));
   }
 
   // Keep the old hash for conflicted files so they stay conflicted until resolved
@@ -444,7 +480,14 @@ export function main(argv = process.argv.slice(2)) {
     process.exit(0);
   }
 
-  const sibling = findSibling(root, hub);
+  let sibling = findSibling(root, hub);
+  if (!sibling && action === 'pull') {
+    const fetched = cloneHub(root, hub);
+    if (fetched) {
+      console.log(`✓ Fetched the public hub into ${fetched}.`);
+      sibling = findSibling(root, hub);
+    }
+  }
   if (!sibling) {
     if (action === 'push') {
       console.log('✓ Local rule saved to .claude/harness-rules.md (not synced to hub).');
@@ -491,7 +534,12 @@ export function main(argv = process.argv.slice(2)) {
     console.log(`✓ Created ${created.length} starter file(s): ${created.join(', ') || 'none (all existed)'}. Spoke mode set to manager in .spec/harness.json.`);
   }
   try { gitIn(sibling, 'pull', '--ff-only', '--quiet'); } catch {} // best effort; offline copy still works
-  describe(sibling, pullFromHub(sibling, root), root);
+  const result = pullFromHub(sibling, root);
+  describe(sibling, result, root);
+  if (needsRerun(result.receipt)) {
+    console.log('↻ hub-sync.mjs changed; running the new version once.');
+    spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...argv], { stdio: 'inherit', env: { ...process.env, HUB_SYNC_RERUN: '1' } });
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

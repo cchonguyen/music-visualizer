@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets, sliceKey } from './pr-scope-check.mjs';
 import { AGENTS_MARKERS } from './lib/sync-core.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -650,4 +650,64 @@ test('AGENTS.md line cap ignores the harness block; spoke-owned lines still coun
   assert.ok(!ok.problems.some((p) => p.includes('Line budget')));
   const over = analyze({ changed: ['AGENTS.md'], thresholds, fileContents: { 'AGENTS.md': build(45, 40) }, headMessage: 'Approved-Tripwire: AGENTS.md' });
   assert.ok(over.problems.some((p) => p.includes('AGENTS.md has 45 lines')));
+});
+
+test('sliceKey ignores the slice number so a renumbered line keeps its key', () => {
+  assert.equal(sliceKey('- [x] **Slice 2.17: A** x'), sliceKey('- [x] **Slice 2.18: A** x'));
+  assert.equal(sliceKey('- [x] **Slice 2.17: A** x'), '- [x] **Slice: A** x');
+});
+
+test('a PR that only renumbers a done CORE / DATA line does not trigger the CORE / DATA test rule', () => {
+  const uiLine = '- [x] **Slice 3: UI** `[UI / VISUAL]`: thing — Target files: `src/ui/x.tsx`';
+  const oldLine = '- [x] **Slice 2.17: A** `[CORE / DATA]`: thing — Target files: `src/a.js`';
+  const newLine = '- [x] **Slice 2.18: A** `[CORE / DATA]`: thing — Target files: `src/a.js`';
+  const diff = new Map([['.spec/PROGRESS.md', { added: [newLine], removed: [oldLine] }]]);
+  const r = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/ui/x.tsx'],
+    diff,
+    progress: uiLine + '\n' + newLine + '\n',
+  });
+  assert.equal(r.sliceType, null);
+  assert.ok(!r.problems.some((p) => p.includes('needs a test file change')), r.problems.join('; '));
+});
+
+test('a PR that turns a pending CORE / DATA slice into [x] with no test change is still a problem', () => {
+  const activeLine = '- [ ] **Slice 5: A** [IN_PROGRESS] `[CORE / DATA]`: thing — Target files: `src/foo.js`';
+  const doneLine = '- [x] **Slice 5: A** `[CORE / DATA]`: thing — Target files: `src/foo.js`';
+  const diff = new Map([['.spec/PROGRESS.md', { added: [doneLine], removed: [activeLine] }]]);
+  const r = analyze({
+    changed: ['.spec/PROGRESS.md', 'src/foo.js'],
+    diff,
+    progress: doneLine + '\n',
+  });
+  assert.equal(r.sliceType, 'CORE / DATA');
+  assert.ok(r.problems.some((p) => p.includes('needs a test file change')), r.problems.join('; '));
+});
+
+test('a docs .md file outside Target files is allowed with a note; AGENTS.md is not', () => {
+  const activeLine = '- [ ] **Slice 6** [IN_PROGRESS] `[UI / VISUAL]`: thing — Target files: `src/foo.js`';
+  const docs = analyze({
+    changed: ['src/foo.js', 'docs/architecture/02-stage-1-capture-and-details.md'],
+    progress: activeLine + '\n',
+  });
+  assert.ok(!docs.problems.some((p) => p.includes('Outside the slice')), docs.problems.join('; '));
+  assert.ok(docs.notes.includes('Docs file outside Target files (allowed): docs/architecture/02-stage-1-capture-and-details.md'));
+
+  const agents = analyze({
+    changed: ['src/foo.js', 'AGENTS.md'],
+    progress: activeLine + '\n',
+  });
+  assert.ok(agents.problems.some((p) => p.includes("Outside the slice's Target files: AGENTS.md")));
+  assert.ok(!agents.notes.some((n) => n.includes('Docs file outside Target files (allowed): AGENTS.md')));
+});
+
+test('a test file outside Target files is allowed with a note', () => {
+  const activeLine = '- [ ] **Slice 7** [IN_PROGRESS] `[UI / VISUAL]`: thing — Target files: `src/foo.js`';
+  const r = analyze({
+    changed: ['src/foo.js', 'src/other.test.js'],
+    diff: testDiff('src/other.test.js', ['expect(1).toBe(1);']),
+    progress: activeLine + '\n',
+  });
+  assert.ok(!r.problems.some((p) => p.includes('Outside the slice')), r.problems.join('; '));
+  assert.ok(r.notes.includes('Test file outside Target files (allowed): src/other.test.js'));
 });
