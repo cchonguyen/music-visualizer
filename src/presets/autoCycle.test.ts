@@ -373,3 +373,39 @@ describe('effectiveCycleOptions (Slice 23.2)', () => {
     expect(c.next(0.2, false, 'a', pool, o)).toBe('b');
   });
 });
+
+describe('hardCut persistence (Slice 26.3)', () => {
+  const store = (initial?: string) => {
+    const data = new Map<string, string>(initial === undefined ? [] : [[CYCLE_STORAGE_KEY, initial]]);
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  };
+
+  it('defaults hardCut to false in DEFAULT_CYCLE', () => {
+    expect(DEFAULT_CYCLE.hardCut).toBe(false);
+  });
+
+  it('persists and loads hardCut in mv.autoCycle', () => {
+    const s = store();
+    saveCycleSettings(opts({ mode: 'beat', hardCut: true }), s);
+    expect(JSON.parse(s.getItem(CYCLE_STORAGE_KEY)!).hardCut).toBe(true);
+    const target = opts({});
+    loadCycleSettings(target, s);
+    expect(target.mode).toBe('beat');
+    expect(target.hardCut).toBe(true);
+
+    saveCycleSettings(opts({ mode: 'beat', hardCut: false }), s);
+    loadCycleSettings(target, s);
+    expect(target.hardCut).toBe(false);
+  });
+
+  it('loads legacy JSON without hardCut cleanly and ignores non-boolean hardCut', () => {
+    const legacy = opts({});
+    loadCycleSettings(legacy, store(JSON.stringify({ mode: 'beat', shuffle: true, intervalSec: 15 })));
+    expect(legacy.mode).toBe('beat');
+    expect(legacy.hardCut).toBe(false);
+
+    const bad = opts({});
+    loadCycleSettings(bad, store(JSON.stringify({ mode: 'beat', hardCut: 'yes' })));
+    expect(bad.hardCut).toBe(false);
+  });
+});
