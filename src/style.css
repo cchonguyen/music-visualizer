@@ -1,45 +1,41 @@
-:root {
-  color-scheme: dark; font-family: var(--ui-font);
-  /* Shared design tokens (slice 9.1). Shortcuts dialog and Studio read these. */
-  /* One UI font for the whole app (slice 11.8). Studio's Tweakpane text uses it too, not the monospace default. */
-  --ui-font: system-ui, sans-serif;
-  /* Contrast (slice 11.5, WCAG AA): text 4.5:1 on its surface; borders, accent and focus 3:1 on dark surfaces. */
-  --surface: #111;
-  --surface-2: #222;
-  --hover: #303030;
-  --border: #707070;
-  --text: #eee;
-  --muted: #9a9a9a;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  /* Button text and slider colours (slice 11.1). Controls bar, Studio and Shortcuts read these. */
-  --btn-font-size: .9em;
-  --btn-font-weight: 400;
-  --slider-track: var(--border);
-  --slider-fill: var(--accent);
-  --slider-thumb: var(--text);
-  /* Slider geometry (slice 11.6). Same 8 px track and rounded ends as Studio's Tweakpane sliders. Phone thumb is 28 px. */
-  --slider-track-h: 8px;
-  --slider-thumb-d: 20px;
-  /* Settings text (slice 11.6): the Shortcuts dialog text size, shared by Controls, Studio labels and group titles. */
-  --ui-text-size: .8rem;
-  --ui-text-lh: 1.15;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #000; color: var(--text); overflow: hidden; }
+/* Project-specific styles for canvas, start overlay, HUD pills/panels, Studio Tweakpane, and shortcuts dialog.
+   Base resets, kit tokens, and ui-* component styles live in .harness/design-system/tokens.css & bundle.css. */
+
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
 #stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
-.overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(0,0,0,.85); text-align: center; padding: 2rem; }
+.overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; background: rgba(0, 0, 0, .85); text-align: center; padding: 2rem; }
 .overlay[hidden], .controls[hidden], .notice[hidden] { display: none; }
-.warn { max-width: 34rem; line-height: 1.5; color: #ccc; }
-.hint { color: var(--muted); font-size: .9rem; }
-/* One button text rule for every surface: same size and weight as the shortcut keys. */
-button, .btn, select { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .4rem .8rem; cursor: pointer; }
-button.primary { font-size: 1.2rem; padding: .7rem 2rem; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.warn { max-width: 34rem; line-height: 1.5; color: var(--text); }
+.hint { color: var(--text-muted); font-size: .9rem; }
+
+/* Non-kit controls (legacy .btn, native select, #controls-show, #start-btn) */
+.btn, select, #controls-show {
+  font: inherit;
+  font-size: 0.9em;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  padding: .4rem .8rem;
+  cursor: pointer;
+}
+.btn:hover, #controls-show:hover { background: var(--mid); border-color: var(--mid-line); }
+#start-btn, button.primary {
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 600;
+  padding: .7rem 2rem;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+#start-btn:hover, button.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+
+/* App-wide focus ring for custom & native controls not already covered by bundle.css */
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* Sliders and checkboxes show the same --focus ring as buttons (slice 11.5). */
-input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
 .controls {
   position: fixed;
   left: 0;
@@ -50,7 +46,7 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   justify-content: flex-end;
   align-items: stretch;
   padding: 1.5rem 1.25rem 1rem;
-  background: linear-gradient(transparent, rgba(0,0,0,.85));
+  background: linear-gradient(transparent, rgba(0, 0, 0, .85));
   transition: opacity .4s;
   z-index: 4;
 }
@@ -66,7 +62,6 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   justify-content: space-between;
   width: 100%;
   gap: 1rem;
-  box-sizing: border-box;
 }
 
 /* Segmented Pill System (Slice 12.2) */
@@ -76,46 +71,33 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   background: rgba(20, 20, 24, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
   overflow: hidden;
-  box-sizing: border-box;
 }
 
 .pill-segment {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: transparent;
-  border: none;
+  border: 0;
   border-radius: 0;
   color: var(--text);
   padding: 0.45rem 0.85rem;
-  font: inherit;
-  font-size: var(--btn-font-size);
-  font-weight: var(--btn-font-weight);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
+  font-size: 0.9em;
+  font-weight: 400;
   line-height: var(--ui-text-lh);
-  box-sizing: border-box;
-}
-
-.pill-segment:hover {
-  background: var(--hover);
-  color: #fff;
 }
 
 .pill-segment:focus-visible {
-  outline: 2px solid var(--focus);
   outline-offset: -2px;
   z-index: 2;
 }
 
 .pill-segment[aria-expanded="true"] {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--mid);
+  color: var(--text);
 }
 
 .pill-segment[hidden] {
@@ -134,7 +116,7 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
 
 .pill-segment.action-btn.is-stop,
 .pill-segment.action-btn[data-action="stop"] {
-  color: #ff6b6b;
+  color: var(--bad);
 }
 
 .pill-segment.scrubber-segment {
@@ -157,14 +139,14 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
 .time-readout {
   font-variant-numeric: tabular-nums;
   font-size: var(--ui-text-size);
-  color: var(--muted);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .pill-separator {
   width: 1px;
   height: 1.25rem;
-  background: #2a2f40;
+  background: var(--line);
   opacity: 0.8;
   flex-shrink: 0;
 }
@@ -195,10 +177,9 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   background: rgba(18, 18, 22, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
-  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-pop);
 }
 
 .hud-panel[hidden] {
@@ -233,7 +214,7 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   justify-content: space-between;
   align-items: center;
   padding-bottom: 0.3rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--line);
 }
 
 .panel-title {
@@ -255,24 +236,23 @@ input[type="range"]:focus-visible, input[type="checkbox"]:focus-visible { outlin
   gap: 0.75rem;
   padding: 0.6rem 0.75rem;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
   width: 100%;
-  box-sizing: border-box;
 }
 
 button.source-card:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: var(--mid);
+  border-color: var(--mid-line);
 }
 
 button.source-card[aria-pressed="true"],
 .source-card.active {
-  background: rgba(42, 106, 224, 0.18);
+  background: var(--accent-tint);
   border-color: var(--accent);
 }
 
@@ -299,7 +279,7 @@ button.source-card[aria-pressed="true"],
 
 .source-card-desc {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--text-muted);
   line-height: 1.3;
 }
 
@@ -310,11 +290,11 @@ button.source-card[aria-pressed="true"],
 .source-file-actions .btn {
   font-size: 0.78rem;
   padding: 0.3rem 0.6rem;
-  background: var(--surface-2);
+  background: var(--surface-raised);
 }
 
 .source-file-actions .btn:hover {
-  background: var(--hover);
+  background: var(--mid);
 }
 
 .source-card-test select {
@@ -322,15 +302,15 @@ button.source-card[aria-pressed="true"],
   margin-top: 0.4rem;
   font-size: var(--ui-text-size);
   padding: 0.35rem 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
   color: var(--text);
 }
 
 .source-volume-footer {
   padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--line);
 }
 
 .source-volume-row {
@@ -357,28 +337,25 @@ button.source-card[aria-pressed="true"],
 
 #seek { width: min(30vw, 22rem); }
 /* Native range inputs and checkbox take the shared slider colours. No custom widgets. */
-input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 24px; margin: 0; accent-color: var(--slider-fill); cursor: pointer; }
-input[type="range"]::-webkit-slider-runnable-track { background: var(--slider-track); height: var(--slider-track-h); border-radius: calc(var(--slider-track-h) / 2); }
-input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--slider-thumb-d); height: var(--slider-thumb-d); margin-top: calc((var(--slider-track-h) - var(--slider-thumb-d)) / 2); border-radius: 50%; border: 0; background: var(--slider-thumb); }
-input[type="range"]::-moz-range-track { background: var(--slider-track); height: var(--slider-track-h); border-radius: calc(var(--slider-track-h) / 2); }
-input[type="range"]::-moz-range-thumb { width: var(--slider-thumb-d); height: var(--slider-thumb-d); border-radius: 50%; border: 0; background: var(--slider-thumb); }
-.value-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { background: var(--line-strong); height: var(--slider-track-h); border-radius: calc(var(--slider-track-h) / 2); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: var(--slider-thumb-d); height: var(--slider-thumb-d); margin-top: calc((var(--slider-track-h) - var(--slider-thumb-d)) / 2); border-radius: 50%; border: 0; background: var(--text); }
+input[type="range"]::-moz-range-track { background: var(--line-strong); height: var(--slider-track-h); border-radius: calc(var(--slider-track-h) / 2); }
+input[type="range"]::-moz-range-thumb { width: var(--slider-thumb-d); height: var(--slider-thumb-d); border-radius: 50%; border: 0; background: var(--text); }
+.value-val { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 /* Sheet header: stays at the top of the sheet while its body scrolls (slice 11.6). Holds the Close button. */
 .sheet-head { position: sticky; top: 0; z-index: 2; background: var(--surface); }
 /* Swipe handle (slice 11.6 follow-up): the only place a phone settings sheet starts a swipe-down. Shown on phones only. */
 .sheet-handle { display: none; }
-input[type="checkbox"] { accent-color: var(--slider-fill); }
+input[type="checkbox"] { accent-color: var(--accent); }
+
 /* Narrow windows (under 600px): groups wrap so every control stays reachable, no horizontal scroll. Desktop unchanged. */
 @media (max-width: 599px) {
-  /* Phone grid (slice 11.3 / 12.2): one column. Each group is a row with a visible title, controls wrap inside it. */
-  /* The whole panel fits the phone viewport. If it is still too tall, the body scrolls inside the sheet and the header stays put. */
   .controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; align-items: stretch; padding: 0 .75rem calc(.6rem + env(safe-area-inset-bottom)); max-height: 88vh; max-height: 88dvh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .controls .controls-head { display: flex; position: sticky; top: 0; right: auto; grid-column: 1; justify-content: flex-end; margin: 0 -.75rem; padding: .5rem .75rem .25rem; background: var(--surface); }
   #seek { width: 100%; }
-  /* Every range input and every button is at least 44 px tall (slice 11.5). The track keeps its 8 px look, centred. */
   .controls input[type="range"] { min-height: 44px; height: 44px; --slider-thumb-d: 28px; }
 
-  /* Segmented Pills mobile layout */
   .hud-pills-row {
     display: flex;
     flex-direction: column;
@@ -389,7 +366,7 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     width: 100%;
     display: flex;
     flex-wrap: wrap;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-card);
   }
   .pill-segment {
     min-height: 44px;
@@ -416,14 +393,13 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     --slider-thumb-d: 28px;
   }
 
-  /* Panels open inline as accessible cards inside the mobile sheet */
   .hud-panel {
     position: static;
     left: auto;
     transform: none;
     width: 100%;
     max-width: 100%;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-card);
     margin: 0.25rem 0;
     animation: none;
   }
@@ -470,20 +446,22 @@ input[type="checkbox"] { accent-color: var(--slider-fill); }
     min-height: 44px;
   }
 
-  /* Touch minimum: 44 by 44 CSS px for every button and popup shortcut key, so taps land on the intended key. */
-  button, .btn, select { min-width: 44px; min-height: 44px; }
+  /* Touch minimum: 44 by 44 CSS px for non-kit controls and popup shortcut keys */
+  .btn, select, #controls-show, .exp-action-btn, .experience-panel .library-actions button, .preset-card-fav { min-width: 44px; min-height: 44px; }
   dialog#shortcuts button.key { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: .25rem .5rem; }
   dialog#shortcuts th, dialog#shortcuts td { padding-top: .25rem; padding-bottom: .25rem; }
 }
-.notice { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); max-width: 90vw; background: #3a1d1d; border: 1px solid #a33; padding: .6rem 1rem; border-radius: 6px; }
-.notice.info { background: #1d2a3a; border-color: #36a; }
+
+.notice { position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); max-width: 90vw; background: var(--bad-tint); border: 1px solid var(--bad); color: var(--text); padding: .6rem 1rem; border-radius: var(--radius-card); box-shadow: var(--shadow-pop); }
+.notice.info { background: var(--mid); border-color: var(--mid-line); }
+.notice-dismiss { margin-left: var(--space-2); background: transparent; border: 0; color: var(--text-muted); cursor: pointer; padding: 0 var(--space-1); }
+.notice-dismiss:hover { color: var(--text); }
 body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px; }
 
 /* Consolidated Experience & Visuals HUD Panel (Slice 12.2) */
 .experience-panel {
   left: 50%;
   transform: translateX(-50%);
-  /* Sizes itself to the screen (slice 21.14): wider when there is room, scrolls instead of falling off the page. */
   width: min(30rem, calc(100vw - 2.5rem));
   max-width: calc(100vw - 2.5rem);
   max-height: calc(100vh - 8rem);
@@ -509,16 +487,16 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 
 .exp-header { display: flex; justify-content: space-between; align-items: center; }
 .exp-title { font-weight: 600; font-size: var(--ui-text-size); color: var(--text); }
-.exp-hint { font-size: .8em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.exp-hint { font-size: .8em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .exp-controls-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: .4rem; }
-.exp-field { display: flex; flex-direction: column; gap: .15rem; font-size: .8em; color: var(--muted); }
+.exp-field { display: flex; flex-direction: column; gap: .15rem; font-size: .8em; color: var(--text-muted); }
 .exp-field select {
   width: 100%;
   font-size: var(--ui-text-size);
   padding: .2rem .35rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 4px);
-  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
   color: var(--text);
 }
 
@@ -539,7 +517,7 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   justify-content: space-between;
   align-items: center;
   font-size: var(--ui-text-size);
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .exp-slider-item input[type="range"] {
@@ -578,33 +556,24 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   grid-template-columns: 1fr 1fr;
   gap: .4rem;
 }
-.exp-action-btn {
+.exp-action-btn,
+.experience-panel .library-actions button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: .8em;
   padding: .25rem .5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
   cursor: pointer;
   text-align: center;
 }
-.exp-action-btn:hover { color: var(--text); border-color: var(--text); }
+.exp-action-btn:hover,
+.experience-panel .library-actions button:hover { color: var(--text); border-color: var(--mid-line); background: var(--mid); }
 .exp-import-label { margin: 0; }
-/* Library buttons are added by controls.ts. They match the look buttons above and sit in two columns. */
 .experience-panel .library-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
-.experience-panel .library-actions button {
-  font-size: .8em;
-  padding: .25rem .5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 4px);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.experience-panel .library-actions button:hover { color: var(--text); border-color: var(--text); }
 @media (max-height: 600px) { .experience-panel { padding: .45rem .55rem; gap: .3rem; } }
 
 /* Startup Onboarding Toast (Slice 12.2) */
@@ -619,13 +588,13 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   justify-content: space-between;
   gap: 0.75rem;
   max-width: min(34rem, 90vw);
-  background: rgba(20, 24, 35, 0.94);
+  background: var(--surface-raised);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(42, 106, 224, 0.45);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--mid-line);
+  border-radius: var(--radius-card);
   padding: 0.6rem 0.9rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 16px rgba(42, 106, 224, 0.2);
+  box-shadow: var(--shadow-pop);
   animation: toastSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
@@ -666,12 +635,11 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
 }
 
 .onboarding-toast-text strong {
-  color: #fff;
+  color: var(--text);
   font-weight: 600;
 }
 
 @media (max-width: 599px) {
-  /* Onboarding toast on phone docks at the top */
   .onboarding-toast {
     bottom: auto;
     top: 1rem;
@@ -704,69 +672,64 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   margin: 0 0 0.75rem;
 }
 
-.toast { position: fixed; top: 1rem; right: 1rem; z-index: 10; background: rgba(18, 18, 18, .85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--border); padding: .4rem .8rem; border-radius: 6px; opacity: 0; transition: opacity .32s; pointer-events: none; }
+.toast { position: fixed; top: 1rem; right: 1rem; z-index: 10; background: var(--surface-raised); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); padding: .4rem .8rem; border-radius: var(--radius-card); box-shadow: var(--shadow-pop); opacity: 0; transition: opacity .32s; pointer-events: none; }
 .toast.shown { opacity: 1; }
 .toast-content { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem .55rem; }
-.toast-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.4); flex-shrink: 0; display: inline-block; }
-.toast-title { font-weight: 600; color: #fff; }
-.toast-detail { color: var(--muted, #aaa); font-size: .85em; }
-/* Studio (slice 9.3). Desktop: right-side panel, 320px, 12px inset. Under 600px: bottom sheet (see media query below). */
+.toast-swatch { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line-strong); flex-shrink: 0; display: inline-block; }
+.toast-title { font-weight: 600; color: var(--text); }
+.toast-detail { color: var(--text-muted); font-size: .85em; }
+
+/* Studio (slice 9.3). Desktop: right-side panel, 320px, 12px inset. Under 600px: bottom sheet. */
 .studio {
   position: fixed; top: 12px; right: 12px; bottom: 12px; width: 320px; max-width: 90vw; overflow-y: auto; z-index: 5;
-  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  /* Tweakpane theme, mapped to shared tokens. Tweakpane reads these from ancestors. */
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-dialog);
+  /* Tweakpane theme, mapped to Harness UI tokens. */
   --tp-base-background-color: var(--surface);
-  --tp-base-border-radius: var(--radius-md);
-  --tp-base-font-family: var(--ui-font);
-  --tp-container-background-color: var(--surface-2);
-  --tp-container-background-color-hover: var(--hover);
-  --tp-container-background-color-focus: var(--hover);
-  --tp-container-background-color-active: var(--hover);
+  --tp-base-border-radius: var(--radius-card);
+  --tp-base-font-family: var(--font-sans);
+  --tp-container-background-color: var(--surface-raised);
+  --tp-container-background-color-hover: var(--mid);
+  --tp-container-background-color-focus: var(--mid);
+  --tp-container-background-color-active: var(--mid);
   --tp-container-foreground-color: var(--text);
-  --tp-label-foreground-color: var(--muted);
-  --tp-monitor-background-color: var(--surface-2);
-  --tp-monitor-foreground-color: var(--muted);
-  --tp-input-background-color: var(--surface-2);
-  --tp-input-background-color-hover: var(--hover);
-  --tp-input-background-color-focus: var(--hover);
-  --tp-input-background-color-active: var(--hover);
+  --tp-label-foreground-color: var(--text-muted);
+  --tp-monitor-background-color: var(--surface-sunken);
+  --tp-monitor-foreground-color: var(--text-muted);
+  --tp-input-background-color: var(--surface-sunken);
+  --tp-input-background-color-hover: var(--mid);
+  --tp-input-background-color-focus: var(--mid);
+  --tp-input-background-color-active: var(--mid);
   --tp-input-foreground-color: var(--text);
-  --tp-button-background-color: var(--surface-2);
-  --tp-button-background-color-hover: var(--hover);
-  --tp-button-background-color-focus: var(--hover);
+  --tp-button-background-color: var(--surface-raised);
+  --tp-button-background-color-hover: var(--mid);
+  --tp-button-background-color-focus: var(--mid);
   --tp-button-background-color-active: var(--accent);
   --tp-button-foreground-color: var(--text);
-  --tp-groove-foreground-color: var(--border);
+  --tp-groove-foreground-color: var(--line);
 }
-.studio :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .studio[hidden] { display: none; }
 .studio-head, dialog#shortcuts .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 @media (max-width: 599px) {
   .studio {
     top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-width: 100%; max-height: 80vh;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0;
+    border-radius: var(--radius-dialog) var(--radius-dialog) 0 0; border-bottom: 0;
     padding: 0 16px calc(12px + env(safe-area-inset-bottom));
     overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch;
-    /* Touch minimum 44px per Studio row (Tweakpane blade height) and per control. */
     --tp-container-unit-size: 44px;
     --tp-container-unit-spacing: 6px;
   }
   .studio:not([hidden]) { animation: studio-slide-up .25s ease-out; }
-  .studio button, .studio select { min-width: 44px; min-height: 44px; }
+  .studio .tp-btnv_b, .studio select { min-width: 44px; min-height: 44px; }
   .studio input, .studio textarea { min-height: 44px; }
-  /* Slider touch sizes on phones (slice 10.3). Colours and track look are shared (slice 10.4, below). Tweakpane 4.0.5 classes: .tp-sldv row, .tp-sldv_t track, .tp-sldv_k knob (::after). */
   .studio .tp-sldv { min-height: 44px; }
   .studio .tp-sldv_t { height: 44px; margin: 0; }
   .studio .tp-sldv_k::after { width: 28px; height: 28px; right: -14px; border-radius: 50%; }
-  /* Studio text uses the shared settings text size (slice 11.6). */
   .studio .tp-lblv_l { font-size: var(--ui-text-size); line-height: var(--ui-text-lh); }
-  /* Sheet header on phones: flush with the sheet edges, Close stays in view while the body scrolls. */
   .studio .sheet-head { margin: 0 -16px; padding: 4px 16px; }
   dialog#shortcuts .sheet-head { margin: -.6rem -.6rem .25rem; padding: .6rem .6rem .25rem; }
   .sheet-head { touch-action: pan-x pan-up pinch-zoom; }
-  /* 44 px tall hit area, full width, with a visible 40x4 bar centred inside. touch-action none keeps the drag with the sheet. */
   .sheet-handle { display: block; position: relative; flex: 0 0 auto; width: 100%; height: 44px; margin: 0; touch-action: none; cursor: grab; }
-  .sheet-handle::before { content: ""; position: absolute; left: 50%; top: 50%; width: 40px; height: 4px; margin: -2px 0 0 -20px; border-radius: 2px; background: var(--muted); }
+  .sheet-handle::before { content: ""; position: absolute; left: 50%; top: 50%; width: 40px; height: 4px; margin: -2px 0 0 -20px; border-radius: 2px; background: var(--text-muted); }
 }
 @keyframes studio-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
@@ -780,36 +743,34 @@ body.drag-over #stage { outline: 4px dashed var(--accent); outline-offset: -12px
   .exp-mode-btn,
   .onboarding-toast { transition: none; }
 }
-dialog#shortcuts { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-lg); max-width: min(34rem, 92vw); padding: 1rem 1.25rem; }
-dialog#shortcuts::backdrop { background: rgba(0, 0, 0, .6); }
+
+dialog#shortcuts { background: var(--surface-raised); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-dialog); box-shadow: var(--shadow-dialog); max-width: min(34rem, 92vw); padding: 1rem 1.25rem; }
+dialog#shortcuts::backdrop { background: var(--scrim); }
 dialog#shortcuts h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
 dialog#shortcuts table { border-collapse: collapse; width: 100%; }
 dialog#shortcuts th, dialog#shortcuts td { padding: .3rem .5rem .3rem 0; text-align: left; vertical-align: top; font-weight: normal; }
 dialog#shortcuts th { white-space: nowrap; }
-dialog#shortcuts kbd { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .05rem .4rem; }
-dialog#shortcuts button.key { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: .05rem .4rem; cursor: pointer; }
-dialog#shortcuts button.key:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* Studio buttons look like the shortcut keys: same surface, border, radius and font size. Touch height comes from the 599px rule above. */
-.studio .tp-btnv_b, .studio #studio-close { font: inherit; font-size: var(--btn-font-size); font-weight: var(--btn-font-weight); color: inherit; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+dialog#shortcuts kbd,
+dialog#shortcuts button.key { font: inherit; font-size: var(--control-fs-compact); color: inherit; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: .05rem .4rem; }
+dialog#shortcuts button.key { cursor: pointer; }
+
+/* Studio Tweakpane buttons, tiles, folder actions, sliders */
+.studio .tp-btnv_b { font: inherit; font-size: var(--ui-text-size); color: inherit; background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-control); }
 .studio .tp-btnv_b:active { color: var(--on-accent); }
-/* Studio action buttons on a grid (slice 10.2). Three tiles per row at every width, filling the panel. Each tile is 44px tall. */
 .studio .studio-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 6px 0; }
 .studio .studio-tiles > .tp-btnv { margin: 0; min-width: 0; }
 .studio .studio-tiles .tp-btnv_b { width: 100%; height: 44px; min-height: 44px; margin: 0; padding: 0 .25rem; }
-/* Studio folder action buttons & category indicator (slice 10.4) */
 .studio .studio-folder-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
 .studio .studio-folder-actions > .tp-btnv { flex: 1 1 0; margin: 0; min-width: 0; }
 .studio .studio-folder-actions .tp-btnv_b { width: 100%; min-height: 32px; padding: 0 4px; font-size: var(--ui-text-size); }
 .studio .studio-category-indicator input,
-.studio .studio-category-indicator .tp-txtv_i { color: var(--muted); font-style: italic; }
+.studio .studio-category-indicator .tp-txtv_i { color: var(--text-muted); font-style: italic; }
 @media (max-width: 599px) {
   .studio .studio-folder-actions .tp-btnv_b { min-height: 44px; }
 }
-/* Shared Studio rules (slice 10.4): same look at every width. Safe on desktop: colours, track and fill only, no touch sizes. */
 .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
-.studio .tp-sldv { touch-action: none; }
-.studio .tp-sldv_t { touch-action: none; }
-.studio .tp-sldv_t::before { height: 8px; border-radius: 4px; background-color: var(--border); }
+.studio .tp-sldv, .studio .tp-sldv_t { touch-action: none; }
+.studio .tp-sldv_t::before { height: 8px; border-radius: 4px; background-color: var(--line-strong); }
 .studio .tp-sldv_k { --btn-bg: var(--text); --btn-bg-h: var(--text); --btn-bg-f: var(--text); --btn-bg-a: var(--text); }
 .studio .tp-sldv_k::before { height: 8px; border-radius: 4px; background-color: var(--accent); }
 .studio .tp-sldv_k::after { background-color: var(--text); }
@@ -831,16 +792,11 @@ dialog#shortcuts .short { display: none; }
   dialog#shortcuts .short { display: inline; }
   dialog#shortcuts .keys { display: grid; grid-template-columns: repeat(5, 44px); gap: .25rem; }
 }
-/* One close pattern (slice 11.2): Studio, Shortcuts and the controls bar each close with .close-btn at the top right. 44 px square under 600px. */
+
 .close-btn { flex: 0 0 auto; }
-.close-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* Controls close sits in the sheet header: top right on desktop (the bar does not scroll), sticky on phones (see 599px block). */
 .controls-head { position: absolute; top: .5rem; right: .5rem; background: none; }
 #controls-show { position: fixed; right: 1rem; bottom: .75rem; z-index: 6; }
 #controls-show[hidden] { display: none; }
-@media (max-width: 599px) {
-  .close-btn, #controls-close, #controls-show { min-width: 44px; min-height: 44px; }
-}
 
 /* Studio Admin Mode (Slice 11.4) */
 .studio-admin-badge {
@@ -849,10 +805,10 @@ dialog#shortcuts .short { display: none; }
   gap: .35rem;
   font-size: var(--ui-text-size);
   font-weight: 600;
-  color: #ffd700;
-  background: rgba(255, 215, 0, 0.15);
-  border: 1px solid rgba(255, 215, 0, 0.4);
-  border-radius: var(--radius-sm);
+  color: var(--warn);
+  background: var(--warn-tint);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-control);
   padding: .15rem .5rem;
   letter-spacing: .02em;
   user-select: none;
@@ -865,59 +821,55 @@ dialog#shortcuts .short { display: none; }
   justify-content: flex-end;
   align-items: center;
   padding: .5rem .75rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
   background: var(--surface);
 }
 .studio-admin-action-btn {
   font-size: var(--ui-text-size);
   font-weight: 500;
-  color: var(--muted);
+  color: var(--text-muted);
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
   padding: .25rem .6rem;
   cursor: pointer;
-  transition: color .2s, border-color .2s;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
 }
 .studio-admin-action-btn:hover {
   color: var(--text);
-  border-color: var(--text);
+  border-color: var(--mid-line);
 }
 .studio-admin-action-btn.admin-active {
-  color: #ffd700;
-  border-color: rgba(255, 215, 0, 0.5);
-  background: rgba(255, 215, 0, 0.1);
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-tint);
 }
 
-
-/* Reset to default and changed marker on Studio controls (slice 15.5). Theme tokens only, so light and dark both work. */
+/* Reset to default and changed marker on Studio controls (slice 15.5) */
 .studio .tp-lblv { position: relative; }
-.studio .studio-reset { flex: none; margin-left: 4px; padding: 0 6px; min-width: 24px; min-height: 24px; font: inherit; line-height: 1; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+.studio .studio-reset { flex: none; margin-left: 4px; padding: 0 6px; min-width: 24px; min-height: 24px; font: inherit; line-height: 1; color: var(--text); background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-control); cursor: pointer; }
 .studio .studio-reset[hidden] { display: none; }
-.studio .studio-reset:hover { background: var(--hover); }
-.studio .studio-reset:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.studio .studio-reset:hover { background: var(--mid); }
+.studio .studio-reset:focus-visible { outline-offset: 1px; }
 .studio .studio-changed { box-shadow: inset 3px 0 0 var(--accent); }
 .studio .studio-changed .tp-lblv_l::before { content: "\25CF"; margin-right: .35em; color: var(--accent); font-size: .7em; vertical-align: middle; }
 
-/* Preset browser on the main screen (slice 21.4). Theme tokens only. Hidden until slice 21.5 wires it in. */
+/* Preset browser on the main screen (slice 21.4) */
 .preset-browser-panel[hidden] { display: none; }
 .preset-browser { display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow: hidden; color: var(--text); font-size: var(--ui-text-size); }
 .preset-browser-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.preset-browser-count { color: var(--muted); }
-.preset-browser-theme { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 6px; min-height: 32px; }
-.preset-browser-theme:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.preset-browser-count { color: var(--text-muted); }
+.preset-browser-theme { font: inherit; color: var(--text); background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-control); padding: 4px 6px; min-height: 32px; }
 .preset-browser-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 6px; }
-.preset-group-title { margin: 0 0 4px; font-size: .85em; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.preset-group-title { margin: 0 0 4px; font-size: .85em; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
-.preset-card { display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); min-height: 44px; }
+.preset-card { display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-control); min-height: 44px; }
 .preset-card-pick { flex: 1; min-width: 0; text-align: left; font: inherit; color: var(--text); background: none; border: 0; padding: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preset-card-pick:hover { color: var(--focus); }
-/* Slice 21.11: 2px ring, same as the app-wide focus ring. The list's padding keeps the ring from being clipped. */
-.preset-card-pick:focus-visible, .preset-card-fav:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .preset-card-meta { flex: none; }
-.preset-cost { display: inline-block; font-size: .7em; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); }
-.preset-cost-light { background: rgba(60, 170, 90, 0.25); }
-.preset-cost-medium { background: rgba(230, 170, 40, 0.25); }
-.preset-cost-heavy { background: rgba(220, 70, 70, 0.3); }
+.preset-cost { display: inline-block; font-size: .7em; padding: 2px 6px; border-radius: var(--radius-pill); border: 1px solid transparent; color: var(--text); }
+.preset-cost-light { background: var(--good-tint); color: var(--good); }
+.preset-cost-medium { background: var(--warn-tint); color: var(--warn); }
+.preset-cost-heavy { background: var(--bad-tint); color: var(--bad); }
 .preset-card-fav { flex: none; font: inherit; color: var(--text); background: none; border: 0; min-width: 32px; min-height: 32px; cursor: pointer; font-size: 1.1em; }
 .preset-card-fav[aria-pressed="true"] { color: var(--focus); }

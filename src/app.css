@@ -1,22 +1,18 @@
 /* App-only styles and kit overrides. Loads after style.css. Never edit the kit's tokens.css or bundle.css. */
 
-/* Slice 24.2: keep the app's own body type until the screens move onto the kit (slices 24.5 to 24.10). */
-body {
-  font-family: var(--ui-font);
-  font-size: 1rem;
-  line-height: normal;
+/* System fonts only per design-system/profile.md; app-only slider & Tweakpane geometry tokens. */
+:root {
+  --font-display: var(--font-sans);
+  --slider-track-h: 8px;
+  --slider-thumb-d: 20px;
+  --ui-text-size: 0.8rem;
+  --ui-text-lh: 1.15;
 }
 
-/* Slice 24.9: inline SVG icons, Lucide style, stroke 1.75. Size follows the surrounding font size. */
+/* Slice 24.9: inline SVG icons scale with surrounding text; stroke/fill rules live in bundle.css. */
 .ui-icon {
   width: 1em;
   height: 1em;
-  flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.75;
-  stroke-linecap: round;
-  stroke-linejoin: round;
   vertical-align: -0.125em;
 }
 
@@ -139,7 +135,6 @@ body {
 .studio-inline-prompt__input,
 .studio-inline-prompt__select {
   width: 100%;
-  box-sizing: border-box;
   min-height: var(--control-h-compact, 32px);
   padding: var(--space-1) var(--space-2);
   background: var(--surface-sunken);
@@ -148,13 +143,6 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   font-size: var(--control-fs-compact, 13px);
-}
-
-.studio-inline-prompt__input:focus-visible,
-.studio-inline-prompt__select:focus-visible,
-.studio-inline-prompt__actions button:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
 }
 
 .studio-inline-prompt__actions {
@@ -179,4 +167,3 @@ body {
     transition: none;
   }
 }
-

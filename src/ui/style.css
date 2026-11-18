@@ -7,43 +7,42 @@
   right: 0;
   z-index: 10;
   margin-top: auto;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   min-height: 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  background: rgba(17, 17, 17, 0.94);
+  background: color-mix(in oklch, var(--surface-raised) 94%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  border-top: 1px solid var(--line);
   font-size: 12px;
   line-height: 1.4;
-  color: #cbd5e1;
-  box-sizing: border-box;
+  color: var(--text-muted);
   word-break: break-word;
   pointer-events: auto;
 }
 
 .helper-param-name {
-  color: #f8fafc;
+  color: var(--text);
   font-weight: 600;
 }
 
 .helper-param-desc {
-  color: #e2e8f0;
+  color: var(--text-muted);
 }
 
 .helper-warning {
-  color: #fbbf24;
+  color: var(--warn);
   font-weight: 600;
   display: block;
 }
 
 .intense-badge {
-  color: #fbbf24;
+  color: var(--warn);
   font-weight: bold;
-  margin-left: 4px;
+  margin-left: var(--space-1);
   font-size: 11px;
   cursor: help;
   user-select: none;
@@ -53,29 +52,29 @@
 .studio-control-highlight,
 .tp-rotv .tp-lblv.studio-control-highlight,
 .tp-rotv .tp-btnv.studio-control-highlight {
-  background: rgba(56, 189, 248, 0.12);
+  background: var(--accent-tint);
   border-radius: 4px;
-  box-shadow: inset 3px 0 0 #38bdf8;
-  transition: background 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: inset 3px 0 0 var(--accent);
+  transition: background var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
 
 .studio-control-highlight.studio-control-highlight-intense,
 .tp-rotv .tp-lblv.studio-control-highlight.studio-control-highlight-intense,
 .tp-rotv .tp-btnv.studio-control-highlight.studio-control-highlight-intense {
-  background: rgba(245, 158, 11, 0.14);
-  box-shadow: inset 3px 0 0 #fbbf24;
+  background: var(--warn-tint);
+  box-shadow: inset 3px 0 0 var(--warn);
 }
 
 .studio-control-highlight:focus-visible,
 .tp-rotv .tp-lblv.studio-control-highlight:focus-within,
 .tp-rotv .tp-btnv.studio-control-highlight:focus-within {
-  outline: 1px solid rgba(56, 189, 248, 0.45);
-  outline-offset: -1px;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .tp-rotv .tp-lblv:hover,
 .tp-rotv .tp-lblv:focus-within {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--mid);
   border-radius: 4px;
 }
 
@@ -90,6 +89,6 @@
 @media (max-width: 599px) {
   .studio-helper-bar {
     margin: 0 -16px;
-    padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+    padding: var(--space-2) var(--space-4) calc(var(--space-2) + env(safe-area-inset-bottom));
   }
 }
