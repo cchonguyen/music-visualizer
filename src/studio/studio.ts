@@ -37,6 +37,8 @@ import {
   CAMERA_MODES,
   COLOR_MOODS,
   TRIGGER_CADENCES,
+  DEFAULT_CUSTOM_SHADOW_TINT,
+  DEFAULT_CUSTOM_HIGHLIGHT_TINT,
   getGlobalDirector,
   type ExperienceMode,
   type CameraMode,
@@ -2944,25 +2946,49 @@ export function buildGlobalDirectorControls(
   director = getGlobalDirector(),
   onHelperUpdate?: (info: ControlHelperDescriptor | null) => void,
 ) {
-  const settings = { ...director.getSettings() };
+  const initial = director.getSettings();
+  const settings = {
+    ...initial,
+    customTint: Boolean(initial.customTint),
+    customShadowTint: initial.customShadowTint ?? DEFAULT_CUSTOM_SHADOW_TINT,
+    customHighlightTint: initial.customHighlightTint ?? DEFAULT_CUSTOM_HIGHLIGHT_TINT,
+  };
   let syncing = false;
   let experienceModeBinding: any;
   let cameraModeBinding: any;
   let cameraIntensityBinding: any;
   let colorMoodBinding: any;
   let colorIntensityBinding: any;
+  let customTintBinding: any;
+  let customShadowTintBinding: any;
+  let customHighlightTintBinding: any;
   let triggerCadenceBinding: any;
+
+  const updateCustomTintVisibility = () => {
+    const show = Boolean(settings.customTint);
+    if (customShadowTintBinding) customShadowTintBinding.hidden = !show;
+    if (customHighlightTintBinding) customHighlightTintBinding.hidden = !show;
+  };
 
   const syncFromDirector = () => {
     if (syncing) return;
     syncing = true;
     try {
-      Object.assign(settings, director.getSettings());
+      const next = director.getSettings();
+      Object.assign(settings, next, {
+        customTint: Boolean(next.customTint),
+        customShadowTint: next.customShadowTint ?? DEFAULT_CUSTOM_SHADOW_TINT,
+        customHighlightTint: next.customHighlightTint ?? DEFAULT_CUSTOM_HIGHLIGHT_TINT,
+      });
       experienceModeBinding?.refresh?.();
       cameraModeBinding?.refresh?.();
       cameraIntensityBinding?.refresh?.();
       colorMoodBinding?.refresh?.();
       colorIntensityBinding?.refresh?.();
+      customTintBinding?.refresh?.();
+      customShadowTintBinding?.refresh?.();
+      customHighlightTintBinding?.refresh?.();
+      updateCustomTintVisibility();
       triggerCadenceBinding?.refresh?.();
     } finally {
       syncing = false;
@@ -3049,6 +3075,10 @@ export function buildGlobalDirectorControls(
       'Biolum': 'biolum',
       'Vapor': 'vapor',
       'Prismatic': 'prismatic',
+      'Monochrome Noir': 'noir',
+      'Acid Neon': 'acid',
+      'Nordic Aurora': 'aurora',
+      'Deep Sunset': 'sunset',
     },
   });
   colorMoodBinding?.on?.('change', (ev: { value: any }) => {
@@ -3084,6 +3114,61 @@ export function buildGlobalDirectorControls(
     },
     onHelperUpdate,
   );
+
+  customTintBinding = folder.addBinding(settings, 'customTint', {
+    label: 'Custom tint',
+  });
+  customTintBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
+    director.updateSettings({ customTint: Boolean(ev.value) });
+    syncFromDirector();
+  });
+  attachControlHelper(
+    customTintBinding,
+    {
+      label: 'Custom tint',
+      description: 'Override the active colour palette with your own shadow and highlight RGB tints.',
+    },
+    onHelperUpdate,
+  );
+
+  customShadowTintBinding = folder.addBinding(settings, 'customShadowTint', {
+    label: 'Shadow tint',
+    view: 'color',
+  });
+  customShadowTintBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
+    director.updateSettings({ customShadowTint: String(ev.value) });
+    syncFromDirector();
+  });
+  attachControlHelper(
+    customShadowTintBinding,
+    {
+      label: 'Shadow tint',
+      description: 'Choose the shadow tint colour used when Custom tint is enabled.',
+    },
+    onHelperUpdate,
+  );
+
+  customHighlightTintBinding = folder.addBinding(settings, 'customHighlightTint', {
+    label: 'Highlight tint',
+    view: 'color',
+  });
+  customHighlightTintBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
+    director.updateSettings({ customHighlightTint: String(ev.value) });
+    syncFromDirector();
+  });
+  attachControlHelper(
+    customHighlightTintBinding,
+    {
+      label: 'Highlight tint',
+      description: 'Choose the highlight tint colour used when Custom tint is enabled.',
+    },
+    onHelperUpdate,
+  );
+
+  updateCustomTintVisibility();
 
   triggerCadenceBinding = folder.addBinding(settings, 'triggerCadence', {
     label: 'Transition trigger',
@@ -3122,6 +3207,9 @@ export function buildGlobalDirectorControls(
     cameraIntensityBinding,
     colorMoodBinding,
     colorIntensityBinding,
+    customTintBinding,
+    customShadowTintBinding,
+    customHighlightTintBinding,
     triggerCadenceBinding,
     unsubscribe,
   };

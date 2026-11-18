@@ -140,9 +140,13 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
     for (const cam of ['auto', 'craneSway', 'dutchRoll', 'breathingPush', 'horizonTilt', 'stillAnchor', 'off']) {
       expect(expPanel).toContain(`value="${cam}"`);
     }
-    for (const col of ['auto', 'native', 'cyberpunk', 'ember', 'biolum', 'vapor', 'prismatic']) {
+    for (const col of ['auto', 'native', 'cyberpunk', 'ember', 'biolum', 'vapor', 'prismatic', 'noir', 'acid', 'aurora', 'sunset']) {
       expect(expPanel).toContain(`value="${col}"`);
     }
+    expect(expPanel).toContain('<option value="noir">Monochrome Noir</option>');
+    expect(expPanel).toContain('<option value="acid">Acid Neon</option>');
+    expect(expPanel).toContain('<option value="aurora">Nordic Aurora</option>');
+    expect(expPanel).toContain('<option value="sunset">Deep Sunset</option>');
     expect(expPanel).toContain('id="gain"');
     expect(expPanel).toContain('id="gain-value"');
     expect(expPanel).toContain('id="beat-sensitivity"');
