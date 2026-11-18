@@ -24,6 +24,7 @@ import { getVisualGain } from '../render/gainStore';
 import { getBeatSensitivity } from '../audio/onset';
 import { getRenderScale } from '../gl/size';
 import { getAspectCorrect } from '../render/compositor';
+import { CYCLE_STORAGE_KEY, DEFAULT_CYCLE, loadCycleSettings, type CycleOptions } from '../presets/autoCycle';
 import type { AudioEngine } from '../audio/engine';
 
 // The shortcuts list is static markup, so the test reads it from index.html (no jsdom in this repo).
@@ -118,7 +119,7 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
     expect(sourcePanel).toContain('id="volume-value"');
   });
 
-  it('has the preset auto-cycle selector, Shuffle toggle and timer length in #experience-panel (slice 21.13)', () => {
+  it('has the preset auto-cycle selector, Shuffle toggle, timer length and hard-cut row in #experience-panel (slices 21.13 & 26.6)', () => {
     expect(expPanel).toContain('id="exp-cycle-mode"');
     for (const v of ['off', 'timer', 'beat']) {
       expect(expPanel).toMatch(new RegExp(`<option value="${v}">`));
@@ -126,6 +127,8 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
     expect(expPanel).toContain('id="exp-cycle-shuffle"');
     expect(expPanel).toMatch(/id="exp-cycle-interval"[^>]*min="5"[^>]*max="120"/);
     expect(expPanel).toContain('id="exp-cycle-interval-value"');
+    expect(expPanel).toMatch(/<div[^>]*id="exp-cycle-hard-cut-row"[^>]*hidden/);
+    expect(expPanel).toMatch(/<input[^>]*id="exp-cycle-hard-cut"[^>]*type="checkbox"/);
   });
 
   it('consolidates Experience mode, Camera, Color, Gain, Beat, Quality and Aspect in #experience-panel', () => {
@@ -466,6 +469,30 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     const aspectCorrect = register('aspect-correct', 'input');
     aspectCorrect.type = 'checkbox';
     experiencePanel.appendChild(aspectCorrect);
+
+    const expCycleMode = register('exp-cycle-mode', 'select');
+    experiencePanel.appendChild(expCycleMode);
+    const expCycleShuffle = register('exp-cycle-shuffle', 'input');
+    expCycleShuffle.type = 'checkbox';
+    experiencePanel.appendChild(expCycleShuffle);
+    const expCycleIntervalRow = register('exp-cycle-interval-row', 'div');
+    expCycleIntervalRow.hidden = true;
+    const expCycleInterval = register('exp-cycle-interval', 'input');
+    const expCycleIntervalValue = register('exp-cycle-interval-value', 'output');
+    expCycleIntervalRow.appendChild(expCycleInterval);
+    expCycleIntervalRow.appendChild(expCycleIntervalValue);
+    experiencePanel.appendChild(expCycleIntervalRow);
+    const expCycleBarsRow = register('exp-cycle-bars-row', 'div');
+    expCycleBarsRow.hidden = true;
+    const expCycleBars = register('exp-cycle-bars', 'select');
+    expCycleBarsRow.appendChild(expCycleBars);
+    experiencePanel.appendChild(expCycleBarsRow);
+    const expCycleHardCutRow = register('exp-cycle-hard-cut-row', 'div');
+    expCycleHardCutRow.hidden = true;
+    const expCycleHardCut = register('exp-cycle-hard-cut', 'input');
+    expCycleHardCut.type = 'checkbox';
+    expCycleHardCutRow.appendChild(expCycleHardCut);
+    experiencePanel.appendChild(expCycleHardCutRow);
 
     const expExportBtn = register('exp-export-btn', 'button');
     experiencePanel.appendChild(expExportBtn);
@@ -877,6 +904,30 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     const aspectCorrect = register('aspect-correct', 'input');
     aspectCorrect.type = 'checkbox';
     experiencePanel.appendChild(aspectCorrect);
+
+    const expCycleMode = register('exp-cycle-mode', 'select');
+    experiencePanel.appendChild(expCycleMode);
+    const expCycleShuffle = register('exp-cycle-shuffle', 'input');
+    expCycleShuffle.type = 'checkbox';
+    experiencePanel.appendChild(expCycleShuffle);
+    const expCycleIntervalRow = register('exp-cycle-interval-row', 'div');
+    expCycleIntervalRow.hidden = true;
+    const expCycleInterval = register('exp-cycle-interval', 'input');
+    const expCycleIntervalValue = register('exp-cycle-interval-value', 'output');
+    expCycleIntervalRow.appendChild(expCycleInterval);
+    expCycleIntervalRow.appendChild(expCycleIntervalValue);
+    experiencePanel.appendChild(expCycleIntervalRow);
+    const expCycleBarsRow = register('exp-cycle-bars-row', 'div');
+    expCycleBarsRow.hidden = true;
+    const expCycleBars = register('exp-cycle-bars', 'select');
+    expCycleBarsRow.appendChild(expCycleBars);
+    experiencePanel.appendChild(expCycleBarsRow);
+    const expCycleHardCutRow = register('exp-cycle-hard-cut-row', 'div');
+    expCycleHardCutRow.hidden = true;
+    const expCycleHardCut = register('exp-cycle-hard-cut', 'input');
+    expCycleHardCut.type = 'checkbox';
+    expCycleHardCutRow.appendChild(expCycleHardCut);
+    experiencePanel.appendChild(expCycleHardCutRow);
 
     const expExportBtn = register('exp-export-btn', 'button');
     experiencePanel.appendChild(expExportBtn);
@@ -1378,6 +1429,72 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('shows #exp-cycle-hard-cut-row only when auto-cycle mode is beat and persists toggle (Slice 26.6)', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+    });
+    try {
+      const cycle: CycleOptions = { ...DEFAULT_CYCLE, mode: 'off', hardCut: false };
+      const controlsInstance = setupControls(mockEngine, { calm: false, fileName: '', cycle });
+      const modeSelect = domElements['exp-cycle-mode']!;
+      const hardCutRow = domElements['exp-cycle-hard-cut-row']!;
+      const hardCutBox = domElements['exp-cycle-hard-cut']!;
+
+      // Hidden for 'off'
+      expect(hardCutRow.hidden).toBe(true);
+      expect(hardCutBox.checked).toBe(false);
+
+      // Hidden for 'timer'
+      modeSelect.value = 'timer';
+      modeSelect.dispatchEvent({ type: 'change' });
+      expect(hardCutRow.hidden).toBe(true);
+
+      // Hidden for 'phrase'
+      modeSelect.value = 'phrase';
+      modeSelect.dispatchEvent({ type: 'change' });
+      expect(hardCutRow.hidden).toBe(true);
+
+      // Visible for 'beat'
+      modeSelect.value = 'beat';
+      modeSelect.dispatchEvent({ type: 'change' });
+      expect(hardCutRow.hidden).toBe(false);
+
+      // Toggling hard cut updates state.cycle and persists to storage
+      hardCutBox.checked = true;
+      hardCutBox.dispatchEvent({ type: 'change' });
+      expect(cycle.hardCut).toBe(true);
+      const savedOn = JSON.parse(store.get(CYCLE_STORAGE_KEY)!);
+      expect(savedOn.hardCut).toBe(true);
+
+      // Reloading into a fresh CycleOptions restores hardCut
+      const reloaded: CycleOptions = { ...DEFAULT_CYCLE };
+      loadCycleSettings(reloaded, globalThis.localStorage);
+      expect(reloaded.hardCut).toBe(true);
+      expect(reloaded.mode).toBe('beat');
+
+      // External mode change (e.g. keyboard shortcut B) syncs visibility on tick()
+      cycle.mode = 'off';
+      controlsInstance.tick();
+      expect(hardCutRow.hidden).toBe(true);
+
+      cycle.mode = 'beat';
+      controlsInstance.tick();
+      expect(hardCutRow.hidden).toBe(false);
+      expect(hardCutBox.checked).toBe(true);
+
+      // Toggling off persists false
+      hardCutBox.checked = false;
+      hardCutBox.dispatchEvent({ type: 'change' });
+      expect(cycle.hardCut).toBe(false);
+      const savedOff = JSON.parse(store.get(CYCLE_STORAGE_KEY)!);
+      expect(savedOff.hardCut).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('HUD & Studio-chrome ARIA & data-tooltip audit (Slice 25.8)', () => {
@@ -1413,6 +1530,7 @@ describe('HUD & Studio-chrome ARIA & data-tooltip audit (Slice 25.8)', () => {
       'aspect-correct',
       'exp-cycle-interval',
       'exp-cycle-bars',
+      'exp-cycle-hard-cut',
       'exp-export-btn',
       'exp-import-input',
       'source-btn',

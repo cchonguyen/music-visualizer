@@ -714,6 +714,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const cycleIntervalValue = document.getElementById('exp-cycle-interval-value') as HTMLElement | null;
   const cycleBarsRow = document.getElementById('exp-cycle-bars-row') as HTMLElement | null;
   const cycleBars = document.getElementById('exp-cycle-bars') as HTMLSelectElement | null;
+  const cycleHardCutRow = document.getElementById('exp-cycle-hard-cut-row') as HTMLElement | null;
+  const cycleHardCut = document.getElementById('exp-cycle-hard-cut') as HTMLInputElement | null;
   const syncCycleUI = () => {
     const cycle = state.cycle;
     if (!cycle) return;
@@ -725,6 +727,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     if (cycleIntervalValue) cycleIntervalValue.textContent = `${cycle.intervalSec} s`;
     if (cycleBarsRow) cycleBarsRow.hidden = cycle.mode !== 'phrase';
     if (cycleBars && cycleBars.value !== String(phraseBarsOf(cycle))) cycleBars.value = String(phraseBarsOf(cycle));
+    if (cycleHardCutRow) cycleHardCutRow.hidden = cycle.mode !== 'beat';
+    if (cycleHardCut && cycleHardCut.checked !== Boolean(cycle.hardCut)) cycleHardCut.checked = Boolean(cycle.hardCut);
   };
   const saveCycle = () => {
     if (state.cycle) saveCycleSettings(state.cycle, safeStorage());
@@ -747,6 +751,12 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     if (!state.cycle) return;
     state.cycle.shuffle = cycleShuffle.checked;
     saveCycle();
+  });
+  cycleHardCut?.addEventListener('change', () => {
+    if (!state.cycle) return;
+    state.cycle.hardCut = cycleHardCut.checked;
+    saveCycle();
+    syncCycleUI();
   });
   cycleInterval?.addEventListener('input', () => {
     if (!state.cycle) return;
