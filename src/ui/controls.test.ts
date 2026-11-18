@@ -7,6 +7,9 @@ import {
   isSwipeDismiss,
   SWIPE_DISMISS_PX,
   setupControls,
+  initTooltips,
+  computeTooltipPosition,
+  TOOLTIP_HOVER_DELAY_MS,
   isEditableTarget,
   EXPERIENCE_LABELS,
   EXPERIENCE_TOAST_DATA,
@@ -1339,6 +1342,320 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     for (const fn of engineListeners['source-changed'] || []) fn('mic');
     expect(toast.hidden).toBe(true);
     expect(toast.classList.contains('dismissed')).toBe(true);
+  });
+
+  it('syncs #playback-action-btn data-tooltip with Play/Pause/Stop state and sets tooltips on dynamic controls', () => {
+    const expPanel = domElements['experience-panel']!;
+    const camRow = createMockElement('div');
+    camRow.className = 'exp-controls-row';
+    const camSelect = domElements['exp-camera-select']!;
+    camSelect.closest = (sel: string) => (sel === '.exp-controls-row' ? camRow : null);
+    expPanel.appendChild(camRow);
+
+    const controlsInstance = setupControls(mockEngine, { calm: false, fileName: '' });
+    const actionBtn = domElements['playback-action-btn']!;
+
+    // Dynamic controls created in setupControls
+    const intensitySelect = expPanel.querySelector('#intensity-select');
+    expect(intensitySelect?.getAttribute('aria-label')).toBe('Intensity');
+    expect(intensitySelect?.getAttribute('data-tooltip')?.trim().length).toBeGreaterThan(0);
+
+    const libBtns = domElements['controls']!.querySelectorAll('button').filter(
+      (b) => b.textContent === 'Export library' || b.textContent === 'Import library…',
+    );
+    expect(libBtns.length).toBe(2);
+    for (const btn of libBtns) {
+      expect(btn.getAttribute('aria-label')?.trim().length).toBeGreaterThan(0);
+      expect(btn.getAttribute('data-tooltip')?.trim().length).toBeGreaterThan(0);
+    }
+
+    // File playback: Play -> Pause
+    domElements['file-input']!.files = [{ name: 'track.mp3' }];
+    domElements['file-input']!.dispatchEvent({ type: 'change' });
+    controlsInstance.tick();
+    expect(actionBtn.getAttribute('data-tooltip')).toBe('Play (Space)');
+
+    actionBtn.dispatchEvent({ type: 'click' });
+    controlsInstance.tick();
+    expect(actionBtn.getAttribute('data-tooltip')).toBe('Pause (Space)');
+
+    // Live stream: Stop
+    const micBtn = domElements['source-panel']!.querySelectorAll('button[data-source="mic"]')[0];
+    micBtn?.dispatchEvent({ type: 'click' });
+    expect(actionBtn.getAttribute('data-tooltip')).toBe('Stop audio input');
+  });
+});
+
+describe('HUD & Studio-chrome ARIA & data-tooltip audit (Slice 25.8)', () => {
+  const expectAttrsById = (id: string) => {
+    const tagMatch = indexHtml.match(new RegExp(`<[^>]*\\bid="${id}"[^>]*>`));
+    expect(tagMatch, `missing element #${id}`).not.toBeNull();
+    const tag = tagMatch![0];
+    const aria = tag.match(/aria-label="([^"]+)"/)?.[1]?.trim() ?? '';
+    const tip = tag.match(/data-tooltip="([^"]+)"/)?.[1]?.trim() ?? '';
+    expect(aria.length, `#${id} should have non-empty aria-label`).toBeGreaterThan(0);
+    expect(tip.length, `#${id} should have non-empty data-tooltip`).toBeGreaterThan(0);
+  };
+
+  it('gives every interactive HUD and Studio-chrome control non-empty aria-label and data-tooltip', () => {
+    const ids = [
+      'start-btn',
+      'dismiss-toast-btn',
+      'controls-close',
+      'controls-show',
+      'studio-close',
+      'source-card-display',
+      'file-btn',
+      'test-select',
+      'volume',
+      'exp-camera-select',
+      'exp-color-select',
+      'gain',
+      'beat-sensitivity',
+      'render-quality',
+      'reaction-style',
+      'exp-cycle-mode',
+      'exp-cycle-shuffle',
+      'aspect-correct',
+      'exp-cycle-interval',
+      'exp-cycle-bars',
+      'exp-export-btn',
+      'exp-import-input',
+      'source-btn',
+      'playback-action-btn',
+      'seek',
+      'experience-btn',
+      'studio-open',
+      'popout-open',
+      'shortcuts-btn',
+      'fs-btn',
+      'shortcuts-close',
+      'reopen-toast-btn',
+    ];
+    for (const id of ids) expectAttrsById(id);
+
+    // Mic card
+    const micTag = indexHtml.match(/<button[^>]*data-source="mic"[^>]*>/)?.[0] ?? '';
+    expect(micTag).toMatch(/aria-label="[^"]+"/);
+    expect(micTag).toMatch(/data-tooltip="[^"]+"/);
+
+    // Experience mode segmented buttons
+    for (const mode of ['cinematic', 'calm', 'minimal', 'colorWalk']) {
+      const modeTag = indexHtml.match(new RegExp(`<button[^>]*data-mode="${mode}"[^>]*>`))?.[0] ?? '';
+      expect(modeTag, `mode ${mode} aria-label`).toMatch(/aria-label="[^"]+"/);
+      expect(modeTag, `mode ${mode} data-tooltip`).toMatch(/data-tooltip="[^"]+"/);
+    }
+
+    // Import label wrapper
+    const importLabel = indexHtml.match(/<label[^>]*class="[^"]*exp-import-label[^"]*"[^>]*>/)?.[0] ?? '';
+    expect(importLabel).toMatch(/aria-label="[^"]+"/);
+    expect(importLabel).toMatch(/data-tooltip="[^"]+"/);
+
+    // All shortcut key buttons inside dialog#shortcuts
+    const keyButtons = [...dialog.matchAll(/<button[^>]*class="key"[^>]*>/g)].map((m) => m[0]);
+    expect(keyButtons.length).toBeGreaterThanOrEqual(26);
+    for (const btnTag of keyButtons) {
+      expect(btnTag).toMatch(/aria-label="[^"]+"/);
+      expect(btnTag).toMatch(/data-tooltip="[^"]+"/);
+    }
+  });
+
+  it('styles .ui-tooltip-popover in app.css with Harness UI tokens and reduced-motion support', async () => {
+    const fsModule = 'node:fs';
+    const { readFileSync } = await import(/* @vite-ignore */ fsModule);
+    const appCss: string = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
+    expect(appCss).toContain('.ui-tooltip-popover');
+    expect(appCss).toContain('var(--surface-raised)');
+    expect(appCss).toContain('var(--line)');
+    expect(appCss).toContain('var(--text)');
+    expect(appCss).toContain('var(--radius-control)');
+    expect(appCss).toContain('var(--shadow-pop)');
+    expect(appCss).toContain('pointer-events: none');
+    expect(appCss).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(appCss).toContain('transition: none');
+  });
+});
+
+describe('Accessible [data-tooltip] popover system (Slice 25.8)', () => {
+  let originalDoc: any;
+  let originalWindow: any;
+  let body: MockDomElement;
+  let root: MockDomElement;
+  let docListeners: Record<string, ((e: any) => void)[]>;
+  let winListeners: Record<string, ((e: any) => void)[]>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    originalDoc = globalThis.document;
+    originalWindow = globalThis.window;
+    docListeners = {};
+    winListeners = {};
+    body = createMockElement('body');
+    root = createMockElement('div');
+    body.appendChild(root);
+
+    (globalThis as any).document = {
+      body,
+      createElement: (tag: string) => {
+        const el = createMockElement(tag);
+        (el as any).getBoundingClientRect = () => ({ left: 0, top: 0, right: 140, bottom: 28, width: 140, height: 28 });
+        (el as any).remove = () => {
+          body.children = body.children.filter((c) => c !== el);
+        };
+        return el;
+      },
+      addEventListener: (evt: string, fn: (e: any) => void) => {
+        docListeners[evt] = docListeners[evt] || [];
+        docListeners[evt].push(fn);
+      },
+      removeEventListener: (evt: string, fn: (e: any) => void) => {
+        docListeners[evt] = (docListeners[evt] || []).filter((f) => f !== fn);
+      },
+      dispatchEvent: (evt: any) => {
+        for (const fn of docListeners[evt.type] || []) fn(evt);
+        return true;
+      },
+    };
+
+    (globalThis as any).window = {
+      innerWidth: 400,
+      innerHeight: 300,
+      setTimeout: (fn: () => void, ms: number) => globalThis.setTimeout(fn, ms),
+      clearTimeout: (id: any) => globalThis.clearTimeout(id),
+      addEventListener: (evt: string, fn: (e: any) => void) => {
+        winListeners[evt] = winListeners[evt] || [];
+        winListeners[evt].push(fn);
+      },
+      removeEventListener: (evt: string, fn: (e: any) => void) => {
+        winListeners[evt] = (winListeners[evt] || []).filter((f) => f !== fn);
+      },
+      dispatchEvent: (evt: any) => {
+        for (const fn of winListeners[evt.type] || []) fn(evt);
+        return true;
+      },
+    };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    (globalThis as any).document = originalDoc;
+    (globalThis as any).window = originalWindow;
+  });
+
+  it('shows tooltip after 200ms hover delay and hides on mouseout', () => {
+    const ctrl = initTooltips(root as unknown as HTMLElement);
+    const popover = body.children.find((c) => c.className === 'ui-tooltip-popover')!;
+    expect(popover).toBeDefined();
+    expect(popover.getAttribute('role')).toBe('tooltip');
+    expect(popover.hidden).toBe(true);
+
+    const btn = createMockElement('button');
+    btn.setAttribute('data-tooltip', 'Choose an audio source');
+    (btn as any).getBoundingClientRect = () => ({ left: 150, top: 120, right: 230, bottom: 156, width: 80, height: 36 });
+    root.appendChild(btn);
+
+    root.dispatchEvent({ type: 'mouseover', target: btn });
+    expect(popover.hidden).toBe(true);
+
+    vi.advanceTimersByTime(TOOLTIP_HOVER_DELAY_MS - 1);
+    expect(popover.hidden).toBe(true);
+
+    vi.advanceTimersByTime(1);
+    expect(popover.hidden).toBe(false);
+    expect(popover.textContent).toBe('Choose an audio source');
+
+    // Leaving to outside hides
+    root.dispatchEvent({ type: 'mouseout', target: btn, relatedTarget: root });
+    expect(popover.hidden).toBe(true);
+
+    ctrl.dispose();
+  });
+
+  it('shows immediately on keyboard :focus-visible and ignores non-focus-visible focusin', () => {
+    const ctrl = initTooltips(root as unknown as HTMLElement);
+    const popover = body.children.find((c) => c.className === 'ui-tooltip-popover')!;
+
+    const btn = createMockElement('button');
+    btn.setAttribute('data-tooltip', 'Toggle fullscreen (F)');
+    (btn as any).getBoundingClientRect = () => ({ left: 180, top: 200, right: 220, bottom: 236, width: 40, height: 36 });
+    (btn as any).matches = (sel: string) => sel === ':focus-visible';
+    root.appendChild(btn);
+
+    root.dispatchEvent({ type: 'focusin', target: btn });
+    expect(popover.hidden).toBe(false);
+    expect(popover.textContent).toBe('Toggle fullscreen (F)');
+
+    // Pointer focus (matches(':focus-visible') === false) should not show
+    (btn as any).matches = () => false;
+    root.dispatchEvent({ type: 'focusout', target: btn, relatedTarget: null });
+    expect(popover.hidden).toBe(true);
+
+    root.dispatchEvent({ type: 'focusin', target: btn });
+    expect(popover.hidden).toBe(true);
+
+    ctrl.dispose();
+  });
+
+  it('dismisses on Escape, pointerdown, blur, and scroll, and cleans up on dispose', () => {
+    const ctrl = initTooltips(root as unknown as HTMLElement);
+    const popover = body.children.find((c) => c.className === 'ui-tooltip-popover')!;
+
+    const btn = createMockElement('button');
+    btn.setAttribute('data-tooltip', 'Open Studio');
+    (btn as any).getBoundingClientRect = () => ({ left: 100, top: 100, right: 160, bottom: 136, width: 60, height: 36 });
+    (btn as any).matches = () => true;
+    root.appendChild(btn);
+
+    // Dismiss via Escape
+    root.dispatchEvent({ type: 'focusin', target: btn });
+    expect(popover.hidden).toBe(false);
+    (globalThis.document as any).dispatchEvent({ type: 'keydown', key: 'Escape' });
+    expect(popover.hidden).toBe(true);
+
+    // Dismiss via pointerdown
+    root.dispatchEvent({ type: 'focusin', target: btn });
+    expect(popover.hidden).toBe(false);
+    (globalThis.document as any).dispatchEvent({ type: 'pointerdown' });
+    expect(popover.hidden).toBe(true);
+
+    // Dismiss via window blur
+    root.dispatchEvent({ type: 'focusin', target: btn });
+    expect(popover.hidden).toBe(false);
+    (globalThis.window as any).dispatchEvent({ type: 'blur' });
+    expect(popover.hidden).toBe(true);
+
+    // Dismiss via scroll
+    root.dispatchEvent({ type: 'focusin', target: btn });
+    expect(popover.hidden).toBe(false);
+    (globalThis.window as any).dispatchEvent({ type: 'scroll' });
+    expect(popover.hidden).toBe(true);
+
+    ctrl.dispose();
+    expect(body.children.some((c) => c.className === 'ui-tooltip-popover')).toBe(false);
+  });
+
+  it('clamps tooltip coordinates inside viewport and flips below when near top edge', () => {
+    // Near top-left corner: flips below and clamps left >= 8
+    const topLeft = computeTooltipPosition(
+      { left: 2, top: 4, right: 42, bottom: 36, width: 40, height: 32 },
+      { left: 0, top: 0, right: 160, bottom: 28, width: 160, height: 28 },
+      360,
+      240,
+    );
+    expect(topLeft.placement).toBe('bottom');
+    expect(topLeft.left).toBe(8);
+    expect(topLeft.top).toBe(44);
+
+    // Near right edge with room above: stays above and clamps left <= 360 - 160 - 8 = 192
+    const topRight = computeTooltipPosition(
+      { left: 320, top: 150, right: 356, bottom: 186, width: 36, height: 36 },
+      { left: 0, top: 0, right: 160, bottom: 28, width: 160, height: 28 },
+      360,
+      240,
+    );
+    expect(topRight.placement).toBe('top');
+    expect(topRight.left).toBe(192);
+    expect(topRight.top).toBe(114);
   });
 });
 

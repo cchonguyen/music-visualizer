@@ -61,3 +61,38 @@ body {
     border-radius: 50%;
   }
 }
+
+/* Slice 25.8: Accessible Harness UI [data-tooltip] popover */
+.ui-tooltip-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 1000;
+  pointer-events: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-pop);
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--control-fs-compact, 13px);
+  line-height: 1.35;
+  max-width: min(260px, calc(100vw - 16px));
+  width: max-content;
+  white-space: normal;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity var(--duration-fast) ease;
+}
+
+.ui-tooltip-popover[hidden] {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-tooltip-popover {
+    transition: none;
+  }
+}
