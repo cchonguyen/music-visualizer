@@ -238,7 +238,273 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return false;
 }
 
+export const TOOLTIP_HOVER_DELAY_MS = 200;
+
+export interface TooltipRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+}
+
+export interface TooltipPosition {
+  left: number;
+  top: number;
+  placement: 'top' | 'bottom';
+}
+
+export interface TooltipController {
+  dispose(): void;
+}
+
+/**
+ * Computes floating tooltip coordinates above (or below if near the top edge) the target
+ * and clamps both axes inside the viewport with an 8 px margin.
+ */
+export function computeTooltipPosition(
+  targetRect: TooltipRect,
+  tooltipRect: TooltipRect,
+  viewportWidth: number,
+  viewportHeight: number,
+): TooltipPosition {
+  const edgePad = 8;
+  const gap = 8;
+  const maxLeft = Math.max(edgePad, viewportWidth - tooltipRect.width - edgePad);
+  const rawLeft = targetRect.left + (targetRect.width - tooltipRect.width) / 2;
+  const left = Math.max(edgePad, Math.min(rawLeft, maxLeft));
+
+  const aboveTop = targetRect.top - tooltipRect.height - gap;
+  const belowTop = targetRect.bottom + gap;
+  const placement: 'top' | 'bottom' = aboveTop >= edgePad ? 'top' : 'bottom';
+  const rawTop = placement === 'top' ? aboveTop : belowTop;
+  const maxTop = Math.max(edgePad, viewportHeight - tooltipRect.height - edgePad);
+  const top = Math.max(edgePad, Math.min(rawTop, maxTop));
+
+  return { left, top, placement };
+}
+
+function findTooltipTarget(raw: EventTarget | null): HTMLElement | null {
+  if (!raw) return null;
+  const el = raw as Partial<HTMLElement>;
+  if (typeof el.closest === 'function') {
+    const match = el.closest('[data-tooltip]') as HTMLElement | null;
+    if (match) return match;
+  }
+  const direct = el.getAttribute?.('data-tooltip') ?? el.dataset?.tooltip;
+  return direct ? (raw as HTMLElement) : null;
+}
+
+function readTooltipText(el: HTMLElement): string {
+  return (el.getAttribute?.('data-tooltip') ?? el.dataset?.tooltip ?? '').trim();
+}
+
+/**
+ * Initializes the single floating Harness UI `[data-tooltip]` popover for `root`.
+ * Shows after ~200 ms on pointer hover, immediately on keyboard `:focus-visible`,
+ * and dismisses on pointer leave, blur/focusout, Escape, pointerdown, and scroll.
+ */
+export function initTooltips(root: ParentNode | HTMLElement = document): TooltipController {
+  const popover = document.createElement('div');
+  popover.id = 'ui-tooltip-popover';
+  popover.className = 'ui-tooltip-popover';
+  popover.setAttribute('role', 'tooltip');
+  popover.hidden = true;
+
+  const hasPopoverApi = typeof (popover as unknown as { showPopover?: () => void }).showPopover === 'function';
+  if (hasPopoverApi) {
+    popover.setAttribute('popover', 'manual');
+  }
+
+  const host = (typeof document !== 'undefined' && document.body)
+    ? document.body
+    : (root as unknown as { appendChild?: (node: Node) => Node });
+  host.appendChild?.(popover);
+
+  let hoverTimer: number | null = null;
+  let activeTarget: HTMLElement | null = null;
+  let pendingTarget: HTMLElement | null = null;
+  let recentPointerDown = false;
+  let addedDescribedBy = false;
+
+  const clearHoverTimer = () => {
+    if (hoverTimer !== null) {
+      window.clearTimeout(hoverTimer);
+      hoverTimer = null;
+    }
+  };
+
+  const restoreDescribedBy = () => {
+    if (activeTarget && addedDescribedBy) {
+      activeTarget.removeAttribute?.('aria-describedby');
+    }
+    addedDescribedBy = false;
+  };
+
+  const hide = () => {
+    clearHoverTimer();
+    pendingTarget = null;
+    restoreDescribedBy();
+    activeTarget = null;
+    popover.hidden = true;
+    if (hasPopoverApi) {
+      try {
+        (popover as unknown as { hidePopover: () => void }).hidePopover();
+      } catch {
+        // Ignore if popover was already closed or disconnected.
+      }
+    }
+  };
+
+  const show = (target: HTMLElement) => {
+    const text = readTooltipText(target);
+    if (!text) {
+      hide();
+      return;
+    }
+    if (activeTarget !== target) {
+      restoreDescribedBy();
+      activeTarget = target;
+      if (!target.getAttribute?.('aria-describedby')) {
+        target.setAttribute?.('aria-describedby', popover.id);
+        addedDescribedBy = true;
+      }
+    }
+    pendingTarget = null;
+    popover.textContent = text;
+    popover.hidden = false;
+    if (hasPopoverApi) {
+      try {
+        (popover as unknown as { showPopover: () => void }).showPopover();
+      } catch {
+        // Ignore if element is not in a popover-capable document.
+      }
+    }
+    const targetRect: TooltipRect = typeof target.getBoundingClientRect === 'function'
+      ? target.getBoundingClientRect()
+      : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+    const tipRect: TooltipRect = typeof popover.getBoundingClientRect === 'function'
+      ? popover.getBoundingClientRect()
+      : { left: 0, top: 0, right: 120, bottom: 32, width: 120, height: 32 };
+    const vw = window.innerWidth || 1024;
+    const vh = window.innerHeight || 768;
+    const pos = computeTooltipPosition(targetRect, tipRect, vw, vh);
+    popover.style.left = `${Math.round(pos.left)}px`;
+    popover.style.top = `${Math.round(pos.top)}px`;
+    if (popover.dataset) popover.dataset.placement = pos.placement;
+  };
+
+  const onMouseOver = (e: Event) => {
+    const target = findTooltipTarget(e.target);
+    if (!target || !readTooltipText(target)) return;
+    if (target === activeTarget || target === pendingTarget) return;
+    clearHoverTimer();
+    pendingTarget = target;
+    hoverTimer = window.setTimeout(() => {
+      hoverTimer = null;
+      if (pendingTarget === target) show(target);
+    }, TOOLTIP_HOVER_DELAY_MS);
+  };
+
+  const onMouseOut = (e: Event) => {
+    const current = activeTarget ?? pendingTarget;
+    if (!current) return;
+    const related = (e as MouseEvent).relatedTarget as Node | null;
+    if (related && typeof current.contains === 'function' && current.contains(related)) return;
+    hide();
+  };
+
+  const onFocusIn = (e: Event) => {
+    const target = findTooltipTarget(e.target);
+    if (!target || !readTooltipText(target)) return;
+    let focusVisible = !recentPointerDown;
+    if (typeof target.matches === 'function') {
+      try {
+        focusVisible = target.matches(':focus-visible');
+      } catch {
+        // Keep pointer-based fallback when :focus-visible is unsupported in mock DOMs.
+      }
+    }
+    if (!focusVisible) {
+      hide();
+      return;
+    }
+    clearHoverTimer();
+    show(target);
+  };
+
+  const onFocusOut = (e: Event) => {
+    if (!activeTarget) return;
+    const related = (e as FocusEvent).relatedTarget as Node | null;
+    if (related && typeof activeTarget.contains === 'function' && activeTarget.contains(related)) return;
+    hide();
+  };
+
+  const onPointerDown = () => {
+    recentPointerDown = true;
+    hide();
+  };
+
+  const onKeyDown = (e: Event) => {
+    recentPointerDown = false;
+    if ((e as KeyboardEvent).key === 'Escape') hide();
+  };
+
+  const onScroll = () => {
+    hide();
+  };
+
+  const onBlur = () => {
+    hide();
+  };
+
+  const rootTarget = root as unknown as {
+    addEventListener?: (type: string, fn: EventListener, capture?: boolean) => void;
+    removeEventListener?: (type: string, fn: EventListener, capture?: boolean) => void;
+  };
+  const globalDoc = (typeof document !== 'undefined' && typeof document.addEventListener === 'function')
+    ? (document as unknown as typeof rootTarget)
+    : rootTarget;
+
+  rootTarget.addEventListener?.('mouseover', onMouseOver);
+  rootTarget.addEventListener?.('mouseout', onMouseOut);
+  rootTarget.addEventListener?.('focusin', onFocusIn);
+  rootTarget.addEventListener?.('focusout', onFocusOut);
+  globalDoc.addEventListener?.('pointerdown', onPointerDown);
+  globalDoc.addEventListener?.('keydown', onKeyDown);
+  window.addEventListener?.('blur', onBlur);
+  window.addEventListener?.('scroll', onScroll, true);
+  if (rootTarget !== globalDoc && rootTarget !== (typeof document !== 'undefined' ? (document.body as unknown) : null)) {
+    rootTarget.addEventListener?.('scroll', onScroll, true);
+  }
+
+  return {
+    dispose() {
+      hide();
+      rootTarget.removeEventListener?.('mouseover', onMouseOver);
+      rootTarget.removeEventListener?.('mouseout', onMouseOut);
+      rootTarget.removeEventListener?.('focusin', onFocusIn);
+      rootTarget.removeEventListener?.('focusout', onFocusOut);
+      globalDoc.removeEventListener?.('pointerdown', onPointerDown);
+      globalDoc.removeEventListener?.('keydown', onKeyDown);
+      window.removeEventListener?.('blur', onBlur);
+      window.removeEventListener?.('scroll', onScroll, true);
+      if (rootTarget !== globalDoc && rootTarget !== (typeof document !== 'undefined' ? (document.body as unknown) : null)) {
+        rootTarget.removeEventListener?.('scroll', onScroll, true);
+      }
+      if (typeof popover.remove === 'function') {
+        popover.remove();
+      } else {
+        const parent = (popover as unknown as { parentNode?: { removeChild?: (n: Node) => void } }).parentNode;
+        parent?.removeChild?.(popover);
+      }
+    },
+  };
+}
+
 export function setupControls(engine: AudioEngine, state: ControlsState): { tick(): void } {
+  initTooltips(document);
   const controls = $<HTMLElement>('controls');
   const fileInput = $<HTMLInputElement>('file-input');
   const fileBtn = $<HTMLButtonElement>('file-btn');
@@ -548,6 +814,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const libraryExportBtn = document.createElement('button');
   libraryExportBtn.type = 'button';
   libraryExportBtn.textContent = 'Export library';
+  libraryExportBtn.setAttribute('aria-label', 'Export library');
+  libraryExportBtn.setAttribute('data-tooltip', 'Download your presets, folders, and tags as one file');
   libraryExportBtn.addEventListener('click', () => {
     const session = getActiveSession();
     if (!session) {
@@ -559,6 +827,8 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const libraryImportBtn = document.createElement('button');
   libraryImportBtn.type = 'button';
   libraryImportBtn.textContent = 'Import library…';
+  libraryImportBtn.setAttribute('aria-label', 'Import library');
+  libraryImportBtn.setAttribute('data-tooltip', 'Merge presets and folders from a library JSON file');
   libraryImportBtn.addEventListener('click', () => {
     const session = getActiveSession();
     if (!session) {
@@ -635,6 +905,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const intensitySelect = document.createElement('select');
   intensitySelect.id = 'intensity-select';
   intensitySelect.setAttribute('aria-label', 'Intensity');
+  intensitySelect.setAttribute('data-tooltip', 'Limit peak brightness and flash intensity');
   for (const opt of INTENSITY_OPTIONS) {
     const option = document.createElement('option');
     option.value = opt;
@@ -951,7 +1222,9 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         const isPaused = !engine.media || engine.media.paused;
         if (actionIcon) actionIcon.textContent = isPaused ? '▶' : '⏸';
         if (actionLabel) actionLabel.textContent = isPaused ? 'Play' : 'Pause';
-        playbackActionBtn.setAttribute('aria-label', isPaused ? 'Play (Space)' : 'Pause (Space)');
+        const actionText = isPaused ? 'Play (Space)' : 'Pause (Space)';
+        playbackActionBtn.setAttribute('aria-label', actionText);
+        playbackActionBtn.setAttribute('data-tooltip', actionText);
       }
       if (scrubberSegment) scrubberSegment.hidden = false;
       if (timelineSeparator) timelineSeparator.hidden = false;
@@ -964,6 +1237,7 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         if (actionIcon) actionIcon.textContent = '⏹';
         if (actionLabel) actionLabel.textContent = 'Stop';
         playbackActionBtn.setAttribute('aria-label', 'Stop stream');
+        playbackActionBtn.setAttribute('data-tooltip', 'Stop audio input');
       }
       if (scrubberSegment) scrubberSegment.hidden = true;
       if (timelineSeparator) timelineSeparator.hidden = true;
@@ -1036,6 +1310,9 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         }
         if (playbackActionBtn.getAttribute('aria-label') !== label) {
           playbackActionBtn.setAttribute('aria-label', label);
+        }
+        if (playbackActionBtn.getAttribute('data-tooltip') !== label) {
+          playbackActionBtn.setAttribute('data-tooltip', label);
         }
       }
 
