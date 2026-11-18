@@ -40,6 +40,7 @@ uniform float uSat;       // 0 = grey, 1 = unchanged
 uniform float uContrast;  // 1 = unchanged
 uniform float uGamma;     // 1 = unchanged
 uniform float uBright;    // added after the grade
+uniform float uInvert;    // 0..1 RGB invert mix before safety
 uniform float uMirror;    // 0 = off, 2..8 = kaleidoscope folds
 uniform float uVignette;  // 0..1 darker edges
 // Vignette options (Slice 18.9). The defaults draw the classic dark oval vignette.
@@ -259,6 +260,9 @@ void main() {
     } else {
       c = hueRotate(c, k * 3.14159265);
     }
+  }
+  if (uInvert > 0.0) {
+    c = mix(c, 1.0 - clamp(c, 0.0, 1.0), clamp(uInvert, 0.0, 1.0));
   }
   // The safety rules read the finished picture. Clamp first: the post chain can push values past 1.
   c = clamp(c, 0.0, 1.0);

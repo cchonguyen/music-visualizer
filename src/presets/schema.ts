@@ -160,6 +160,7 @@ export const FEEDBACK_POST_LAYOUT: Readonly<Record<string, readonly string[]>> =
     "hueDrift", "hueShift", "saturation", "contrast", "gamma", "brightness",
     "contourFreq", "contourWidth", "colorSpread", "solarize",
     "bloom", "bloomThreshold", "bloomSize", "bloomTintAmount", "bloomTintHue", "bloomPulse", "colourMap", "colourMapBy", "colourMapGradient", "colourMapGradient2", "colourMapMix", "vignette", "vignetteShape", "vignetteSoftness", "vignetteBlend", "vignetteColour", "vignetteGradient",
+    "invert",
   ],
 };
 
