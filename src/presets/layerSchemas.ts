@@ -793,6 +793,19 @@ export const POST_SPECS: readonly ParamSpec[] = [
   { type: 'enum', name: 'colourMapGradient', label: 'Colour map gradient', group: 'Colour', default: GRADIENT_DEFAULT_A, options: GRADIENT_NAMES, showWhen: { colourMap: { above: 0 } }, description: 'The first gradient.' },
   { type: 'enum', name: 'colourMapGradient2', label: 'Colour map second gradient', group: 'Colour', default: GRADIENT_DEFAULT_B, options: GRADIENT_NAMES, showWhen: { colourMap: { above: 0 } }, description: 'The gradient the mix moves toward.' },
   { type: 'float', name: 'colourMapMix', label: 'Colour map mix (0 first, 1 second)', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, showWhen: { colourMap: { above: 0 } }, description: 'Blends from the first gradient to the second. Morph it, link it to the music or react it to a trigger to change gradients over time.' },
+  {
+    type: 'float',
+    name: 'invert',
+    label: 'Colour invert',
+    group: 'Colour',
+    default: 0,
+    min: 0,
+    max: 1,
+    step: 0.01,
+    description: 'Blends pixels toward their RGB inverse before the brightness safety limiter.',
+    intense: true,
+    warning: 'Intense visual transform. Can invert dark backgrounds to bright — use with care.',
+  },
 ];
 
 export const FEEDBACK_SPECS: readonly ParamSpec[] = [

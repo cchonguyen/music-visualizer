@@ -50,7 +50,7 @@ export function parseHexColour(hex: string, out: [number, number, number]): [num
 /** Post settings with identity values (see post.frag.glsl). */
 export const POST_IDENTITY = {
   hueShift: 0, saturation: 1, contrast: 1, gamma: 1, brightness: 0, mirror: 0, vignette: 0, chroma: 0, bloom: 0, bloomThreshold: 0.6,
-  bloomSize: 0, bloomTintAmount: 0, bloomTintHue: 0, bloomPulse: 0,
+  bloomSize: 0, bloomTintAmount: 0, bloomTintHue: 0, bloomPulse: 0, invert: 0,
 };
 type PostValues = typeof POST_IDENTITY;
 const POST_KEYS = Object.keys(POST_IDENTITY) as (keyof PostValues)[];
@@ -370,6 +370,7 @@ export class Compositor implements RenderLayer {
       p.vignette > 0 ||
       p.chroma > 0 ||
       p.bloom > 0 ||
+      p.invert > 0 ||
       this.mapAmt > 0
     );
     return postActive || this.hasDirectorEffect();
@@ -893,6 +894,7 @@ export class Compositor implements RenderLayer {
     gl.uniform1f(this.u(prog, 'uContrast'), p.contrast);
     gl.uniform1f(this.u(prog, 'uGamma'), p.gamma);
     gl.uniform1f(this.u(prog, 'uBright'), p.brightness);
+    gl.uniform1f(this.loc(prog, 'uInvert'), p.invert);
     gl.uniform1f(this.u(prog, 'uMirror'), p.mirror);
     gl.uniform1f(this.u(prog, 'uVignette'), p.vignette);
     gl.uniform1f(this.u(prog, 'uChroma'), p.chroma);
