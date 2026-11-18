@@ -10,7 +10,7 @@ import { LAYER_FACTORIES, applyPresetToScene, applyValues, readWarpOps, valuesOf
 import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, formatLayerType, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, clampDisplaySec, type AudioSource, type LayerEntry, type Preset, type Settings, type Setting, type Transition, type WarpOperator } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SECONDS_SPEC, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, PRESET_BLEND_MAX_SEC, PRESET_BLEND_MIN_SEC, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, clampBlendSec, clampDisplaySec, type AudioSource, type LayerEntry, type Preset, type Settings, type Setting, type Transition, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { MAX_LAYER_SEED, applyMashup, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
@@ -1389,6 +1389,52 @@ export class Studio {
     const transSecBinding = pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 });
     transSecBinding.on('change', commitEdit);
     attachControlHelper(transSecBinding, { ...SECONDS_SPEC, label: 'Transition seconds' }, this.onHelper);
+    // Optional per-preset blend time override (slice 26.5): 0..10 s, or undefined to use transition.seconds.
+    const initialBlend = clampBlendSec(preset.blendSec);
+    const blendHolder = {
+      customBlend: initialBlend !== undefined,
+      blendSec: initialBlend ?? clampBlendSec(preset.transition.seconds) ?? 1.2,
+    };
+    const customBlendBinding = pane.addBinding(blendHolder, 'customBlend', { label: 'Custom blend time' });
+    const blendSecBinding = pane.addBinding(blendHolder, 'blendSec', {
+      label: 'Blend time (s)',
+      min: PRESET_BLEND_MIN_SEC,
+      max: PRESET_BLEND_MAX_SEC,
+      step: 0.05,
+    });
+    blendSecBinding.hidden = !blendHolder.customBlend;
+    customBlendBinding.on('change', (ev) => {
+      const enabled = Boolean(ev.value);
+      blendHolder.customBlend = enabled;
+      blendSecBinding.hidden = !enabled;
+      if (!enabled) {
+        preset.blendSec = undefined;
+      } else {
+        const clamped = clampBlendSec(blendHolder.blendSec) ?? clampBlendSec(preset.transition.seconds) ?? 1.2;
+        blendHolder.blendSec = clamped;
+        preset.blendSec = clamped;
+        blendSecBinding.refresh();
+      }
+      commitEdit();
+    });
+    blendSecBinding.on('change', (ev) => {
+      if (!blendHolder.customBlend) return;
+      const clamped = clampBlendSec(Number(ev.value));
+      if (clamped !== undefined) {
+        blendHolder.blendSec = clamped;
+        preset.blendSec = clamped;
+      }
+      commitEdit();
+    });
+    attachControlHelper(
+      customBlendBinding,
+      {
+        label: 'Custom blend time',
+        description: 'Override the transition crossfade with a custom per-preset blend time (0 s for an instant cut).',
+      },
+      this.onHelper,
+    );
+    attachControlHelper(blendSecBinding, { ...BLEND_SECONDS_SPEC, label: 'Blend time (s)' }, this.onHelper);
     // Display time (slice 23.3): 0 means auto-cycle timer. Values below the minimum remove the stored field.
     const displayHolder = { displaySec: preset.displaySec ?? 0 };
     const displayBinding = pane.addBinding(displayHolder, 'displaySec', { label: 'Display time (s, 0 = auto-cycle timer)', min: 0, max: PRESET_DISPLAY_MAX_SEC, step: 1 });
