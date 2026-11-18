@@ -58,6 +58,8 @@ import {
   EXIT_ADMIN_LABEL,
   ADMIN_POPUP_TIMEOUT_MS,
   ADMIN_PRECHECK_TIMEOUT_MS,
+  createStudioIconSvg,
+  attachButtonIcon,
 } from './adminControls';
 import { PresetSession } from '../presets/session';
 
@@ -2152,7 +2154,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
       promptRow!.querySelector('.studio-inline-prompt__confirm')!.dispatchEvent({ type: 'click' });
 
       expect(session.promoteToSystemPreset).toHaveBeenCalledWith('user-1', 'flagship');
-      expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset locally 👑 (remote sync offline)');
+      expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset locally (remote sync offline)');
       expect(switchTo).toHaveBeenCalledWith('sys-user-1');
     } finally {
       (globalThis as any).prompt = origPrompt;
@@ -3967,7 +3969,7 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
       expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
 
       promoteUserPresetAction(offline.session, offlineUser, () => 'showcase');
-      expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset locally 👑 (remote sync offline)');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset locally (remote sync offline)');
 
       deleteSystemPresetAction(offline.session, 'flight');
       expect(showToastSpy).toHaveBeenLastCalledWith('System preset removed locally (remote sync offline)');
@@ -3993,7 +3995,7 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
 
       promoteUserPresetAction(online.session, onlineUser, () => 'showcase');
       await flush();
-      expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset remotely 👑');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset remotely');
 
       deleteSystemPresetAction(online.session, 'flight');
       await flush();
@@ -4223,5 +4225,90 @@ describe('Slice 25.11: Humanized labels, [Linked]/[Morphed] badges, read-only hi
     // Escape dismisses inline prompt
     input.dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault: vi.fn(), stopPropagation: vi.fn() });
     expect(container.querySelector('.studio-inline-prompt')).toBeNull();
+  });
+});
+
+describe('Slice 26.1: Studio inline SVG icons replace crown emoji in Admin controls', () => {
+  it('uses plain text without crown emoji for ADMIN_BADGE_LABEL and EXIT_ADMIN_LABEL', () => {
+    expect(ADMIN_BADGE_LABEL).toBe('Admin Mode Active');
+    expect(ADMIN_BADGE_LABEL).not.toContain('👑');
+    expect(EXIT_ADMIN_LABEL).toBe('Exit Admin Mode');
+    expect(EXIT_ADMIN_LABEL).not.toContain('👑');
+  });
+
+  it('createStudioIconSvg creates Lucide-style inline SVGs via createElementNS or createElement fallback', () => {
+    const mockEl = createMockElement('div');
+    const crownFallback = createStudioIconSvg(mockEl.ownerDocument as unknown as Document, 'crown');
+    expect(crownFallback).not.toBeNull();
+    expect(crownFallback?.getAttribute('class')).toBe('ui-icon');
+    expect(crownFallback?.getAttribute('data-icon')).toBe('crown');
+    expect(crownFallback?.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(crownFallback?.getAttribute('aria-hidden')).toBe('true');
+    expect((crownFallback as unknown as MockElement).querySelectorAll('path').length).toBeGreaterThanOrEqual(2);
+
+    const nsCalls: string[] = [];
+    const nsDoc = {
+      createElementNS: (ns: string, tag: string) => {
+        nsCalls.push(`${ns}:${tag}`);
+        return createMockElement(tag);
+      },
+    } as unknown as Document;
+    const warnSvg = createStudioIconSvg(nsDoc, 'alert-triangle');
+    expect(warnSvg).not.toBeNull();
+    expect(warnSvg?.getAttribute('data-icon')).toBe('alert-triangle');
+    expect(nsCalls[0]).toBe('http://www.w3.org/2000/svg:svg');
+    expect((warnSvg as unknown as MockElement).querySelectorAll('path').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('renderAdminBadge prepends a crown SVG icon alongside ADMIN_BADGE_LABEL', () => {
+    const container = createMockElement('div');
+    const head = createMockElement('div');
+    head.className = 'studio-head';
+    container.appendChild(head);
+
+    const badge = renderAdminBadge(container as unknown as HTMLElement, true);
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe(ADMIN_BADGE_LABEL);
+    const svg = (badge as unknown as MockElement).querySelector('.ui-icon');
+    expect(svg).not.toBeNull();
+    expect(svg?.getAttribute('data-icon')).toBe('crown');
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(svg?.getAttribute('aria-hidden')).toBe('true');
+
+    // Re-rendering does not duplicate the icon
+    renderAdminBadge(container as unknown as HTMLElement, true);
+    expect((badge as unknown as MockElement).querySelectorAll('.ui-icon')).toHaveLength(1);
+    expect(badge?.textContent).toBe(ADMIN_BADGE_LABEL);
+  });
+
+  it('attachButtonIcon injects crown SVG before .tp-btnv_t without clobbering text and removes when show=false', () => {
+    const root = createMockElement('div');
+    root.className = 'tp-btnv';
+    const btnEl = createMockElement('button');
+    btnEl.className = 'tp-btnv_b';
+    const textEl = createMockElement('div');
+    textEl.className = 'tp-btnv_t';
+    textEl.textContent = 'Save System Preset';
+    btnEl.appendChild(textEl);
+    root.appendChild(btnEl);
+
+    const buttonWrapper = { element: root };
+    attachButtonIcon(buttonWrapper, 'crown', true);
+    attachButtonIcon(buttonWrapper, 'crown', true);
+
+    expect(btnEl.querySelectorAll('.ui-icon')).toHaveLength(1);
+    expect(btnEl.children[0]?.getAttribute('data-icon')).toBe('crown');
+    expect(btnEl.children[1]).toBe(textEl);
+    expect(textEl.textContent).toBe('Save System Preset');
+
+    // Simulate Tweakpane updating btn.title in .tp-btnv_t
+    textEl.textContent = 'Save System Preset *';
+    expect(btnEl.querySelectorAll('.ui-icon')).toHaveLength(1);
+    expect(btnEl.textContent).toBe('Save System Preset *');
+
+    // Hiding removes the icon while keeping .tp-btnv_t intact
+    attachButtonIcon(buttonWrapper, 'crown', false);
+    expect(btnEl.querySelectorAll('.ui-icon')).toHaveLength(0);
+    expect(textEl.textContent).toBe('Save System Preset *');
   });
 });

@@ -167,3 +167,19 @@
     transition: none;
   }
 }
+
+/* Slice 26.1: inline Lucide SVG icons inside Studio admin buttons and badges */
+.studio .tp-btnv_b:has(.ui-icon),
+.studio-admin-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.studio .tp-btnv_b .ui-icon,
+.studio-admin-badge .ui-icon,
+.studio-admin-action-btn .ui-icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}

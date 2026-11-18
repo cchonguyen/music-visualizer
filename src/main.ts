@@ -462,7 +462,7 @@ function start(): void {
       adminGateway.checkCloudflareAccess().then((verified) => {
         if (verified) {
           const email = adminGateway.getState().adminEmail;
-          showToast(`👑 Admin Mode Active${email ? ` (${email})` : ''}`);
+          showToast(`Admin Mode Active${email ? ` (${email})` : ''}`);
         }
         if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
           window.history.replaceState({}, '', '/');
