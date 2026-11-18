@@ -11,11 +11,110 @@ import { showToast } from '../ui/toast';
 
 export type { AdminSessionState };
 
-export const ADMIN_BADGE_LABEL = '👑 Admin Mode Active';
+export const ADMIN_BADGE_LABEL = 'Admin Mode Active';
 export const ADMIN_ACCESS_LABEL = 'Admin Access';
-export const EXIT_ADMIN_LABEL = 'Exit Admin Mode 👑';
+export const EXIT_ADMIN_LABEL = 'Exit Admin Mode';
 export const DELETE_ARMED_LABEL = 'Tap again to delete';
 export const DELETE_LABEL = 'Delete';
+
+export type StudioIconName = 'crown' | 'alert-triangle';
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const STUDIO_ICON_PATHS: Record<StudioIconName, readonly string[]> = {
+  crown: [
+    'M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z',
+    'M5 21h14',
+  ],
+  'alert-triangle': [
+    'm21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3',
+    'M12 9v4',
+    'M12 17h.01',
+  ],
+};
+
+/**
+ * Create a Lucide-style 16px stroke-1.75 inline `<svg class="ui-icon">` element.
+ * Falls back to `doc.createElement` when `createElementNS` is unavailable in minimal test doubles.
+ */
+export function createStudioIconSvg(doc: Document, name: StudioIconName): SVGSVGElement | null {
+  if (!doc) return null;
+  const createSvgEl = (tag: string): Element | null => {
+    if (typeof doc.createElementNS === 'function') {
+      return doc.createElementNS(SVG_NS, tag);
+    }
+    if (typeof doc.createElement === 'function') {
+      return doc.createElement(tag);
+    }
+    return null;
+  };
+
+  const svg = createSvgEl('svg');
+  if (!svg) return null;
+
+  svg.setAttribute('class', 'ui-icon');
+  svg.setAttribute('data-icon', name);
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+
+  for (const d of STUDIO_ICON_PATHS[name]) {
+    const path = createSvgEl('path');
+    if (path) {
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    }
+  }
+
+  return svg as SVGSVGElement;
+}
+
+/**
+ * Attach or remove an inline Studio SVG icon inside a Tweakpane button (`.tp-btnv_b`) or element.
+ * Inserts before `.tp-btnv_t` so plain-text `btn.title` updates remain intact.
+ */
+export function attachButtonIcon(elementOrButton: unknown, name: StudioIconName, show = true): void {
+  if (!elementOrButton || typeof elementOrButton !== 'object') return;
+  const obj = elementOrButton as { element?: unknown };
+  const el = (obj.element ?? elementOrButton) as HTMLElement | null;
+  if (!el || typeof el !== 'object') return;
+
+  const btnEl = (typeof el.querySelector === 'function' ? el.querySelector<HTMLElement>('.tp-btnv_b') : null) ?? el;
+  if (!btnEl || typeof btnEl !== 'object') return;
+
+  const existing = typeof btnEl.querySelectorAll === 'function'
+    ? Array.from(btnEl.querySelectorAll('.ui-icon'))
+    : [];
+  for (const node of existing) {
+    if (node.getAttribute?.('data-icon') === name) {
+      if (typeof (node as HTMLElement).remove === 'function') {
+        (node as HTMLElement).remove();
+      } else if (typeof btnEl.removeChild === 'function') {
+        btnEl.removeChild(node);
+      }
+    }
+  }
+
+  if (!show) return;
+
+  const doc = btnEl.ownerDocument ?? el.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!doc) return;
+
+  const icon = createStudioIconSvg(doc, name);
+  if (!icon) return;
+
+  const textEl = typeof btnEl.querySelector === 'function' ? btnEl.querySelector('.tp-btnv_t') : null;
+  if (textEl && typeof (textEl as HTMLElement).before === 'function') {
+    (textEl as HTMLElement).before(icon);
+  } else if (typeof btnEl.insertBefore === 'function') {
+    btnEl.insertBefore(icon, btnEl.firstChild ?? null);
+  } else if (typeof btnEl.prepend === 'function') {
+    btnEl.prepend(icon);
+  } else if (btnEl.firstChild && typeof (btnEl.firstChild as HTMLElement).before === 'function') {
+    (btnEl.firstChild as HTMLElement).before(icon);
+  } else if (typeof btnEl.appendChild === 'function') {
+    btnEl.appendChild(icon);
+  }
+}
 
 export function getAdminActionLabel(isAdmin: boolean): string {
   return isAdmin ? EXIT_ADMIN_LABEL : ADMIN_ACCESS_LABEL;
@@ -73,7 +172,6 @@ export function renderAdminBadge(container: HTMLElement, isAdmin: boolean): HTML
       badge = doc.createElement('span');
       badge.className = 'studio-admin-badge';
       badge.setAttribute('role', 'status');
-      badge.textContent = ADMIN_BADGE_LABEL;
 
       const closeBtn = head.querySelector('#studio-close');
       if (closeBtn && typeof closeBtn.before === 'function') {
@@ -83,7 +181,27 @@ export function renderAdminBadge(container: HTMLElement, isAdmin: boolean): HTML
       }
     } else {
       badge.hidden = false;
-      badge.textContent = ADMIN_BADGE_LABEL;
+    }
+
+    const icon = createStudioIconSvg(doc, 'crown');
+    const textNode = typeof doc.createTextNode === 'function'
+      ? doc.createTextNode(ADMIN_BADGE_LABEL)
+      : ADMIN_BADGE_LABEL;
+    if (typeof badge.replaceChildren === 'function') {
+      if (icon) badge.replaceChildren(icon, textNode);
+      else badge.replaceChildren(textNode);
+    } else {
+      badge.textContent = '';
+      if (icon && typeof badge.appendChild === 'function') {
+        badge.appendChild(icon);
+      }
+      if (typeof badge.append === 'function') {
+        badge.append(textNode);
+      } else if (typeof badge.appendChild === 'function' && typeof textNode !== 'string') {
+        badge.appendChild(textNode);
+      } else {
+        badge.textContent = ADMIN_BADGE_LABEL;
+      }
     }
     return badge;
   } else {
@@ -174,7 +292,7 @@ function waitForAdminPopup(
       } catch {
         // ignore
       }
-      showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+      showToast(`Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
       settle({ success: true });
     };
 
@@ -273,7 +391,7 @@ export async function promptAdminLogin(
     if (typeof adminGateway.checkCloudflareAccess === 'function') {
       const verified = await adminGateway.checkCloudflareAccess();
       if (verified) {
-        showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+        showToast(`Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
         return { success: true };
       }
     }
@@ -288,7 +406,7 @@ export async function promptAdminLogin(
     if (typeof adminGateway.checkCloudflareAccess === 'function') {
       const verified = await adminGateway.checkCloudflareAccess();
       if (verified) {
-        showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+        showToast(`Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
         return { success: true };
       }
     }
@@ -305,7 +423,7 @@ export async function promptAdminLogin(
   if (typeof window !== 'undefined') {
     // Already signed in (valid Cloudflare Access cookie): no popup needed.
     if (await checkAccessWithTimeout(adminGateway, ADMIN_PRECHECK_TIMEOUT_MS)) {
-      showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+      showToast(`Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
       return { success: true };
     }
 
@@ -337,7 +455,7 @@ export async function promptAdminLogin(
       typeof adminGateway.checkCloudflareAccess === 'function' &&
       (await adminGateway.checkCloudflareAccess())
     ) {
-      showToast(`👑 Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
+      showToast(`Admin Mode: ${adminGateway.getState().adminEmail || 'Verified'}`);
       return { success: true };
     }
 
@@ -514,8 +632,8 @@ export function promoteUserPresetAction(
     () => session.promoteToSystemPreset(userId, subfolder),
     {
       pending: 'Promoting to system preset…',
-      remoteSuccess: 'Promoted to system preset remotely 👑',
-      offline: 'Promoted to system preset locally 👑 (remote sync offline)',
+      remoteSuccess: 'Promoted to system preset remotely',
+      offline: 'Promoted to system preset locally (remote sync offline)',
     },
   );
 }
