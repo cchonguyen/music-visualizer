@@ -8,7 +8,7 @@ import { cyclePalette } from '../render/paletteStore';
 import { getVisualGain, setVisualGain } from '../render/gainStore';
 import { getBeatSensitivity, setBeatSensitivity } from '../audio/onset';
 import { getReactionStyle, REACTION_STYLES, REACTION_STYLE_LABELS, setReactionStyle } from '../presets/reactionStyles';
-import { getRenderScale, RENDER_SCALES, setRenderScale } from '../gl/size';
+import { getLowPowerMode, getRenderScale, RENDER_SCALES, setLowPowerMode, setRenderScale } from '../gl/size';
 import { getAspectCorrect, setAspectCorrect } from '../render/compositor';
 import {
   getGlobalDirector,
@@ -503,7 +503,15 @@ export function initTooltips(root: ParentNode | HTMLElement = document): Tooltip
   };
 }
 
-export function setupControls(engine: AudioEngine, state: ControlsState): { tick(): void } {
+export interface ControlsCallbacks {
+  onLowPowerChange?: (on: boolean) => void;
+}
+
+export function setupControls(
+  engine: AudioEngine,
+  state: ControlsState,
+  callbacks?: ControlsCallbacks,
+): { tick(): void } {
   initTooltips(document);
   const controls = $<HTMLElement>('controls');
   const fileInput = $<HTMLInputElement>('file-input');
@@ -916,6 +924,17 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const aspectBox = $<HTMLInputElement>('aspect-correct');
   aspectBox.checked = getAspectCorrect();
   aspectBox.addEventListener('change', () => setAspectCorrect(aspectBox.checked));
+
+  // Low-power mode (slice 26.10): caps effective render scale at 50% and bypasses heavy post effects.
+  const lowPowerBox = document.getElementById('low-power-mode') as HTMLInputElement | null;
+  if (lowPowerBox) {
+    lowPowerBox.checked = getLowPowerMode();
+    lowPowerBox.addEventListener('change', () => {
+      const on = setLowPowerMode(lowPowerBox.checked);
+      lowPowerBox.checked = on;
+      callbacks?.onLowPowerChange?.(on);
+    });
+  }
 
   // Visual gain: how strongly visuals respond to the music (not the volume).
   const gain = $<HTMLInputElement>('gain');

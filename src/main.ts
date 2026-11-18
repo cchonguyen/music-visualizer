@@ -42,7 +42,7 @@ import { isEditableTarget, setupControls, sourceName, type ControlsState } from 
 import { BenchmarkPanel, DebugPanel } from './ui/debugPanel';
 import { BenchmarkRunner, GpuTimedLayer, benchmarkSeconds, describeRenderer } from './render/benchmark';
 import { QualityGovernor, TIER_SETTINGS, detectTier } from './render/qualityGovernor';
-import { setAutoScale } from './gl/size';
+import { getEffectiveRenderScale, getLowPowerMode, setAutoScale } from './gl/size';
 import { setFloatBuffersEnabled } from './gl/fbo';
 import { maxCostForTier, presetCost } from './presets/cost';
 import { mountPresetBrowser, toBrowserPreset, withFavourite, type BrowserPreset, type PresetBrowserHandle } from './ui/presetBrowser';
@@ -602,7 +602,16 @@ function start(): void {
   };
   applyReducedMotion(reduceQuery?.matches === true);
   reduceQuery?.addEventListener('change', (e) => applyReducedMotion(e.matches));
-  const controls = setupControls(engine, state);
+  if (compositor) compositor.setLowPower(getLowPowerMode());
+  const controls = setupControls(engine, state, {
+    onLowPowerChange: (on) => {
+      if (compositor) {
+        compositor.setLowPower(on);
+        compositor.resize(host.canvas.width, host.canvas.height, Math.min(2, window.devicePixelRatio || 1));
+      }
+      getEffectiveRenderScale();
+    },
+  });
   const panel = new DebugPanel();
 
   // Benchmark mode (Slice 16.1): runs every preset on the kick test signal, with auto-cycle off.
