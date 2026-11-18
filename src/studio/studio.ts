@@ -2151,10 +2151,16 @@ export function linkTargets(preset: Preset): { key: string; label: string; setti
   });
   (preset.warp ?? []).forEach((op, i) => {
     for (const spec of warpOpSpecs(op.type)) {
-      if (spec.type !== 'float') continue;
+      if (spec.type !== 'float' && spec.type !== 'int') continue;
       const setting = op.params[spec.name];
       if (!setting) continue;
-      out.push({ key: `W${i}.${spec.name}`, label: `Warp ${i + 1}. ${WARP_OP_LABELS[op.type]} · ${spec.label}`, setting, meterKey: '', spec });
+      out.push({
+        key: `W${i}.${spec.name}`,
+        label: `Warp ${i + 1}. ${WARP_OP_LABELS[op.type]} · ${spec.label}`,
+        setting,
+        meterKey: `W${i}.${spec.name}`,
+        spec,
+      });
     }
   });
   for (const spec of FEEDBACK_NUMBERS) {

@@ -7,41 +7,41 @@
   right: 0;
   z-index: 10;
   margin-top: auto;
-  padding: 6px 12px;
+  padding: 8px 12px;
   min-height: 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
-  background: rgba(17, 17, 17, 0.92);
+  background: rgba(17, 17, 17, 0.94);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
   font-size: 12px;
   line-height: 1.4;
-  color: #9ca3af;
+  color: #cbd5e1;
   box-sizing: border-box;
   word-break: break-word;
   pointer-events: auto;
 }
 
 .helper-param-name {
-  color: #f3f4f6;
+  color: #f8fafc;
   font-weight: 600;
 }
 
 .helper-param-desc {
-  color: #d1d5db;
+  color: #e2e8f0;
 }
 
 .helper-warning {
-  color: #f59e0b;
-  font-weight: 500;
+  color: #fbbf24;
+  font-weight: 600;
   display: block;
 }
 
 .intense-badge {
-  color: #f59e0b;
+  color: #fbbf24;
   font-weight: bold;
   margin-left: 4px;
   font-size: 11px;
@@ -49,23 +49,42 @@
   user-select: none;
 }
 
-/* Active control highlight (hover/focus/tap feedback) */
-.studio-control-highlight {
-  background: rgba(255, 255, 255, 0.06);
+/* Active control highlight (hover/focus/tap feedback across all Studio rows) */
+.studio-control-highlight,
+.tp-rotv .tp-lblv.studio-control-highlight,
+.tp-rotv .tp-btnv.studio-control-highlight {
+  background: rgba(56, 189, 248, 0.12);
   border-radius: 4px;
   box-shadow: inset 3px 0 0 #38bdf8;
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
-.studio-control-highlight.studio-control-highlight-intense {
-  background: rgba(245, 158, 11, 0.08);
-  box-shadow: inset 3px 0 0 #f59e0b;
+.studio-control-highlight.studio-control-highlight-intense,
+.tp-rotv .tp-lblv.studio-control-highlight.studio-control-highlight-intense,
+.tp-rotv .tp-btnv.studio-control-highlight.studio-control-highlight-intense {
+  background: rgba(245, 158, 11, 0.14);
+  box-shadow: inset 3px 0 0 #fbbf24;
+}
+
+.studio-control-highlight:focus-visible,
+.tp-rotv .tp-lblv.studio-control-highlight:focus-within,
+.tp-rotv .tp-btnv.studio-control-highlight:focus-within {
+  outline: 1px solid rgba(56, 189, 248, 0.45);
+  outline-offset: -1px;
 }
 
 .tp-rotv .tp-lblv:hover,
 .tp-rotv .tp-lblv:focus-within {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-control-highlight,
+  .tp-rotv .tp-lblv.studio-control-highlight,
+  .tp-rotv .tp-btnv.studio-control-highlight {
+    transition: none;
+  }
 }
 
 @media (max-width: 599px) {

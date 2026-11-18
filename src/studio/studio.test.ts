@@ -17,7 +17,9 @@ import {
   linkTargets,
   STUDIO_HELPER_IDLE_TEXT,
   renderHelperContent,
+  attachControlHelper,
   attachSpecHelper,
+  newWarpOperator,
   SYSTEM_OPTGROUP_LABELS,
   renderPresetSelectHierarchy,
   Studio,
@@ -35,7 +37,8 @@ import type { ParamSpec } from '../presets/schema';
 import { FEEDBACK_POST_LAYOUT, feedbackPostGroupOf, layoutFeedbackPost } from '../presets/schema';
 import { ALL_PRESETS, SCHEMAS } from '../presets/builtin';
 import { isMainSilent, NOOP_SCENE_HOST, POPOUT_WAITING_TEXT, readShownPreset } from './popoutMain';
-import { parsePreset } from '../presets/format';
+import { parsePreset, OPACITY_SPEC, BLEND_SPEC, TRAILS_SPEC, STYLE_SPEC, SECONDS_SPEC } from '../presets/format';
+import { warpOpSpecs, WARP_OP_TYPES } from '../presets/warpOps';
 import { AdminGateway } from '../presets/adminGateway';
 import {
   ADMIN_BADGE_LABEL,
@@ -3436,5 +3439,239 @@ describe('popoutMain helpers (Slice 22.6)', () => {
       NOOP_SCENE_HOST.setPost({});
       NOOP_SCENE_HOST.setTransition('crossfade');
     }).not.toThrow();
+  });
+});
+
+describe('Slice 25.7: Universal Studio helper bar coverage & Warp Operator int/meter link targets', () => {
+  function collectPaneControls(pane: any): { bindings: any[]; buttons: any[] } {
+    const bindings: any[] = [...(pane.bindings ?? [])];
+    const buttons: any[] = [...(pane.buttons ?? [])];
+    for (const f of pane.folders ?? []) {
+      const sub = collectPaneControls(f.folder);
+      bindings.push(...sub.bindings);
+      buttons.push(...sub.buttons);
+    }
+    return { bindings, buttons };
+  }
+
+  it('attachControlHelper supports raw DOM elements with ControlHelperDescriptor and keeps highlight while focus stays inside', () => {
+    const el = createMockElement('button');
+    const child = createMockElement('span');
+    el.appendChild(child);
+    const helperBar = createMockElement('div');
+    renderHelperContent(helperBar as any, null);
+
+    attachControlHelper(
+      el,
+      { label: 'Admin Access', description: 'Sign in as administrator.', intense: true, warning: 'Elevated access' },
+      (info) => renderHelperContent(helperBar as any, info),
+    );
+
+    expect(el.querySelector('.intense-badge')?.textContent).toBe('(!)');
+    el.dispatchEvent({ type: 'focus' });
+    expect(el.classList.contains('studio-control-highlight')).toBe(true);
+    expect(el.classList.contains('studio-control-highlight-intense')).toBe(true);
+    expect(helperBar.querySelector('.helper-param-name')?.textContent).toBe('Admin Access');
+    expect(helperBar.querySelector('.helper-param-desc')?.textContent).toBe('Sign in as administrator.');
+    expect(helperBar.querySelector('.helper-warning')?.textContent).toContain('Elevated access');
+
+    // Focus moving to a child inside el should NOT clear the highlight or helper bar
+    el.dispatchEvent({ type: 'focusout', relatedTarget: child });
+    expect(el.classList.contains('studio-control-highlight')).toBe(true);
+    expect(helperBar.querySelector('.helper-param-name')?.textContent).toBe('Admin Access');
+
+    // Focus moving outside clears both
+    el.dispatchEvent({ type: 'focusout', relatedTarget: createMockElement('div') });
+    expect(el.classList.contains('studio-control-highlight')).toBe(false);
+    expect(el.classList.contains('studio-control-highlight-intense')).toBe(false);
+    expect(helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+  });
+
+  it('format.ts specs (OPACITY, BLEND, TRAILS, STYLE, SECONDS) and warpOps.ts specs update helper bar on hover and focus', () => {
+    const helperBar = createMockElement('div');
+    const pane = createMockPane();
+    const onHelper = (info: any) => renderHelperContent(helperBar as any, info);
+
+    for (const spec of [OPACITY_SPEC, BLEND_SPEC, TRAILS_SPEC, STYLE_SPEC, SECONDS_SPEC]) {
+      expect(spec.description).toBeTruthy();
+      const el = createMockElement('div');
+      const labelEl = createMockElement('div');
+      labelEl.className = 'tp-lblv_l';
+      el.appendChild(labelEl);
+      attachControlHelper({ element: el }, spec, onHelper);
+
+      el.dispatchEvent({ type: 'mouseenter' });
+      expect(helperBar.querySelector('.helper-param-name')?.textContent).toBe(spec.label);
+      expect(helperBar.querySelector('.helper-param-desc')?.textContent).toBe(spec.description);
+      expect(el.classList.contains('studio-control-highlight')).toBe(true);
+
+      el.dispatchEvent({ type: 'mouseleave' });
+      expect(helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+      expect(el.classList.contains('studio-control-highlight')).toBe(false);
+    }
+
+    for (const opType of WARP_OP_TYPES) {
+      const specs = warpOpSpecs(opType);
+      const op = newWarpOperator(opType);
+      const { specBindings } = bindSection(pane, `Warp ${opType}`, specs, op.params, undefined, undefined, onHelper);
+      for (const { spec, blades } of specBindings) {
+        expect(spec.description).toBeTruthy();
+        const bladeEl = blades[0].element;
+        bladeEl.dispatchEvent({ type: 'focusin' });
+        expect(helperBar.querySelector('.helper-param-name')?.textContent).toBe(spec.label);
+        expect(helperBar.querySelector('.helper-param-desc')?.textContent).toBe(spec.description);
+        bladeEl.dispatchEvent({ type: 'focusout' });
+        expect(helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+      }
+    }
+  });
+
+  it('every Studio control row across Preset/Folder, Director, Layer actions, Warp, Links/Morphs, Reactions, Diagnostics, and Admin updates the helper bar on hover/focus', async () => {
+    const { PresetSession } = await import('../presets/session');
+    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const host = {
+      setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
+      setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
+    };
+    const session = new PresetSession(host as any, SCHEMAS, undefined as any);
+    for (const b of BUILTIN_PRESETS) session.addBuiltin(b.id, b.preset);
+
+    const folder = session.createFolder('My Folder');
+    const userId = session.saveAs(BUILTIN_PRESETS[0]!.id, 'User Helper Test');
+    session.setPresetFolder(userId, folder.id);
+    const userPreset = session.get(userId)!.preset;
+    userPreset.warp = [newWarpOperator('curl')];
+    userPreset.warp[0]!.params.octaves!.link = { source: 'lfoSine', amount: 0.5, smooth: 0.1 };
+    userPreset.warp[0]!.params.octaves!.morph = { to: 4, rate: 0.2 };
+    userPreset.reactions = [{
+      trigger: { type: 'everyNBeats', n: 4 },
+      response: 'kick',
+      target: { group: 'feedback', name: 'zoom' },
+      amount: 0.1,
+      ease: 0.3,
+    }];
+    session.show(userId);
+
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    const closeBtn = createMockElement('button');
+    closeBtn.attributes['id'] = 'studio-close';
+    container.appendChild(closeBtn);
+    container.appendChild(body);
+    // Support container.querySelector('#studio-close')
+    const origQuery = container.querySelector.bind(container);
+    container.querySelector = (sel: string) => (sel === '#studio-close' ? closeBtn : origQuery(sel));
+
+    let pane: any = null;
+    const linkMeter = vi.fn(() => 0.72);
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      linkMeter,
+      frameMs: () => 4.2,
+      paneFactory: () => (pane = createMockPane()),
+    });
+
+    // Select the linked W0.octaves target so LFO rate, Source now, and Morph controls all render
+    (studio as any).linkTarget = 'W0.octaves';
+    studio.bind(userId);
+
+    const { bindings, buttons } = collectPaneControls(pane);
+    expect(bindings.length).toBeGreaterThan(20);
+    expect(buttons.length).toBeGreaterThan(10);
+
+    // Every single binding and button in the Studio pane must activate the helper bar & highlight on hover and focus
+    for (const b of bindings) {
+      const label = b.options?.label ?? b.prop;
+      b.element.dispatchEvent({ type: 'mouseenter' });
+      expect(b.element.classList.contains('studio-control-highlight'), `binding "${label}" highlight on hover`).toBe(true);
+      expect(studio.helperBar.textContent, `binding "${label}" helper text on hover`).not.toBe(STUDIO_HELPER_IDLE_TEXT);
+      expect(studio.helperBar.querySelector('.helper-param-name')?.textContent, `binding "${label}" helper name`).toBeTruthy();
+      expect(studio.helperBar.querySelector('.helper-param-desc')?.textContent, `binding "${label}" helper desc`).toBeTruthy();
+
+      b.element.dispatchEvent({ type: 'mouseleave' });
+      expect(b.element.classList.contains('studio-control-highlight')).toBe(false);
+      expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+
+      b.element.dispatchEvent({ type: 'focusin' });
+      expect(b.element.classList.contains('studio-control-highlight'), `binding "${label}" highlight on focusin`).toBe(true);
+      expect(studio.helperBar.textContent, `binding "${label}" helper text on focusin`).not.toBe(STUDIO_HELPER_IDLE_TEXT);
+
+      b.element.dispatchEvent({ type: 'focusout' });
+      expect(b.element.classList.contains('studio-control-highlight')).toBe(false);
+      expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+    }
+
+    for (const btn of buttons) {
+      btn.element.dispatchEvent({ type: 'mouseenter' });
+      expect(btn.element.classList.contains('studio-control-highlight'), `button "${btn.title}" highlight on hover`).toBe(true);
+      expect(studio.helperBar.textContent, `button "${btn.title}" helper text on hover`).not.toBe(STUDIO_HELPER_IDLE_TEXT);
+      expect(studio.helperBar.querySelector('.helper-param-desc')?.textContent, `button "${btn.title}" helper desc`).toBeTruthy();
+
+      btn.element.dispatchEvent({ type: 'mouseleave' });
+      expect(btn.element.classList.contains('studio-control-highlight')).toBe(false);
+      expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+
+      btn.element.dispatchEvent({ type: 'focus' });
+      expect(btn.element.classList.contains('studio-control-highlight'), `button "${btn.title}" highlight on focus`).toBe(true);
+      expect(studio.helperBar.textContent, `button "${btn.title}" helper text on focus`).not.toBe(STUDIO_HELPER_IDLE_TEXT);
+
+      btn.element.dispatchEvent({ type: 'blur' });
+      expect(btn.element.classList.contains('studio-control-highlight')).toBe(false);
+      expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+    }
+
+    // Close button & footer Admin button also update the helper bar
+    closeBtn.dispatchEvent({ type: 'mouseenter' });
+    expect(studio.helperBar.querySelector('.helper-param-name')?.textContent).toBe('Close Studio');
+    closeBtn.dispatchEvent({ type: 'mouseleave' });
+    expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+
+    const footerAdminBtn = studio.footer?.querySelector('.studio-admin-action-btn') as any;
+    expect(footerAdminBtn).toBeDefined();
+    footerAdminBtn.dispatchEvent({ type: 'focusin' });
+    expect(studio.helperBar.querySelector('.helper-param-name')?.textContent).toBe('Admin Access');
+    footerAdminBtn.dispatchEvent({ type: 'focusout' });
+    expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
+
+    // Built-in Category binding also updates helper bar
+    const builtinId = BUILTIN_PRESETS[0]!.id;
+    studio.bind(builtinId);
+    const catBinding = collectPaneControls(pane).bindings.find((b) => b.options?.label === 'Category');
+    expect(catBinding).toBeDefined();
+    catBinding.element.dispatchEvent({ type: 'mouseenter' });
+    expect(studio.helperBar.querySelector('.helper-param-name')?.textContent).toBe('Category');
+    catBinding.element.dispatchEvent({ type: 'mouseleave' });
+
+    // Confirm linkMeter was invoked with W0.octaves meterKey (`${userId}W0.octaves`)
+    expect(linkMeter).toHaveBeenCalledWith(`${userId}W0.octaves`);
+    studio.dispose();
+  });
+
+  it('linkTargets exposes int Warp Operator settings (octaves, iterations) and populates meterKey W{i}.{name}', () => {
+    const preset = JSON.parse(JSON.stringify(ALL_PRESETS[0]!.preset)) as Preset;
+    preset.warp = [newWarpOperator('curl'), newWarpOperator('fold')];
+
+    const targets = linkTargets(preset);
+
+    const octavesTarget = targets.find((t) => t.key === 'W0.octaves');
+    expect(octavesTarget).toBeDefined();
+    expect(octavesTarget!.spec.type).toBe('int');
+    expect(octavesTarget!.meterKey).toBe('W0.octaves');
+    expect(octavesTarget!.label).toBe('Warp 1. Curl noise · Octaves');
+
+    const curlAmount = targets.find((t) => t.key === 'W0.amount');
+    expect(curlAmount).toBeDefined();
+    expect(curlAmount!.meterKey).toBe('W0.amount');
+
+    const iterationsTarget = targets.find((t) => t.key === 'W1.iterations');
+    expect(iterationsTarget).toBeDefined();
+    expect(iterationsTarget!.spec.type).toBe('int');
+    expect(iterationsTarget!.meterKey).toBe('W1.iterations');
+    expect(iterationsTarget!.label).toBe('Warp 2. Fractal fold · Iterations');
+
+    // Non-numeric warp spec (flow: enum) must remain excluded
+    expect(targets.find((t) => t.key === 'W0.flow')).toBeUndefined();
   });
 });
