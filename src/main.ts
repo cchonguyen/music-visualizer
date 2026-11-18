@@ -304,7 +304,7 @@ function start(): void {
   // The Visuals menu saves the choice (slice 21.13); a saved choice wins over the default.
   loadCycleSettings(cycle, safeStorage());
   const cycler = new AutoCycler();
-  let switchShown: ((id: string) => void) | null = null;
+  let switchShown: ((id: string, fadeSecOverride?: number) => void) | null = null;
   // Single-layer debug options (?tunnel, ?particles) and the preset scenes. Arrays, so TypeScript
   // does not narrow them to null inside the per-frame closures.
   const tunnels: TunnelLayer[] = [];
@@ -381,10 +381,10 @@ function start(): void {
     let popoutHost: PopoutHost | null = null;
     let popoutConnected = false;
     let popoutWindow: Window | null = null;
-    const switchTo = (id: string, announce = false) => {
+    const switchTo = (id: string, announce = false, fadeSecOverride?: number) => {
       currentId = id;
       cycler.reset();
-      liveSession.show(id);
+      liveSession.show(id, fadeSecOverride);
       presetBrowser?.setEntries(browserEntries());
       // Old presets may still hold a retired ReactionDiffusion layer. It is skipped; say so once per session.
       if (!retiredNoticeShown && presetHasRetiredLayer(liveSession.get(id)?.preset)) {
@@ -430,7 +430,7 @@ function start(): void {
       });
     };
     switchTo(currentId);
-    switchShown = (id) => switchTo(id, true);
+    switchShown = (id, fadeSecOverride) => switchTo(id, true, fadeSecOverride);
     popoutHost = createPopoutHost({
       session: liveSession,
       switchTo: (id) => switchTo(id, true),
@@ -876,7 +876,10 @@ function start(): void {
         preparedId = null;
       }
       const pick = cycler.next(dtSec, strongBeat, shownId, pool, shownCycleOpts, frame);
-      if (pick) switchShown(pick);
+      if (pick) {
+        const hardCut = cycle.mode === 'beat' && Boolean(cycle.hardCut);
+        switchShown(pick, hardCut ? 0 : undefined);
+      }
     }
     // Audio links (E2): the shown preset's linked settings follow the music, once per frame.
     const shown = session?.shownId;

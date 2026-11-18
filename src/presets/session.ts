@@ -4,6 +4,7 @@
 import { buildScene, applyPresetToScene } from './loader';
 import {
   parsePreset,
+  presetBlendSec,
   PresetFormatError,
   type Preset,
   type LayerEntry,
@@ -478,12 +479,12 @@ export class PresetSession {
   }
 
   /** Makes `id` the preset on screen: builds its scene if needed, applies its settings, and fades to it. */
-  show(id: string): void {
+  show(id: string, fadeSecOverride?: number): void {
     const entry = this.entries.get(id);
     if (!entry) throw new Error(`show: unknown preset "${id}"`);
     if (!this.scenes.has(id)) this.buildAndRegister(id);
     applyPresetToScene(previewPreset(entry.preset, this.monitors.get(id)), this.scenes.get(id)!);
-    this.host.setFadeSeconds(entry.preset.transition.seconds);
+    this.host.setFadeSeconds(fadeSecOverride ?? presetBlendSec(entry.preset));
     this.host.setWeights({ [id]: 1 });
     this.host.setPost(valuesOf(entry.preset.post));
     this.host.setTransition(entry.preset.transition.style);
@@ -1146,7 +1147,7 @@ export class PresetSession {
         if (this.scenes.has(record.id)) {
           this.rebuild(record.id);
           if (this.current === record.id) {
-            this.host.setFadeSeconds(parsedPreset.transition.seconds);
+            this.host.setFadeSeconds(presetBlendSec(parsedPreset));
             this.host.setPost(valuesOf(parsedPreset.post));
             this.host.setTransition(parsedPreset.transition.style);
           }
