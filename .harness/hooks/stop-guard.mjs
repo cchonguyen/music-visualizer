@@ -217,8 +217,10 @@ export function stalledPlan(transcriptText) {
       stated = actedOn ? null : NEXT_STEP.exec(said);
     }
     if (openSteps.length === 0 && !stated) return '';
-    // A wake set earlier in the same turn as the checklist counts too (calls in one message can come in any order).
-    let base = checklistAt >= 0 ? checklistAt : lastAt;
+    // The search starts at the stated step when there is one (its turn can be later than the checklist's), otherwise at
+    // the checklist. Either way it walks back to the turn's prompt, so a wake set earlier in the same turn counts
+    // (calls in one message can come in any order). An earlier turn's question never covers a later stated step.
+    let base = stated ? lastAt : (checklistAt >= 0 ? checklistAt : lastAt);
     for (let i = base - 1; i >= 0; i -= 1) {
       if (events[i].kind === 'prompt') { base = i; break; }
     }
