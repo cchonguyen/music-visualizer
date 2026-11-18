@@ -22,7 +22,7 @@ import { showToast, toRgbStr } from './toast';
 import { getGlobalDirector } from '../render/globalDirector';
 import { getVisualGain } from '../render/gainStore';
 import { getBeatSensitivity } from '../audio/onset';
-import { getRenderScale } from '../gl/size';
+import { getLowPowerMode, getRenderScale, LOW_POWER_STORAGE_KEY, setLowPowerMode } from '../gl/size';
 import { getAspectCorrect } from '../render/compositor';
 import { CYCLE_STORAGE_KEY, DEFAULT_CYCLE, loadCycleSettings, type CycleOptions } from '../presets/autoCycle';
 import type { AudioEngine } from '../audio/engine';
@@ -153,6 +153,7 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
     expect(expPanel).toContain('id="beat-value"');
     expect(expPanel).toContain('id="render-quality"');
     expect(expPanel).toContain('id="aspect-correct"');
+    expect(expPanel).toMatch(/<input[^>]*id="low-power-mode"[^>]*type="checkbox"/);
     expect(expPanel).toContain('id="exp-export-btn"');
     expect(expPanel).toContain('id="exp-import-input"');
 
@@ -473,6 +474,10 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     const aspectCorrect = register('aspect-correct', 'input');
     aspectCorrect.type = 'checkbox';
     experiencePanel.appendChild(aspectCorrect);
+
+    const lowPowerMode = register('low-power-mode', 'input');
+    lowPowerMode.type = 'checkbox';
+    experiencePanel.appendChild(lowPowerMode);
 
     const expCycleMode = register('exp-cycle-mode', 'select');
     experiencePanel.appendChild(expCycleMode);
@@ -908,6 +913,10 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     const aspectCorrect = register('aspect-correct', 'input');
     aspectCorrect.type = 'checkbox';
     experiencePanel.appendChild(aspectCorrect);
+
+    const lowPowerMode = register('low-power-mode', 'input');
+    lowPowerMode.type = 'checkbox';
+    experiencePanel.appendChild(lowPowerMode);
 
     const expCycleMode = register('exp-cycle-mode', 'select');
     experiencePanel.appendChild(expCycleMode);
@@ -1499,6 +1508,41 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it('wires #low-power-mode checkbox with persisted state and onLowPowerChange callback (Slice 26.10)', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+    });
+    const prev = getLowPowerMode();
+    try {
+      setLowPowerMode(true);
+      const onLowPowerChange = vi.fn();
+      setupControls(mockEngine, { calm: false, fileName: '' }, { onLowPowerChange });
+      const lowPowerBox = domElements['low-power-mode']!;
+
+      // Initialized from getLowPowerMode()
+      expect(lowPowerBox.checked).toBe(true);
+
+      // Toggling off persists '0' and invokes callback(false)
+      lowPowerBox.checked = false;
+      lowPowerBox.dispatchEvent({ type: 'change' });
+      expect(getLowPowerMode()).toBe(false);
+      expect(store.get(LOW_POWER_STORAGE_KEY)).toBe('0');
+      expect(onLowPowerChange).toHaveBeenCalledWith(false);
+
+      // Toggling on persists '1' and invokes callback(true)
+      lowPowerBox.checked = true;
+      lowPowerBox.dispatchEvent({ type: 'change' });
+      expect(getLowPowerMode()).toBe(true);
+      expect(store.get(LOW_POWER_STORAGE_KEY)).toBe('1');
+      expect(onLowPowerChange).toHaveBeenCalledWith(true);
+    } finally {
+      setLowPowerMode(prev);
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('HUD & Studio-chrome ARIA & data-tooltip audit (Slice 25.8)', () => {
@@ -1532,6 +1576,7 @@ describe('HUD & Studio-chrome ARIA & data-tooltip audit (Slice 25.8)', () => {
       'exp-cycle-mode',
       'exp-cycle-shuffle',
       'aspect-correct',
+      'low-power-mode',
       'exp-cycle-interval',
       'exp-cycle-bars',
       'exp-cycle-hard-cut',
