@@ -3,7 +3,7 @@
 - `000` `CLAUDE.md` — Claude Code entry shim & project commands
 - `010` `AGENTS.md` — Universal Falcon Protocol card catalog
 ## Sector 100 — Work Dispatch & State
-- `110` `.spec/PROGRESS.md` — Active Stage 25 slice checklist & target files
+- `110` `.spec/PROGRESS.md` — Active Stage 26 slice checklist & target files
 - `120` `.spec/HISTORY.md` — Completed stages & archived slice history
 - `130` `.spec/BLACK_BOX.md` — Circuit-breaker crash reports (on-demand)
 - `140` `.spec/SESSION_HANDOFF.md` — Cross-session handoff summary
@@ -46,3 +46,4 @@
 - `493` `.spec/specs/roadmap/stage-22-director-and-popout.md` — Stage 22 director signals & pop-out Studio
 - `494` `.spec/specs/roadmap/stage-23-polish.md` — Stage 23 polish after Stage 22
 - `495` `.spec/specs/roadmap/stage-24-harness-ui-adoption.md` — Stage 24 Harness UI adoption
+- `496` `.spec/specs/stage-26-optional-polish-parked-visuals.md` — Stage 26 Optional Polish & Parked Visuals spec

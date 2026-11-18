@@ -337,8 +337,9 @@ No lint script exists in this repo, so Verify omits it. Slice 20.9 preset number
 - [x] **Slice 23.3: Studio Display time slider** Issue: #333 🖐 `[UI / VISUAL]` worker: engineer (Haiku) Target files: `src/studio/studio.ts`, `src/studio/studio.test.ts` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 24 — Harness UI adoption (.spec/specs/roadmap/stage-24-harness-ui-adoption.md)
-Done: 24.1 (PR #340), 24.2 (PR #343), 24.3 (PR #345), 24.4 (PR #347), 24.5 (PR #351), 24.6 (PR #353), 24.7 (PR #355), 24.9 (PR #349). Hub slices H24.2 to H24.4 dropped 2026-11-13. Slice 24.10 (CSS prune) deferred until after review.
+Done: 24.1 (PR #340), 24.2 (PR #343), 24.3 (PR #345), 24.4 (PR #347), 24.5 (PR #351), 24.6 (PR #353), 24.7 (PR #355), 24.9 (PR #349), 24.10 (PR #387). Hub slices H24.2 to H24.4 dropped 2026-11-13.
 - [x] **Slice 24.8: Studio panel text and sliders match the HUD (Charlie, 2026-11-13)** Issue: #357 `[UI / VISUAL]` worker: engineer (Haiku) Target files: `src/app.css` | Verify: npm run typecheck && npm test && npm run build
+- [x] **Slice 24.10: Prune `src/style.css` rules and tokens now served by the kit** `[UI / VISUAL]` worker: gf-coder (Haiku) Target files: `src/style.css`, `src/ui/style.css`, `src/app.css` | Coords: `[400, 410, 495]` | Verify: npm run typecheck && npm test && npm run build
 
 ## Stage 25 — Visual Improvements, Warp/Feedback Responsiveness, Tooltips & Studio Cleanup (.spec/specs/visual-improvements-tooltips-audit-spec.md)
 - [x] **Slice 25.1: Prune dead Tunnel/Crown controls, wire Particle `terrainDisplace` into `PARTICLE_SPECS`, and silently ignore retired layer/post keys** `[CORE / DATA]` worker: gf-coder (Haiku) Target files: `src/presets/layerSchemas.ts`, `src/presets/format.ts`, `src/presets/layerSchemas.test.ts`, `src/render/__tests__/tunnelOverhaul.test.ts` | Coords: `[400, 410, 490]` | Verify: npm run typecheck && npm test && npm run build

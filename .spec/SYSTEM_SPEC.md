@@ -230,6 +230,11 @@ Bin indices are derived from `ctx.sampleRate`. Detection analyser `smoothingTime
   - **Feedback & Warp Responsiveness**: Adds CPU-envelope-smoothed `warpAudioSource`, `warpReactivity`, `warpAttackMs`, `warpReleaseMs` in `Scene`, enables morph-only presets in `hasLinks()`, and unifies Visual Gain / Calm scaling via `applyVisualGainAndCalm()`.
   - **100% Tooltips & Studio Helper Bar**: Completes `ParamSpec.description` across `warpOps.ts` and `format.ts`, wires `attachControlHelper` across all Studio rows, and adds Harness UI `[data-tooltip]` popovers in `src/app.css` and `src/ui/controls.ts`.
   - **Studio Cleanup & Inline UX**: Clears `Studio` `setInterval` on dispose, deduplicates Admin buttons, prunes legacy hidden HUD elements, humanizes labels, adds `[Linked]`/`[Morphed]` markers, and replaces `window.prompt`/`confirm` with inline Studio DOM controls.
+- **Stage 26 — Optional Polish & Parked Visual Improvements (2026-11-18; Sector 496):**
+  - **Studio Inline SVGs**: Replaces `👑` and `⚠️` emojis with Lucide-style 16px stroke-1.75 `<svg class="ui-icon">` elements (`crown`, `alert-triangle`); Tweakpane button icons inject into `.tp-btnv_b` before `.tp-btnv_t` so `btn.title` updates never clobber the SVG.
+  - **Per-Preset `blendSec` & True `0s` Hard-Cut Beat Mode**: `Preset.blendSec` (`0..10` s, fallback `transition.seconds`), `CycleOptions.hardCut` (persisted in `mv.autoCycle`, beat-mode HUD toggle), and `Compositor.setFadeSeconds` accepting `0` to bypass weight easing and the 0.6s `'morph'` ramp for immediate single-frame cuts.
+  - **Extra Global Director Palettes, Live Tint RGB Pickers & Low-Power Mode**: Adds `noir`, `acid`, `aurora`, and `sunset` palettes to `GlobalDirector`, live `customTint` / `customShadowTint` / `customHighlightTint` color pickers in Studio, and persistent `mv.lowPowerMode` (`LOW_POWER_SCALE = 0.5` ceiling + `Compositor.setLowPower(true)` bypassing `post.frag.glsl` / `BlurChain` while keeping `composite.frag.glsl` safety active).
+  - **Parked Visuals (`invert` & Radial `exponent`)**: Adds `invert` (`0..1`, `intense: true`) to `POST_SPECS`, `Compositor`, and `post.frag.glsl` (before `applySafety`), and `exponent` (`0.25..4.0`, default `1.0`) to `warpOpSpecs('radial')` and `warpField.frag.glsl`.
 
 
 
