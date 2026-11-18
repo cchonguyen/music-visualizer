@@ -10,6 +10,8 @@ import {
   AUTOCYCLE_PALETTES,
   TRIGGER_CADENCES,
   DEFAULT_DIRECTOR_SETTINGS,
+  DEFAULT_CUSTOM_SHADOW_TINT,
+  DEFAULT_CUSTOM_HIGHLIGHT_TINT,
   DIRECTOR_PALETTES,
   DIRECTOR_STORAGE_KEY,
   GlobalDirector,
@@ -20,6 +22,8 @@ import {
   readDirectorSettings,
   saveDirectorSettings,
   sanitizeDirectorSettings,
+  sanitizeHexTint,
+  parseHexTint,
   getGlobalDirector,
   resetGlobalDirector,
   TIER_MIN_DWELL_SEC,
@@ -68,7 +72,19 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
       expect(EXPERIENCE_MODES).toEqual(['cinematic', 'calm', 'minimal', 'colorWalk', 'custom']);
       expect(CAMERA_MODES).toEqual(['auto', 'craneSway', 'dutchRoll', 'breathingPush', 'horizonTilt', 'stillAnchor', 'off']);
       expect(CAMERA_MOVES).toEqual(['craneSway', 'dutchRoll', 'breathingPush', 'horizonTilt', 'stillAnchor']);
-      expect(COLOR_MOODS).toEqual(['auto', 'native', 'cyberpunk', 'ember', 'biolum', 'vapor', 'prismatic']);
+      expect(COLOR_MOODS).toEqual([
+        'auto',
+        'native',
+        'cyberpunk',
+        'ember',
+        'biolum',
+        'vapor',
+        'prismatic',
+        'noir',
+        'acid',
+        'aurora',
+        'sunset',
+      ]);
       expect(TRIGGER_CADENCES).toEqual(['section', 'beats32', 'beats64', 'beats128', 'timer45']);
 
       expect(DEFAULT_DIRECTOR_SETTINGS).toEqual({
@@ -78,6 +94,9 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
         colorMood: 'auto',
         colorIntensity: 0.45,
         triggerCadence: 'section',
+        customTint: false,
+        customShadowTint: DEFAULT_CUSTOM_SHADOW_TINT,
+        customHighlightTint: DEFAULT_CUSTOM_HIGHLIGHT_TINT,
       });
     });
 
@@ -94,6 +113,9 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
         colorMood: 'ember' as const,
         colorIntensity: 0.5,
         triggerCadence: 'timer45' as const,
+        customTint: true,
+        customShadowTint: '#112233',
+        customHighlightTint: '#445566',
       };
       saveDirectorSettings(custom);
       expect(localStorage.getItem(DIRECTOR_STORAGE_KEY)).toBe(JSON.stringify(custom));
@@ -693,7 +715,7 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
   });
 
   describe('6. Curated color palettes and auto-cycle', () => {
-    it('defines all 6 curated palettes with exact tint values', () => {
+    it('defines all 10 curated palettes with exact tint values', () => {
       expect(Object.keys(DIRECTOR_PALETTES)).toEqual(PALETTE_NAMES);
 
       expect(DIRECTOR_PALETTES.native).toEqual({
@@ -731,6 +753,30 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
         highlightTint: [1.0, 0.33, 0.2],
         spatialSpread: 0.8,
       });
+
+      expect(DIRECTOR_PALETTES.noir).toEqual({
+        shadowTint: [0.12, 0.12, 0.14],
+        highlightTint: [0.95, 0.95, 0.98],
+        spatialSpread: 0.25,
+      });
+
+      expect(DIRECTOR_PALETTES.acid).toEqual({
+        shadowTint: [0.18, 0.02, 0.35],
+        highlightTint: [0.65, 1.0, 0.05],
+        spatialSpread: 0.55,
+      });
+
+      expect(DIRECTOR_PALETTES.aurora).toEqual({
+        shadowTint: [0.0, 0.35, 0.28],
+        highlightTint: [0.65, 0.12, 0.85],
+        spatialSpread: 0.55,
+      });
+
+      expect(DIRECTOR_PALETTES.sunset).toEqual({
+        shadowTint: [0.22, 0.04, 0.18],
+        highlightTint: [1.0, 0.42, 0.12],
+        spatialSpread: 0.5,
+      });
     });
 
     it('returns identity when colorMood is native or intensity is 0', () => {
@@ -745,30 +791,37 @@ describe('GlobalDirector Engine & State Store (Slice 7.30)', () => {
       expect(zeroDir.getColorUniforms().intensity).toBe(0);
     });
 
-    it('auto-cycles through curated palettes excluding native', () => {
+    it('auto-cycles through all 9 curated palettes excluding native', () => {
       const director = new GlobalDirector({ colorMood: 'auto' });
       expect(AUTOCYCLE_PALETTES).not.toContain('native');
+      expect(AUTOCYCLE_PALETTES).toEqual([
+        'cyberpunk',
+        'ember',
+        'biolum',
+        'vapor',
+        'prismatic',
+        'noir',
+        'acid',
+        'aurora',
+        'sunset',
+      ]);
       expect(director.getToPalette()).toBe('cyberpunk');
 
-      // Cycle 1: cyberpunk -> ember
-      director.triggerMacro();
-      expect(director.getToPalette()).toBe('ember');
-
-      // Cycle 2: ember -> biolum
-      director.triggerMacro();
-      expect(director.getToPalette()).toBe('biolum');
-
-      // Cycle 3: biolum -> vapor
-      director.triggerMacro();
-      expect(director.getToPalette()).toBe('vapor');
-
-      // Cycle 4: vapor -> prismatic
-      director.triggerMacro();
-      expect(director.getToPalette()).toBe('prismatic');
-
-      // Cycle 5: prismatic -> cyberpunk (wraps around without native)
-      director.triggerMacro();
-      expect(director.getToPalette()).toBe('cyberpunk');
+      const expectedOrder = [
+        'ember',
+        'biolum',
+        'vapor',
+        'prismatic',
+        'noir',
+        'acid',
+        'aurora',
+        'sunset',
+        'cyberpunk',
+      ];
+      for (const expected of expectedOrder) {
+        director.triggerMacro();
+        expect(director.getToPalette()).toBe(expected);
+      }
     });
 
     it('advances gradAngle continuously at 0.025 rad/s and wraps at 2pi', () => {
@@ -1435,5 +1488,122 @@ describe('Slice 22.4: energy tiers with hysteresis', () => {
     // A stale level would have switched to build at the 2 s dwell.
     const tiers = runTiers(d, 2.2, () => LOUD);
     expect(tiers.every((t) => t === 'chill')).toBe(true);
+  });
+});
+
+describe('Slice 26.7: new Global Director palettes & live custom tint overrides', () => {
+  beforeEach(() => {
+    globalThis.localStorage = createMemoryStorage();
+    resetGlobalDirector();
+  });
+
+  it('sanitizes hex tint strings and parses RGB triples accurately', () => {
+    expect(sanitizeHexTint('#FF00AA', '#000000')).toBe('#ff00aa');
+    expect(sanitizeHexTint(' #abc ', '#000000')).toBe('#aabbcc');
+    expect(sanitizeHexTint('not-a-color', '#123456')).toBe('#123456');
+    expect(sanitizeHexTint(42, '#123456')).toBe('#123456');
+
+    expect(parseHexTint('#ff8000')).toEqual([1, 128 / 255, 0]);
+    expect(parseHexTint('#000000')).toEqual([0, 0, 0]);
+    expect(parseHexTint('invalid', [0.1, 0.2, 0.3])).toEqual([0.1, 0.2, 0.3]);
+  });
+
+  it('defaults customTint to false and preserves backwards-compatibility for legacy stored settings', () => {
+    localStorage.setItem(
+      DIRECTOR_STORAGE_KEY,
+      JSON.stringify({
+        experienceMode: 'custom',
+        cameraMode: 'stillAnchor',
+        cameraIntensity: 0.4,
+        colorMood: 'noir',
+        colorIntensity: 0.6,
+        triggerCadence: 'section',
+      }),
+    );
+
+    const restored = readDirectorSettings();
+    expect(restored.colorMood).toBe('noir');
+    expect(restored.customTint).toBe(false);
+    expect(restored.customShadowTint).toBe(DEFAULT_CUSTOM_SHADOW_TINT);
+    expect(restored.customHighlightTint).toBe(DEFAULT_CUSTOM_HIGHLIGHT_TINT);
+  });
+
+  it('applies each new palette (noir, acid, aurora, sunset) when customTint is false', () => {
+    for (const mood of ['noir', 'acid', 'aurora', 'sunset'] as const) {
+      const director = new GlobalDirector({
+        colorMood: mood,
+        colorIntensity: 0.5,
+        customTint: false,
+        customShadowTint: '#ff0000',
+        customHighlightTint: '#00ff00',
+      });
+      const uniforms = director.getColorUniforms();
+      expect(uniforms.shadowTint).toEqual(DIRECTOR_PALETTES[mood].shadowTint);
+      expect(uniforms.highlightTint).toEqual(DIRECTOR_PALETTES[mood].highlightTint);
+      expect(uniforms.spatialSpread).toBeCloseTo(DIRECTOR_PALETTES[mood].spatialSpread, 6);
+    }
+  });
+
+  it('overrides shadowTint and highlightTint in-place when customTint is true and color grading is active', () => {
+    const director = new GlobalDirector({
+      colorMood: 'aurora',
+      colorIntensity: 0.5,
+      customTint: true,
+      customShadowTint: '#336699',
+      customHighlightTint: '#ffcc00',
+    });
+
+    const out = {
+      shadowTint: [0, 0, 0] as [number, number, number],
+      highlightTint: [0, 0, 0] as [number, number, number],
+      spatialSpread: 0,
+      gradAngle: 0,
+      intensity: 0,
+      cycleAngle: 0,
+    };
+    const shadowRef = out.shadowTint;
+    const highlightRef = out.highlightTint;
+
+    director.getColorUniforms(out);
+    expect(out.shadowTint).toBe(shadowRef);
+    expect(out.highlightTint).toBe(highlightRef);
+    expect(out.shadowTint[0]).toBeCloseTo(0x33 / 255, 6);
+    expect(out.shadowTint[1]).toBeCloseTo(0x66 / 255, 6);
+    expect(out.shadowTint[2]).toBeCloseTo(0x99 / 255, 6);
+    expect(out.highlightTint[0]).toBeCloseTo(1.0, 6);
+    expect(out.highlightTint[1]).toBeCloseTo(0xcc / 255, 6);
+    expect(out.highlightTint[2]).toBeCloseTo(0.0, 6);
+    expect(out.intensity).toBeGreaterThan(0);
+
+    // Persists updates to localStorage
+    director.updateSettings({ customShadowTint: '#102030' });
+    expect(readDirectorSettings().customShadowTint).toBe('#102030');
+    expect(director.getColorUniforms().shadowTint[0]).toBeCloseTo(0x10 / 255, 6);
+  });
+
+  it('still returns identity when customTint is true but colorMood is native or colorIntensity is 0', () => {
+    const nativeDir = new GlobalDirector({
+      colorMood: 'native',
+      colorIntensity: 0.8,
+      customTint: true,
+      customShadowTint: '#ff0000',
+      customHighlightTint: '#00ff00',
+    });
+    const nativeUniforms = nativeDir.getColorUniforms();
+    expect(nativeUniforms.intensity).toBe(0);
+    expect(nativeUniforms.shadowTint).toEqual([1, 1, 1]);
+    expect(nativeUniforms.highlightTint).toEqual([1, 1, 1]);
+
+    const zeroDir = new GlobalDirector({
+      colorMood: 'sunset',
+      colorIntensity: 0,
+      customTint: true,
+      customShadowTint: '#ff0000',
+      customHighlightTint: '#00ff00',
+    });
+    const zeroUniforms = zeroDir.getColorUniforms();
+    expect(zeroUniforms.intensity).toBe(0);
+    expect(zeroUniforms.shadowTint).toEqual([1, 1, 1]);
+    expect(zeroUniforms.highlightTint).toEqual([1, 1, 1]);
   });
 });
