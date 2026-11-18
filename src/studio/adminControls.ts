@@ -4,7 +4,7 @@
  */
 
 import type { IAdminGateway, AdminSessionState } from '../presets/adminGateway';
-import type { PresetSession } from '../presets/session';
+import type { PresetSession, RemotePresetResult } from '../presets/session';
 import type { SystemSubfolder } from '../presets/builtin';
 import { SYSTEM_SUBFOLDER_LABELS } from '../presets/builtin';
 import { showToast } from '../ui/toast';
@@ -12,8 +12,14 @@ import { showToast } from '../ui/toast';
 export type { AdminSessionState };
 
 export const ADMIN_BADGE_LABEL = '👑 Admin Mode Active';
+export const ADMIN_ACCESS_LABEL = 'Admin Access';
+export const EXIT_ADMIN_LABEL = 'Exit Admin Mode 👑';
 export const DELETE_ARMED_LABEL = 'Tap again to delete';
 export const DELETE_LABEL = 'Delete';
+
+export function getAdminActionLabel(isAdmin: boolean): string {
+  return isAdmin ? EXIT_ADMIN_LABEL : ADMIN_ACCESS_LABEL;
+}
 
 /** BroadcastChannel name used by the Worker /admin page and the SPA to announce a verified login. */
 export const ADMIN_AUTH_CHANNEL = 'mv-admin-auth';
@@ -358,20 +364,120 @@ export function adminLogout(adminGateway: IAdminGateway): void {
   showToast('Exited Admin Mode');
 }
 
+function hasRemoteSync(session: PresetSession): boolean {
+  const s = session as unknown as {
+    hasRemoteWriter?: () => boolean;
+    getRemoteWriter?: () => unknown;
+  };
+  if (typeof s.hasRemoteWriter === 'function') return Boolean(s.hasRemoteWriter());
+  if (typeof s.getRemoteWriter === 'function') return Boolean(s.getRemoteWriter());
+  return false;
+}
+
+function runAdminMutation<T>(
+  session: PresetSession,
+  op: 'save' | 'delete',
+  getId: (res: T) => string,
+  mutate: () => T,
+  messages: {
+    pending: string;
+    remoteSuccess: string;
+    offline: string;
+  },
+): T {
+  const hasRemote = hasRemoteSync(session);
+  const sub = (session as unknown as {
+    subscribeRemoteResult?: (fn: (r: RemotePresetResult) => void) => () => void;
+  }).subscribeRemoteResult;
+
+  let expectedId: string | null = null;
+  let unsub: (() => void) | undefined;
+  if (hasRemote && typeof sub === 'function') {
+    unsub = sub.call(session, (result: RemotePresetResult) => {
+      if (result.op !== op) return;
+      if (expectedId !== null && result.id !== expectedId) return;
+      unsub?.();
+      if (result.success) {
+        showToast(messages.remoteSuccess);
+      } else {
+        showToast(`Remote sync failed: ${result.error || 'unknown error'}`);
+      }
+    });
+  }
+
+  let res: T;
+  try {
+    res = mutate();
+    expectedId = getId(res);
+  } catch (err) {
+    unsub?.();
+    throw err;
+  }
+
+  if (!hasRemote) {
+    showToast(messages.offline);
+  } else if (typeof sub === 'function') {
+    showToast(messages.pending);
+  } else {
+    showToast(messages.remoteSuccess);
+  }
+  return res;
+}
+
 /**
  * Save working copy of a system preset remotely and propagate changes.
  */
 export function saveSystemPresetAction(session: PresetSession, id: string): void {
-  session.saveSystemPreset(id);
-  showToast('System preset saved');
+  runAdminMutation(
+    session,
+    'save',
+    () => id,
+    () => session.saveSystemPreset(id),
+    {
+      pending: 'Saving system preset…',
+      remoteSuccess: 'System preset saved remotely',
+      offline: 'System preset saved locally (remote sync offline)',
+    },
+  );
 }
 
 /**
  * Delete a system preset remotely and locally.
  */
 export function deleteSystemPresetAction(session: PresetSession, id: string): void {
-  session.removeSystemPreset(id);
-  showToast('System preset deleted');
+  runAdminMutation(
+    session,
+    'delete',
+    () => id,
+    () => session.removeSystemPreset(id),
+    {
+      pending: 'Removing system preset…',
+      remoteSuccess: 'System preset removed remotely',
+      offline: 'System preset removed locally (remote sync offline)',
+    },
+  );
+}
+
+/**
+ * Move a system preset to a different system subfolder and sync remotely.
+ */
+export function setSystemPresetSubfolderAction(
+  session: PresetSession,
+  id: string,
+  subfolder: SystemSubfolder,
+): void {
+  const label = SYSTEM_SUBFOLDER_LABELS[subfolder] ?? subfolder;
+  runAdminMutation(
+    session,
+    'save',
+    () => id,
+    () => session.setSystemPresetSubfolder(id, subfolder),
+    {
+      pending: `Moving to ${label}…`,
+      remoteSuccess: `Moved to ${label} remotely`,
+      offline: `Moved to ${label} locally (remote sync offline)`,
+    },
+  );
 }
 
 /**
@@ -401,7 +507,15 @@ export function promoteUserPresetAction(
       ? clean
       : 'classics';
 
-  const newId = session.promoteToSystemPreset(userId, subfolder);
-  showToast('Promoted to system preset 👑');
-  return newId;
+  return runAdminMutation(
+    session,
+    'save',
+    (newId) => newId,
+    () => session.promoteToSystemPreset(userId, subfolder),
+    {
+      pending: 'Promoting to system preset…',
+      remoteSuccess: 'Promoted to system preset remotely 👑',
+      offline: 'Promoted to system preset locally 👑 (remote sync offline)',
+    },
+  );
 }

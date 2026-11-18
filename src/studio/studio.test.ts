@@ -47,10 +47,14 @@ import {
   adminLogout,
   saveSystemPresetAction,
   deleteSystemPresetAction,
+  setSystemPresetSubfolderAction,
   promoteUserPresetAction,
+  ADMIN_ACCESS_LABEL,
+  EXIT_ADMIN_LABEL,
   ADMIN_POPUP_TIMEOUT_MS,
   ADMIN_PRECHECK_TIMEOUT_MS,
 } from './adminControls';
+import { PresetSession } from '../presets/session';
 
 describe('deleteAnnouncement (slice 11.4)', () => {
   it('announces "Tap again" while Delete is armed', () => {
@@ -2045,7 +2049,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     // Move to flagship subfolder
     subfolderBinding.fire('change', 'flagship');
     expect(session.setSystemPresetSubfolder).toHaveBeenCalledWith('crown', 'flagship');
-    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative (01–12)');
+    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
 
     // 3. Name is editable
     const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
@@ -2058,7 +2062,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(saveBtn).toBeDefined();
     saveBtn.fire('click');
     expect(session.saveSystemPreset).toHaveBeenCalledWith('crown');
-    expect(showToastSpy).toHaveBeenCalledWith('System preset saved');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset saved locally (remote sync offline)');
 
     // 5. Delete button is present with 2-tap confirmation protocol
     const deleteBtn = pane.buttons.find((b: any) => b.title === 'Delete');
@@ -2072,7 +2076,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     // Second tap confirms delete
     deleteBtn.fire('click');
     expect(session.removeSystemPreset).toHaveBeenCalledWith('crown');
-    expect(showToastSpy).toHaveBeenCalledWith('System preset deleted');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset removed locally (remote sync offline)');
 
     showToastSpy.mockRestore();
   });
@@ -2092,7 +2096,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     promoteBtn.fire('click');
     expect(promptSpy).toHaveBeenCalled();
     expect(session.promoteToSystemPreset).toHaveBeenCalledWith('user-1', 'flagship');
-    expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset 👑');
+    expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset locally 👑 (remote sync offline)');
     expect(switchTo).toHaveBeenCalledWith('sys-user-1');
 
     promptSpy.mockRestore();
@@ -2205,11 +2209,11 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
 
     saveSystemPresetAction(mockSession, 'sys-1');
     expect(mockSession.saveSystemPreset).toHaveBeenCalledWith('sys-1');
-    expect(showToastSpy).toHaveBeenCalledWith('System preset saved');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset saved locally (remote sync offline)');
 
     deleteSystemPresetAction(mockSession, 'sys-1');
     expect(mockSession.removeSystemPreset).toHaveBeenCalledWith('sys-1');
-    expect(showToastSpy).toHaveBeenCalledWith('System preset deleted');
+    expect(showToastSpy).toHaveBeenCalledWith('System preset removed locally (remote sync offline)');
 
     // 4. promoteUserPresetAction
     const promotedId = promoteUserPresetAction(mockSession, 'u-1', () => 'SHOWCASE');
@@ -3628,11 +3632,14 @@ describe('Slice 25.7: Universal Studio helper bar coverage & Warp Operator int/m
     closeBtn.dispatchEvent({ type: 'mouseleave' });
     expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
 
-    const footerAdminBtn = studio.footer?.querySelector('.studio-admin-action-btn') as any;
-    expect(footerAdminBtn).toBeDefined();
-    footerAdminBtn.dispatchEvent({ type: 'focusin' });
+    // Single Admin Access button (duplicate footer button removed in Slice 25.10)
+    expect(studio.footer).toBeNull();
+    expect(container.querySelector('.studio-admin-action-btn')).toBeNull();
+    const adminBtn = buttons.find((b: any) => b.title === 'Admin Access');
+    expect(adminBtn).toBeDefined();
+    adminBtn.element.dispatchEvent({ type: 'focusin' });
     expect(studio.helperBar.querySelector('.helper-param-name')?.textContent).toBe('Admin Access');
-    footerAdminBtn.dispatchEvent({ type: 'focusout' });
+    adminBtn.element.dispatchEvent({ type: 'focusout' });
     expect(studio.helperBar.textContent).toBe(STUDIO_HELPER_IDLE_TEXT);
 
     // Built-in Category binding also updates helper bar
@@ -3673,5 +3680,285 @@ describe('Slice 25.7: Universal Studio helper bar coverage & Warp Operator int/m
 
     // Non-numeric warp spec (flow: enum) must remain excluded
     expect(targets.find((t) => t.key === 'W0.flow')).toBeUndefined();
+  });
+});
+
+describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync, dynamic dirty * & truthful admin feedback', () => {
+  function createRealSession(options: { admin?: boolean; remoteWriter?: any } = {}) {
+    const host = {
+      setScene: vi.fn(),
+      removeScene: vi.fn(),
+      setFadeSeconds: vi.fn(),
+      setWeights: vi.fn(),
+      setPost: vi.fn(),
+      setTransition: vi.fn(),
+    };
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => void store.clear(),
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      get length() { return store.size; },
+    } as Storage;
+    const adminGateway = new AdminGateway({ mock: true, defaultAdmin: Boolean(options.admin) });
+    const session = new PresetSession(host as any, SCHEMAS, storage, {
+      adminGateway,
+      remoteWriter: options.remoteWriter,
+    });
+    for (const b of ALL_PRESETS) session.addBuiltin(b.id, b.preset);
+    return { session, adminGateway, host };
+  }
+
+  it('Studio.dispose() clears the refresh setInterval so frameMs stops polling', () => {
+    vi.useFakeTimers();
+    const clearSpy = vi.spyOn(globalThis, 'clearInterval');
+    try {
+      const container = createMockElement('div');
+      const body = createMockElement('div');
+      body.className = 'studio-body';
+      container.appendChild(body);
+      container.hidden = false;
+
+      const frameMs = vi.fn(() => 5.5);
+      const { session } = createRealSession();
+      const studio = new Studio(container as any, {
+        session,
+        switchTo: vi.fn(),
+        frameMs,
+        paneFactory: () => createMockPane(),
+      });
+      studio.bind('crown');
+
+      frameMs.mockClear();
+      vi.advanceTimersByTime(1000);
+      expect(frameMs).toHaveBeenCalledTimes(2);
+
+      studio.dispose();
+      expect(clearSpy).toHaveBeenCalledTimes(1);
+
+      frameMs.mockClear();
+      vi.advanceTimersByTime(2000);
+      expect(frameMs).not.toHaveBeenCalled();
+
+      // Calling dispose() again is safe and idempotent
+      expect(() => studio.dispose()).not.toThrow();
+    } finally {
+      clearSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('renders only a single Admin Access / Exit Admin Mode button with no duplicate .studio-footer button', () => {
+    const { container, studio, getPane, adminGateway } = setupTest({ admin: false });
+    studio.bind('crown');
+    let pane = getPane();
+
+    const nonAdminBtns = pane.buttons.filter(
+      (b: any) => b.title === ADMIN_ACCESS_LABEL || b.title === EXIT_ADMIN_LABEL,
+    );
+    expect(nonAdminBtns).toHaveLength(1);
+    expect(nonAdminBtns[0].title).toBe(ADMIN_ACCESS_LABEL);
+    expect(studio.footer).toBeNull();
+    expect(container.querySelectorAll('.studio-footer')).toHaveLength(0);
+    expect(container.querySelectorAll('.studio-admin-action-btn')).toHaveLength(0);
+
+    // Toggle to admin mode and verify still only 1 button
+    (adminGateway as any).state = { isAdmin: true, adminEmail: 'admin@test.com', role: 'admin' };
+    (adminGateway as any).notifyListeners();
+    pane = getPane();
+
+    const adminBtns = pane.buttons.filter(
+      (b: any) => b.title === ADMIN_ACCESS_LABEL || b.title === EXIT_ADMIN_LABEL,
+    );
+    expect(adminBtns).toHaveLength(1);
+    expect(adminBtns[0].title).toBe(EXIT_ADMIN_LABEL);
+    expect(container.querySelectorAll('.studio-footer')).toHaveLength(0);
+    expect(container.querySelectorAll('.studio-admin-action-btn')).toHaveLength(0);
+    studio.dispose();
+  });
+
+  it('buildGlobalDirectorControls reacts to director.subscribeExperienceChange and Studio unsubscribes on rebind and dispose', () => {
+    resetGlobalDirector();
+    const director = getGlobalDirector();
+    director.reset();
+
+    // 1. Direct buildGlobalDirectorControls subscription & refresh
+    const folder = createMockPane();
+    const refreshSpies = new Map<string, ReturnType<typeof vi.fn>>();
+    const controls = buildGlobalDirectorControls(folder, director);
+    for (const b of folder.bindings) {
+      const spy = vi.fn();
+      b.refresh = spy;
+      refreshSpies.set(b.prop, spy);
+    }
+
+    // External change via HUD or keyboard M
+    director.setExperienceMode('calm');
+    expect(controls.experienceModeBinding.target.experienceMode).toBe('calm');
+    expect(controls.experienceModeBinding.target.cameraMode).toBe(director.getSettings().cameraMode);
+    expect(controls.experienceModeBinding.target.colorMood).toBe(director.getSettings().colorMood);
+    expect(refreshSpies.get('experienceMode')).toHaveBeenCalledTimes(1);
+    expect(refreshSpies.get('cameraMode')).toHaveBeenCalledTimes(1);
+    expect(refreshSpies.get('colorMood')).toHaveBeenCalledTimes(1);
+
+    controls.unsubscribe();
+    refreshSpies.get('experienceMode')!.mockClear();
+    director.setExperienceMode('minimal');
+    expect(refreshSpies.get('experienceMode')).not.toHaveBeenCalled();
+
+    // 2. Studio cleans up director subscription on rebind and dispose
+    const subscribeSpy = vi.spyOn(director, 'subscribeExperienceChange');
+    const unsubFns: Array<ReturnType<typeof vi.fn>> = [];
+    subscribeSpy.mockImplementation((fn) => {
+      const realUnsub = (director as any).experienceListeners
+        ? (() => {
+            (director as any).experienceListeners.add(fn);
+            return () => (director as any).experienceListeners.delete(fn);
+          })()
+        : () => {};
+      const wrapped = vi.fn(() => realUnsub());
+      unsubFns.push(wrapped);
+      return wrapped;
+    });
+
+    const { studio } = setupTest();
+    studio.bind('crown');
+    expect(unsubFns).toHaveLength(1);
+    expect(unsubFns[0]).not.toHaveBeenCalled();
+
+    // Rebind unsubscribes the previous panel listener and creates a fresh one
+    studio.bind('user-1');
+    expect(unsubFns[0]).toHaveBeenCalledTimes(1);
+    expect(unsubFns).toHaveLength(2);
+    expect(unsubFns[1]).not.toHaveBeenCalled();
+
+    // Dispose unsubscribes the active listener
+    studio.dispose();
+    expect(unsubFns[1]).toHaveBeenCalledTimes(1);
+
+    subscribeSpy.mockRestore();
+  });
+
+  it('updates Save button dirty (*) indicator dynamically on preset edits without full rebind', () => {
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+    try {
+      const { session } = createRealSession({ admin: true });
+      const userId = session.saveAs('crown', 'Dynamic Dirty User');
+      session.show(userId);
+
+      const container = createMockElement('div');
+      const body = createMockElement('div');
+      body.className = 'studio-body';
+      container.appendChild(body);
+      let pane: any = null;
+      const studio = new Studio(container as any, {
+        session,
+        switchTo: vi.fn(),
+        paneFactory: () => (pane = createMockPane()),
+      });
+
+      // 1. User preset starts clean: 'Save', then becomes 'Save *' on edit
+      studio.bind(userId);
+      const getSaveBtn = () => pane.buttons.find((b: any) => b.title.startsWith('Save'));
+      expect(getSaveBtn().title).toBe('Save');
+      expect(session.isDirty(userId)).toBe(false);
+
+      const transSec = pane.bindings.find((b: any) => b.options?.label === 'Transition seconds');
+      transSec.target.seconds = 4.5;
+      transSec.fire('change', 4.5);
+
+      expect(session.isDirty(userId)).toBe(true);
+      expect(getSaveBtn().title).toBe('Save *');
+
+      // Saving clears dirty indicator
+      getSaveBtn().fire('click');
+      expect(session.isDirty(userId)).toBe(false);
+      expect(getSaveBtn().title).toBe('Save');
+
+      // 2. Admin editing system preset updates 'Save System Preset 👑' -> 'Save System Preset 👑 *'
+      studio.bind('crown');
+      expect(getSaveBtn().title).toBe('Save System Preset 👑');
+      const nameB = pane.bindings.find((b: any) => b.options?.label === 'Name');
+      nameB.target.name = 'Crown Edited';
+      nameB.fire('change', 'Crown Edited');
+
+      expect(session.isDirty('crown')).toBe(true);
+      expect(getSaveBtn().title).toBe('Save System Preset 👑 *');
+
+      studio.dispose();
+    } finally {
+      showToastSpy.mockRestore();
+    }
+  });
+
+  it('reports truthful admin sync feedback for remote success, offline/local-only, and remote error', async () => {
+    const flush = () => new Promise<void>((r) => setTimeout(r, 0));
+    const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
+
+    try {
+      // 1. Offline / local-only (no remoteWriter configured)
+      const offline = createRealSession({ admin: true });
+      const offlineUser = offline.session.saveAs('crown', 'Offline Candidate');
+
+      saveSystemPresetAction(offline.session, 'crown');
+      expect(showToastSpy).toHaveBeenLastCalledWith('System preset saved locally (remote sync offline)');
+
+      setSystemPresetSubfolderAction(offline.session, 'crown', 'flagship');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
+
+      promoteUserPresetAction(offline.session, offlineUser, () => 'showcase');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset locally 👑 (remote sync offline)');
+
+      deleteSystemPresetAction(offline.session, 'flight');
+      expect(showToastSpy).toHaveBeenLastCalledWith('System preset removed locally (remote sync offline)');
+
+      // 2. Remote success
+      showToastSpy.mockClear();
+      const okWriter = {
+        upsert: vi.fn().mockResolvedValue({ success: true }),
+        softDelete: vi.fn().mockResolvedValue({ success: true }),
+      };
+      const online = createRealSession({ admin: true, remoteWriter: okWriter });
+      const onlineUser = online.session.saveAs('crown', 'Online Candidate');
+
+      saveSystemPresetAction(online.session, 'crown');
+      expect(showToastSpy).not.toHaveBeenCalledWith('System preset saved remotely');
+      await flush();
+      expect(okWriter.upsert).toHaveBeenCalledTimes(1);
+      expect(showToastSpy).toHaveBeenLastCalledWith('System preset saved remotely');
+
+      setSystemPresetSubfolderAction(online.session, 'crown', 'flagship');
+      await flush();
+      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) remotely');
+
+      promoteUserPresetAction(online.session, onlineUser, () => 'showcase');
+      await flush();
+      expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset remotely 👑');
+
+      deleteSystemPresetAction(online.session, 'flight');
+      await flush();
+      expect(okWriter.softDelete).toHaveBeenCalledWith('flight');
+      expect(showToastSpy).toHaveBeenLastCalledWith('System preset removed remotely');
+
+      // 3. Remote failure (HTTP error response and rejected network call)
+      showToastSpy.mockClear();
+      const errWriter = {
+        upsert: vi.fn().mockResolvedValue({ success: false, error: 'HTTP 403 Forbidden' }),
+        softDelete: vi.fn().mockRejectedValue(new Error('Network offline')),
+      };
+      const failing = createRealSession({ admin: true, remoteWriter: errWriter });
+
+      saveSystemPresetAction(failing.session, 'crown');
+      await flush();
+      expect(showToastSpy).toHaveBeenLastCalledWith('Remote sync failed: HTTP 403 Forbidden');
+
+      deleteSystemPresetAction(failing.session, 'flight');
+      await flush();
+      expect(showToastSpy).toHaveBeenLastCalledWith('Remote sync failed: Network offline');
+    } finally {
+      showToastSpy.mockRestore();
+    }
   });
 });
