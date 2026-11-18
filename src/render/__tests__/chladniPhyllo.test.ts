@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ChladniSandLayer, CHLADNI_POINT_COUNT } from '../layers/chladniSand';
-import { ParticleLayer } from '../layers/particles';
+import { ParticleLayer, PARTICLE_DISPLACE_SPEC } from '../layers/particles';
 import { TunnelLayer } from '../layers/tunnel';
 import chladniVertSrc from '../shaders/chladniSand.vert.glsl?raw';
 import chladniFragSrc from '../shaders/chladniSand.frag.glsl?raw';
@@ -9,13 +9,17 @@ import particlesFragSrc from '../shaders/particles.frag.glsl?raw';
 import tunnelFragSrc from '../shaders/tunnel.frag.glsl?raw';
 import {
   assertValidSpec,
+  isSpecVisible,
   CHLADNI_SPECS,
   CHLADNI_DEFAULTS,
   PARTICLE_MODE_SPEC,
   PARTICLES_SCHEMA,
+  PHYLLOTAXIS_SPECS,
   PARTICLE_SEED_SHAPE_SPEC,
   PARTICLE_PHYLLO_PATTERN_SPEC,
   PARTICLE_PETAL_STRETCH_SPEC,
+  SPECTRAL_TERRAIN_DEFAULTS,
+  SPECTRAL_TERRAIN_SPECS,
 } from '../../presets/schema';
 import { LAYER_FACTORIES, applyValues, buildScene } from '../../presets/loader';
 import { FLAGSHIP_PRESETS_09_10, ALL_PRESETS } from '../../presets/builtin';
@@ -292,6 +296,20 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
       for (const spec of CHLADNI_SPECS) {
         expect(() => assertValidSpec(spec)).not.toThrow();
       }
+      const plateMode = CHLADNI_SPECS.find((s) => s.name === 'plateMode');
+      expect(plateMode).toBeDefined();
+      expect(plateMode?.type).toBe('enum');
+      if (plateMode?.type === 'enum') {
+        expect(plateMode.options).toEqual([
+          'fullscreen',
+          'isometricPlate',
+          'radialMandala',
+          'hexagon',
+          'triangle',
+          'starMandala',
+          'morph',
+        ]);
+      }
     });
   });
 
@@ -471,6 +489,29 @@ describe('Slice 7.14: ChladniSandLayer & Phyllotaxis Mode', () => {
       for (const spec of PARTICLES_SCHEMA) {
         expect(() => assertValidSpec(spec)).not.toThrow();
       }
+
+      expect(PHYLLOTAXIS_SPECS.map((s) => s.name)).toEqual([
+        'seedShape',
+        'phylloPattern',
+        'petalStretch',
+        'flowSpeed',
+        'subTwist',
+      ]);
+      for (const spec of PHYLLOTAXIS_SPECS) {
+        expect(spec.showWhen).toEqual({ mode: 'phyllotaxis' });
+        expect(isSpecVisible(spec, { mode: 'phyllotaxis' })).toBe(true);
+        expect(isSpecVisible(spec, { mode: 'radial' })).toBe(false);
+        expect(isSpecVisible(spec, { mode: 'field' })).toBe(false);
+      }
+
+      expect(() => assertValidSpec(PARTICLE_DISPLACE_SPEC)).not.toThrow();
+      expect(PARTICLE_DISPLACE_SPEC.description).toBe(
+        'Displaces particles along the 3D terrain ridges published by Spectral Terrain.',
+      );
+
+      expect(SPECTRAL_TERRAIN_DEFAULTS.skirtOpacity).toBe(0.15);
+      const skirtSpec = SPECTRAL_TERRAIN_SPECS.find((s) => s.name === 'skirtOpacity');
+      expect(skirtSpec?.default).toBe(0.15);
     });
 
     it('verifies Golden Angle calculation in phyllotaxis', () => {

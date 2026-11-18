@@ -48,6 +48,7 @@ export const PARTICLE_DISPLACE_SPEC = {
   min: 0.0,
   max: 1.0,
   step: 0.05,
+  description: 'Displaces particles along the 3D terrain ridges published by Spectral Terrain.',
 };
 
 const PARTICLE_SHAPES = ['streak', 'dot', 'star', 'ring'];
