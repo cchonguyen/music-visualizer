@@ -30,6 +30,10 @@ void main() {
 
 export const FEEDBACK_WARP_DEFAULTS = {
   warpMode: 'classic',
+  warpAudioSource: 'sub',
+  warpReactivity: 0.0,
+  warpAttackMs: 15,
+  warpReleaseMs: 250,
   kaleidoN: 6,
   portalRadius: 0.0,
   rgbSplit: 0.0,
@@ -88,6 +92,30 @@ const WARP_MODES: Record<string, number> = { classic: 0, curl: 1, polarFold: 2, 
 const CURL_PATTERNS: Record<string, number> = { plumes: 0, eddies: 1, outflow: 2, inflow: 3 };
 const MOBIUS_MODES: Record<string, number> = { auto: 0, dipoleFlow: 1, doubleVortex: 2, figureEight: 3, breathingOrbit: 4 };
 
+function clamp01(v: number): number {
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+}
+
+function evalWarpAudioSource(source: string, frame?: AudioFrame): number {
+  if (!frame) return 0;
+  switch (source) {
+    case 'sub':
+      return clamp01(frame.norm?.sub ?? frame.env?.sub ?? 0);
+    case 'bass':
+      return clamp01(frame.env?.sub ?? frame.norm?.sub ?? 0);
+    case 'mid':
+      return clamp01(frame.norm?.mid ?? frame.env?.mid ?? 0);
+    case 'high':
+      return clamp01(frame.norm?.high ?? frame.env?.high ?? 0);
+    case 'energy':
+      return clamp01(frame.energy ?? 0);
+    case 'kick':
+      return clamp01(Math.max(frame.kickEnv ?? 0, frame.kickPulse ? 1 : 0));
+    default:
+      return clamp01(frame.norm?.sub ?? frame.env?.sub ?? 0);
+  }
+}
+
 export function applyLayerBlend(gl: WebGL2RenderingContext, blend: BlendMode): void {
   gl.enable(gl.BLEND);
   switch (blend) {
@@ -144,6 +172,7 @@ export class Scene {
   private blitSrcLoc: WebGLUniformLocation | null = null;
   private uni = new Map<string, WebGLUniformLocation | null>();
   private foregroundOpacity = 1.0;
+  private smoothedWarpAudio = 0.0;
   private outputTex: WebGLTexture | null = null;
   private snapshotTarget: PassTarget | null = null;
 
@@ -216,6 +245,15 @@ export class Scene {
 
   getForegroundOpacity(): number {
     return this.foregroundOpacity;
+  }
+
+  getSmoothedWarpAudio(): number {
+    return this.smoothedWarpAudio;
+  }
+
+  getEffectiveWarp(): number {
+    const baseWarp = this.num('warp') || 0;
+    return baseWarp * (1 + this.smoothedWarpAudio);
   }
 
   /**
@@ -343,6 +381,21 @@ export class Scene {
     const terrainBiasDriftY = terrainFlow > 0 ? -0.012 * terrainFlow : 0;
 
     const dt = typeof frame?.dtSec === 'number' && Number.isFinite(frame.dtSec) && frame.dtSec > 0 ? frame.dtSec : 1 / 60;
+    const reactivityRaw = Number(this.fb.warpReactivity ?? FEEDBACK_WARP_DEFAULTS.warpReactivity);
+    const reactivity = Number.isFinite(reactivityRaw) ? Math.min(1, Math.max(0, reactivityRaw)) : 0;
+    const warpSource = String(this.fb.warpAudioSource ?? FEEDBACK_WARP_DEFAULTS.warpAudioSource);
+    const warpTarget = reactivity > 0 ? reactivity * evalWarpAudioSource(warpSource, frame) : 0;
+    const attackMsRaw = Number(this.fb.warpAttackMs ?? FEEDBACK_WARP_DEFAULTS.warpAttackMs);
+    const releaseMsRaw = Number(this.fb.warpReleaseMs ?? FEEDBACK_WARP_DEFAULTS.warpReleaseMs);
+    const attackSec = Math.max(0.001, (Number.isFinite(attackMsRaw) ? attackMsRaw : FEEDBACK_WARP_DEFAULTS.warpAttackMs) / 1000);
+    const releaseSec = Math.max(0.001, (Number.isFinite(releaseMsRaw) ? releaseMsRaw : FEEDBACK_WARP_DEFAULTS.warpReleaseMs) / 1000);
+    const tauSec = warpTarget > this.smoothedWarpAudio ? attackSec : releaseSec;
+    const alpha = 1 - Math.exp(-dt / tauSec);
+    this.smoothedWarpAudio += (warpTarget - this.smoothedWarpAudio) * alpha;
+    if (warpTarget === 0 && Math.abs(this.smoothedWarpAudio) < 1e-9) {
+      this.smoothedWarpAudio = 0.0;
+    }
+
     const normMid = frame?.norm?.mid ?? (frame?.env?.mid ?? 0.5);
     const normSub = frame?.norm?.sub ?? (frame?.env?.sub ?? 0.5);
     this.poleOrbitPhase += dt * (0.28 + normMid * 0.45);
@@ -403,7 +456,7 @@ export class Scene {
     ti.centreY = Number(this.fb.centreY);
     ti.stretchX = Number(this.fb.stretchX);
     ti.stretchY = Number(this.fb.stretchY);
-    ti.warp = Number(this.fb.warp);
+    ti.warp = this.getEffectiveWarp();
     ti.warpScale = Number(this.fb.warpScale);
     ti.warpSpeed = Number(this.fb.warpSpeed);
     advanceSceneTransform(ti, clock.timeSec);
@@ -559,7 +612,8 @@ export class Scene {
     gl.uniform2f(this.loc('uStretch'), this.num('stretchX'), this.num('stretchY'));
     gl.uniform1f(this.loc('uZoom'), this.num('zoom'));
     gl.uniform1f(this.loc('uRot'), this.num('rotate'));
-    gl.uniform1f(this.loc('uWarp'), this.num('warp'));
+    const effectiveWarp = this.getEffectiveWarp();
+    gl.uniform1f(this.loc('uWarp'), effectiveWarp);
     gl.uniform1f(this.loc('uWarpScale'), this.num('warpScale'));
     gl.uniform1f(this.loc('uWarpSpeed'), this.num('warpSpeed'));
     gl.uniform1f(this.loc('uTime'), timeSec);
@@ -583,7 +637,11 @@ export class Scene {
     }
     gl.uniform1f?.(this.loc('uKaleidoN')!, kaleidoFolds);
     gl.uniform1f?.(this.loc('uPortalRadius')!, this.num('portalRadius') || 0.0);
-    gl.uniform1f?.(this.loc('uRgbSplit')!, this.num('rgbSplit') || 0.0);
+    const baseRgbSplit = this.num('rgbSplit') || 0.0;
+    const effectiveRgbSplit = modeKey === 'rgbSplit'
+      ? baseRgbSplit * (1 + this.smoothedWarpAudio)
+      : baseRgbSplit;
+    gl.uniform1f?.(this.loc('uRgbSplit')!, effectiveRgbSplit);
 
     const dRgb = this.fb.decayRgb;
     if (Array.isArray(dRgb) && dRgb.length === 3) {
@@ -597,7 +655,7 @@ export class Scene {
     gl.uniform1f?.(this.loc('uSolarizePhase')!, timeSec * 2.0);
     const poleOffset = this.num('mobiusPoleOffset');
     gl.uniform1f?.(this.loc('uMobiusPoleOffset')!, !Number.isNaN(poleOffset) && poleOffset > 0 ? poleOffset : 0.48);
-    gl.uniform1f?.(this.loc('uWarpAmp')!, this.num('warp') || 0.0);
+    gl.uniform1f?.(this.loc('uWarpAmp')!, effectiveWarp);
 
     // Slice 7.22 Curl uniforms:
     gl.uniform1i?.(this.loc('uCurlOctaves')!, Math.max(1, Math.min(3, Math.round(this.num('curlOctaves') || 2))));
@@ -674,5 +732,6 @@ export class Scene {
     this.gl = null;
     this.outputTex = null;
     this.foregroundOpacity = 1.0;
+    this.smoothedWarpAudio = 0.0;
   }
 }
