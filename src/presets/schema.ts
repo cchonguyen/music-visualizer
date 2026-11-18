@@ -672,7 +672,7 @@ export const SPECTRAL_TERRAIN_DEFAULTS: Required<SpectralTerrainParams> = {
   ridgeShape: 'smooth',
   layoutMode: 'fullHorizon',
   gridCols: 16,
-  skirtOpacity: 0.90,
+  skirtOpacity: 0.15,
   colorSpread: 0.85,
   invertColors: false,
   terrainFlow: 0.35,
@@ -719,6 +719,7 @@ export const PARTICLE_SEED_SHAPE_SPEC: EnumSpec = {
   default: "petal",
   options: ["orb", "petal", "star"],
   description: "Chooses the geometric morphology of individual particle seeds.",
+  showWhen: { mode: "phyllotaxis" },
 };
 
 export const PARTICLE_PHYLLO_PATTERN_SPEC: EnumSpec = {
@@ -729,6 +730,7 @@ export const PARTICLE_PHYLLO_PATTERN_SPEC: EnumSpec = {
   default: "auto",
   options: ["auto", "golden137.5", "lucas99.5", "fibonacci137.6", "rosette137.3", "starburst144"],
   description: "Sets the mathematical divergence angle determining botanical spiral patterns.",
+  showWhen: { mode: "phyllotaxis" },
 };
 
 export const PARTICLE_PETAL_STRETCH_SPEC: NumberSpec = {
@@ -741,6 +743,7 @@ export const PARTICLE_PETAL_STRETCH_SPEC: NumberSpec = {
   max: 3.0,
   step: 0.05,
   description: "Elongates particle geometry along radial velocity vectors.",
+  showWhen: { mode: "phyllotaxis" },
 };
 
 export const PARTICLE_FLOW_SPEED_SPEC: NumberSpec = {
@@ -753,6 +756,7 @@ export const PARTICLE_FLOW_SPEED_SPEC: NumberSpec = {
   max: 4.0,
   step: 0.05,
   description: "Controls the outward bloom expansion velocity of the particle field.",
+  showWhen: { mode: "phyllotaxis" },
 };
 
 export const PARTICLE_SUB_TWIST_SPEC: NumberSpec = {
@@ -765,6 +769,7 @@ export const PARTICLE_SUB_TWIST_SPEC: NumberSpec = {
   max: 4.0,
   step: 0.05,
   description: "Couples sub-bass audio energy to rotational spiral vortex twisting.",
+  showWhen: { mode: "phyllotaxis" },
 };
 
 export const PHYLLOTAXIS_SPECS: readonly ParamSpec[] = [
@@ -793,7 +798,7 @@ if (LAYER_SPECS && LAYER_SPECS.particles) {
 }
 
 /** Chladni sand parameters and schema (Slice 7.14, Slice 7.28). */
-export type ChladniPlateMode = 'fullscreen' | 'isometricPlate' | 'radialMandala';
+export type ChladniPlateMode = 'fullscreen' | 'isometricPlate' | 'radialMandala' | 'hexagon' | 'triangle' | 'starMandala' | 'morph';
 export type ChladniHarmonyMode = 'auto' | '1:2' | '2:3' | '3:4' | '3:5' | '4:5' | '5:7' | '6:8';
 
 export interface ChladniSandParams {
@@ -829,7 +834,7 @@ export const CHLADNI_SPECS: readonly ParamSpec[] = [
   { type: "float", name: "attraction", label: "Nodal attraction", group: "Sand", default: CHLADNI_DEFAULTS.attraction, min: 0.1, max: 3.0, step: 0.05, description: "Sets gravitational velocity pulling sand toward nodal lines." },
   { type: "float", name: "jitter", label: "Kick jitter", group: "Sand", default: CHLADNI_DEFAULTS.jitter, min: 0.0, max: 3.0, step: 0.05, description: "Injects kinetic brownian dispersion into grains on bass kicks." },
   { type: "colour", name: "color", label: "Sand colour", group: "Colour", default: CHLADNI_DEFAULTS.color, description: "Sets base tint color of the resonant sand grains." },
-  { type: "enum", name: "plateMode", label: "Plate geometry", group: "Sand", default: CHLADNI_DEFAULTS.plateMode, options: ["fullscreen", "isometricPlate", "radialMandala"], description: "Chooses the boundary geometry of the vibrating resonant plate." },
+  { type: "enum", name: "plateMode", label: "Plate geometry", group: "Sand", default: CHLADNI_DEFAULTS.plateMode, options: ["fullscreen", "isometricPlate", "radialMandala", "hexagon", "triangle", "starMandala", "morph"], description: "Chooses the boundary geometry of the vibrating resonant plate." },
   { type: "enum", name: "harmonyMode", label: "Harmonic mode (n:m)", group: "Sand", default: CHLADNI_DEFAULTS.harmonyMode, options: ["auto", "1:2", "2:3", "3:4", "3:5", "4:5", "5:7", "6:8"], description: "Selects harmonic frequency integer ratios shaping nodal curves." },
   { type: "float", name: "nodalSharpness", label: "Nodal line sharpness", group: "Sand", default: CHLADNI_DEFAULTS.nodalSharpness, min: 0.2, max: 2.0, step: 0.05, description: "Sharpens acoustic potential wells defining nodal line boundaries." },
   { type: "float", name: "grainWarmth", label: "Amber/cyan color mix", group: "Colour", default: CHLADNI_DEFAULTS.grainWarmth, min: 0.0, max: 1.0, step: 0.05, description: "Blends between warm amber and cool spectral color tones." },

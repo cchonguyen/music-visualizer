@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { parsePreset, presetDisplaySec, PresetFormatError, PRESET_VERSION, type SchemaRegistry } from "./format";
+import {
+  parsePreset,
+  presetDisplaySec,
+  PresetFormatError,
+  PRESET_VERSION,
+  STYLE_SPEC,
+  TRANSITION_STYLES,
+  type SchemaRegistry,
+} from "./format";
 import type { ParamSpec } from "./schema";
 
 const zoom: ParamSpec = { type: "float", name: "zoom", label: "Zoom", group: "Feedback", default: 1, min: 0.5, max: 2, step: 0.01 };
@@ -350,5 +358,25 @@ describe("presetDisplaySec (Slice 23.2)", () => {
     expect(presetDisplaySec({})).toBeUndefined();
     expect(presetDisplaySec({ displaySec: NaN })).toBeUndefined();
     expect(presetDisplaySec(undefined)).toBeUndefined();
+  });
+});
+
+describe("parsePreset: morph transition style (Slice 25.3)", () => {
+  it("includes 'morph' in TRANSITION_STYLES and STYLE_SPEC.options", () => {
+    expect(TRANSITION_STYLES).toEqual(["crossfade", "wipe", "dissolve", "zoom", "morph"]);
+    expect(STYLE_SPEC.options).toEqual(TRANSITION_STYLES);
+  });
+
+  it("parses and round-trips transition.style = 'morph' with zero warnings", () => {
+    const first = parsePreset(
+      { ...minimal, transition: { style: "morph", seconds: 1.5 } },
+      registry,
+    );
+    expect(first.warnings).toEqual([]);
+    expect(first.preset.transition).toEqual({ style: "morph", seconds: 1.5 });
+
+    const second = parsePreset(JSON.parse(JSON.stringify(first.preset)), registry);
+    expect(second.warnings).toEqual([]);
+    expect(second.preset.transition).toEqual({ style: "morph", seconds: 1.5 });
   });
 });

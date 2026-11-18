@@ -11,7 +11,7 @@ export const PRESET_VERSION = 1 as const;
 
 export { AUDIO_SOURCES, type AudioSource };
 
-export const TRANSITION_STYLES = ["crossfade", "wipe", "dissolve", "zoom"] as const;
+export const TRANSITION_STYLES = ["crossfade", "wipe", "dissolve", "zoom", "morph"] as const;
 export type Transition = (typeof TRANSITION_STYLES)[number];
 
 export const BLEND_MODES = ["max", "alpha", "add", "screen"] as const;
@@ -180,7 +180,7 @@ export const OPACITY_SPEC: NumberSpec = { type: "float", name: "opacity", label:
 export const SECONDS_SPEC: NumberSpec = { type: "float", name: "seconds", label: "Crossfade", group: "Transition", default: 0.32, min: 0.3, max: 10, step: 0.01 };
 export const BLEND_SPEC: EnumSpec = { type: "enum", name: "blend", label: "Blend", group: "Layer", default: "max", options: BLEND_MODES };
 export const TRAILS_SPEC: BoolSpec = { type: "bool", name: "trails", label: "Trails", group: "Layer", default: true };
-export const STYLE_SPEC: EnumSpec = { type: "enum", name: "style", label: "Style", group: "Transition", default: "crossfade", options: ["crossfade", "wipe", "dissolve", "zoom"] };
+export const STYLE_SPEC: EnumSpec = { type: "enum", name: "style", label: "Style", group: "Transition", default: "crossfade", options: TRANSITION_STYLES };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
