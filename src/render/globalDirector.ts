@@ -107,6 +107,10 @@ export const COLOR_MOODS = [
   'biolum',
   'vapor',
   'prismatic',
+  'noir',
+  'acid',
+  'aurora',
+  'sunset',
 ] as const;
 export type ColorMood = (typeof COLOR_MOODS)[number];
 
@@ -117,6 +121,10 @@ export const PALETTE_NAMES = [
   'biolum',
   'vapor',
   'prismatic',
+  'noir',
+  'acid',
+  'aurora',
+  'sunset',
 ] as const;
 export type PaletteName = Exclude<ColorMood, 'auto'>;
 
@@ -126,6 +134,10 @@ export const AUTOCYCLE_PALETTES: readonly PaletteName[] = [
   'biolum',
   'vapor',
   'prismatic',
+  'noir',
+  'acid',
+  'aurora',
+  'sunset',
 ] as const;
 
 export const TRIGGER_CADENCES = [
@@ -137,6 +149,9 @@ export const TRIGGER_CADENCES = [
 ] as const;
 export type TriggerCadence = (typeof TRIGGER_CADENCES)[number];
 
+export const DEFAULT_CUSTOM_SHADOW_TINT = '#00e6ff';
+export const DEFAULT_CUSTOM_HIGHLIGHT_TINT = '#ff0080';
+
 export interface GlobalDirectorSettings {
   experienceMode: ExperienceMode;
   cameraMode: CameraMode;
@@ -144,6 +159,9 @@ export interface GlobalDirectorSettings {
   colorMood: ColorMood;
   colorIntensity: number; // 0..1, default 0.45
   triggerCadence: TriggerCadence;
+  customTint?: boolean;
+  customShadowTint?: string;
+  customHighlightTint?: string;
 }
 
 export interface CameraUniforms {
@@ -173,6 +191,9 @@ export const DEFAULT_DIRECTOR_SETTINGS: Readonly<GlobalDirectorSettings> = {
   colorMood: 'auto',
   colorIntensity: 0.45,
   triggerCadence: 'section',
+  customTint: false,
+  customShadowTint: DEFAULT_CUSTOM_SHADOW_TINT,
+  customHighlightTint: DEFAULT_CUSTOM_HIGHLIGHT_TINT,
 };
 
 export interface PaletteDef {
@@ -211,6 +232,26 @@ export const DIRECTOR_PALETTES: Readonly<Record<PaletteName, PaletteDef>> = {
     shadowTint: [0.0, 0.2, 0.8],
     highlightTint: [1.0, 0.33, 0.2],
     spatialSpread: 0.8,
+  },
+  noir: {
+    shadowTint: [0.12, 0.12, 0.14],
+    highlightTint: [0.95, 0.95, 0.98],
+    spatialSpread: 0.25,
+  },
+  acid: {
+    shadowTint: [0.18, 0.02, 0.35],
+    highlightTint: [0.65, 1.0, 0.05],
+    spatialSpread: 0.55,
+  },
+  aurora: {
+    shadowTint: [0.0, 0.35, 0.28],
+    highlightTint: [0.65, 0.12, 0.85],
+    spatialSpread: 0.55,
+  },
+  sunset: {
+    shadowTint: [0.22, 0.04, 0.18],
+    highlightTint: [1.0, 0.42, 0.12],
+    spatialSpread: 0.5,
   },
 };
 
@@ -383,6 +424,49 @@ export function evaluateCameraMove(
   }
 }
 
+const HEX_6_RE = /^#[0-9a-fA-F]{6}$/;
+const HEX_3_RE = /^#[0-9a-fA-F]{3}$/;
+
+export function sanitizeHexTint(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (HEX_6_RE.test(trimmed)) return trimmed.toLowerCase();
+  if (HEX_3_RE.test(trimmed)) {
+    const r = trimmed[1]!;
+    const g = trimmed[2]!;
+    const b = trimmed[3]!;
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  return fallback;
+}
+
+export function parseHexTint(
+  hex: string,
+  fallback: readonly [number, number, number] = [1, 1, 1],
+): [number, number, number] {
+  const out: [number, number, number] = [fallback[0], fallback[1], fallback[2]];
+  writeHexTint(hex, out, fallback);
+  return out;
+}
+
+function writeHexTint(
+  hex: string,
+  target: [number, number, number],
+  fallback: readonly [number, number, number],
+): void {
+  const normalized = sanitizeHexTint(hex, '');
+  if (!normalized) {
+    target[0] = fallback[0];
+    target[1] = fallback[1];
+    target[2] = fallback[2];
+    return;
+  }
+  const n = Number.parseInt(normalized.slice(1), 16);
+  target[0] = ((n >> 16) & 0xff) / 255;
+  target[1] = ((n >> 8) & 0xff) / 255;
+  target[2] = (n & 0xff) / 255;
+}
+
 export function sanitizeDirectorSettings(raw: unknown): GlobalDirectorSettings {
   if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_DIRECTOR_SETTINGS };
@@ -415,6 +499,14 @@ export function sanitizeDirectorSettings(raw: unknown): GlobalDirectorSettings {
     ? (obj.triggerCadence as TriggerCadence)
     : DEFAULT_DIRECTOR_SETTINGS.triggerCadence;
 
+  const customTint =
+    typeof obj.customTint === 'boolean'
+      ? obj.customTint
+      : Boolean(DEFAULT_DIRECTOR_SETTINGS.customTint);
+
+  const customShadowTint = sanitizeHexTint(obj.customShadowTint, DEFAULT_CUSTOM_SHADOW_TINT);
+  const customHighlightTint = sanitizeHexTint(obj.customHighlightTint, DEFAULT_CUSTOM_HIGHLIGHT_TINT);
+
   return {
     experienceMode,
     cameraMode,
@@ -422,6 +514,9 @@ export function sanitizeDirectorSettings(raw: unknown): GlobalDirectorSettings {
     colorMood,
     colorIntensity,
     triggerCadence,
+    customTint,
+    customShadowTint,
+    customHighlightTint,
   };
 }
 
@@ -1006,9 +1101,22 @@ export class GlobalDirector {
 
     const shadowTint = out.shadowTint;
     const highlightTint = out.highlightTint;
-    for (let i = 0; i < 3; i++) {
-      shadowTint[i] = (1 - beta) * pFrom.shadowTint[i]! + beta * pTo.shadowTint[i]!;
-      highlightTint[i] = (1 - beta) * pFrom.highlightTint[i]! + beta * pTo.highlightTint[i]!;
+    if (this.settings.customTint) {
+      writeHexTint(
+        this.settings.customShadowTint ?? DEFAULT_CUSTOM_SHADOW_TINT,
+        shadowTint,
+        DIRECTOR_PALETTES.cyberpunk.shadowTint,
+      );
+      writeHexTint(
+        this.settings.customHighlightTint ?? DEFAULT_CUSTOM_HIGHLIGHT_TINT,
+        highlightTint,
+        DIRECTOR_PALETTES.cyberpunk.highlightTint,
+      );
+    } else {
+      for (let i = 0; i < 3; i++) {
+        shadowTint[i] = (1 - beta) * pFrom.shadowTint[i]! + beta * pTo.shadowTint[i]!;
+        highlightTint[i] = (1 - beta) * pFrom.highlightTint[i]! + beta * pTo.highlightTint[i]!;
+      }
     }
 
     // Energy tier weights (slice 22.4). Calm applies no tier effect.
