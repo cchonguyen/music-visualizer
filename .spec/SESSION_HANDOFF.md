@@ -1,24 +1,21 @@
-# Session Handoff: Stage 24 Harness UI adoption
+# Session Handoff: Stage 26 Optional Polish & Parked Visual Improvements
 
 ## Last Active State
-- **Last Active Platform**: Claude Code (web)
-- **Branch**: `claude/project-thread-qj51zp`, restarted from `main` after each merge.
+- **Last Active Branch**: `visual_improvements_tooltips_audit` (rebased on `origin/main` at `f0ca49f`).
 - **Active Task**: none. No `[IN_PROGRESS]` slice.
-- **Status**: Stage 24 slices 24.1 to 24.7 and 24.9 are merged (PRs #340, #343, #345, #347, #351, #353, #355, #349). 24.8 was folded into 24.7. 24.10 is deferred.
+- **Status**: Stages 1 through 25 (including deferred Slice 24.10 CSS prune, PR #387) are complete and archived in `.spec/HISTORY.md`. Stage 26 is planned, specified in `.spec/specs/stage-26-optional-polish-parked-visuals.md` (`[496]`), and queued in `.spec/PROGRESS.md` (`Slice 26.1` through `Slice 26.13`).
 
 ## What changed (recent)
-- The kit (`tokens.css`, `bundle.css`) loads before `style.css`, then `src/app.css`. `<html>` carries `data-theme="dark"`, `data-accent="azure"`, `data-density="comfortable"`.
-- The app's own accent and yellow focus tokens are gone. Accent is the kit's azure and focus is the kit's 2px outline.
-- Control bar buttons use `ui-btn ui-btn--ghost`. The experience-mode picker is a `ui-segmented` radiogroup with arrow keys. Close, dismiss and guide buttons use kit buttons. Emoji icons are inline SVG.
-- `design-system/profile.md` records the departures: dark lock, custom toast, dialog and HUD panels, Tweakpane, system fonts.
-- Hub slices H24.1 to H24.4 were dropped: no new blue (Charlie chose azure), the profile path was already consistent, the unused tokens are reference values.
+- Completed Stage 25 (Slices 25.1–25.11): dead parameter/uniform pruning, half-wired controls activation, CPU-smoothed warp responsiveness, 100% tooltips & Studio helper bar, inline DOM prompts, and Studio cleanup.
+- Completed Stage 24 (Slice 24.10, PR #387): pruned redundant CSS rules and tokens in `src/style.css`, `src/ui/style.css`, and `src/app.css`.
+- Archived Slice 24.10 into `.spec/HISTORY.md` and authored Stage 26 spec (`[496]`) + ADR + atomic slices (`26.1`–`26.13`).
 
-## Open items
-1. Charlie reviews the live look (accent is a lighter azure, Start text is dark, bar is about 5px taller).
-2. The kit's hue table lists azure for Media Recommendation too. The hub README table could add Music Visualizer (hub change, not done).
-3. Slice 24.10 prune of `src/style.css` waits for that review. Still custom: pill group, source cards, HUD panels, `dialog#shortcuts`.
-4. Studio crown and warning emoji are unchanged.
+## Queued Stage 26 Scope
+1. **Slices 26.1–26.2**: Replace `👑` and `⚠️` emojis in Studio Admin controls, helper bar, Tweakpane admin buttons, and toasts with Lucide-style 16px inline `<svg class="ui-icon">` icons.
+2. **Slices 26.3–26.6**: Add optional per-preset `blendSec` (`0..10` s), `hardCut` beat auto-cycle mode, and `0s` instant cut support in `Compositor`, `PresetSession`, `Studio`, and the Visuals panel.
+3. **Slices 26.7–26.10**: Add 4 roadmap Global Director palettes (`noir`, `acid`, `aurora`, `sunset`), live `shadowTint` / `highlightTint` RGB pickers in Studio, and persistent Low-Power Mode (`LOW_POWER_SCALE = 0.5` + Compositor post-pass bypass with safety preserved).
+4. **Slices 26.11–26.13**: Add `invert` post-processing effect and `radial` `exponent` (`zoomexp`) WarpField parameter with full test coverage.
 
 ## Next Steps
-1. Charlie reviews the live site.
-2. Then decide on slice 24.10 and any follow-up tweaks.
+1. Execute `Slice 26.1` through `Slice 26.13` sequentially via Tier 3 workers from `.spec/PROGRESS.md`.
+2. Verify `npm run typecheck && npm test && npm run build` and `node .harness/scripts/navigator.mjs --check` after each slice.
