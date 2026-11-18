@@ -10,7 +10,7 @@ import { LAYER_FACTORIES, applyPresetToScene, applyValues, readWarpOps, valuesOf
 import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, TRAILS_SPEC, TRANSITION_STYLES, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, clampDisplaySec, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, clampDisplaySec, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { MAX_LAYER_SEED, applyMashup, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
@@ -143,8 +143,16 @@ export const DEFAULT_ADD_LAYER_TYPE = 'shape';
 /** Default prompt shown in the Studio helper bar when no parameter is hovered/focused (Slice 9.8). */
 export const STUDIO_HELPER_IDLE_TEXT = 'Tap or hover over any effect name to see a description of what it does.';
 
-/** Render parameter description and warning in the fixed helper bar element. */
-export function renderHelperContent(helperBar: HTMLElement, spec: ParamSpec | null): void {
+/** Descriptor for non-ParamSpec Studio controls wired to the bottom helper bar (Slice 25.6). */
+export interface ControlHelperDescriptor {
+  label: string;
+  description: string;
+  warning?: string;
+  intense?: boolean;
+}
+
+/** Render parameter or control description and warning in the fixed helper bar element. */
+export function renderHelperContent(helperBar: HTMLElement, spec: ParamSpec | ControlHelperDescriptor | null): void {
   if (!helperBar) return;
   if (!spec || (!spec.description && !spec.warning && !spec.intense)) {
     helperBar.textContent = STUDIO_HELPER_IDLE_TEXT;
@@ -184,58 +192,78 @@ export function renderHelperContent(helperBar: HTMLElement, spec: ParamSpec | nu
   }
 }
 
-/** Attach amber badge and hover/focus listeners to a blade row (Slice 9.8). */
-export function attachSpecHelper(
-  blade: any,
-  spec: ParamSpec,
-  onHelperUpdate?: (spec: ParamSpec | null) => void,
+/** Generalized control helper: attaches optional badge and hover/focus listeners to any Studio blade or DOM element (Slice 25.6). */
+export function attachControlHelper<T extends ParamSpec | ControlHelperDescriptor>(
+  elementOrBlade: any,
+  info: T,
+  onHelperUpdate?: (info: T | null) => void,
 ): void {
-  if (!blade || typeof blade !== 'object') return;
-  const el: HTMLElement | undefined = blade.element;
-  if (!el) return;
+  if (!elementOrBlade || typeof elementOrBlade !== 'object') return;
+  const el: HTMLElement | undefined =
+    elementOrBlade.element ?? (typeof elementOrBlade.addEventListener === 'function' ? elementOrBlade : undefined);
+  if (!el || typeof el !== 'object') return;
 
   const doc = el.ownerDocument || (typeof document !== 'undefined' ? document : null);
 
   // 1. Intense / warning badge: (!) appended to label element or blade root
-  if (spec.intense || spec.warning) {
-    const hasBadge = typeof el.querySelector === 'function' && el.querySelector('.intense-badge');
-    if (!hasBadge && doc) {
-      const badge = doc.createElement('span');
-      badge.className = 'intense-badge';
-      badge.title = spec.warning || 'High-intensity effect';
-      badge.textContent = '(!)';
-      const labelEl = typeof el.querySelector === 'function' ? el.querySelector('.tp-lblv_l, label') : null;
-      if (labelEl && typeof labelEl.append === 'function') {
-        labelEl.append(badge);
-      } else if (typeof el.append === 'function') {
-        el.append(badge);
+  if (info.intense || info.warning) {
+    try {
+      const hasBadge = typeof el.querySelector === 'function' && el.querySelector('.intense-badge');
+      if (!hasBadge && doc && typeof doc.createElement === 'function') {
+        const badge = doc.createElement('span');
+        badge.className = 'intense-badge';
+        badge.title = info.warning || 'High-intensity effect';
+        badge.textContent = '(!)';
+        const labelEl = typeof el.querySelector === 'function' ? el.querySelector('.tp-lblv_l, label') : null;
+        if (labelEl && typeof labelEl.append === 'function') {
+          labelEl.append(badge);
+        } else if (typeof el.append === 'function') {
+          el.append(badge);
+        }
       }
+    } catch {
+      // Gracefully handle incomplete DOM mocks in test environments
     }
   }
 
   // 2. Reactive hover & focus tracking
   if (typeof el.addEventListener === 'function' && onHelperUpdate) {
     const activate = () => {
-      el.classList?.add('studio-control-highlight');
-      if (spec.intense || spec.warning) el.classList?.add('studio-control-highlight-intense');
-      onHelperUpdate(spec);
+      el.classList?.add?.('studio-control-highlight');
+      if (info.intense || info.warning) el.classList?.add?.('studio-control-highlight-intense');
+      onHelperUpdate(info);
     };
     const deactivate = () => {
-      el.classList?.remove('studio-control-highlight');
-      el.classList?.remove('studio-control-highlight-intense');
+      el.classList?.remove?.('studio-control-highlight');
+      el.classList?.remove?.('studio-control-highlight-intense');
       onHelperUpdate(null);
     };
 
-    el.addEventListener('mouseenter', activate);
-    el.addEventListener('focusin', activate);
-    el.addEventListener('mouseleave', deactivate);
-    el.addEventListener('focusout', (ev: FocusEvent) => {
-      if (ev?.relatedTarget && typeof el.contains === 'function' && el.contains(ev.relatedTarget as Node)) {
-        return;
-      }
-      deactivate();
-    });
+    try {
+      el.addEventListener('mouseenter', activate);
+      el.addEventListener('focusin', activate);
+      el.addEventListener('focus', activate);
+      el.addEventListener('mouseleave', deactivate);
+      el.addEventListener('blur', deactivate);
+      el.addEventListener('focusout', (ev: FocusEvent) => {
+        if (ev?.relatedTarget && typeof el.contains === 'function' && el.contains(ev.relatedTarget as Node)) {
+          return;
+        }
+        deactivate();
+      });
+    } catch {
+      // Gracefully handle incomplete DOM mocks in test environments
+    }
   }
+}
+
+/** Attach amber badge and hover/focus listeners to a blade row (Slice 9.8 wrapper for backwards compatibility). */
+export function attachSpecHelper(
+  blade: any,
+  spec: ParamSpec,
+  onHelperUpdate?: (spec: ParamSpec | null) => void,
+): void {
+  attachControlHelper(blade, spec, onHelperUpdate);
 }
 
 /** True when `value` differs from the spec default (arrays compare per item, text case-insensitively). */
@@ -500,7 +528,11 @@ export class Studio {
     }
     renderHelperContent(this.helperBar, null);
 
-    container.querySelector<HTMLButtonElement>('#studio-close')?.addEventListener('click', () => this.setVisible(false));
+    const closeBtn = container.querySelector<HTMLButtonElement>('#studio-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.setVisible(false));
+      this.attachHelp(closeBtn, 'Close Studio', 'Hides the Preset Studio panel and returns focus to the main controls.');
+    }
     // Swipe down on a phone sheet closes Studio (slice 11.6). Same path as the Close button, so focus returns.
     attachSwipeDismiss(container, () => this.setVisible(false));
     // Any pointer or key action outside the Delete button disarms a pending Delete.
@@ -516,6 +548,19 @@ export class Studio {
       this.monitor.ms = this.opts.frameMs?.() ?? 0;
       this.pane.refresh();
     }, 500);
+  }
+
+  private readonly onHelper = (info: ParamSpec | ControlHelperDescriptor | null): void => {
+    renderHelperContent(this.helperBar, info);
+  };
+
+  private attachHelp(
+    elementOrBlade: any,
+    label: string,
+    description: string,
+    extra?: { warning?: string; intense?: boolean },
+  ): void {
+    attachControlHelper(elementOrBlade, { label, description, ...extra }, this.onHelper);
   }
 
   get defaultAddType(): string {
@@ -776,6 +821,7 @@ export class Studio {
       }
     };
     presetBinding.on('change', (ev: { value: unknown }) => onSelectPreset(String(ev.value)));
+    this.attachHelp(presetBinding, 'Preset', 'Switch the active preset. System presets are read-only; user presets can be edited and saved.');
 
     const selectEl = (presetBinding?.element?.querySelector?.('select') ?? this.body.querySelector?.('select')) as HTMLSelectElement | null;
     if (selectEl) {
@@ -804,6 +850,7 @@ export class Studio {
           categoryBinding.element.classList?.add('studio-category-indicator');
           categoryBinding.element.setAttribute?.('data-category', categoryText);
         }
+        this.attachHelp(categoryBinding, 'Category', 'Shows the built-in category and read-only status of this system preset.');
       } else {
         const currentSubfolder = (typeof session.getSystemPresetSubfolder === 'function'
           ? session.getSystemPresetSubfolder(id)
@@ -837,6 +884,7 @@ export class Studio {
         if (subfolderSelectEl) {
           subfolderSelectEl.addEventListener?.('change', () => onSelectSubfolder(subfolderSelectEl.value));
         }
+        this.attachHelp(subfolderBinding, 'Subfolder', 'Moves this system preset between Showcase, Flagship, and Classics folders.');
       }
     }
 
@@ -860,6 +908,13 @@ export class Studio {
         }
       });
     }
+    this.attachHelp(
+      nameBinding,
+      'Name',
+      entry.builtin && !isAdmin
+        ? 'Display name of this built-in preset (read-only unless signed in as admin).'
+        : 'Display name shown in the preset selector and on-screen display.',
+    );
 
     // Folder controls for user presets (Slice 10.4)
     if (!entry.builtin) {
@@ -906,21 +961,23 @@ export class Studio {
       if (folderSelectEl) {
         folderSelectEl.addEventListener?.('change', () => onSelectFolder(folderSelectEl.value));
       }
+      this.attachHelp(folderBinding, 'Folder', 'Organise this user preset into a folder or move it back to Unfiled.');
 
       // Folder management buttons
       const folderBtnElements: HTMLElement[] = [];
-      const addFolderBtn = (title: string, onClick: () => void) => {
+      const addFolderBtn = (title: string, description: string, onClick: () => void) => {
         const btn = pane.addButton({ title });
         btn.on('click', onClick);
+        this.attachHelp(btn, title, description);
         folderBtnElements.push(btn.element);
         return btn;
       };
 
       if (currentFolderId) {
-        addFolderBtn('Rename folder', () => this.handleRenameFolder(id, currentFolderId));
-        addFolderBtn('Delete folder', () => this.handleDeleteFolder(id, currentFolderId));
+        addFolderBtn('Rename folder', 'Rename the currently selected user preset folder.', () => this.handleRenameFolder(id, currentFolderId));
+        addFolderBtn('Delete folder', 'Delete the current folder (presets inside are moved to Unfiled).', () => this.handleDeleteFolder(id, currentFolderId));
       }
-      addFolderBtn('Add folder', () => this.handleNewFolder(id));
+      addFolderBtn('Add folder', 'Create a new folder and move this preset into it.', () => this.handleNewFolder(id));
 
       const docForFolder = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
       if (folderBtnElements.length > 0 && docForFolder) {
@@ -948,36 +1005,55 @@ export class Studio {
         session.commit(id);
       }
     };
-    pane.addBinding(tagHolder, 'favourite', { label: 'Favourite (auto-cycle)' }).on('change', (ev) => setTag('favourite', Boolean(ev.value)));
-    pane.addBinding(tagHolder, 'skip', { label: 'Skip in auto-cycle' }).on('change', (ev) => setTag('skip', Boolean(ev.value)));
+    const favBinding = pane.addBinding(tagHolder, 'favourite', { label: 'Favourite (auto-cycle)' });
+    favBinding.on('change', (ev) => setTag('favourite', Boolean(ev.value)));
+    this.attachHelp(favBinding, 'Favourite (auto-cycle)', 'Mark this preset as a favourite so auto-cycle favours it.');
+    const skipBinding = pane.addBinding(tagHolder, 'skip', { label: 'Skip in auto-cycle' });
+    skipBinding.on('change', (ev) => setTag('skip', Boolean(ev.value)));
+    this.attachHelp(skipBinding, 'Skip in auto-cycle', 'Exclude this preset from automatic cycling while keeping it selectable manually.');
     // Transition into this preset (T1): style and time. Applied the next time the preset is shown.
-    pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'style', {
+    const transStyleBinding = pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'style', {
       label: 'Transition style',
       options: Object.fromEntries(TRANSITION_STYLES.map((t) => [t, t])),
-    }).on('change', () => session.commit(id));
-    pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 }).on('change', () => session.commit(id));
+    });
+    transStyleBinding.on('change', () => session.commit(id));
+    attachControlHelper(transStyleBinding, { ...STYLE_SPEC, label: 'Transition style' }, this.onHelper);
+    const transSecBinding = pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 });
+    transSecBinding.on('change', () => session.commit(id));
+    attachControlHelper(transSecBinding, { ...SECONDS_SPEC, label: 'Transition seconds' }, this.onHelper);
     // Display time (slice 23.3): 0 means auto-cycle timer. Values below the minimum remove the stored field.
     const displayHolder = { displaySec: preset.displaySec ?? 0 };
-    pane.addBinding(displayHolder, 'displaySec', { label: 'Display time (s, 0 = auto-cycle timer)', min: 0, max: PRESET_DISPLAY_MAX_SEC, step: 1 }).on('change', (ev) => {
+    const displayBinding = pane.addBinding(displayHolder, 'displaySec', { label: 'Display time (s, 0 = auto-cycle timer)', min: 0, max: PRESET_DISPLAY_MAX_SEC, step: 1 });
+    displayBinding.on('change', (ev) => {
       const value = Number(ev.value);
       const clamped = clampDisplaySec(value);
       if (value < PRESET_DISPLAY_MIN_SEC || clamped === undefined) delete preset.displaySec;
       else preset.displaySec = clamped;
       session.commit(id);
     });
+    this.attachHelp(displayBinding, 'Display time', 'How long this preset stays on screen in Timer mode (5–300 s; 0 uses the global timer).');
     // Action buttons share one grid wrapper (slice 10.2). Each button's element is collected, then moved into the wrapper below.
     const tiles: HTMLElement[] = [];
-    const tile = <T extends ButtonApi>(btn: T): T => {
+    const tile = <T extends ButtonApi>(btn: T, label: string, description: string): T => {
       tiles.push(btn.element);
+      this.attachHelp(btn, label, description);
       return btn;
     };
     if (entry.builtin) {
       if (!isAdmin) {
-        tile(pane.addButton({ title: 'Save (Read-only)' })).on('click', () => {
+        tile(
+          pane.addButton({ title: 'Save (Read-only)' }),
+          'Save (Read-only)',
+          'Built-in presets are read-only. Use "Save as…" to keep an editable copy.',
+        ).on('click', () => {
           showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
         });
       } else {
-        tile(pane.addButton({ title: `Save System Preset 👑${dirty}` })).on('click', () => {
+        tile(
+          pane.addButton({ title: `Save System Preset 👑${dirty}` }),
+          'Save System Preset',
+          'Overwrite this built-in system preset with your current edits.',
+        ).on('click', () => {
           if (typeof session.saveSystemPreset === 'function') {
             this.run(() => session.saveSystemPreset(id), 'System preset saved');
           } else {
@@ -986,38 +1062,82 @@ export class Studio {
         });
       }
     } else {
-      tile(pane.addButton({ title: `Save${dirty}` })).on('click', () => this.run(() => session.save(id), 'Saved'));
+      tile(
+        pane.addButton({ title: `Save${dirty}` }),
+        'Save',
+        'Save changes to this user preset in your browser library.',
+      ).on('click', () => this.run(() => session.save(id), 'Saved'));
     }
-    tile(pane.addButton({ title: 'Save as…' })).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
-    tile(pane.addButton({ title: 'Duplicate' })).on('click', () =>
+    tile(
+      pane.addButton({ title: 'Save as…' }),
+      'Save as…',
+      'Save the current settings as a new user preset under a new name.',
+    ).on('click', () => this.openSaveAsField(id, `${preset.name} copy`));
+    tile(
+      pane.addButton({ title: 'Duplicate' }),
+      'Duplicate',
+      'Create an immediate copy of this preset and switch to it.',
+    ).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),
     );
     if (!entry.builtin || isAdmin) {
-      const del = tile(pane.addButton({ title: DELETE_LABEL }));
+      const del = tile(
+        pane.addButton({ title: DELETE_LABEL }),
+        'Delete',
+        'Remove this preset (tap twice within 3 seconds to confirm).',
+      );
       this.deleteBtn = del;
       del.on('click', () => this.onDeleteTap(del, id));
     }
     if (!entry.builtin && isAdmin) {
-      tile(pane.addButton({ title: 'Promote to System Preset 👑' })).on('click', () =>
+      tile(
+        pane.addButton({ title: 'Promote to System Preset 👑' }),
+        'Promote to System Preset',
+        'Promote this user preset into a built-in system preset.',
+      ).on('click', () =>
         this.handlePromoteUserPreset(id),
       );
     }
-    tile(pane.addButton({ title: 'Export .json' })).on('click', () => this.exportFile(id));
-    tile(pane.addButton({ title: 'Import .json…' })).on('click', () => this.importFile());
+    tile(
+      pane.addButton({ title: 'Export .json' }),
+      'Export .json',
+      'Download this preset as a portable JSON file.',
+    ).on('click', () => this.exportFile(id));
+    tile(
+      pane.addButton({ title: 'Import .json…' }),
+      'Import .json…',
+      'Import a preset, palette, or bundle from a JSON file.',
+    ).on('click', () => this.importFile());
     // Whole library (slice 21.9): every user preset, folder, favourite and tag in one file.
-    tile(pane.addButton({ title: 'Export library' })).on('click', () => exportLibraryFile(session));
-    tile(pane.addButton({ title: 'Import library…' })).on('click', () =>
+    tile(
+      pane.addButton({ title: 'Export library' }),
+      'Export library',
+      'Download all user presets, folders, favourites, and tags in a single backup file.',
+    ).on('click', () => exportLibraryFile(session));
+    tile(
+      pane.addButton({ title: 'Import library…' }),
+      'Import library…',
+      'Restore or merge presets and folders from a previously exported library file.',
+    ).on('click', () =>
       importLibraryFromPicker(session, () => {
         this.refreshPresetDropdown();
         this.bind(id);
       }),
     );
-    const undo = tile(pane.addButton({ title: 'Undo' }));
+    const undo = tile(
+      pane.addButton({ title: 'Undo' }),
+      'Undo',
+      'Revert the most recent edit to this preset.',
+    );
     undo.disabled = !session.canUndo(id);
     undo.on('click', () => this.run(() => {
       session.undo(id);
     }, 'Undone'));
-    const redo = tile(pane.addButton({ title: 'Redo' }));
+    const redo = tile(
+      pane.addButton({ title: 'Redo' }),
+      'Redo',
+      'Reapply the most recently undone edit to this preset.',
+    );
     redo.disabled = !session.canRedo(id);
     redo.on('click', () => this.run(() => {
       session.redo(id);
@@ -1036,8 +1156,12 @@ export class Studio {
 
     // --- Vary -----------------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
-    pane.addButton({ title: 'Randomise (within safe ranges)' }).on('click', () => this.vary('random'));
-    pane.addButton({ title: 'Mutate (±10%)' }).on('click', () => this.vary('mutate'));
+    const randomBtn = pane.addButton({ title: 'Randomise (within safe ranges)' });
+    randomBtn.on('click', () => this.vary('random'));
+    this.attachHelp(randomBtn, 'Randomise', 'Randomise all unlocked layers, feedback, and post settings within safe visual ranges.');
+    const mutateBtn = pane.addButton({ title: 'Mutate (±10%)' });
+    mutateBtn.on('click', () => this.vary('mutate'));
+    this.attachHelp(mutateBtn, 'Mutate (±10%)', 'Nudge all unlocked layers, feedback, and post settings slightly (±10%) for subtle variations.');
 
     // --- Mashup (Slice 20.10): keep these layers, take another preset's Feedback and Post look ---------
     const mashupOptions = this.mashupOptions();
@@ -1045,16 +1169,20 @@ export class Studio {
     if (mashupIds.length > 0) {
       if (!mashupIds.includes(this.mashupFrom)) this.mashupFrom = mashupIds[0]!;
       const holder = { from: this.mashupFrom };
-      pane.addBinding(holder, 'from', { label: 'Look from', options: mashupOptions }).on('change', (ev) => {
+      const lookFromBinding = pane.addBinding(holder, 'from', { label: 'Look from', options: mashupOptions });
+      lookFromBinding.on('change', (ev) => {
         this.mashupFrom = String(ev.value);
       });
-      pane.addButton({ title: 'Mashup: use that look on these layers' }).on('click', () => this.mashup());
+      this.attachHelp(lookFromBinding, 'Look from', 'Choose another preset whose Feedback, Post, Warp, and Reactions look you want to borrow.');
+      const mashupBtn = pane.addButton({ title: 'Mashup: use that look on these layers' });
+      mashupBtn.on('click', () => this.mashup());
+      this.attachHelp(mashupBtn, 'Mashup', 'Copy the chosen preset’s Feedback, Post, Warp, and Reactions onto your current layers.');
     }
 
     // --- Global Director (Sector 483, Slice 7.32) -----------------------------------
     const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
     this.sectionFolders.push(dirFolder);
-    buildGlobalDirectorControls(dirFolder);
+    buildGlobalDirectorControls(dirFolder, undefined, this.onHelper);
     // Per-preset: false applies this preset's own camera or colour profile on load (Slice 15.7).
     const profileFlags = {
       useGlobalCamera: preset.directorProfile?.useGlobalCamera !== false,
@@ -1068,10 +1196,12 @@ export class Studio {
       preset.directorProfile[key] = value;
       session.commit(id);
     };
-    dirFolder.addBinding(profileFlags, 'useGlobalCamera', { label: 'Use global camera' })
-      .on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalCamera', Boolean(ev.value)));
-    dirFolder.addBinding(profileFlags, 'useGlobalColour', { label: 'Use global colour' })
-      .on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalColour', Boolean(ev.value)));
+    const useGlobalCamBinding = dirFolder.addBinding(profileFlags, 'useGlobalCamera', { label: 'Use global camera' });
+    useGlobalCamBinding.on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalCamera', Boolean(ev.value)));
+    this.attachHelp(useGlobalCamBinding, 'Use global camera', 'When on, Global Director controls camera motion; turn off to keep this preset’s own camera profile.');
+    const useGlobalColBinding = dirFolder.addBinding(profileFlags, 'useGlobalColour', { label: 'Use global colour' });
+    useGlobalColBinding.on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalColour', Boolean(ev.value)));
+    this.attachHelp(useGlobalColBinding, 'Use global colour', 'When on, Global Director applies its colour mood; turn off to keep this preset’s own palette.');
 
     // --- Layer stack ----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
@@ -1079,22 +1209,32 @@ export class Studio {
     if (preset.layers.length > 0) {
       const layerOptions = Object.fromEntries(preset.layers.map((l, i) => [formatLayerLabel(l, i), i]));
       const sel = { selected: this.selected };
-      pane.addBinding(sel, 'selected', { label: 'Layer', options: layerOptions }).on('change', (ev) => {
+      const layerSelectBinding = pane.addBinding(sel, 'selected', { label: 'Layer', options: layerOptions });
+      layerSelectBinding.on('change', (ev) => {
         this.selected = Number(ev.value);
         this.bind(id);
       });
+      this.attachHelp(layerSelectBinding, 'Layer', 'Select which layer in the stack to inspect, reorder, or modify.');
       const layer = preset.layers[this.selected]!;
-      pane.addBinding(layer as unknown as Record<string, unknown>, 'enabled', { label: 'Layer on' }).on('change', () => this.structure());
+      const layerOnBinding = pane.addBinding(layer as unknown as Record<string, unknown>, 'enabled', { label: 'Layer on' });
+      layerOnBinding.on('change', () => this.structure());
+      this.attachHelp(layerOnBinding, 'Layer on', 'Enable or disable the selected layer in the rendered scene.');
       const lock = { locked: this.locked.has(this.selected) };
-      pane.addBinding(lock, 'locked', { label: 'Keep when randomising' }).on('change', (ev) => {
+      const lockBinding = pane.addBinding(lock, 'locked', { label: 'Keep when randomising' });
+      lockBinding.on('change', (ev) => {
         if (ev.value) this.locked.add(this.selected);
         else this.locked.delete(this.selected);
       });
+      this.attachHelp(lockBinding, 'Keep when randomising', 'Lock this layer so Randomise and Mutate leave its settings untouched.');
       const seedBox = { seed: this.layerSeed };
-      pane.addBinding(seedBox, 'seed', { label: 'Layer seed (0 = new each time)', min: 0, max: MAX_LAYER_SEED, step: 1 }).on('change', (ev) => {
+      const seedBinding = pane.addBinding(seedBox, 'seed', { label: 'Layer seed (0 = new each time)', min: 0, max: MAX_LAYER_SEED, step: 1 });
+      seedBinding.on('change', (ev) => {
         this.layerSeed = Math.max(0, Math.min(MAX_LAYER_SEED, Math.round(Number(ev.value) || 0)));
       });
-      pane.addButton({ title: 'Randomise this layer' }).on('click', () => this.varyLayer());
+      this.attachHelp(seedBinding, 'Layer seed', 'Seed for "Randomise this layer" (0 picks a fresh random seed every click; non-zero repeats the exact result).');
+      const varyLayerBtn = pane.addButton({ title: 'Randomise this layer' });
+      varyLayerBtn.on('click', () => this.varyLayer());
+      this.attachHelp(varyLayerBtn, 'Randomise this layer', 'Randomise only the currently selected layer using the Layer seed above.');
       buildLayerControls(
         pane,
         layer,
@@ -1103,40 +1243,56 @@ export class Studio {
         session,
         undefined,
         id,
-        (spec) => renderHelperContent(this.helperBar, spec),
+        this.onHelper,
       );
       const mon = { solo: session.isSolo(id, this.selected), mute: session.isMuted(id, this.selected) };
-      pane.addBinding(mon, 'solo', { label: 'Solo (preview only)' }).on('change', (ev) => {
+      const soloBinding = pane.addBinding(mon, 'solo', { label: 'Solo (preview only)' });
+      soloBinding.on('change', (ev) => {
         session.setSolo(id, this.selected, Boolean(ev.value));
         this.bind(id);
       });
-      pane.addBinding(mon, 'mute', { label: 'Mute (preview only)' }).on('change', (ev) => {
+      this.attachHelp(soloBinding, 'Solo (preview only)', 'Temporarily isolate this layer in the preview without changing the saved preset.');
+      const muteBinding = pane.addBinding(mon, 'mute', { label: 'Mute (preview only)' });
+      muteBinding.on('change', (ev) => {
         session.setMute(id, this.selected, Boolean(ev.value));
         this.bind(id);
       });
-      pane.addButton({ title: 'Duplicate layer' }).on('click', () => {
+      this.attachHelp(muteBinding, 'Mute (preview only)', 'Temporarily hide this layer in the preview without disabling it in the saved preset.');
+      const dupLayerBtn = pane.addButton({ title: 'Duplicate layer' });
+      dupLayerBtn.on('click', () => {
         this.selected = session.duplicateLayer(id, this.selected);
         this.locked.clear();
         this.bind(id);
       });
-      pane.addButton({ title: 'Move layer up' }).on('click', () => this.move(-1));
-      pane.addButton({ title: 'Move layer down' }).on('click', () => this.move(1));
-      pane.addButton({ title: 'Remove layer' }).on('click', () => {
+      this.attachHelp(dupLayerBtn, 'Duplicate layer', 'Insert a copy of the selected layer immediately after it.');
+      const moveUpBtn = pane.addButton({ title: 'Move layer up' });
+      moveUpBtn.on('click', () => this.move(-1));
+      this.attachHelp(moveUpBtn, 'Move layer up', 'Move the selected layer earlier in the render order.');
+      const moveDownBtn = pane.addButton({ title: 'Move layer down' });
+      moveDownBtn.on('click', () => this.move(1));
+      this.attachHelp(moveDownBtn, 'Move layer down', 'Move the selected layer later in the render order.');
+      const removeLayerBtn = pane.addButton({ title: 'Remove layer' });
+      removeLayerBtn.on('click', () => {
         preset.layers.splice(this.selected, 1);
         session.shiftMonitorAfterRemove(id, this.selected);
         this.structure();
       });
+      this.attachHelp(removeLayerBtn, 'Remove layer', 'Delete the selected layer from this preset.');
     }
     const typeHolder = { type: this.addType };
     const typeOptions = Object.fromEntries(Object.keys(LAYER_FACTORIES).map((t) => [t, t]));
-    pane.addBinding(typeHolder, 'type', { label: 'Add layer', options: typeOptions }).on('change', (ev) => {
+    const addLayerTypeBinding = pane.addBinding(typeHolder, 'type', { label: 'Add layer', options: typeOptions });
+    addLayerTypeBinding.on('change', (ev) => {
       this.addType = String(ev.value);
     });
-    pane.addButton({ title: 'Add this layer' }).on('click', () => {
+    this.attachHelp(addLayerTypeBinding, 'Add layer', 'Choose the layer type to append when clicking "Add this layer".');
+    const addLayerBtn = pane.addButton({ title: 'Add this layer' });
+    addLayerBtn.on('click', () => {
       preset.layers.push(defaultLayer(this.addType));
       this.selected = preset.layers.length - 1;
       this.structure();
     });
+    this.attachHelp(addLayerBtn, 'Add this layer', 'Append a new layer of the chosen type to the end of the stack.');
 
     // --- Settings -------------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
@@ -1144,6 +1300,8 @@ export class Studio {
     const collapseBtn = pane.addButton({ title: 'Collapse All' });
     expandBtn.on('click', () => this.expandAll());
     collapseBtn.on('click', () => this.collapseAll());
+    this.attachHelp(expandBtn, 'Expand All', 'Open all collapsible Studio parameter sections and groups.');
+    this.attachHelp(collapseBtn, 'Collapse All', 'Close all collapsible Studio parameter sections and groups.');
 
     const docForExpand = this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
     if (docForExpand) {
@@ -1197,22 +1355,31 @@ export class Studio {
     // --- Frame time -----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
     this.monitor.ms = this.opts.frameMs?.() ?? 0;
-    pane.addBinding(this.monitor, 'ms', {
+    const frameTimeBinding = pane.addBinding(this.monitor, 'ms', {
       label: `Frame time ms (60 fps ≤ ${FRAME_BUDGET_MS})`,
       readonly: true,
       format: (v: number) => v.toFixed(1),
     });
+    this.attachHelp(frameTimeBinding, 'Frame time', `Live render time per frame in milliseconds (staying at or below ${FRAME_BUDGET_MS} ms keeps 60 fps).`);
 
     // --- Administrator Mode Access (Slice 11.4) -------------------------------------
     pane.addBlade({ view: 'separator' });
     const adminActionTitle = isAdmin ? 'Exit Admin Mode 👑' : 'Admin Access';
-    pane.addButton({ title: adminActionTitle }).on('click', () => {
+    const adminBtn = pane.addButton({ title: adminActionTitle });
+    adminBtn.on('click', () => {
       if (this.isAdmin()) {
         adminLogout(this.adminGateway);
       } else {
         this.handleAdminLogin();
       }
     });
+    this.attachHelp(
+      adminBtn,
+      adminActionTitle,
+      isAdmin
+        ? 'Sign out of Administrator Mode and return to standard user permissions.'
+        : 'Sign in as an administrator to edit or promote built-in system presets.',
+    );
 
     this.renderFooter(isAdmin);
   }
@@ -1246,6 +1413,13 @@ export class Studio {
         this.handleAdminLogin();
       }
     });
+    this.attachHelp(
+      btn,
+      isAdmin ? 'Exit Admin Mode' : 'Admin Access',
+      isAdmin
+        ? 'Sign out of Administrator Mode and return to standard user permissions.'
+        : 'Sign in as an administrator to edit or promote built-in system presets.',
+    );
     footer.append(btn);
   }
 
@@ -1256,46 +1430,61 @@ export class Studio {
     pane.addBlade({ view: 'separator' });
     if (!targets.some((t) => t.key === this.linkTarget)) this.linkTarget = targets[0]!.key;
     const pick = { key: this.linkTarget };
-    pane.addBinding(pick, 'key', {
+    const linkTargetBinding = pane.addBinding(pick, 'key', {
       label: 'Link a setting',
       options: Object.fromEntries(targets.map((t) => [t.label, t.key])),
-    }).on('change', (ev) => {
+    });
+    linkTargetBinding.on('change', (ev) => {
       this.linkTarget = String(ev.value);
       this.bind(id);
     });
+    this.attachHelp(linkTargetBinding, 'Link a setting', 'Choose any numeric layer, warp, feedback, or post setting to modulate with audio or an LFO.');
     const target = targets.find((t) => t.key === this.linkTarget)!;
     const setting = target.setting;
     const session = this.opts.session;
     if (!setting.link) {
-      pane.addButton({ title: 'Add audio link' }).on('click', () => {
+      const addLinkBtn = pane.addButton({ title: 'Add audio link' });
+      addLinkBtn.on('click', () => {
         session.commit(id);
         setting.link = { source: 'bass', amount: 0.2, smooth: 0.2 };
         this.bind(id);
       });
+      this.attachHelp(addLinkBtn, 'Add audio link', 'Attach an audio band or LFO modulator to the selected setting.');
       return;
     }
     const link = setting.link;
     const onEdit = () => session.commit(id);
-    pane.addBinding(link as unknown as Record<string, unknown>, 'source', {
+    const sourceBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'source', {
       label: 'Source',
       options: Object.fromEntries(AUDIO_SOURCES.map((s) => [s, s])),
-    }).on('change', onEdit);
-    pane.addBinding(link as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -1, max: 1, step: 0.01 }).on('change', onEdit);
-    pane.addBinding(link as unknown as Record<string, unknown>, 'smooth', { label: 'Smoothing', min: 0, max: 1, step: 0.01 }).on('change', onEdit);
+    });
+    sourceBinding.on('change', onEdit);
+    this.attachHelp(sourceBinding, 'Source', 'Select the audio frequency band, beat envelope, or LFO waveform driving this setting.');
+    const linkAmountBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -1, max: 1, step: 0.01 });
+    linkAmountBinding.on('change', onEdit);
+    this.attachHelp(linkAmountBinding, 'Amount (share of range)', 'How far the link pushes the setting across its range (negative values invert the modulation).');
+    const linkSmoothBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'smooth', { label: 'Smoothing', min: 0, max: 1, step: 0.01 });
+    linkSmoothBinding.on('change', onEdit);
+    this.attachHelp(linkSmoothBinding, 'Smoothing', 'Controls how smoothly the link follows rapid changes in the source signal (0 = instant, 1 = very smooth).');
     if (link.source.startsWith('lfo')) {
       // LFO rate (slice: adjustable LFOs). Blank means the 0.5 Hz default.
       const rateBox = link as unknown as { rate?: number };
       if (rateBox.rate === undefined) rateBox.rate = LFO_RATE_DEFAULT;
-      pane.addBinding(rateBox, 'rate', { label: 'LFO rate (Hz)', min: LFO_RATE_MIN, max: LFO_RATE_MAX, step: 0.05 }).on('change', onEdit);
+      const lfoRateBinding = pane.addBinding(rateBox, 'rate', { label: 'LFO rate (Hz)', min: LFO_RATE_MIN, max: LFO_RATE_MAX, step: 0.05 });
+      lfoRateBinding.on('change', onEdit);
+      this.attachHelp(lfoRateBinding, 'LFO rate (Hz)', 'Oscillation frequency in cycles per second when using an LFO source.');
     }
     // The runner's keys are `${presetId}${L|F}…`, so the preset id goes in front.
     this.linkMonitor.value = target.meterKey ? this.opts.linkMeter?.(`${id}${target.meterKey}`) ?? 0 : 0;
-    pane.addBinding(this.linkMonitor, 'value', { label: 'Source now (0–1)', readonly: true, format: (v: number) => v.toFixed(2) });
-    pane.addButton({ title: 'Remove audio link' }).on('click', () => {
+    const linkMonitorBinding = pane.addBinding(this.linkMonitor, 'value', { label: 'Source now (0–1)', readonly: true, format: (v: number) => v.toFixed(2) });
+    this.attachHelp(linkMonitorBinding, 'Source now (0–1)', 'Live normalised readout of the selected modulation source right now.');
+    const removeLinkBtn = pane.addButton({ title: 'Remove audio link' });
+    removeLinkBtn.on('click', () => {
       session.commit(id);
       delete (setting as Setting).link;
       this.bind(id);
     });
+    this.attachHelp(removeLinkBtn, 'Remove audio link', 'Disconnect the audio or LFO link from this setting.');
   }
 
   /**
@@ -1310,20 +1499,25 @@ export class Studio {
     if (this.warpIndex >= list.length) this.warpIndex = Math.max(0, list.length - 1);
     if (list.length > 0) {
       const pick = { index: String(this.warpIndex) };
-      pane.addBinding(pick, 'index', {
+      const warpPickBinding = pane.addBinding(pick, 'index', {
         label: 'Warp operator',
         options: Object.fromEntries(list.map((op, i) => [describeWarpOperator(op, i), String(i)])),
-      }).on('change', (ev) => {
+      });
+      warpPickBinding.on('change', (ev) => {
         this.warpIndex = Number(ev.value);
         this.bind(id);
       });
+      this.attachHelp(warpPickBinding, 'Warp operator', 'Select which warp field operator in the stack (up to 4) to edit or remove.');
     }
     if (list.length < WARP_OP_MAX) {
       const typeBox = { type: this.warpAddType as string };
-      pane.addBinding(typeBox, 'type', { label: 'New warp operator', options: warpTypeOptions() }).on('change', (ev) => {
+      const newWarpTypeBinding = pane.addBinding(typeBox, 'type', { label: 'New warp operator', options: warpTypeOptions() });
+      newWarpTypeBinding.on('change', (ev) => {
         if (isWarpOpType(ev.value)) this.warpAddType = ev.value;
       });
-      pane.addButton({ title: 'Add warp operator' }).on('click', () => {
+      this.attachHelp(newWarpTypeBinding, 'New warp operator', 'Choose the warp operator effect type to add to the stack.');
+      const addWarpBtn = pane.addButton({ title: 'Add warp operator' });
+      addWarpBtn.on('click', () => {
         session.commit(id);
         const ops = (preset.warp ??= []);
         ops.push(newWarpOperator(this.warpAddType));
@@ -1331,13 +1525,15 @@ export class Studio {
         live();
         this.bind(id);
       });
+      this.attachHelp(addWarpBtn, 'Add warp operator', 'Append the chosen warp operator to the preset’s warp field stack.');
     }
     const op = list[this.warpIndex];
     if (!op) return;
 
     const onEdit = () => session.commit(id);
     const typeBox = { type: op.type as string };
-    pane.addBinding(typeBox, 'type', { label: 'Operator type', options: warpTypeOptions() }).on('change', (ev) => {
+    const opTypeBinding = pane.addBinding(typeBox, 'type', { label: 'Operator type', options: warpTypeOptions() });
+    opTypeBinding.on('change', (ev) => {
       if (!isWarpOpType(ev.value)) return;
       op.type = ev.value;
       fillWarpParams(op);
@@ -1345,18 +1541,23 @@ export class Studio {
       onEdit();
       this.bind(id);
     });
-    pane.addBinding(op as unknown as Record<string, unknown>, 'enabled', { label: 'Operator on' }).on('change', () => {
+    this.attachHelp(opTypeBinding, 'Operator type', 'Change the effect type of the currently selected warp operator.');
+    const opEnabledBinding = pane.addBinding(op as unknown as Record<string, unknown>, 'enabled', { label: 'Operator on' });
+    opEnabledBinding.on('change', () => {
       live();
       onEdit();
     });
+    this.attachHelp(opEnabledBinding, 'Operator on', 'Enable or bypass this warp operator without removing it from the stack.');
     this.bindSection(pane, `Warp operator ${this.warpIndex + 1}: ${WARP_OP_LABELS[op.type]}`, warpOpSpecs(op.type), op.params, live, { section: `warp${this.warpIndex}`, layerIndex: null });
-    pane.addButton({ title: 'Remove warp operator' }).on('click', () => {
+    const removeWarpBtn = pane.addButton({ title: 'Remove warp operator' });
+    removeWarpBtn.on('click', () => {
       session.commit(id);
       list.splice(this.warpIndex, 1);
       if (list.length === 0) delete preset.warp;
       live();
       this.bind(id);
     });
+    this.attachHelp(removeWarpBtn, 'Remove warp operator', 'Delete the selected warp operator from the stack.');
   }
 
   /**
@@ -1368,77 +1569,99 @@ export class Studio {
     const session = this.opts.session;
     pane.addBlade({ view: 'separator' });
     const styleBox = { style: preset.reactionStyle ?? REACTION_STYLE_GLOBAL };
-    pane.addBinding(styleBox, 'style', {
+    const reactionStyleBinding = pane.addBinding(styleBox, 'style', {
       label: 'Reaction style',
       options: reactionStyleOptions(),
-    }).on('change', (ev) => {
+    });
+    reactionStyleBinding.on('change', (ev) => {
       const style = parseReactionStyle(ev.value);
       if (style) preset.reactionStyle = style;
       else delete preset.reactionStyle;
       session.commit(id);
     });
+    this.attachHelp(reactionStyleBinding, 'Reaction style', 'Override the global reaction style for this preset, or follow the global setting.');
 
     const list = preset.reactions ?? [];
     if (this.reactionIndex >= list.length) this.reactionIndex = Math.max(0, list.length - 1);
     const targets = reactionTargets(preset);
     if (list.length > 0) {
       const pick = { index: String(this.reactionIndex) };
-      pane.addBinding(pick, 'index', {
+      const reactionPickBinding = pane.addBinding(pick, 'index', {
         label: 'Reaction',
         options: Object.fromEntries(list.map((r, i) => [`${i + 1}. ${describeReaction(r)}`, String(i)])),
-      }).on('change', (ev) => {
+      });
+      reactionPickBinding.on('change', (ev) => {
         this.reactionIndex = Number(ev.value);
         this.bind(id);
       });
+      this.attachHelp(reactionPickBinding, 'Reaction', 'Select which beat or section reaction rule to inspect, edit, or remove.');
     }
     if (list.length < MAX_REACTIONS) {
-      pane.addButton({ title: 'Add reaction' }).on('click', () => {
+      const addReactionBtn = pane.addButton({ title: 'Add reaction' });
+      addReactionBtn.on('click', () => {
         session.commit(id);
         const reactions = (preset.reactions ??= []);
         reactions.push(newReaction(targets[0]));
         this.reactionIndex = reactions.length - 1;
         this.bind(id);
       });
+      this.attachHelp(addReactionBtn, 'Add reaction', 'Create a new automated trigger-and-response rule on a Feedback or Post control.');
     }
     const reaction = list[this.reactionIndex];
     if (!reaction) return;
 
     const onEdit = () => session.commit(id);
     const trigger = { type: reaction.trigger.type as string };
-    pane.addBinding(trigger, 'type', {
+    const whenBinding = pane.addBinding(trigger, 'type', {
       label: 'When',
       options: Object.fromEntries(TRIGGER_TYPES.map((t) => [TRIGGER_LABELS[t], t])),
-    }).on('change', (ev) => {
+    });
+    whenBinding.on('change', (ev) => {
       reaction.trigger = triggerOf(String(ev.value) as TriggerType, reaction.trigger.n);
       onEdit();
       this.bind(id);
     });
+    this.attachHelp(whenBinding, 'When', 'Event or rhythmic cadence that fires this reaction.');
     if (reaction.trigger.type === 'everyNBeats') {
-      pane.addBinding(reaction.trigger as unknown as Record<string, unknown>, 'n', { label: 'Every how many beats', min: 1, max: REACTION_EVERY_BEATS_MAX, step: 1 }).on('change', onEdit);
+      const everyBeatsBinding = pane.addBinding(reaction.trigger as unknown as Record<string, unknown>, 'n', { label: 'Every how many beats', min: 1, max: REACTION_EVERY_BEATS_MAX, step: 1 });
+      everyBeatsBinding.on('change', onEdit);
+      this.attachHelp(everyBeatsBinding, 'Every how many beats', 'Number of detected beats between each reaction trigger.');
     } else if (reaction.trigger.type === 'everyNSeconds') {
-      pane.addBinding(reaction.trigger as unknown as Record<string, unknown>, 'n', { label: 'Every how many seconds', min: REACTION_EVERY_SECONDS_MIN, max: REACTION_EVERY_SECONDS_MAX, step: 0.25 }).on('change', onEdit);
+      const everySecBinding = pane.addBinding(reaction.trigger as unknown as Record<string, unknown>, 'n', { label: 'Every how many seconds', min: REACTION_EVERY_SECONDS_MIN, max: REACTION_EVERY_SECONDS_MAX, step: 0.25 });
+      everySecBinding.on('change', onEdit);
+      this.attachHelp(everySecBinding, 'Every how many seconds', 'Interval in seconds between each periodic reaction trigger.');
     }
-    pane.addBinding(reaction as unknown as Record<string, unknown>, 'response', {
+    const responseBinding = pane.addBinding(reaction as unknown as Record<string, unknown>, 'response', {
       label: 'What happens',
       options: Object.fromEntries(RESPONSE_TYPES.map((r) => [RESPONSE_LABELS[r], r])),
-    }).on('change', onEdit);
+    });
+    responseBinding.on('change', onEdit);
+    this.attachHelp(responseBinding, 'What happens', 'How the target control responds when triggered (Kick, Step, Flip, Drift, or Pick).');
     const where = { key: reactionTargetKey(reaction.target) };
     // A control that is hidden right now (for example Warp in a mode that does not use it) stays pickable if it is already chosen.
     const options = Object.fromEntries(targets.map((t) => [t.label, t.key]));
     if (!targets.some((t) => t.key === where.key)) options[`${reaction.target.group === 'post' ? 'Post' : 'Feedback'} · ${reaction.target.name}`] = where.key;
-    pane.addBinding(where, 'key', { label: 'Which control', options }).on('change', (ev) => {
+    const whichControlBinding = pane.addBinding(where, 'key', { label: 'Which control', options });
+    whichControlBinding.on('change', (ev) => {
       const next = parseReactionTargetKey(String(ev.value));
       if (next) reaction.target = next;
       onEdit();
     });
-    pane.addBinding(reaction as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -REACTION_AMOUNT_MAX, max: REACTION_AMOUNT_MAX, step: 0.01 }).on('change', onEdit);
-    pane.addBinding(reaction as unknown as Record<string, unknown>, 'ease', { label: 'Ease time (s)', min: 0, max: REACTION_EASE_MAX, step: 0.05 }).on('change', onEdit);
-    pane.addButton({ title: 'Remove reaction' }).on('click', () => {
+    this.attachHelp(whichControlBinding, 'Which control', 'Feedback or Post parameter driven by this reaction.');
+    const reactionAmountBinding = pane.addBinding(reaction as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -REACTION_AMOUNT_MAX, max: REACTION_AMOUNT_MAX, step: 0.01 });
+    reactionAmountBinding.on('change', onEdit);
+    this.attachHelp(reactionAmountBinding, 'Amount (share of range)', 'Strength and direction of the reaction across the target control’s range.');
+    const reactionEaseBinding = pane.addBinding(reaction as unknown as Record<string, unknown>, 'ease', { label: 'Ease time (s)', min: 0, max: REACTION_EASE_MAX, step: 0.05 });
+    reactionEaseBinding.on('change', onEdit);
+    this.attachHelp(reactionEaseBinding, 'Ease time (s)', 'Time in seconds for the reaction impulse to settle or transition.');
+    const removeReactionBtn = pane.addButton({ title: 'Remove reaction' });
+    removeReactionBtn.on('click', () => {
       session.commit(id);
       list.splice(this.reactionIndex, 1);
       if (list.length === 0) delete preset.reactions;
       this.bind(id);
     });
+    this.attachHelp(removeReactionBtn, 'Remove reaction', 'Delete the selected reaction rule from this preset.');
   }
 
   /** Morph the setting picked in the link editor: it swings between its value and a second value (slice E-c). */
@@ -1449,31 +1672,39 @@ export class Studio {
     const session = this.opts.session;
     const onEdit = () => session.commit(id);
     if (!setting.morph) {
-      pane.addButton({ title: 'Add morph (swing to a second value)' }).on('click', () => {
+      const addMorphBtn = pane.addButton({ title: 'Add morph (swing to a second value)' });
+      addMorphBtn.on('click', () => {
         session.commit(id);
         setting.morph = { to: morphTargetFor(spec, setting.value), rate: MORPH_RATE_DEFAULT };
         this.bind(id);
       });
+      this.attachHelp(addMorphBtn, 'Add morph', 'Continuously oscillate the selected setting between its base value and a target value.');
       return;
     }
     const morph = setting.morph;
-    pane.addBinding(morph as unknown as Record<string, unknown>, 'to', {
+    const morphToBinding = pane.addBinding(morph as unknown as Record<string, unknown>, 'to', {
       label: 'Morph to',
       min: spec.min,
       max: spec.max,
       step: spec.step,
-    }).on('change', onEdit);
-    pane.addBinding(morph as unknown as Record<string, unknown>, 'rate', {
+    });
+    morphToBinding.on('change', onEdit);
+    this.attachHelp(morphToBinding, 'Morph to', 'Second target value that the setting smoothly swings toward and back from.');
+    const morphRateBinding = pane.addBinding(morph as unknown as Record<string, unknown>, 'rate', {
       label: 'Morph rate (cycles/s)',
       min: MORPH_RATE_MIN,
       max: MORPH_RATE_MAX,
       step: 0.01,
-    }).on('change', onEdit);
-    pane.addButton({ title: 'Remove morph' }).on('click', () => {
+    });
+    morphRateBinding.on('change', onEdit);
+    this.attachHelp(morphRateBinding, 'Morph rate (cycles/s)', 'Speed of the cosine morph cycle in full back-and-forth cycles per second.');
+    const removeMorphBtn = pane.addButton({ title: 'Remove morph' });
+    removeMorphBtn.on('click', () => {
       session.commit(id);
       delete (setting as Setting).morph;
       this.bind(id);
     });
+    this.attachHelp(removeMorphBtn, 'Remove morph', 'Stop morphing this setting and keep its base value.');
   }
 
   private bindSection(
@@ -1648,6 +1879,9 @@ export class Studio {
     });
     ok.addEventListener('click', submit);
     cancel.addEventListener('click', () => this.closeSaveAsField());
+    this.attachHelp(input, 'New preset name', 'Enter a name for the new copy of this preset.');
+    this.attachHelp(ok, 'Confirm Save as', 'Save the preset under the typed name.');
+    this.attachHelp(cancel, 'Cancel Save as', 'Close the name prompt without saving a copy.');
     field.append(input, ok, cancel, msg);
     this.body.prepend(field);
     this.saveAsField = field;
@@ -2101,6 +2335,14 @@ export function bindSection(
       saveStudioView(viewHolder.view);
       for (const notify of [...viewSubscribers]) notify(viewHolder.view);
     });
+    attachControlHelper(
+      viewBinding,
+      {
+        label: 'View',
+        description: 'Switch between Basic (essential controls) and Advanced (every parameter in this section).',
+      },
+      onHelperUpdate as ((info: ParamSpec | ControlHelperDescriptor | null) => void) | undefined,
+    );
     const onView = (v: StudioView) => {
       try {
         if (viewHolder.view !== v) {
@@ -2244,6 +2486,7 @@ export function bindSpec(
 export function buildGlobalDirectorControls(
   folder: { addBinding: (target: any, prop: any, options?: any) => any },
   director = getGlobalDirector(),
+  onHelperUpdate?: (info: ControlHelperDescriptor | null) => void,
 ) {
   const settings = { ...director.getSettings() };
 
@@ -2256,9 +2499,18 @@ export function buildGlobalDirectorControls(
       'Color Walk': 'colorWalk',
       'Custom': 'custom',
     },
-  }).on('change', (ev: { value: any }) => {
+  });
+  experienceModeBinding?.on?.('change', (ev: { value: any }) => {
     director.setExperienceMode(ev.value as ExperienceMode);
   });
+  attachControlHelper(
+    experienceModeBinding,
+    {
+      label: 'Experience mode',
+      description: 'Sets overall visual energy: Cinematic (full dynamic range), Calm (soft motion), Minimal (reduced elements), Color Walk, or Custom.',
+    },
+    onHelperUpdate,
+  );
 
   const cameraModeBinding = folder.addBinding(settings, 'cameraMode', {
     label: 'Camera motion',
@@ -2271,18 +2523,36 @@ export function buildGlobalDirectorControls(
       'Still anchor': 'stillAnchor',
       'Off': 'off',
     },
-  }).on('change', (ev: { value: any }) => {
+  });
+  cameraModeBinding?.on?.('change', (ev: { value: any }) => {
     director.updateSettings({ cameraMode: ev.value as CameraMode });
   });
+  attachControlHelper(
+    cameraModeBinding,
+    {
+      label: 'Camera motion',
+      description: 'Controls automated 3D camera sweeps, breathing push/pull, rolls, and anchor points.',
+    },
+    onHelperUpdate,
+  );
 
   const cameraIntensityBinding = folder.addBinding(settings, 'cameraIntensity', {
     label: 'Camera intensity',
     min: 0,
     max: 1,
     step: 0.05,
-  }).on('change', (ev: { value: any }) => {
+  });
+  cameraIntensityBinding?.on?.('change', (ev: { value: any }) => {
     director.updateSettings({ cameraIntensity: Number(ev.value) });
   });
+  attachControlHelper(
+    cameraIntensityBinding,
+    {
+      label: 'Camera intensity',
+      description: 'Scales the amplitude of automated camera movements and parallax displacement.',
+    },
+    onHelperUpdate,
+  );
 
   const colorMoodBinding = folder.addBinding(settings, 'colorMood', {
     label: 'Color mood',
@@ -2295,18 +2565,36 @@ export function buildGlobalDirectorControls(
       'Vapor (Violet/Rose)': 'vapor',
       'Prismatic (Cobalt/Coral)': 'prismatic',
     },
-  }).on('change', (ev: { value: any }) => {
+  });
+  colorMoodBinding?.on?.('change', (ev: { value: any }) => {
     director.updateSettings({ colorMood: ev.value as ColorMood });
   });
+  attachControlHelper(
+    colorMoodBinding,
+    {
+      label: 'Color mood',
+      description: 'Overlays harmonic colour palettes or preserves each preset’s native colour scheme.',
+    },
+    onHelperUpdate,
+  );
 
   const colorIntensityBinding = folder.addBinding(settings, 'colorIntensity', {
     label: 'Color intensity',
     min: 0,
     max: 1,
     step: 0.05,
-  }).on('change', (ev: { value: any }) => {
+  });
+  colorIntensityBinding?.on?.('change', (ev: { value: any }) => {
     director.updateSettings({ colorIntensity: Number(ev.value) });
   });
+  attachControlHelper(
+    colorIntensityBinding,
+    {
+      label: 'Color intensity',
+      description: 'Controls the strength of global colour palette remapping.',
+    },
+    onHelperUpdate,
+  );
 
   const triggerCadenceBinding = folder.addBinding(settings, 'triggerCadence', {
     label: 'Transition trigger',
@@ -2317,9 +2605,18 @@ export function buildGlobalDirectorControls(
       'Every 128 beats': 'beats128',
       'Timer (45s)': 'timer45',
     },
-  }).on('change', (ev: { value: any }) => {
+  });
+  triggerCadenceBinding?.on?.('change', (ev: { value: any }) => {
     director.updateSettings({ triggerCadence: ev.value as TriggerCadence });
   });
+  attachControlHelper(
+    triggerCadenceBinding,
+    {
+      label: 'Transition trigger',
+      description: 'Determines when automated preset transitions fire based on song sections, beat counts, or timer intervals.',
+    },
+    onHelperUpdate,
+  );
 
   return {
     experienceModeBinding,
