@@ -27,6 +27,9 @@ import {
   saveStudioView,
   isSpecShown,
   STUDIO_VIEW_KEY,
+  AUDIO_SOURCE_LABELS,
+  TRANSITION_STYLE_LABELS,
+  formatEnumOptionLabel,
 } from './studio';
 import { getGlobalDirector, resetGlobalDirector } from '../render/globalDirector';
 import { Scene } from '../render/scene';
@@ -35,13 +38,15 @@ import type { Vec3Spec } from '../presets/schema';
 import { LAYER_SPECS, POST_SPECS, tierOf } from '../presets/layerSchemas';
 import type { ParamSpec } from '../presets/schema';
 import { FEEDBACK_POST_LAYOUT, feedbackPostGroupOf, layoutFeedbackPost } from '../presets/schema';
-import { ALL_PRESETS, SCHEMAS } from '../presets/builtin';
+import { ALL_PRESETS, LAYER_TYPE_LABELS, SCHEMAS, formatLayerType } from '../presets/builtin';
 import { isMainSilent, NOOP_SCENE_HOST, POPOUT_WAITING_TEXT, readShownPreset } from './popoutMain';
-import { parsePreset, OPACITY_SPEC, BLEND_SPEC, TRAILS_SPEC, STYLE_SPEC, SECONDS_SPEC } from '../presets/format';
+import { AUDIO_SOURCES, TRANSITION_STYLES, parsePreset, OPACITY_SPEC, BLEND_SPEC, TRAILS_SPEC, STYLE_SPEC, SECONDS_SPEC } from '../presets/format';
+import { LAYER_FACTORIES } from '../presets/loader';
 import { warpOpSpecs, WARP_OP_TYPES } from '../presets/warpOps';
 import { AdminGateway } from '../presets/adminGateway';
 import {
   ADMIN_BADGE_LABEL,
+  SYSTEM_SUBFOLDER_OPTIONS,
   renderAdminBadge,
   promptAdminLogin,
   adminLogout,
@@ -751,11 +756,11 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
 
     expect(camModeB!.options.label).toBe('Camera motion');
     expect(camModeB!.options.options).toEqual({
-      'Auto (Complementary)': 'auto',
+      'Auto': 'auto',
       'Crane sway': 'craneSway',
       'Dutch roll': 'dutchRoll',
-      'Breathing push': 'breathingPush',
-      'Horizon 2.5D tilt': 'horizonTilt',
+      'Push swell': 'breathingPush',
+      'Horizon 2.5D': 'horizonTilt',
       'Still anchor': 'stillAnchor',
       'Off': 'off',
     });
@@ -767,13 +772,13 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
 
     expect(colMoodB!.options.label).toBe('Color mood');
     expect(colMoodB!.options.options).toEqual({
-      'Auto-cycle palettes': 'auto',
-      'Native (preset original)': 'native',
-      'Cyberpunk (Cyan/Magenta)': 'cyberpunk',
-      'Ember (Indigo/Gold)': 'ember',
-      'Bioluminescent (Teal/Aqua)': 'biolum',
-      'Vapor (Violet/Rose)': 'vapor',
-      'Prismatic (Cobalt/Coral)': 'prismatic',
+      'Auto-cycle': 'auto',
+      'Native (preset)': 'native',
+      'Cyberpunk': 'cyberpunk',
+      'Ember': 'ember',
+      'Biolum': 'biolum',
+      'Vapor': 'vapor',
+      'Prismatic': 'prismatic',
     });
 
     expect(colIntensityB!.options.label).toBe('Color intensity');
@@ -895,7 +900,7 @@ describe('formatLayerTitle & formatLayerLabel (Slice 9.4)', () => {
     expect(formatLayerLabel(layer, 1)).toBe('2. Shape (star · dots) (off)');
   });
 
-  it('formats non-shape layers with standard layer type', () => {
+  it('formats non-shape layers with humanized layer type', () => {
     const tunnelLayer: LayerEntry = {
       type: 'tunnel',
       enabled: true,
@@ -903,9 +908,9 @@ describe('formatLayerTitle & formatLayerLabel (Slice 9.4)', () => {
       blend: 'add',
       params: {},
     };
-    expect(formatLayerTitle(tunnelLayer, 0)).toBe('1. tunnel');
-    expect(formatLayerLabel(tunnelLayer, 0)).toBe('1. tunnel');
-    expect(formatLayerLabel({ ...tunnelLayer, enabled: false }, 1)).toBe('2. tunnel (off)');
+    expect(formatLayerTitle(tunnelLayer, 0)).toBe('1. Forward Flight Tunnel');
+    expect(formatLayerLabel(tunnelLayer, 0)).toBe('1. Forward Flight Tunnel');
+    expect(formatLayerLabel({ ...tunnelLayer, enabled: false }, 1)).toBe('2. Forward Flight Tunnel (off)');
   });
 });
 
@@ -1860,29 +1865,40 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
     showToastSpy.mockRestore();
   });
 
-  it('prompts and creates new folder when selecting "+ New Folder…" from dropdown', () => {
-    const { studio, getPane, session } = setupTest();
+  it('opens inline DOM prompt and creates new folder when selecting "+ New Folder…" from dropdown', () => {
+    const { container, studio, getPane, session } = setupTest();
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
-    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue('Synthetics');
+    const origPrompt = (globalThis as any).prompt;
+    const globalPromptSpy = vi.fn();
+    (globalThis as any).prompt = globalPromptSpy;
 
-    studio.bind('user-1');
-    const pane = getPane();
-    const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
+    try {
+      studio.bind('user-1');
+      const pane = getPane();
+      const folderBinding = pane.bindings.find((b: any) => b.prop === 'folder');
 
-    folderBinding.fire('change', '__new_folder__');
-    expect(promptSpy).toHaveBeenCalled();
-    expect(session.createFolder).toHaveBeenCalledWith('Synthetics');
-    expect(session.setPresetFolder).toHaveBeenCalledWith('user-1', expect.stringContaining('folder-'));
-    expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Created folder "Synthetics"'));
+      folderBinding.fire('change', '__new_folder__');
+      expect(globalPromptSpy).not.toHaveBeenCalled();
 
-    promptSpy.mockRestore();
-    showToastSpy.mockRestore();
+      const promptRow = container.querySelector('.studio-inline-prompt');
+      expect(promptRow).not.toBeNull();
+      const input = promptRow!.querySelector('.studio-inline-prompt__input')!;
+      const confirmBtn = promptRow!.querySelector('.studio-inline-prompt__confirm')!;
+      input.value = 'Synthetics';
+      confirmBtn.dispatchEvent({ type: 'click' });
+
+      expect(session.createFolder).toHaveBeenCalledWith('Synthetics');
+      expect(session.setPresetFolder).toHaveBeenCalledWith('user-1', expect.stringContaining('folder-'));
+      expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Created folder "Synthetics"'));
+    } finally {
+      (globalThis as any).prompt = origPrompt;
+      showToastSpy.mockRestore();
+    }
   });
 
-  it('prompts and creates new folder when clicking "Add folder" button', () => {
-    const { studio, getPane, session } = setupTest();
+  it('opens inline DOM prompt and creates new folder when clicking "Add folder" button', () => {
+    const { container, studio, getPane, session } = setupTest();
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
-    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue('Deep Focus');
 
     studio.bind('user-1');
     const pane = getPane();
@@ -1890,19 +1906,23 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
     expect(addFolderBtn).toBeDefined();
 
     addFolderBtn.fire('click');
-    expect(promptSpy).toHaveBeenCalled();
+    const promptRow = container.querySelector('.studio-inline-prompt');
+    expect(promptRow).not.toBeNull();
+    const input = promptRow!.querySelector('.studio-inline-prompt__input')!;
+    const confirmBtn = promptRow!.querySelector('.studio-inline-prompt__confirm')!;
+    input.value = 'Deep Focus';
+    confirmBtn.dispatchEvent({ type: 'click' });
+
     expect(session.createFolder).toHaveBeenCalledWith('Deep Focus');
     expect(session.setPresetFolder).toHaveBeenCalledWith('user-1', expect.stringContaining('folder-'));
     expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Created folder "Deep Focus"'));
 
-    promptSpy.mockRestore();
     showToastSpy.mockRestore();
   });
 
-  it('renames folder when clicking "Rename folder" button', () => {
-    const { studio, getPane, session } = setupTest();
+  it('renames folder via inline DOM prompt when clicking "Rename folder" button', () => {
+    const { container, studio, getPane, session } = setupTest();
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
-    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue('Lofi Beats');
 
     studio.bind('user-in-folder');
     const pane = getPane();
@@ -1910,61 +1930,81 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
     expect(renameBtn).toBeDefined();
 
     renameBtn.fire('click');
-    expect(promptSpy).toHaveBeenCalledWith(expect.stringContaining('Rename folder "Chill Beats"'), 'Chill Beats');
+    const promptRow = container.querySelector('.studio-inline-prompt');
+    expect(promptRow).not.toBeNull();
+    const input = promptRow!.querySelector('.studio-inline-prompt__input')!;
+    expect(input.value).toBe('Chill Beats');
+    const confirmBtn = promptRow!.querySelector('.studio-inline-prompt__confirm')!;
+    input.value = 'Lofi Beats';
+    confirmBtn.dispatchEvent({ type: 'click' });
+
     expect(session.renameFolder).toHaveBeenCalledWith('folder-chill', 'Lofi Beats');
     expect(showToastSpy).toHaveBeenCalledWith('Folder renamed to "Lofi Beats"');
 
-    promptSpy.mockRestore();
     showToastSpy.mockRestore();
   });
 
-  it('deletes folder with confirmation when clicking "Delete folder" button and unfiles presets', () => {
-    const { studio, getPane, session } = setupTest();
+  it('deletes folder via inline confirmation row when clicking "Delete folder" button and unfiles presets', () => {
+    const { container, studio, getPane, session } = setupTest();
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
-    const confirmSpy = vi.spyOn(studio, 'confirmAction').mockReturnValue(true);
+    const origConfirm = (globalThis as any).confirm;
+    const globalConfirmSpy = vi.fn();
+    (globalThis as any).confirm = globalConfirmSpy;
 
-    studio.bind('user-in-folder');
-    const pane = getPane();
-    const deleteFolderBtn = pane.buttons.find((b: any) => b.title === 'Delete folder');
-    expect(deleteFolderBtn).toBeDefined();
+    try {
+      studio.bind('user-in-folder');
+      const pane = getPane();
+      const deleteFolderBtn = pane.buttons.find((b: any) => b.title === 'Delete folder');
+      expect(deleteFolderBtn).toBeDefined();
 
-    deleteFolderBtn.fire('click');
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('Delete folder "Chill Beats"? Presets inside will be moved to Unfiled.'));
-    expect(session.deleteFolder).toHaveBeenCalledWith('folder-chill');
-    expect(showToastSpy).toHaveBeenCalledWith('Folder "Chill Beats" deleted');
+      deleteFolderBtn.fire('click');
+      expect(globalConfirmSpy).not.toHaveBeenCalled();
 
-    // After folder deletion, the preset is unfiled
-    const updatedPane = getPane();
-    const updatedFolderBinding = updatedPane.bindings.find((b: any) => b.prop === 'folder');
-    expect(updatedFolderBinding.target.folder).toBe('');
-    expect(updatedPane.buttons.find((b: any) => b.title === 'Rename folder')).toBeUndefined();
-    expect(updatedPane.buttons.find((b: any) => b.title === 'Delete folder')).toBeUndefined();
+      const promptRow = container.querySelector('.studio-inline-prompt');
+      expect(promptRow).not.toBeNull();
+      expect(promptRow!.getAttribute('role')).toBe('alertdialog');
+      expect(promptRow!.textContent).toContain('Delete folder "Chill Beats"? Presets inside will be moved to Unfiled.');
 
-    confirmSpy.mockRestore();
-    showToastSpy.mockRestore();
+      const confirmBtn = promptRow!.querySelector('.studio-inline-prompt__confirm')!;
+      confirmBtn.dispatchEvent({ type: 'click' });
+
+      expect(session.deleteFolder).toHaveBeenCalledWith('folder-chill');
+      expect(showToastSpy).toHaveBeenCalledWith('Folder "Chill Beats" deleted');
+
+      // After folder deletion, the preset is unfiled
+      const updatedPane = getPane();
+      const updatedFolderBinding = updatedPane.bindings.find((b: any) => b.prop === 'folder');
+      expect(updatedFolderBinding.target.folder).toBe('');
+      expect(updatedPane.buttons.find((b: any) => b.title === 'Rename folder')).toBeUndefined();
+      expect(updatedPane.buttons.find((b: any) => b.title === 'Delete folder')).toBeUndefined();
+    } finally {
+      (globalThis as any).confirm = origConfirm;
+      showToastSpy.mockRestore();
+    }
   });
 
-  it('cancelling prompt or confirm does not create, rename, or delete folders', () => {
-    const { studio, session } = setupTest();
-    const promptSpy = vi.spyOn(studio, 'promptForFolderName').mockReturnValue(null);
-    const confirmSpy = vi.spyOn(studio, 'confirmAction').mockReturnValue(false);
+  it('cancelling inline prompt or confirmation does not create, rename, or delete folders', () => {
+    const { container, studio, session } = setupTest();
 
     // Cancel create
     studio.bind('user-1');
     studio.handleNewFolder('user-1');
+    container.querySelector('.studio-inline-prompt__cancel')!.dispatchEvent({ type: 'click' });
     expect(session.createFolder).not.toHaveBeenCalled();
+    expect(container.querySelector('.studio-inline-prompt')).toBeNull();
 
     // Cancel rename
     studio.bind('user-in-folder');
     studio.handleRenameFolder('user-in-folder', 'folder-chill');
+    container.querySelector('.studio-inline-prompt__cancel')!.dispatchEvent({ type: 'click' });
     expect(session.renameFolder).not.toHaveBeenCalled();
+    expect(container.querySelector('.studio-inline-prompt')).toBeNull();
 
     // Cancel delete
     studio.handleDeleteFolder('user-in-folder', 'folder-chill');
+    container.querySelector('.studio-inline-prompt__cancel')!.dispatchEvent({ type: 'click' });
     expect(session.deleteFolder).not.toHaveBeenCalled();
-
-    promptSpy.mockRestore();
-    confirmSpy.mockRestore();
+    expect(container.querySelector('.studio-inline-prompt')).toBeNull();
   });
 
   it('studio.refresh() rebinds and synchronizes state', () => {
@@ -2081,41 +2121,59 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     showToastSpy.mockRestore();
   });
 
-  it('renders "Promote to System Preset 👑" button for user presets in admin mode', () => {
-    const { studio, getPane, session, switchTo } = setupTest({ admin: true });
+  it('renders "Promote to System Preset 👑" button and promotes via inline subfolder select in admin mode', () => {
+    const { container, studio, getPane, session, switchTo } = setupTest({ admin: true });
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
-    const promptSpy = vi.spyOn(studio, 'promptForAdminInput').mockReturnValue('flagship');
+    const origPrompt = (globalThis as any).prompt;
+    const globalPromptSpy = vi.fn();
+    (globalThis as any).prompt = globalPromptSpy;
 
-    studio.bind('user-1');
-    const pane = getPane();
+    try {
+      studio.bind('user-1');
+      const pane = getPane();
 
-    // Promote button should be available
-    const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
-    expect(promoteBtn).toBeDefined();
+      // Promote button should be available
+      const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
+      expect(promoteBtn).toBeDefined();
 
-    promoteBtn.fire('click');
-    expect(promptSpy).toHaveBeenCalled();
-    expect(session.promoteToSystemPreset).toHaveBeenCalledWith('user-1', 'flagship');
-    expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset locally 👑 (remote sync offline)');
-    expect(switchTo).toHaveBeenCalledWith('sys-user-1');
+      promoteBtn.fire('click');
+      expect(globalPromptSpy).not.toHaveBeenCalled();
 
-    promptSpy.mockRestore();
-    showToastSpy.mockRestore();
+      const promptRow = container.querySelector('.studio-inline-prompt');
+      expect(promptRow).not.toBeNull();
+      const select = promptRow!.querySelector('.studio-inline-prompt__select')!;
+      expect(select).not.toBeNull();
+      const options = select.querySelectorAll('option').map((o) => ({ label: o.textContent, value: o.value }));
+      expect(options).toEqual(
+        Object.entries(SYSTEM_SUBFOLDER_OPTIONS).map(([label, value]) => ({ label, value })),
+      );
+
+      select.value = 'flagship';
+      promptRow!.querySelector('.studio-inline-prompt__confirm')!.dispatchEvent({ type: 'click' });
+
+      expect(session.promoteToSystemPreset).toHaveBeenCalledWith('user-1', 'flagship');
+      expect(showToastSpy).toHaveBeenCalledWith('Promoted to system preset locally 👑 (remote sync offline)');
+      expect(switchTo).toHaveBeenCalledWith('sys-user-1');
+    } finally {
+      (globalThis as any).prompt = origPrompt;
+      showToastSpy.mockRestore();
+    }
   });
 
-  it('cancelling promote prompt aborts promotion', () => {
-    const { studio, getPane, session } = setupTest({ admin: true });
-    const promptSpy = vi.spyOn(studio, 'promptForAdminInput').mockReturnValue(null);
+  it('cancelling inline promote prompt aborts promotion', () => {
+    const { container, studio, getPane, session } = setupTest({ admin: true });
 
     studio.bind('user-1');
     const pane = getPane();
     const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
     promoteBtn.fire('click');
 
-    expect(promptSpy).toHaveBeenCalled();
-    expect(session.promoteToSystemPreset).not.toHaveBeenCalled();
+    const promptRow = container.querySelector('.studio-inline-prompt');
+    expect(promptRow).not.toBeNull();
+    promptRow!.querySelector('.studio-inline-prompt__cancel')!.dispatchEvent({ type: 'click' });
 
-    promptSpy.mockRestore();
+    expect(container.querySelector('.studio-inline-prompt')).toBeNull();
+    expect(session.promoteToSystemPreset).not.toHaveBeenCalled();
   });
 
   it('supports admin login and logout lifecycle with dynamic UI refresh', async () => {
@@ -3960,5 +4018,210 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
     } finally {
       showToastSpy.mockRestore();
     }
+  });
+});
+
+describe('Slice 25.11: Humanized labels, [Linked]/[Morphed] badges, read-only hint & inline DOM prompts', () => {
+  it('LAYER_TYPE_LABELS covers every LAYER_FACTORIES key and formatLayerType formats camelCase fallbacks', () => {
+    for (const key of Object.keys(LAYER_FACTORIES)) {
+      expect(LAYER_TYPE_LABELS[key], `LAYER_TYPE_LABELS missing key "${key}"`).toBeTruthy();
+      expect(formatLayerType(key)).toBe(LAYER_TYPE_LABELS[key]);
+    }
+    expect(formatLayerType('spectralTerrain')).toBe('Spectral Terrain');
+    expect(formatLayerType('reactionDiffusion')).toBe('Reaction Diffusion');
+    expect(formatLayerType('chladniSand')).toBe('Chladni Cymatics Sand');
+    expect(formatLayerType('moire')).toBe('Moiré Interference');
+    expect(formatLayerType('customParticleGrid')).toBe('Custom Particle Grid');
+    expect(formatLayerType('')).toBe('');
+  });
+
+  it('humanizes Add layer dropdown options and non-shape layer titles/labels', () => {
+    const { studio, getPane, presets, session } = setupTest();
+    session.isSolo = () => false;
+    session.isMuted = () => false;
+    session.monitorOf = () => undefined;
+    presets['user-1']!.preset.layers = [
+      { type: 'spectralTerrain', enabled: true, opacity: 1, blend: 'add', params: {} },
+      { type: 'chladniSand', enabled: false, opacity: 1, blend: 'alpha', params: {} },
+    ];
+
+    studio.bind('user-1');
+    const pane = getPane();
+
+    const addLayerBinding = pane.bindings.find((b: any) => b.options?.label === 'Add layer');
+    expect(addLayerBinding).toBeDefined();
+    for (const key of Object.keys(LAYER_FACTORIES)) {
+      expect(addLayerBinding.options.options[formatLayerType(key)]).toBe(key);
+    }
+
+    const layerPicker = pane.bindings.find((b: any) => b.options?.label === 'Layer');
+    expect(layerPicker.options.options['1. Spectral Terrain']).toBe(0);
+    expect(layerPicker.options.options['2. Chladni Cymatics Sand (off)']).toBe(1);
+
+    const terrainFolder = pane.folders.find((f: any) => f.options?.title === '1. Spectral Terrain');
+    expect(terrainFolder).toBeDefined();
+  });
+
+  it('humanizes bindSpec enum options, AUDIO_SOURCES, and TRANSITION_STYLES', () => {
+    const pane = createMockPane();
+    const plateSpec: ParamSpec = {
+      type: 'enum',
+      name: 'plateMode',
+      label: 'Plate geometry',
+      group: 'Sand',
+      default: 'fullscreen',
+      options: ['fullscreen', 'isometricPlate', 'radialMandala', 'starMandala'],
+    };
+    const warpSpec: ParamSpec = {
+      type: 'enum',
+      name: 'warpMode',
+      label: 'Warp mode',
+      group: 'Warp',
+      default: 'classic',
+      options: ['classic', 'curl', 'polarFold', 'mobius', 'rgbSplit'],
+    };
+    const blendSpec: ParamSpec = {
+      type: 'enum',
+      name: 'blend',
+      label: 'Blend',
+      group: 'Layer',
+      default: 'add',
+      options: ['alpha', 'add', 'max'],
+    };
+
+    const b1 = bindSpec(pane, plateSpec, { plateMode: 'fullscreen' }, () => {});
+    expect(b1.options.options).toEqual({
+      'Fullscreen': 'fullscreen',
+      'Isometric Plate': 'isometricPlate',
+      'Radial Mandala': 'radialMandala',
+      'Star Mandala': 'starMandala',
+    });
+
+    const b2 = bindSpec(pane, warpSpec, { warpMode: 'classic' }, () => {});
+    expect(b2.options.options).toEqual({
+      'Classic': 'classic',
+      'Curl': 'curl',
+      'Polar Fold (Mandala)': 'polarFold',
+      'Mobius': 'mobius',
+      'RGB Split': 'rgbSplit',
+    });
+
+    const b3 = bindSpec(pane, blendSpec, { blend: 'add' }, () => {});
+    expect(b3.options.options).toEqual({
+      'Alpha': 'alpha',
+      'Additive': 'add',
+      'Maximum': 'max',
+    });
+
+    expect(formatEnumOptionLabel('starburstLoom')).toBe('Starburst Loom');
+    expect(formatEnumOptionLabel('1:2')).toBe('1:2');
+
+    for (const s of AUDIO_SOURCES) {
+      expect(AUDIO_SOURCE_LABELS[s], `AUDIO_SOURCE_LABELS missing "${s}"`).toBeTruthy();
+    }
+    for (const t of TRANSITION_STYLES) {
+      expect(TRANSITION_STYLE_LABELS[t], `TRANSITION_STYLE_LABELS missing "${t}"`).toBeTruthy();
+    }
+  });
+
+  it('uses TRANSITION_STYLE_LABELS and AUDIO_SOURCE_LABELS in Studio bindings', () => {
+    const { studio, getPane, presets } = setupTest();
+    const userPreset = presets['user-1']!.preset;
+    userPreset.feedback = {
+      zoom: { value: 1.0, link: { source: 'lfoSine', amount: 0.2, smooth: 0.2 } },
+    };
+
+    studio.bind('user-1');
+    const pane = getPane();
+
+    const transBinding = pane.bindings.find((b: any) => b.options?.label === 'Transition style');
+    expect(transBinding).toBeDefined();
+    expect(transBinding.options.options).toEqual(
+      Object.fromEntries(TRANSITION_STYLES.map((t) => [TRANSITION_STYLE_LABELS[t], t])),
+    );
+
+    const sourceBinding = pane.bindings.find((b: any) => b.options?.label === 'Source');
+    expect(sourceBinding).toBeDefined();
+    expect(sourceBinding.options.options).toEqual(
+      Object.fromEntries(AUDIO_SOURCES.map((s) => [AUDIO_SOURCE_LABELS[s], s])),
+    );
+  });
+
+  it('renders read-only preset hint on built-in presets for non-admin users only', () => {
+    const { container, studio } = setupTest({ admin: false });
+
+    studio.bind('crown');
+    const hint = container.querySelector('.studio-readonly-hint');
+    expect(hint).not.toBeNull();
+    expect(hint!.getAttribute('role')).toBe('status');
+    expect(hint!.textContent).toContain('read-only');
+    expect(hint!.textContent).toContain('Favourite');
+    expect(hint!.textContent).toContain('Skip');
+    expect(hint!.textContent).toContain('Save as…');
+
+    studio.bind('user-1');
+    expect(container.querySelector('.studio-readonly-hint')).toBeNull();
+
+    const adminSetup = setupTest({ admin: true });
+    adminSetup.studio.bind('crown');
+    expect(adminSetup.container.querySelector('.studio-readonly-hint')).toBeNull();
+  });
+
+  it('labels link selector "Link or morph a setting" and prefixes [Linked], [Morphed], and [Linked & Morphed] in linkTargets', () => {
+    const layer = defaultLayer('spectralTerrain');
+    layer.params.elevation!.link = { source: 'bass', amount: 0.3, smooth: 0.2 };
+    layer.params.width!.morph = { to: 1.5, rate: 0.1 };
+    layer.params.brightness!.link = { source: 'sub', amount: 0.2, smooth: 0.1 };
+    layer.params.brightness!.morph = { to: 1.6, rate: 0.15 };
+
+    const zoomLabel = SCHEMAS.feedback.find((s) => s.name === 'zoom')!.label;
+    const bloomLabel = SCHEMAS.post.find((s) => s.name === 'bloom')!.label;
+
+    const preset: Preset = {
+      version: 1,
+      name: 'Badge Test',
+      tags: [],
+      transition: { style: 'crossfade', seconds: 1 },
+      feedback: { zoom: { value: 1.0, link: { source: 'energy', amount: 0.1, smooth: 0.3 } } },
+      layers: [layer],
+      post: { bloom: { value: 0.3, morph: { to: 0.8, rate: 0.1 } } },
+    };
+
+    const targets = linkTargets(preset);
+    const byKey = Object.fromEntries(targets.map((t) => [t.key, t.label]));
+    expect(byKey['L0.elevation']).toBe('[Linked] 1. Spectral Terrain · Peak elevation');
+    expect(byKey['L0.width']).toBe('[Morphed] 1. Spectral Terrain · Terrain width');
+    expect(byKey['L0.brightness']).toBe('[Linked & Morphed] 1. Spectral Terrain · Ridge brightness');
+    expect(byKey['F.zoom']).toBe(`[Linked] Feedback · ${zoomLabel}`);
+    expect(byKey['P.bloom']).toBe(`[Morphed] Post · ${bloomLabel}`);
+
+    const { studio, getPane, presets } = setupTest();
+    presets['user-1']!.preset.feedback = { zoom: { value: 1.0 } };
+    studio.bind('user-1');
+    const pane = getPane();
+    const linkSelector = pane.bindings.find((b: any) => b.options?.label === 'Link or morph a setting');
+    expect(linkSelector).toBeDefined();
+  });
+
+  it('supports Escape key dismissal and empty-name validation on inline folder prompts', () => {
+    const { container, studio, session } = setupTest();
+    studio.bind('user-1');
+
+    studio.handleNewFolder('user-1');
+    const row = container.querySelector('.studio-inline-prompt')!;
+    const input = row.querySelector('.studio-inline-prompt__input')!;
+    const confirmBtn = row.querySelector('.studio-inline-prompt__confirm')!;
+
+    // Empty name shows validation error instead of submitting
+    input.value = '   ';
+    confirmBtn.dispatchEvent({ type: 'click' });
+    const err = row.querySelector('.studio-inline-prompt__error')!;
+    expect(err.textContent).toBe('Enter a folder name.');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(session.createFolder).not.toHaveBeenCalled();
+
+    // Escape dismisses inline prompt
+    input.dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault: vi.fn(), stopPropagation: vi.fn() });
+    expect(container.querySelector('.studio-inline-prompt')).toBeNull();
   });
 });

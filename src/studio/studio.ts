@@ -9,8 +9,8 @@ import { isLayerRendered } from '../presets/session';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, readWarpOps, valuesOf } from '../presets/loader';
 import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
-import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, clampDisplaySec, type LayerEntry, type Preset, type Settings, type Setting, type WarpOperator } from '../presets/format';
+import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, formatLayerType, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, clampDisplaySec, type AudioSource, type LayerEntry, type Preset, type Settings, type Setting, type Transition, type WarpOperator } from '../presets/format';
 import type { Scene } from '../render/scene';
 import { MAX_LAYER_SEED, applyMashup, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
@@ -60,6 +60,92 @@ import {
 } from './adminControls';
 
 export { EXPERIENCE_MODES, CAMERA_MODES, COLOR_MOODS, TRIGGER_CADENCES, ADMIN_BADGE_LABEL };
+
+/** Human-readable display labels for Audio Link modulation sources. */
+export const AUDIO_SOURCE_LABELS: Readonly<Record<AudioSource, string>> = {
+  sub: 'Sub Bass',
+  bass: 'Bass',
+  mid: 'Mid',
+  high: 'High / Treble',
+  energy: 'Overall Energy',
+  loudness: 'Loudness',
+  beat: 'Beat Pulse',
+  onset: 'Onset / Transient',
+  section: 'Section Energy',
+  beatStrength: 'Beat Strength',
+  brightness: 'Brightness',
+  subFlux: 'Sub Flux',
+  midFlux: 'Mid Flux',
+  highFlux: 'High Flux',
+  lfoSine: 'LFO · Sine',
+  lfoSaw: 'LFO · Saw',
+  lfoRandom: 'LFO · Random',
+  time: 'Time',
+  kickEnv: 'Kick Envelope',
+  centroid: 'Spectral Centroid',
+};
+
+/** Human-readable display labels for preset transition styles. */
+export const TRANSITION_STYLE_LABELS: Readonly<Record<Transition, string>> = {
+  crossfade: 'Crossfade',
+  wipe: 'Wipe',
+  dissolve: 'Dissolve',
+  zoom: 'Zoom',
+  morph: 'Morph',
+};
+
+/** Explicit human-readable display labels for schema enum options (with camelCase fallback). */
+export const ENUM_OPTION_LABELS: Readonly<Record<string, string>> = {
+  isometricPlate: 'Isometric Plate',
+  radialMandala: 'Radial Mandala',
+  starMandala: 'Star Mandala',
+  polarFold: 'Polar Fold (Mandala)',
+  rgbSplit: 'RGB Split',
+  alpha: 'Alpha',
+  add: 'Additive',
+  max: 'Maximum',
+  screen: 'Screen',
+  classic: 'Classic',
+  curl: 'Curl',
+  mobius: 'Mobius',
+  fullscreen: 'Fullscreen',
+  hexagon: 'Hexagon',
+  triangle: 'Triangle',
+  morph: 'Morph',
+  crossfade: 'Crossfade',
+  wipe: 'Wipe',
+  dissolve: 'Dissolve',
+  zoom: 'Zoom',
+  cw: 'Clockwise',
+  ccw: 'Counter-clockwise',
+  knot3d: '3D Knot',
+  figure8: 'Figure 8',
+  golden137_5: 'Golden (137.5°)',
+  'golden137.5': 'Golden (137.5°)',
+  'lucas99.5': 'Lucas (99.5°)',
+  'fibonacci137.6': 'Fibonacci (137.6°)',
+  'rosette137.3': 'Rosette (137.3°)',
+  starburst144: 'Starburst (144°)',
+  sub: 'Sub Bass',
+  bass: 'Bass',
+  mid: 'Mid',
+  high: 'High / Treble',
+  energy: 'Overall Energy',
+  kick: 'Kick',
+};
+
+/** Convert an enum option key into a human-readable Studio dropdown label. */
+export function formatEnumOptionLabel(value: string): string {
+  if (!value) return '';
+  if (ENUM_OPTION_LABELS[value]) return ENUM_OPTION_LABELS[value];
+  if (/^\d+(:\d+)?$/.test(value)) return value;
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([a-zA-Z])(\d)/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
 
 /** One control change, reported through StudioOptions.onEdit. layerIndex is the index in preset.layers, or null outside layers. */
 export interface StudioEdit {
@@ -468,6 +554,8 @@ export class Studio {
   private readonly deleteLive: HTMLElement;
   /** The in-panel "Save as" name field, when open. */
   private saveAsField: HTMLElement | null = null;
+  /** The active inline prompt or confirmation row inside `.studio-body`, when open. */
+  private inlinePromptEl: HTMLElement | null = null;
   /** Fixed bottom helper bar element for parameter descriptions & warnings (Slice 9.8). */
   readonly helperBar: HTMLElement;
   /** Preset select element in the DOM (Slice 10.3). */
@@ -656,29 +744,208 @@ export class Studio {
     }
   }
 
-  /** Prompt user for administrator input (passkey secret or email). */
-  promptForAdminInput(message: string, defaultValue = ''): string | null {
-    return this.promptForFolderName(message, defaultValue);
-  }
-
   /** Initiate administrator login flow. */
   async handleAdminLogin(): Promise<{ success: boolean; error?: string }> {
-    const promptFn = (msg: string, d?: string) => this.promptForAdminInput(msg, d);
-    return await promptAdminLogin(this.adminGateway, promptFn);
+    return await promptAdminLogin(this.adminGateway);
   }
 
-  /** Promote a user preset to a system preset. */
-  handlePromoteUserPreset(id: string): void {
-    const promptFn = (msg: string, d?: string) => this.promptForAdminInput(msg, d);
-    try {
-      const newId = promoteUserPresetAction(this.opts.session, id, promptFn);
-      if (newId) {
-        this.refreshPresetDropdown();
-        this.opts.switchTo(newId);
-      }
-    } catch (err) {
-      showToast((err as Error).message);
+  private getDoc(): Document | null {
+    return this.body.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  }
+
+  private insertPromptRow(row: HTMLElement): void {
+    this.closeSaveAsField();
+    this.closeInlinePrompt();
+    if (typeof (this.body as any).prepend === 'function') {
+      (this.body as any).prepend(row);
+    } else if (this.body.firstChild && typeof (this.body.firstChild as any).before === 'function') {
+      (this.body.firstChild as any).before(row);
+    } else if (typeof this.body.append === 'function') {
+      this.body.append(row);
     }
+    this.inlinePromptEl = row;
+  }
+
+  private closeInlinePrompt(): void {
+    if (!this.inlinePromptEl) return;
+    if (typeof (this.inlinePromptEl as any).remove === 'function') {
+      (this.inlinePromptEl as any).remove();
+    } else {
+      this.inlinePromptEl.parentElement?.removeChild?.(this.inlinePromptEl);
+    }
+    this.inlinePromptEl = null;
+  }
+
+  private openInlineTextPrompt(opts: {
+    ariaLabel: string;
+    labelText: string;
+    confirmLabel: string;
+    defaultValue?: string;
+    helpLabel: string;
+    helpDescription: string;
+    onSubmit: (value: string) => string | void;
+    onCancel?: () => void;
+  }): void {
+    const doc = this.getDoc();
+    if (!doc) return;
+
+    const row = doc.createElement('div');
+    row.className = 'studio-inline-prompt';
+    row.setAttribute('role', 'region');
+    row.setAttribute('aria-label', opts.ariaLabel);
+
+    const inputId = `studio-prompt-${Date.now()}`;
+    const label = doc.createElement('label');
+    label.className = 'studio-inline-prompt__label';
+    label.setAttribute('for', inputId);
+    label.textContent = opts.labelText;
+
+    const input = doc.createElement('input');
+    input.type = 'text';
+    input.id = inputId;
+    input.className = 'studio-inline-prompt__input';
+    input.value = opts.defaultValue ?? '';
+    input.setAttribute('aria-label', opts.labelText);
+
+    const errorEl = doc.createElement('span');
+    errorEl.className = 'studio-inline-prompt__error';
+    errorEl.setAttribute('role', 'alert');
+
+    const actions = doc.createElement('div');
+    actions.className = 'studio-inline-prompt__actions';
+
+    const confirmBtn = doc.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'ui-btn ui-btn--primary studio-inline-prompt__confirm';
+    confirmBtn.textContent = opts.confirmLabel;
+
+    const cancelBtn = doc.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ui-btn ui-btn--ghost studio-inline-prompt__cancel';
+    cancelBtn.textContent = 'Cancel';
+
+    const cancel = () => {
+      this.closeInlinePrompt();
+      opts.onCancel?.();
+    };
+
+    const submit = () => {
+      const err = opts.onSubmit(input.value);
+      if (typeof err === 'string' && err.length > 0) {
+        errorEl.textContent = err;
+        input.setAttribute('aria-invalid', 'true');
+        (input as any).focus?.();
+      }
+    };
+
+    input.addEventListener('keydown', (ev: KeyboardEvent) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault?.();
+        submit();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault?.();
+        ev.stopPropagation?.();
+        cancel();
+      }
+    });
+    confirmBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+
+    this.attachHelp(input, opts.helpLabel, opts.helpDescription);
+    this.attachHelp(confirmBtn, opts.confirmLabel, opts.helpDescription);
+    this.attachHelp(cancelBtn, 'Cancel', 'Close this prompt without making changes.');
+
+    actions.append(confirmBtn, cancelBtn);
+    row.append(label, input, errorEl, actions);
+    this.insertPromptRow(row);
+    (input as any).focus?.();
+    (input as any).select?.();
+  }
+
+  /** Promote a user preset to a system preset via inline subfolder picker. */
+  handlePromoteUserPreset(id: string): void {
+    const doc = this.getDoc();
+    if (!doc) return;
+
+    const row = doc.createElement('div');
+    row.className = 'studio-inline-prompt';
+    row.setAttribute('role', 'region');
+    row.setAttribute('aria-label', 'Promote to System Preset');
+
+    const selectId = `studio-promote-${Date.now()}`;
+    const label = doc.createElement('label');
+    label.className = 'studio-inline-prompt__label';
+    label.setAttribute('for', selectId);
+    label.textContent = 'Promote to system subfolder';
+
+    const select = doc.createElement('select');
+    select.id = selectId;
+    select.className = 'studio-inline-prompt__select';
+    select.setAttribute('aria-label', 'Target system subfolder');
+
+    for (const [optLabel, optValue] of Object.entries(SYSTEM_SUBFOLDER_OPTIONS)) {
+      const opt = doc.createElement('option');
+      opt.value = optValue;
+      opt.setAttribute('value', optValue);
+      opt.textContent = optLabel;
+      if (optValue === 'classics') {
+        opt.selected = true;
+        opt.setAttribute('selected', 'selected');
+      }
+      select.append(opt);
+    }
+    select.value = 'classics';
+
+    const actions = doc.createElement('div');
+    actions.className = 'studio-inline-prompt__actions';
+
+    const confirmBtn = doc.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'ui-btn ui-btn--primary studio-inline-prompt__confirm';
+    confirmBtn.textContent = 'Promote preset';
+
+    const cancelBtn = doc.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ui-btn ui-btn--ghost studio-inline-prompt__cancel';
+    cancelBtn.textContent = 'Cancel';
+
+    const cancel = () => this.closeInlinePrompt();
+
+    const submit = () => {
+      const chosen = select.value || 'classics';
+      this.closeInlinePrompt();
+      try {
+        const newId = promoteUserPresetAction(this.opts.session, id, () => chosen);
+        if (newId) {
+          this.refreshPresetDropdown();
+          this.opts.switchTo(newId);
+        }
+      } catch (err) {
+        showToast((err as Error).message);
+      }
+    };
+
+    select.addEventListener('keydown', (ev: KeyboardEvent) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault?.();
+        submit();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault?.();
+        ev.stopPropagation?.();
+        cancel();
+      }
+    });
+    confirmBtn.addEventListener('click', submit);
+    cancelBtn.addEventListener('click', cancel);
+
+    this.attachHelp(select, 'Target system subfolder', 'Choose which built-in system folder receives this promoted preset.');
+    this.attachHelp(confirmBtn, 'Promote preset', 'Promote this user preset into the selected built-in system folder.');
+    this.attachHelp(cancelBtn, 'Cancel', 'Close without promoting this preset.');
+
+    actions.append(confirmBtn, cancelBtn);
+    row.append(label, select, actions);
+    this.insertPromptRow(row);
+    (select as any).focus?.();
   }
 
   dispose(): void {
@@ -686,6 +953,8 @@ export class Studio {
       clearInterval(this.frameTimer);
       this.frameTimer = null;
     }
+    this.closeSaveAsField();
+    this.closeInlinePrompt();
     this.disarmDelete();
     if (this.directorUnsubscribe) {
       this.directorUnsubscribe();
@@ -699,46 +968,33 @@ export class Studio {
     this.pane = null;
   }
 
-  /** Prompt user for folder name via prompt or prompt fallback. */
-  promptForFolderName(message: string, defaultValue = ''): string | null {
-    if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-      const res = window.prompt(message, defaultValue);
-      return res !== null ? res.trim() : null;
-    }
-    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).prompt === 'function') {
-      const res = (globalThis as any).prompt(message, defaultValue);
-      return res !== null ? res.trim() : null;
-    }
-    return null;
-  }
-
-  /** Confirm action via window.confirm or confirm fallback. */
-  confirmAction(message: string): boolean {
-    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
-      return window.confirm(message);
-    }
-    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).confirm === 'function') {
-      return (globalThis as any).confirm(message);
-    }
-    return true;
-  }
-
   handleNewFolder(presetId: string): void {
-    const name = this.promptForFolderName('Enter new folder name:');
-    if (!name) {
-      this.bind(presetId);
-      return;
-    }
-    const session = this.opts.session;
-    try {
-      const folder = session.createFolder(name);
-      session.setPresetFolder(presetId, folder.id);
-      showToast(`Created folder "${folder.name}"`);
-      this.bind(presetId);
-    } catch (err) {
-      showToast((err as Error).message);
-      this.bind(presetId);
-    }
+    this.openInlineTextPrompt({
+      ariaLabel: 'New folder name',
+      labelText: 'New folder name',
+      confirmLabel: 'Create folder',
+      defaultValue: '',
+      helpLabel: 'New folder name',
+      helpDescription: 'Enter a name for the new folder and move this preset into it.',
+      onSubmit: (raw) => {
+        const name = raw.trim();
+        if (!name) return 'Enter a folder name.';
+        this.closeInlinePrompt();
+        const session = this.opts.session;
+        try {
+          const folder = session.createFolder(name);
+          session.setPresetFolder(presetId, folder.id);
+          showToast(`Created folder "${folder.name}"`);
+          this.bind(presetId);
+        } catch (err) {
+          showToast((err as Error).message);
+          this.bind(presetId);
+        }
+      },
+      onCancel: () => {
+        this.bind(presetId);
+      },
+    });
   }
 
   handleRenameFolder(presetId: string, folderId: string): void {
@@ -746,31 +1002,90 @@ export class Studio {
     const folders = typeof session.getFolders === 'function' ? session.getFolders() : [];
     const current = folders.find((f) => f.id === folderId);
     const currentName = current ? current.name : '';
-    const newName = this.promptForFolderName(`Rename folder "${currentName}":`, currentName);
-    if (!newName || newName === currentName) return;
-    try {
-      session.renameFolder(folderId, newName);
-      showToast(`Folder renamed to "${newName}"`);
-      this.bind(presetId);
-    } catch (err) {
-      showToast((err as Error).message);
-    }
+
+    this.openInlineTextPrompt({
+      ariaLabel: 'Rename folder',
+      labelText: `Rename folder "${currentName}"`,
+      confirmLabel: 'Rename folder',
+      defaultValue: currentName,
+      helpLabel: 'Rename folder',
+      helpDescription: 'Enter a new name for this user preset folder.',
+      onSubmit: (raw) => {
+        const newName = raw.trim();
+        if (!newName) return 'Enter a folder name.';
+        this.closeInlinePrompt();
+        if (newName === currentName) return;
+        try {
+          session.renameFolder(folderId, newName);
+          showToast(`Folder renamed to "${newName}"`);
+          this.bind(presetId);
+        } catch (err) {
+          showToast((err as Error).message);
+        }
+      },
+    });
   }
 
   handleDeleteFolder(presetId: string, folderId: string): void {
+    const doc = this.getDoc();
+    if (!doc) return;
     const session = this.opts.session;
     const folders = typeof session.getFolders === 'function' ? session.getFolders() : [];
     const current = folders.find((f) => f.id === folderId);
     const folderName = current ? current.name : 'this folder';
-    const confirmed = this.confirmAction(`Delete folder "${folderName}"? Presets inside will be moved to Unfiled.`);
-    if (!confirmed) return;
-    try {
-      session.deleteFolder(folderId);
-      showToast(`Folder "${folderName}" deleted`);
-      this.bind(presetId);
-    } catch (err) {
-      showToast((err as Error).message);
-    }
+
+    const row = doc.createElement('div');
+    row.className = 'studio-inline-prompt studio-inline-prompt--danger';
+    row.setAttribute('role', 'alertdialog');
+    row.setAttribute('aria-label', 'Delete folder confirmation');
+
+    const msg = doc.createElement('div');
+    msg.className = 'studio-inline-prompt__label';
+    msg.textContent = `Delete folder "${folderName}"? Presets inside will be moved to Unfiled.`;
+
+    const actions = doc.createElement('div');
+    actions.className = 'studio-inline-prompt__actions';
+
+    // Safe choice on the left (Harness UI Dialog rule).
+    const cancelBtn = doc.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ui-btn ui-btn--ghost studio-inline-prompt__cancel';
+    cancelBtn.textContent = 'Cancel';
+
+    const confirmBtn = doc.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'ui-btn ui-btn--danger studio-inline-prompt__confirm';
+    confirmBtn.textContent = 'Delete folder';
+
+    const cancel = () => this.closeInlinePrompt();
+    const confirm = () => {
+      this.closeInlinePrompt();
+      try {
+        session.deleteFolder(folderId);
+        showToast(`Folder "${folderName}" deleted`);
+        this.bind(presetId);
+      } catch (err) {
+        showToast((err as Error).message);
+      }
+    };
+
+    row.addEventListener('keydown', (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        ev.preventDefault?.();
+        ev.stopPropagation?.();
+        cancel();
+      }
+    });
+    cancelBtn.addEventListener('click', cancel);
+    confirmBtn.addEventListener('click', confirm);
+
+    this.attachHelp(cancelBtn, 'Cancel', 'Keep this folder and its preset assignments.');
+    this.attachHelp(confirmBtn, 'Delete folder', 'Delete this folder and move its presets to Unfiled.');
+
+    actions.append(cancelBtn, confirmBtn);
+    row.append(msg, actions);
+    this.insertPromptRow(row);
+    (cancelBtn as any).focus?.();
   }
 
   /** (Re)build the panel for preset `id`. Call after every switch or structure change. */
@@ -813,6 +1128,7 @@ export class Studio {
     }
     renderHelperContent(this.helperBar, null);
     this.saveAsField = null;
+    this.inlinePromptEl = null;
     this.presetSelectEl = null;
     this.sectionFolders = [];
     const pane: Pane = this.opts.paneFactory
@@ -885,6 +1201,22 @@ export class Studio {
           categoryBinding.element.setAttribute?.('data-category', categoryText);
         }
         this.attachHelp(categoryBinding, 'Category', 'Shows the built-in category and read-only status of this system preset.');
+        const hintDoc = this.getDoc();
+        if (hintDoc) {
+          const hint = hintDoc.createElement('div');
+          hint.className = 'studio-readonly-hint';
+          hint.setAttribute('role', 'status');
+          hint.textContent =
+            'Built-in presets are read-only. Slider edits preview live; Favourite and Skip choices save locally. Use Save as… to keep your own editable copy.';
+          if (
+            categoryBinding?.element?.parentElement &&
+            typeof (categoryBinding.element as any).after === 'function'
+          ) {
+            (categoryBinding.element as any).after(hint);
+          } else {
+            this.body.append(hint);
+          }
+        }
       } else {
         const currentSubfolder = (typeof session.getSystemPresetSubfolder === 'function'
           ? session.getSystemPresetSubfolder(id)
@@ -1042,7 +1374,7 @@ export class Studio {
     // Transition into this preset (T1): style and time. Applied the next time the preset is shown.
     const transStyleBinding = pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'style', {
       label: 'Transition style',
-      options: Object.fromEntries(TRANSITION_STYLES.map((t) => [t, t])),
+      options: Object.fromEntries(TRANSITION_STYLES.map((t) => [TRANSITION_STYLE_LABELS[t] ?? formatEnumOptionLabel(t), t])),
     });
     transStyleBinding.on('change', commitEdit);
     attachControlHelper(transStyleBinding, { ...STYLE_SPEC, label: 'Transition style' }, this.onHelper);
@@ -1319,7 +1651,7 @@ export class Studio {
       this.attachHelp(removeLayerBtn, 'Remove layer', 'Delete the selected layer from this preset.');
     }
     const typeHolder = { type: this.addType };
-    const typeOptions = Object.fromEntries(Object.keys(LAYER_FACTORIES).map((t) => [t, t]));
+    const typeOptions = Object.fromEntries(Object.keys(LAYER_FACTORIES).map((t) => [formatLayerType(t), t]));
     const addLayerTypeBinding = pane.addBinding(typeHolder, 'type', { label: 'Add layer', options: typeOptions });
     addLayerTypeBinding.on('change', (ev) => {
       this.addType = String(ev.value);
@@ -1360,9 +1692,7 @@ export class Studio {
       const layerEntry = preset.layers[i]!;
       if (!isLayerRendered(layerEntry, i, session.monitorOf(id))) continue;
       const k = live++;
-      const title = layerEntry.type === 'shape'
-        ? formatLayerTitle(layerEntry, i)
-        : layerEntry.type;
+      const title = formatLayerTitle(layerEntry, i);
       this.bindSection(pane, title, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
         const current = session.sceneOf(id).layers[k];
         if (current) applyValues(current, valuesOf(layerEntry.params));
@@ -1429,14 +1759,14 @@ export class Studio {
     if (!targets.some((t) => t.key === this.linkTarget)) this.linkTarget = targets[0]!.key;
     const pick = { key: this.linkTarget };
     const linkTargetBinding = pane.addBinding(pick, 'key', {
-      label: 'Link a setting',
+      label: 'Link or morph a setting',
       options: Object.fromEntries(targets.map((t) => [t.label, t.key])),
     });
     linkTargetBinding.on('change', (ev) => {
       this.linkTarget = String(ev.value);
       this.bind(id);
     });
-    this.attachHelp(linkTargetBinding, 'Link a setting', 'Choose any numeric layer, warp, feedback, or post setting to modulate with audio or an LFO.');
+    this.attachHelp(linkTargetBinding, 'Link or morph a setting', 'Choose any numeric layer, warp, feedback, or post setting to modulate with audio, an LFO, or a morph.');
     const target = targets.find((t) => t.key === this.linkTarget)!;
     const setting = target.setting;
     const session = this.opts.session;
@@ -1457,7 +1787,7 @@ export class Studio {
     };
     const sourceBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'source', {
       label: 'Source',
-      options: Object.fromEntries(AUDIO_SOURCES.map((s) => [s, s])),
+      options: Object.fromEntries(AUDIO_SOURCES.map((s) => [AUDIO_SOURCE_LABELS[s] ?? formatEnumOptionLabel(s), s])),
     });
     sourceBinding.on('change', onEdit);
     this.attachHelp(sourceBinding, 'Source', 'Select the audio frequency band, beat envelope, or LFO waveform driving this setting.');
@@ -1852,29 +2182,32 @@ export class Studio {
   /** Show the in-panel name field for Save as. OK saves under the typed name; Cancel or Escape changes nothing. */
   private openSaveAsField(id: string, defaultName: string): void {
     this.closeSaveAsField();
+    this.closeInlinePrompt();
+    const doc = this.getDoc();
+    if (!doc) return;
     const session = this.opts.session;
-    const field = document.createElement('div');
+    const field = doc.createElement('div');
     field.style.display = 'flex';
     field.style.flexWrap = 'wrap';
     field.style.gap = '6px';
     field.style.padding = '6px';
-    const input = document.createElement('input');
+    const input = doc.createElement('input');
     input.type = 'text';
     input.value = defaultName;
     input.setAttribute('aria-label', 'Name for the new preset');
-    const msg = document.createElement('span');
+    const msg = doc.createElement('span');
     msg.setAttribute('role', 'alert');
-    const ok = document.createElement('button');
+    const ok = doc.createElement('button');
     ok.type = 'button';
     ok.textContent = 'OK';
-    const cancel = document.createElement('button');
+    const cancel = doc.createElement('button');
     cancel.type = 'button';
     cancel.textContent = 'Cancel';
     const submit = () => {
       const check = validatePresetName(input.value);
       if (!check.ok) {
         msg.textContent = check.message;
-        input.focus();
+        (input as any).focus?.();
         return;
       }
       this.closeSaveAsField();
@@ -1896,14 +2229,25 @@ export class Studio {
     this.attachHelp(ok, 'Confirm Save as', 'Save the preset under the typed name.');
     this.attachHelp(cancel, 'Cancel Save as', 'Close the name prompt without saving a copy.');
     field.append(input, ok, cancel, msg);
-    this.body.prepend(field);
+    if (typeof (this.body as any).prepend === 'function') {
+      (this.body as any).prepend(field);
+    } else if (this.body.firstChild && typeof (this.body.firstChild as any).before === 'function') {
+      (this.body.firstChild as any).before(field);
+    } else {
+      this.body.append(field);
+    }
     this.saveAsField = field;
-    input.focus();
-    input.select();
+    (input as any).focus?.();
+    (input as any).select?.();
   }
 
   private closeSaveAsField(): void {
-    this.saveAsField?.remove();
+    if (!this.saveAsField) return;
+    if (typeof (this.saveAsField as any).remove === 'function') {
+      (this.saveAsField as any).remove();
+    } else {
+      this.saveAsField.parentElement?.removeChild?.(this.saveAsField);
+    }
     this.saveAsField = null;
   }
 
@@ -2029,7 +2373,7 @@ export class Studio {
   }
 }
 
-/** Descriptive title for layer settings sections (e.g. "1. Shape (circle · bars)"). */
+/** Descriptive title for layer settings sections (e.g. "1. Shape (circle · bars)", "2. Spectral Terrain"). */
 export function formatLayerTitle(layer: LayerEntry, index: number): string {
   if (layer.type === 'shape') {
     const p = layer.params ?? {};
@@ -2041,23 +2385,13 @@ export function formatLayerTitle(layer: LayerEntry, index: number): string {
       : (p.effectType ?? 'bars');
     return `${index + 1}. Shape (${base} · ${effect})`;
   }
-  return `${index + 1}. ${layer.type}`;
+  return `${index + 1}. ${formatLayerType(layer.type)}`;
 }
 
-/** Layer dropdown label in Studio (e.g. "1. Shape (circle · bars)" or "... (off)"). */
+/** Layer dropdown label in Studio (e.g. "1. Shape (circle · bars)" or "2. Spectral Terrain (off)"). */
 export function formatLayerLabel(layer: LayerEntry, index: number): string {
   const off = layer.enabled ? '' : ' (off)';
-  if (layer.type === 'shape') {
-    const p = layer.params ?? {};
-    const base = (p.baseShape !== null && typeof p.baseShape === 'object' && 'value' in p.baseShape)
-      ? p.baseShape.value
-      : (p.baseShape ?? 'circle');
-    const effect = (p.effectType !== null && typeof p.effectType === 'object' && 'value' in p.effectType)
-      ? p.effectType.value
-      : (p.effectType ?? 'bars');
-    return `${index + 1}. Shape (${base} · ${effect})${off}`;
-  }
-  return `${index + 1}. ${layer.type}${off}`;
+  return `${formatLayerTitle(layer, index)}${off}`;
 }
 
 // --- Warp field (Slice 18.4) -------------------------------------------------------------
@@ -2175,15 +2509,22 @@ export function describeReaction(r: Reaction): string {
   return `${when}: ${what}, ${r.target.group === 'post' ? 'Post' : 'Feedback'} · ${label}`;
 }
 
+function formatLinkTargetLabel(baseLabel: string, setting: Setting): string {
+  const hasLink = setting.link !== undefined;
+  const hasMorph = setting.morph !== undefined;
+  if (hasLink && hasMorph) return `[Linked & Morphed] ${baseLabel}`;
+  if (hasLink) return `[Linked] ${baseLabel}`;
+  if (hasMorph) return `[Morphed] ${baseLabel}`;
+  return baseLabel;
+}
+
 /** Every numeric setting that can take a link, with the key used in the Studio and the link meter key. */
 export function linkTargets(preset: Preset): { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] {
   const out: { key: string; label: string; setting: Setting; meterKey: string; spec: ParamSpec }[] = [];
   let live = 0;
   preset.layers.forEach((layer, i) => {
     const k = layer.enabled ? live++ : -1;
-    const layerTitle = layer.type === 'shape'
-      ? formatLayerTitle(layer, i)
-      : `${i + 1}. ${layer.type}`;
+    const layerTitle = formatLayerTitle(layer, i);
     for (const spec of LAYER_SPECS[layer.type] ?? []) {
       if (spec.type !== 'float' && spec.type !== 'int') continue;
       if (!isSpecVisible(spec, layer.params)) continue;
@@ -2191,7 +2532,7 @@ export function linkTargets(preset: Preset): { key: string; label: string; setti
       if (!setting) continue;
       out.push({
         key: `L${i}.${spec.name}`,
-        label: `${layerTitle} · ${spec.label}`,
+        label: formatLinkTargetLabel(`${layerTitle} · ${spec.label}`, setting),
         setting,
         meterKey: k >= 0 ? `L${k}.${spec.name}` : '',
         spec,
@@ -2205,7 +2546,7 @@ export function linkTargets(preset: Preset): { key: string; label: string; setti
       if (!setting) continue;
       out.push({
         key: `W${i}.${spec.name}`,
-        label: `Warp ${i + 1}. ${WARP_OP_LABELS[op.type]} · ${spec.label}`,
+        label: formatLinkTargetLabel(`Warp ${i + 1}. ${WARP_OP_LABELS[op.type]} · ${spec.label}`, setting),
         setting,
         meterKey: `W${i}.${spec.name}`,
         spec,
@@ -2215,12 +2556,12 @@ export function linkTargets(preset: Preset): { key: string; label: string; setti
   for (const spec of FEEDBACK_NUMBERS) {
     if (!isSpecVisible(spec, preset.feedback)) continue;
     const setting = preset.feedback[spec.name];
-    if (setting) out.push({ key: `F.${spec.name}`, label: `Feedback · ${spec.label}`, setting, meterKey: `F.${spec.name}`, spec });
+    if (setting) out.push({ key: `F.${spec.name}`, label: formatLinkTargetLabel(`Feedback · ${spec.label}`, setting), setting, meterKey: `F.${spec.name}`, spec });
   }
   for (const spec of POST_NUMBERS) {
     if (!isSpecVisible(spec, preset.post)) continue;
     const setting = preset.post[spec.name];
-    if (setting) out.push({ key: `P.${spec.name}`, label: `Post · ${spec.label}`, setting, meterKey: `P.${spec.name}`, spec });
+    if (setting) out.push({ key: `P.${spec.name}`, label: formatLinkTargetLabel(`Post · ${spec.label}`, setting), setting, meterKey: `P.${spec.name}`, spec });
   }
   return out;
 }
@@ -2291,7 +2632,7 @@ export function buildLayerControls(
   const blendKey = (BLEND_SPEC as any).key ?? BLEND_SPEC.name;
   const blendBinding = pane.addBinding(entry as unknown as Record<string, unknown>, blendKey, {
     label: BLEND_SPEC.label,
-    options: Object.fromEntries(BLEND_MODES.map((b) => [b, b])),
+    options: Object.fromEntries(BLEND_MODES.map((b) => [formatEnumOptionLabel(b), b])),
   }).on('change', onLayerConfigChange);
   attachSpecHelper(blendBinding, BLEND_SPEC, onHelperUpdate);
   attachResetControl([blendBinding], BLEND_SPEC, entry as any, blendKey, onLayerConfigChange);
@@ -2504,7 +2845,7 @@ export function bindSpec(
       result = pane.addBinding(target, key, { label }).on('change', onChange);
       break;
     case 'enum':
-      result = pane.addBinding(target, key, { label, options: Object.fromEntries(spec.options.map((o) => [o, o])) }).on('change', onChange);
+      result = pane.addBinding(target, key, { label, options: Object.fromEntries(spec.options.map((o) => [formatEnumOptionLabel(o), o])) }).on('change', onChange);
       break;
     case 'colour':
       result = pane.addBinding(target, key, { label, view: 'color' }).on('change', onChange);
@@ -2597,11 +2938,11 @@ export function buildGlobalDirectorControls(
   cameraModeBinding = folder.addBinding(settings, 'cameraMode', {
     label: 'Camera motion',
     options: {
-      'Auto (Complementary)': 'auto',
+      'Auto': 'auto',
       'Crane sway': 'craneSway',
       'Dutch roll': 'dutchRoll',
-      'Breathing push': 'breathingPush',
-      'Horizon 2.5D tilt': 'horizonTilt',
+      'Push swell': 'breathingPush',
+      'Horizon 2.5D': 'horizonTilt',
       'Still anchor': 'stillAnchor',
       'Off': 'off',
     },
@@ -2643,13 +2984,13 @@ export function buildGlobalDirectorControls(
   colorMoodBinding = folder.addBinding(settings, 'colorMood', {
     label: 'Color mood',
     options: {
-      'Auto-cycle palettes': 'auto',
-      'Native (preset original)': 'native',
-      'Cyberpunk (Cyan/Magenta)': 'cyberpunk',
-      'Ember (Indigo/Gold)': 'ember',
-      'Bioluminescent (Teal/Aqua)': 'biolum',
-      'Vapor (Violet/Rose)': 'vapor',
-      'Prismatic (Cobalt/Coral)': 'prismatic',
+      'Auto-cycle': 'auto',
+      'Native (preset)': 'native',
+      'Cyberpunk': 'cyberpunk',
+      'Ember': 'ember',
+      'Biolum': 'biolum',
+      'Vapor': 'vapor',
+      'Prismatic': 'prismatic',
     },
   });
   colorMoodBinding?.on?.('change', (ev: { value: any }) => {

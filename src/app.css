@@ -96,3 +96,87 @@ body {
     transition: none;
   }
 }
+
+/* Slice 25.11: Built-in preset read-only hint & inline Studio prompt/confirmation rows */
+.studio-readonly-hint {
+  margin: var(--space-1) 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--control-fs-compact, 13px);
+  line-height: 1.4;
+}
+
+.studio-inline-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--control-fs-compact, 13px);
+  transition: border-color var(--duration-fast) ease, background-color var(--duration-fast) ease;
+}
+
+.studio-inline-prompt--danger {
+  border-color: var(--bad);
+  background: var(--bad-tint);
+}
+
+.studio-inline-prompt__label {
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.studio-inline-prompt__input,
+.studio-inline-prompt__select {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--control-h-compact, 32px);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--control-fs-compact, 13px);
+}
+
+.studio-inline-prompt__input:focus-visible,
+.studio-inline-prompt__select:focus-visible,
+.studio-inline-prompt__actions button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.studio-inline-prompt__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.studio-inline-prompt__error {
+  color: var(--bad);
+  font-size: var(--control-fs-compact, 13px);
+  line-height: 1.3;
+}
+
+.studio-inline-prompt__error:empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-inline-prompt {
+    transition: none;
+  }
+}
+
