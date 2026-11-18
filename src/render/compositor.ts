@@ -207,6 +207,8 @@ export class Compositor implements RenderLayer {
   private fadeSec = RELEASE_TAU_SEC;
   // Lighter crossfade for slower devices (Slice 16.11): shorter fades, and the outgoing scene is not redrawn.
   private lightFade = false;
+  // Low-power mode (Slice 26.9): bypasses heavy post/blur passes while keeping safety active, and caps fades.
+  private lowPower = false;
   // Slice 5.3: the canvas size as the host gave it, and the box the scene actually uses (w x h),
   // drawn at (offX, offY) on the canvas. appliedAspect is the setting the buffers were sized for.
   private rawW = 1;
@@ -265,9 +267,21 @@ export class Compositor implements RenderLayer {
     return this.lightFade;
   }
 
-  /** Crossfade time in use: the preset's own, capped when the lighter crossfade is on. */
+  /**
+   * Low-power mode: bypasses heavy post-processing (BlurChain / post.frag.glsl) while keeping the
+   * composite.frag.glsl WCAG 2.3.1 safety pass active, and applies lightFade transition capping.
+   */
+  setLowPower(on: boolean): void {
+    this.lowPower = Boolean(on);
+  }
+
+  isLowPower(): boolean {
+    return this.lowPower;
+  }
+
+  /** Crossfade time in use: the preset's own, capped when the lighter crossfade or low-power mode is on. */
   private effectiveFadeSec(): number {
-    return this.lightFade ? Math.min(this.fadeSec, LIGHT_FADE_MAX_SEC) : this.fadeSec;
+    return this.lightFade || this.lowPower ? Math.min(this.fadeSec, LIGHT_FADE_MAX_SEC) : this.fadeSec;
   }
 
   /** Transition style for scene switches (T1). Applies while two scenes blend. */
@@ -577,7 +591,7 @@ export class Compositor implements RenderLayer {
   }
 
   private postActive(): boolean {
-    return this.hasPost();
+    return !this.lowPower && this.hasPost();
   }
 
   draw(frame: AudioFrame, clock: RenderClock, target: RenderTarget): void {
@@ -681,8 +695,8 @@ export class Compositor implements RenderLayer {
     // Each active scene renders its own buffers. It is now stale for whenever it comes back after being kept.
     const crossfading = active.length > 1;
     for (const name of active) {
-      // Lighter crossfade: a scene that is on its way out keeps its last image instead of being drawn again.
-      if (this.lightFade && crossfading && (this.targets.get(name) ?? 0) === 0 && this.drawn.has(name)) continue;
+      // Lighter crossfade / low-power: a scene that is on its way out keeps its last image instead of being drawn again.
+      if ((this.lightFade || this.lowPower) && crossfading && (this.targets.get(name) ?? 0) === 0 && this.drawn.has(name)) continue;
       this.scenes.get(name)!.draw(frame, clock);
       this.drawn.add(name);
     }
