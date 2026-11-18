@@ -176,11 +176,54 @@ export class PresetFormatError extends Error {
 }
 
 // Fixed specs for the fields every preset has. Same coercion rules as layer settings.
-export const OPACITY_SPEC: NumberSpec = { type: "float", name: "opacity", label: "Opacity", group: "Layer", default: 1, min: 0, max: 1, step: 0.01 };
-export const SECONDS_SPEC: NumberSpec = { type: "float", name: "seconds", label: "Crossfade", group: "Transition", default: 0.32, min: 0.3, max: 10, step: 0.01 };
-export const BLEND_SPEC: EnumSpec = { type: "enum", name: "blend", label: "Blend", group: "Layer", default: "max", options: BLEND_MODES };
-export const TRAILS_SPEC: BoolSpec = { type: "bool", name: "trails", label: "Trails", group: "Layer", default: true };
-export const STYLE_SPEC: EnumSpec = { type: "enum", name: "style", label: "Style", group: "Transition", default: "crossfade", options: TRANSITION_STYLES };
+export const OPACITY_SPEC: NumberSpec = {
+  type: "float",
+  name: "opacity",
+  label: "Opacity",
+  group: "Layer",
+  default: 1,
+  min: 0,
+  max: 1,
+  step: 0.01,
+  description: "Controls how visible this layer is when blended over earlier layers.",
+};
+export const SECONDS_SPEC: NumberSpec = {
+  type: "float",
+  name: "seconds",
+  label: "Crossfade",
+  group: "Transition",
+  default: 0.32,
+  min: 0.3,
+  max: 10,
+  step: 0.01,
+  description: "Duration of the transition animation when switching to this preset, in seconds.",
+};
+export const BLEND_SPEC: EnumSpec = {
+  type: "enum",
+  name: "blend",
+  label: "Blend",
+  group: "Layer",
+  default: "max",
+  options: BLEND_MODES,
+  description: "Chooses how this layer combines with earlier layers (Max, Alpha, Add, or Screen).",
+};
+export const TRAILS_SPEC: BoolSpec = {
+  type: "bool",
+  name: "trails",
+  label: "Trails",
+  group: "Layer",
+  default: true,
+  description: "When on, this layer feeds into the feedback trail buffer instead of drawing only on the final pass.",
+};
+export const STYLE_SPEC: EnumSpec = {
+  type: "enum",
+  name: "style",
+  label: "Style",
+  group: "Transition",
+  default: "crossfade",
+  options: TRANSITION_STYLES,
+  description: "Visual transition effect used when switching into this preset.",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

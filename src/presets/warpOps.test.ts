@@ -81,4 +81,13 @@ describe("warp operator schema", () => {
   it("recognises the new operator names", () => {
     for (const name of ["stretch", "tile", "tunnel", "sphere", "curl"]) expect(isWarpOpType(name)).toBe(true);
   });
+
+  it("every operator spec has a non-empty description", () => {
+    for (const type of WARP_OP_TYPES) {
+      for (const spec of warpOpSpecs(type)) {
+        expect(typeof spec.description).toBe("string");
+        expect(spec.description!.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
 });
