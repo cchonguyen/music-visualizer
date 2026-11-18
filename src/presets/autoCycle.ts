@@ -21,6 +21,8 @@ export interface CycleOptions {
   maxCost?: CostLevel;
   /** Phrase mode: bars per phrase, one of PHRASE_BAR_OPTIONS. Missing means DEFAULT_PHRASE_BARS. */
   phraseBars?: number;
+  /** Beat mode: switch instantly with 0s fade on beat (Slice 26.3). Missing means false. */
+  hardCut?: boolean;
 }
 
 /** The tempo fields of an AudioFrame that Phrase mode reads. Missing fields mean no tempo. */
@@ -40,7 +42,7 @@ export interface CycleCandidate {
 /** How many seconds before a switch the next preset is chosen, so it can be prepared (Slice 16.3). */
 export const PREPARE_LEAD_SEC = 3;
 
-export const DEFAULT_CYCLE: CycleOptions = { mode: 'timer', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false, calmOnly: false, phraseBars: DEFAULT_PHRASE_BARS };
+export const DEFAULT_CYCLE: CycleOptions = { mode: 'timer', intervalSec: 20, minGapSec: 8, shuffle: false, favouritesOnly: false, calmOnly: false, phraseBars: DEFAULT_PHRASE_BARS, hardCut: false };
 
 /** Bars per phrase, or the default when missing or not one of the options. */
 export function phraseBarsOf(opts: Pick<CycleOptions, 'phraseBars'>): number {
@@ -204,21 +206,31 @@ export function loadCycleSettings(target: CycleOptions, storage: Pick<Storage, '
   try {
     const raw = storage?.getItem(CYCLE_STORAGE_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as Partial<Record<'mode' | 'shuffle' | 'intervalSec' | 'phraseBars', unknown>>;
+    const saved = JSON.parse(raw) as Partial<Record<'mode' | 'shuffle' | 'intervalSec' | 'phraseBars' | 'hardCut', unknown>>;
     if (saved.mode === 'off' || saved.mode === 'timer' || saved.mode === 'beat' || saved.mode === 'phrase') target.mode = saved.mode;
     if (typeof saved.shuffle === 'boolean') target.shuffle = saved.shuffle;
     if (saved.intervalSec !== undefined) target.intervalSec = clampInterval(saved.intervalSec);
     // Saves from before Phrase mode have no phraseBars: the current (default) value stays.
     if (typeof saved.phraseBars === 'number' && (PHRASE_BAR_OPTIONS as readonly number[]).includes(saved.phraseBars)) target.phraseBars = saved.phraseBars;
+    if (typeof saved.hardCut === 'boolean') target.hardCut = saved.hardCut;
   } catch {
     // Blocked storage or bad JSON: keep the defaults.
   }
 }
 
-/** Saves mode, shuffle, timer length and phrase bars. Failure only means the choice is not remembered. */
+/** Saves mode, shuffle, timer length, phrase bars and hardCut. Failure only means the choice is not remembered. */
 export function saveCycleSettings(opts: CycleOptions, storage: Pick<Storage, 'setItem'> | undefined): void {
   try {
-    storage?.setItem(CYCLE_STORAGE_KEY, JSON.stringify({ mode: opts.mode, shuffle: opts.shuffle, intervalSec: opts.intervalSec, phraseBars: phraseBarsOf(opts) }));
+    storage?.setItem(
+      CYCLE_STORAGE_KEY,
+      JSON.stringify({
+        mode: opts.mode,
+        shuffle: opts.shuffle,
+        intervalSec: opts.intervalSec,
+        phraseBars: phraseBarsOf(opts),
+        hardCut: Boolean(opts.hardCut),
+      }),
+    );
   } catch {
     // Private mode or a full store.
   }

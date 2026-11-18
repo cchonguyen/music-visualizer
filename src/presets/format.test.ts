@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  BLEND_SECONDS_SPEC,
+  BLEND_SEC_MAX,
+  BLEND_SEC_MIN,
+  PRESET_BLEND_MAX_SEC,
+  PRESET_BLEND_MIN_SEC,
+  clampBlendSec,
   parsePreset,
+  presetBlendSec,
   presetDisplaySec,
   PresetFormatError,
   PRESET_VERSION,
@@ -378,5 +385,67 @@ describe("parsePreset: morph transition style (Slice 25.3)", () => {
     const second = parsePreset(JSON.parse(JSON.stringify(first.preset)), registry);
     expect(second.warnings).toEqual([]);
     expect(second.preset.transition).toEqual({ style: "morph", seconds: 1.5 });
+  });
+});
+
+describe("parsePreset: per-preset blend time (Slice 26.3)", () => {
+  it("exposes blendSec bounds and BLEND_SECONDS_SPEC", () => {
+    expect(BLEND_SEC_MIN).toBe(0);
+    expect(BLEND_SEC_MAX).toBe(10);
+    expect(PRESET_BLEND_MIN_SEC).toBe(0);
+    expect(PRESET_BLEND_MAX_SEC).toBe(10);
+    expect(BLEND_SECONDS_SPEC.min).toBe(0);
+    expect(BLEND_SECONDS_SPEC.max).toBe(10);
+    expect(BLEND_SECONDS_SPEC.description?.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a valid blendSec including 0 for instant cut", () => {
+    const { preset, warnings } = parsePreset({ ...minimal, blendSec: 0 }, registry);
+    expect(preset.blendSec).toBe(0);
+    expect(warnings).toEqual([]);
+    expect(parsePreset({ ...minimal, blendSec: 2.5 }, registry).preset.blendSec).toBe(2.5);
+  });
+
+  it("clamps blendSec to 0..10 and rounds to 0.01", () => {
+    expect(clampBlendSec(-2)).toBe(0);
+    expect(clampBlendSec(42)).toBe(10);
+    expect(clampBlendSec(1.234)).toBe(1.23);
+    expect(parsePreset({ ...minimal, blendSec: -1 }, registry).preset.blendSec).toBe(0);
+    expect(parsePreset({ ...minimal, blendSec: 25 }, registry).preset.blendSec).toBe(10);
+    expect(parsePreset({ ...minimal, blendSec: 1.236 }, registry).preset.blendSec).toBe(1.24);
+  });
+
+  it("drops a non-number or non-finite blendSec with a warning", () => {
+    for (const bad of ["1.5", NaN, Infinity, -Infinity, null, true]) {
+      const { preset, warnings } = parsePreset({ ...minimal, blendSec: bad }, registry);
+      expect(preset).not.toHaveProperty("blendSec");
+      expect(warnings).toContain("blendSec: not a number, ignored");
+    }
+  });
+
+  it("omits blendSec when absent and round-trips when present", () => {
+    const absent = parsePreset(minimal, registry).preset;
+    expect(absent).not.toHaveProperty("blendSec");
+    expect("blendSec" in JSON.parse(JSON.stringify(absent))).toBe(false);
+
+    const present = parsePreset({ ...minimal, blendSec: 0.75 }, registry).preset;
+    const roundTripped = parsePreset(JSON.parse(JSON.stringify(present)), registry).preset;
+    expect(roundTripped).toEqual(present);
+    expect(roundTripped.blendSec).toBe(0.75);
+  });
+});
+
+describe("presetBlendSec (Slice 26.3)", () => {
+  it("returns clamped blendSec when set, including 0", () => {
+    expect(presetBlendSec({ blendSec: 0, transition: { seconds: 1.5 } })).toBe(0);
+    expect(presetBlendSec({ blendSec: -3, transition: { seconds: 1.5 } })).toBe(0);
+    expect(presetBlendSec({ blendSec: 3.5, transition: { seconds: 1.5 } })).toBe(3.5);
+    expect(presetBlendSec({ blendSec: 99, transition: { seconds: 1.5 } })).toBe(10);
+  });
+
+  it("falls back to transition.seconds when blendSec is unset or invalid, or 1.2 when undefined", () => {
+    expect(presetBlendSec({ transition: { seconds: 2.4 } })).toBe(2.4);
+    expect(presetBlendSec({ blendSec: NaN, transition: { seconds: 2.4 } })).toBe(2.4);
+    expect(presetBlendSec(undefined)).toBe(1.2);
   });
 });

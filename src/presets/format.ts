@@ -102,12 +102,32 @@ export function presetDisplaySec(preset: { displaySec?: number } | undefined): n
   return clampDisplaySec(preset?.displaySec);
 }
 
+/** Slice 26.3: optional per-preset blend time override in seconds (0..10). Missing means use transition.seconds. */
+export const PRESET_BLEND_MIN_SEC = 0;
+export const PRESET_BLEND_MAX_SEC = 10;
+export const BLEND_SEC_MIN = PRESET_BLEND_MIN_SEC;
+export const BLEND_SEC_MAX = PRESET_BLEND_MAX_SEC;
+
+/** A finite number clamped to 0..10 and rounded to 0.01 s. Anything else gives undefined. */
+export function clampBlendSec(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const clamped = Math.min(PRESET_BLEND_MAX_SEC, Math.max(PRESET_BLEND_MIN_SEC, value));
+  return Math.round(clamped * 100) / 100;
+}
+
+/** The preset's blend time in seconds (clamped), falling back to transition.seconds (or 1.2). */
+export function presetBlendSec(preset: { blendSec?: number; transition: { seconds: number } } | undefined): number {
+  return clampBlendSec(preset?.blendSec) ?? preset?.transition.seconds ?? 1.2;
+}
+
 export interface Preset {
   version: typeof PRESET_VERSION;
   name: string;
   tags: string[];
   /** Slice 23.2: how long this preset shows in Timer mode, 5..300 s. Missing means the global timer. */
   displaySec?: number;
+  /** Slice 26.3: optional per-preset blend time override in seconds, 0..10. Missing means use transition.seconds. */
+  blendSec?: number;
   /** Slice 20.7: what the preset is mostly about. Missing means untagged. */
   theme?: PresetTheme;
   /** Slice 20.7: how the preset feels. Missing means untagged. */
@@ -197,6 +217,17 @@ export const SECONDS_SPEC: NumberSpec = {
   max: 10,
   step: 0.01,
   description: "Duration of the transition animation when switching to this preset, in seconds.",
+};
+export const BLEND_SECONDS_SPEC: NumberSpec = {
+  type: "float",
+  name: "blendSec",
+  label: "Blend time",
+  group: "Transition",
+  default: 1.2,
+  min: PRESET_BLEND_MIN_SEC,
+  max: PRESET_BLEND_MAX_SEC,
+  step: 0.05,
+  description: "Optional per-preset blend time override in seconds (0 for an instant cut). Missing means use the transition crossfade.",
 };
 export const BLEND_SPEC: EnumSpec = {
   type: "enum",
@@ -452,6 +483,9 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
   const displaySec = clampDisplaySec(raw.displaySec);
   if (raw.displaySec !== undefined && displaySec === undefined) warnings.push(`displaySec: not a number, ignored`);
 
+  const blendSec = clampBlendSec(raw.blendSec);
+  if (raw.blendSec !== undefined && blendSec === undefined) warnings.push(`blendSec: not a number, ignored`);
+
   const preset: Preset = {
     version: PRESET_VERSION,
     name: raw.name.trim(),
@@ -459,6 +493,7 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     ...(theme ? { theme } : {}),
     ...(mood ? { mood } : {}),
     ...(displaySec !== undefined ? { displaySec } : {}),
+    ...(blendSec !== undefined ? { blendSec } : {}),
     transition,
     feedback,
     layers,
