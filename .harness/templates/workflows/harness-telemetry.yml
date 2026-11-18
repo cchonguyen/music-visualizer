@@ -1,0 +1,16 @@
+# Harness telemetry (spoke caller). Copy to .github/workflows/harness-telemetry.yml in a spoke.
+# When a pull request merges, the hub's reusable workflow appends its harness receipt to this repo's
+# harness-telemetry branch. Normal checkouts never fetch that branch.
+name: Harness telemetry
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    if: github.event.pull_request.merged == true
+    uses: cchonguyen/claude-harness-hub/.github/workflows/harness-telemetry.yml@main

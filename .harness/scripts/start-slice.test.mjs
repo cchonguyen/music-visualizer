@@ -165,13 +165,13 @@ function assertAdhocRefused(dir, overrides, pattern) {
 
 test('adhoc: id is the next minor under the highest major in the working tree', () => {
   const dir = makeRepo({ progress: '# P\n- [x] **Slice 3.4: A** Target files: a\n- [x] **Slice 3.5a: B** Target files: b\n- [x] **Slice 2.9: C** Target files: c\n' });
-  assert.equal(startAdhoc(dir, ADHOC).sliceId, '3.6');
+  assert.equal(startAdhoc(dir, ADHOC).sliceId, '3.42');
 });
 
 test('adhoc: origin/main ahead of the working tree raises the major', () => {
   const dir = makeRepo();
   const res = startAdhoc(dir, { ...ADHOC, mainProgress: '- [x] **Slice 7.2: Ahead** Target files: z\n' });
-  assert.equal(res.sliceId, '7.3');
+  assert.equal(res.sliceId, '7.42');
 });
 
 test('adhoc: --id overrides the rule and a taken id is refused', () => {
@@ -183,24 +183,42 @@ test('adhoc: --id overrides the rule and a taken id is refused', () => {
   assertAdhocRefused(makeRepo({ progress: `${BASE_PROGRESS}- [x] **Slice 5.1: T** Target files: t\n` }), { id: '5.1' }, /already exists/);
 });
 
+test('adhoc: parallel starts from the same main get different ids (major.issue)', () => {
+  const a = startAdhoc(makeRepo(), { ...ADHOC, issue: '42' }).sliceId;
+  const b = startAdhoc(makeRepo(), { ...ADHOC, issue: '43' }).sliceId;
+  assert.equal(a, '2.42');
+  assert.equal(b, '2.43');
+  assert.notEqual(a, b);
+});
+
+test('adhoc: falls back to max minor + 1 when major.issue is already a planned slice', () => {
+  const dir = makeRepo({ progress: `${BASE_PROGRESS}- [x] **Slice 2.42: Planned** Target files: p\n` });
+  assert.equal(startAdhoc(dir, ADHOC).sliceId, '2.43');
+});
+
+test('adhoc: explicit --id wins over the numbering rule', () => {
+  const dir = makeRepo({ progress: `${BASE_PROGRESS}- [x] **Slice 2.42: Planned** Target files: p\n` });
+  assert.equal(startAdhoc(dir, { ...ADHOC, id: '9.9' }).sliceId, '9.9');
+});
+
 test('adhoc: written line parses back and the anchor carries both trailers and a batch event', () => {
   const dir = makeRepo();
   const res = startAdhoc(dir, { ...ADHOC, tag: 'ui', gateChange: true });
-  assert.equal(res.sliceId, '2.1');
-  const line = progressText(dir).split('\n').find((l) => /Slice 2\.1:/.test(l));
+  assert.equal(res.sliceId, '2.42');
+  const line = progressText(dir).split('\n').find((l) => /Slice 2\.42:/.test(l));
   assert.match(line, /\[UI \/ VISUAL\] GATE CHANGE\. On-the-fly: bug blocks current work Target files:/);
   const p = parseSliceLine(line);
-  assert.equal(p.id, '2.1');
+  assert.equal(p.id, '2.42');
   assert.equal(p.status, '[IN_PROGRESS]');
   assert.deepEqual(p.targets, ['src/a.mjs', 'src/a.test.mjs']);
   assert.equal(p.issue, 42);
   assert.equal(p.verify, 'node --test src/a.test.mjs');
   const subject = execFileSync('git', ['log', '-1', '--format=%s'], { cwd: dir, encoding: 'utf8' }).trim();
-  assert.equal(subject, 'docs(spec): anchor Slice 2.1 [IN_PROGRESS]');
+  assert.equal(subject, 'docs(spec): anchor Slice 2.42 [IN_PROGRESS]');
   const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
   assert.match(body, /^Spec-Bypass: on-the-fly Issue #42$/m);
   assert.match(body, /^Spec-Bypass-Reason: bug blocks current work$/m);
-  assert.ok(readBatchEvents(dir).some((e) => e.event === 'adhoc_slice_start' && e.slice === 'Slice 2.1'));
+  assert.ok(readBatchEvents(dir).some((e) => e.event === 'adhoc_slice_start' && e.slice === 'Slice 2.42'));
 });
 
 test('adhoc: refuses bad issue numbers and newline or pipe values', () => {
@@ -237,13 +255,13 @@ test('adhoc: refuses a Red tripwire target', () => {
 test('adhoc: engine-locked targets are refused in a spoke but allowed in the hub', () => {
   const dir = makeRepo();
   assertAdhocRefused(dir, { originUrl: 'git@github.com:o/some-spoke.git', targets: '.harness/x.mjs' }, /engine-locked/);
-  assert.equal(startAdhoc(dir, { ...ADHOC, targets: '.harness/x.mjs' }).sliceId, '2.1');
+  assert.equal(startAdhoc(dir, { ...ADHOC, targets: '.harness/x.mjs' }).sliceId, '2.42');
 });
 
 test('adhoc: refuses while main is red; a failing ls-remote is ignored', () => {
   const dir = makeRepo();
   assertAdhocRefused(dir, { lsRemote: () => 'abc123\trefs/tags/harness-main-red\n' }, /main is red/);
-  assert.equal(startAdhoc(dir, { ...ADHOC, lsRemote: () => { throw new Error('offline'); } }).sliceId, '2.1');
+  assert.equal(startAdhoc(dir, { ...ADHOC, lsRemote: () => { throw new Error('offline'); } }).sliceId, '2.42');
 });
 
 test('adhoc: restores PROGRESS.md when the commit fails', () => {

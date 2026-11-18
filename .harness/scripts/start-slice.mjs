@@ -320,13 +320,18 @@ export function startAdhoc(root, opts = {}) {
   if (explicitId) {
     sliceId = explicitId;
   } else {
-    const major = ids.reduce((m, id) => Math.max(m, parseInt(id, 10)), 0);
-    let maxMinor = 0;
-    for (const id of ids) {
-      const m = id.match(/^([0-9]+)\.([0-9]+)/);
-      if (m && Number(m[1]) === major) maxMinor = Math.max(maxMinor, Number(m[2]));
+    const major = ids.length ? ids.reduce((m, id) => Math.max(m, parseInt(id, 10)), 0) : 1;
+    // Issue numbers are handed out atomically by GitHub, so parallel threads cannot pick the same id.
+    sliceId = `${major}.${issue}`;
+    if (ids.includes(sliceId)) {
+      // A planned slice already uses that number: fall back to the next free minor so start never fails.
+      let maxMinor = 0;
+      for (const id of ids) {
+        const m = id.match(/^([0-9]+)\.([0-9]+)/);
+        if (m && Number(m[1]) === major) maxMinor = Math.max(maxMinor, Number(m[2]));
+      }
+      sliceId = `${major}.${maxMinor + 1}`;
     }
-    sliceId = `${major}.${maxMinor + 1}`;
   }
   if (ids.includes(sliceId)) throw new Error(`Slice ${sliceId} already exists in PROGRESS.md.`);
 

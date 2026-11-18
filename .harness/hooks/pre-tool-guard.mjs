@@ -14,8 +14,33 @@ import { clearUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
-import { appendEvent } from '../scripts/lib/event-log.mjs';
+import { appendEvent, readEvents, eventFile } from '../scripts/lib/event-log.mjs';
 import { mainThreadDecision } from './lib/main-thread-guard.mjs';
+
+// Model-visible warnings. Claude Code shows the model a PreToolUse hook's stdout JSON only, so soft
+// warnings also go here as additionalContext. At most one JSON object is written per invocation.
+const pendingContext = [];
+const PLAN_LOCK_CONTEXT = 'No task is marked [IN_PROGRESS] in .spec/PROGRESS.md (PLAN LOCK). Fix: open the issue with the GitHub MCP issue_write tool, then run node .harness/scripts/start-slice.mjs --adhoc --title "<t>" --tag core|ui --targets "<a,b>" --verify "<cmd>" --issue <N> --reason "<why>". Or anchor a pending slice with node .harness/scripts/start-slice.mjs "<id>".';
+
+function addContext(text) {
+  pendingContext.push(text);
+}
+
+function flushContext() {
+  if (pendingContext.length === 0) return;
+  const additionalContext = pendingContext.map((text) => `HARNESS WARNING: ${text}`).join('\n\n');
+  pendingContext.length = 0;
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext } }) + '\n');
+}
+
+// True when this session already logged an event of this kind (missing or unreadable file means not seen).
+function warnSeenBefore(root, session, kind) {
+  try {
+    return readEvents(eventFile(root, session)).some((entry) => entry.kind === kind);
+  } catch {
+    return false;
+  }
+}
 
 const gitIn = (cwd, args, env = {}) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], env: { ...process.env, ...env } }).trim();
@@ -543,6 +568,7 @@ if (isDirectRun) {
   if (modeOf(root) === 'locked') {
     // Plan lock is a soft warn: log it on stderr and to the event log, then let the edit proceed.
     console.error('WARN: PLAN LOCK: No task is marked [IN_PROGRESS] in .spec/PROGRESS.md. Run /spec, or open an on-the-fly slice: node .harness/scripts/start-slice.mjs --adhoc (see CLAUDE.md, Work modes).');
+    if (!warnSeenBefore(root, event.session_id, 'plan_lock_warn')) addContext(PLAN_LOCK_CONTEXT);
     appendEvent(root, {
       session: event.session_id,
       kind: 'plan_lock_warn',
@@ -593,6 +619,7 @@ if (isDirectRun) {
       const scopeCheck = checkTargetFileScope({ relTarget, allowedTargets: allowedList, role });
       if (!scopeCheck.allowed) {
         console.error(`WARN: ${scopeCheck.reason}`);
+        if (!warnSeenBefore(root, event.session_id, 'scope_lock_warn')) addContext(scopeCheck.reason);
         appendEvent(root, {
           session: event.session_id,
           kind: 'scope_lock_warn',
@@ -604,8 +631,10 @@ if (isDirectRun) {
   }
 
   if (isHubRepo && isEnginePath(relTarget) && ['vibe', 'slice'].includes(modeOf(root))) {
+    flushContext();
     process.exit(0);
   }
 
+  flushContext();
   process.exit(0);
 }

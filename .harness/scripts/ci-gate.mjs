@@ -6,6 +6,7 @@
 //                          trailer. Exits 1 when any are listed. Skips bookkeeping
 //                          commits: only .spec/ or engine sync files changed, or a sync subject.
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const ZERO_SHA = /^0+$/;
@@ -139,6 +140,87 @@ export function commitsMissingTrailer({ before, after, cwd = process.cwd() }) {
     .map(({ sha, subject }) => `${sha.slice(0, 12)} ${subject}`);
 }
 
+// Issue number from the first closing keyword (close/fix/resolve and forms) followed by `#N` or `owner/repo#N`.
+// Returns the number, or null when the body links no issue.
+const CLOSING_LINK = /\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\s+(?:[\w.-]+\/[\w.-]+)?#(\d+)\b/i;
+export function findIssueLink(body) {
+  const m = String(body ?? '').match(CLOSING_LINK);
+  return m ? Number(m[1]) : null;
+}
+
+// Slice ids used by more than one slice line in PROGRESS.md text, sorted numerically.
+const SLICE_ID_LINE = /^\s*-\s*\[[^\]]*\]\s*\*\*Slice\s+([0-9]+(?:\.[0-9]+)*)\b/;
+export function duplicateSliceIds(progressText) {
+  const counts = new Map();
+  for (const line of String(progressText ?? '').split('\n')) {
+    const m = line.match(SLICE_ID_LINE);
+    if (m) counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, n]) => n > 1)
+    .map(([id]) => id)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+// Duplicated slice ids where at least one of the lines with that id is still open ([ ]).
+// Old duplicates whose lines are all done do not block later PRs.
+const OPEN_SLICE_LINE = /^\s*-\s*\[ \]/;
+export function openDuplicateSliceIds(progressText) {
+  const counts = new Map();
+  const open = new Set();
+  for (const line of String(progressText ?? '').split('\n')) {
+    const m = line.match(SLICE_ID_LINE);
+    if (!m) continue;
+    counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+    if (OPEN_SLICE_LINE.test(line)) open.add(m[1]);
+  }
+  return [...counts.entries()]
+    .filter(([id, n]) => n > 1 && open.has(id))
+    .map(([id]) => id)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+// Pure PR gate. Returns { problems, warnings, notes }. Every problem tells the agent the exact fix.
+export function gateCheck({ body, labels = [], progressText = '' } = {}) {
+  const problems = [];
+  const warnings = [];
+  const notes = [];
+  if (labels.includes('harness:bypass')) {
+    notes.push('Bypass label present: gate skipped. Recorded for telemetry.');
+    return { problems, warnings, notes };
+  }
+  if (labels.includes('migration')) {
+    notes.push('Migration PR: slice checks skipped.');
+    return { problems, warnings, notes };
+  }
+  if (findIssueLink(body) === null) {
+    problems.push('No linked issue: add `Closes #N` to the PR body (the gate workflow normally adds one automatically).');
+  }
+  const dupes = openDuplicateSliceIds(progressText);
+  if (dupes.length > 0) {
+    problems.push(`Duplicate slice ids in .spec/PROGRESS.md: ${dupes.join(', ')}. Fix: renumber the later line of each pair to the next free id; \`node .harness/scripts/start-slice.mjs\` picks free ids.`);
+  }
+  const doneDupes = duplicateSliceIds(progressText).filter((id) => !dupes.includes(id));
+  if (doneDupes.length > 0) {
+    notes.push(`Old duplicate slice ids (all done, ignored): ${doneDupes.join(', ')}.`);
+  }
+  return { problems, warnings, notes };
+}
+
+function readOptional(file) {
+  if (!file) return '';
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function flagValue(args, name) {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [mode, first, second] = process.argv.slice(2);
   if (mode === 'pr' && first && second) {
@@ -169,8 +251,52 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       for (const line of missing) console.log(`  - ${line}`);
       process.exitCode = 1;
     }
+  } else if (mode === 'has-issue' && first) {
+    // Exit 0 when the PR body links an issue, 1 when it does not, 2 when the body file cannot be read.
+    let body;
+    try {
+      body = fs.readFileSync(first, 'utf8');
+    } catch (err) {
+      console.log(`✗ Cannot read body file: ${String(err.message).split('\n')[0]}`);
+      process.exitCode = 2;
+    }
+    if (body !== undefined) {
+      const issue = findIssueLink(body);
+      if (issue === null) {
+        console.log('No closing issue link found in the PR body.');
+        process.exitCode = 1;
+      } else {
+        console.log(`Closing issue link found: #${issue}`);
+      }
+    }
+  } else if (mode === 'gate') {
+    const args = process.argv.slice(3);
+    const bodyFile = flagValue(args, '--body-file');
+    const labels = (flagValue(args, '--labels') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const progressFile = flagValue(args, '--progress');
+    let body = '';
+    if (bodyFile) {
+      try {
+        body = fs.readFileSync(bodyFile, 'utf8');
+      } catch (err) {
+        console.log(`✗ Cannot read body file: ${String(err.message).split('\n')[0]}`);
+        process.exitCode = 2;
+      }
+    }
+    if (process.exitCode !== 2) {
+      const { problems, warnings, notes } = gateCheck({ body, labels, progressText: readOptional(progressFile) });
+      for (const w of warnings) console.log(`::warning::${w}`);
+      for (const n of notes) console.log(`✓ Harness gate: ${n}`);
+      if (problems.length === 0) {
+        if (notes.length === 0) console.log('✓ Harness gate: issue linked and no duplicate slice ids.');
+      } else {
+        console.log('✗ Harness gate failed:');
+        for (const p of problems) console.log(`  - ${p}`);
+        process.exitCode = 1;
+      }
+    }
   } else {
-    console.log('Usage: node .harness/scripts/ci-gate.mjs pr <base> <head> | push <before> <after>');
+    console.log('Usage: node .harness/scripts/ci-gate.mjs pr <base> <head> | push <before> <after> | has-issue <bodyFile> | gate --body-file <f> --labels "<list>" [--progress <path>]');
     process.exitCode = 2;
   }
 }

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer, isBookkeepingCommit } from './ci-gate.mjs';
+import { parseRefereeTrailers, hasRefereeTrailer, addedSliceLines, checkPullRequest, commitsMissingTrailer, isBookkeepingCommit, findIssueLink, duplicateSliceIds, openDuplicateSliceIds, gateCheck } from './ci-gate.mjs';
 
 const TREE = 'a'.repeat(40);
 
@@ -263,4 +263,125 @@ test('checkPullRequest still fails a package.json version bump alone', () => {
   commitPlain(dir);
   const { problems } = checkPullRequest({ base: 'main', head: 'sync', cwd: dir });
   assert.ok(problems.some((p) => /No Referee trailer/.test(p)));
+});
+
+test('findIssueLink reads closing keywords case-insensitively', () => {
+  assert.equal(findIssueLink('Closes #12'), 12);
+  assert.equal(findIssueLink('fixes #3 and more'), 3);
+  assert.equal(findIssueLink('we FIXED #44'), 44);
+  assert.equal(findIssueLink('resolve #7'), 7);
+  assert.equal(findIssueLink('Resolved #8'), 8);
+  assert.equal(findIssueLink('close #9'), 9);
+});
+
+test('findIssueLink reads a cross-repo reference and returns the first match', () => {
+  assert.equal(findIssueLink('Closes octo/repo#21'), 21);
+  assert.equal(findIssueLink('Closes #5\nFixes #6'), 5);
+});
+
+test('findIssueLink returns null when no closing keyword links an issue', () => {
+  assert.equal(findIssueLink('See #4 for context'), null);
+  assert.equal(findIssueLink('Closes the loop'), null);
+  assert.equal(findIssueLink('Enclosed #4'), null);
+  assert.equal(findIssueLink(''), null);
+  assert.equal(findIssueLink(null), null);
+});
+
+test('duplicateSliceIds finds repeated ids across any bracket content, sorted', () => {
+  const progress = [
+    '- [x] **Slice 10.5: Stall** [CORE / DATA]',
+    '- [ ] **Slice 2.1: A**',
+    '- [IN_PROGRESS] **Slice 10.5: Again**',
+    '- [ ] **Slice 2.1: B**',
+    '- [BLOCKED] **Slice 9.2: C**',
+    '- [ ] **Slice 9.2: D**',
+    '- [ ] **Slice 3.0: once**',
+    '  Slice 3.0 mentioned in prose',
+  ].join('\n');
+  assert.deepEqual(duplicateSliceIds(progress), ['2.1', '9.2', '10.5']);
+});
+
+test('duplicateSliceIds returns an empty list for unique ids or empty text', () => {
+  assert.deepEqual(duplicateSliceIds('- [ ] **Slice 1.1: a**\n- [ ] **Slice 1.2: b**'), []);
+  assert.deepEqual(duplicateSliceIds(''), []);
+});
+
+test('gateCheck skips everything with the bypass label and says so', () => {
+  const r = gateCheck({ body: 'no link', labels: ['harness:bypass'], progressText: '- [ ] **Slice 1.1: a**\n- [ ] **Slice 1.1: b**' });
+  assert.deepEqual(r, { problems: [], warnings: [], notes: ['Bypass label present: gate skipped. Recorded for telemetry.'] });
+});
+
+test('gateCheck skips slice checks for a migration PR', () => {
+  const r = gateCheck({ body: '', labels: ['migration'], progressText: '- [ ] **Slice 1.1: a**\n- [ ] **Slice 1.1: b**' });
+  assert.deepEqual(r, { problems: [], warnings: [], notes: ['Migration PR: slice checks skipped.'] });
+});
+
+test('gateCheck fails a PR with no linked issue and says how to fix it', () => {
+  const r = gateCheck({ body: 'Just a description', labels: [], progressText: '' });
+  assert.equal(r.problems.length, 1);
+  assert.match(r.problems[0], /No linked issue: add `Closes #N` to the PR body/);
+});
+
+test('gateCheck fails duplicate slice ids and names them', () => {
+  const r = gateCheck({ body: 'Closes #1', labels: [], progressText: '- [ ] **Slice 4.2: a**\n- [x] **Slice 4.2: b**' });
+  assert.equal(r.problems.length, 1);
+  assert.match(r.problems[0], /Duplicate slice ids in \.spec\/PROGRESS\.md: 4\.2/);
+  assert.match(r.problems[0], /renumber the later line/);
+  assert.match(r.problems[0], /start-slice\.mjs/);
+});
+
+test('gateCheck reports both problems together', () => {
+  const r = gateCheck({ body: '', progressText: '- [ ] **Slice 4.2: a**\n- [ ] **Slice 4.2: b**' });
+  assert.equal(r.problems.length, 2);
+});
+
+test('gateCheck passes a clean PR with an issue link and unique slices', () => {
+  const r = gateCheck({ body: 'Closes #175', labels: ['slice'], progressText: '- [ ] **Slice 1.1: a**\n- [x] **Slice 1.2: b**' });
+  assert.deepEqual(r, { problems: [], warnings: [], notes: [] });
+});
+
+test('openDuplicateSliceIds ignores an id whose duplicate lines are all done', () => {
+  assert.deepEqual(openDuplicateSliceIds('- [x] **Slice 4.2: a**\n- [x] **Slice 4.2: b**'), []);
+});
+
+test('openDuplicateSliceIds returns an id when one of its duplicate lines is open', () => {
+  assert.deepEqual(openDuplicateSliceIds('- [ ] **Slice 4.2: a**\n- [x] **Slice 4.2: b**'), ['4.2']);
+});
+
+test('openDuplicateSliceIds returns an id when both duplicate lines are open', () => {
+  assert.deepEqual(openDuplicateSliceIds('- [ ] **Slice 4.2: a**\n- [ ] **Slice 4.2: b**'), ['4.2']);
+});
+
+test('gateCheck ignores a done+done duplicate and notes it', () => {
+  const r = gateCheck({ body: 'Closes #1', labels: [], progressText: '- [x] **Slice 4.2: a**\n- [x] **Slice 4.2: b**' });
+  assert.deepEqual(r.problems, []);
+  assert.deepEqual(r.notes, ['Old duplicate slice ids (all done, ignored): 4.2.']);
+});
+
+test('gateCheck still fails an open duplicate and adds no done-duplicate note for it', () => {
+  const r = gateCheck({ body: 'Closes #1', labels: [], progressText: '- [ ] **Slice 4.2: a**\n- [x] **Slice 4.2: b**' });
+  assert.equal(r.problems.length, 1);
+  assert.match(r.problems[0], /Duplicate slice ids in \.spec\/PROGRESS\.md: 4\.2/);
+  assert.deepEqual(r.notes, []);
+});
+
+test('gate and has-issue CLI modes work on a body file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-gate-cli-'));
+  const script = path.join(import.meta.dirname, 'ci-gate.mjs');
+  const bodyFile = path.join(dir, 'body.md');
+  const progress = path.join(dir, 'PROGRESS.md');
+  fs.writeFileSync(bodyFile, 'Closes #9\n');
+  fs.writeFileSync(progress, '- [ ] **Slice 5.1: a**\n');
+  const linked = spawnSync(process.execPath, [script, 'has-issue', bodyFile], { encoding: 'utf8' });
+  assert.equal(linked.status, 0);
+  fs.writeFileSync(bodyFile, 'no link\n');
+  const unlinked = spawnSync(process.execPath, [script, 'has-issue', bodyFile], { encoding: 'utf8' });
+  assert.equal(unlinked.status, 1);
+  const bad = spawnSync(process.execPath, [script, 'gate', '--body-file', bodyFile, '--labels', '', '--progress', progress], { encoding: 'utf8' });
+  assert.equal(bad.status, 1);
+  assert.match(bad.stdout, /No linked issue/);
+  fs.writeFileSync(bodyFile, 'Closes #9\n');
+  const ok = spawnSync(process.execPath, [script, 'gate', '--body-file', bodyFile, '--labels', 'slice,migration', '--progress', path.join(dir, 'missing.md')], { encoding: 'utf8' });
+  assert.equal(ok.status, 0);
+  assert.match(ok.stdout, /Migration PR: slice checks skipped/);
 });

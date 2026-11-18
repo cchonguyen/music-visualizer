@@ -83,6 +83,8 @@ export const TRIPWIRES = [
 ];
 
 export const isTestFile = (file) => TEST_FILE.test(file);
+// A PROGRESS line with its slice number removed, so a renumbered line compares equal to the original
+export const sliceKey = (line) => String(line).replace(/\bSlice\s+[0-9]+(?:\.[0-9]+)*/, 'Slice').trim();
 export const isEngineFile = (file) =>
   !SPOKE_OWNED.has(file) && !SYNC_DELIVERED.has(file)
   && (file.startsWith('.claude/') || file.startsWith('.harness/') || file === '.harness-version');
@@ -252,7 +254,10 @@ export function analyze({
   // Scope rule: while exactly one slice is [IN_PROGRESS], only its Target files (and .spec/) may change.
   // A slice PR usually marks its slice [x] by the time it opens, so fall back to slice lines this PR marks done.
   const active = progress.split('\n').filter((l) => ACTIVE_TASK.test(l));
-  const doneInPr = (diff.get('.spec/PROGRESS.md')?.added ?? []).filter((l) => DONE_SLICE.test(l));
+  // A done line this PR only renumbers (or re-adds while it was already done) is not a slice this PR completes
+  const progressDiff = diff.get('.spec/PROGRESS.md');
+  const alreadyDoneKeys = new Set((progressDiff?.removed ?? []).filter((l) => DONE_SLICE.test(l)).map(sliceKey));
+  const doneInPr = (progressDiff?.added ?? []).filter((l) => DONE_SLICE.test(l) && !alreadyDoneKeys.has(sliceKey(l)));
   // A finish-slice commit promotes the next pending slice to [IN_PROGRESS]. When this PR changes none of that
   // slice's Target files, the marker is only the next slice's placeholder, so the PR's done slices are checked.
   // .spec/ targets do not count: every slice PR changes .spec/PROGRESS.md, so they would make a placeholder look touched.
@@ -292,6 +297,15 @@ export function analyze({
       if (targets.some((t) => t.includes('el-exit-gate') || t.includes('pre-tool-guard')) && file === '.harness/hooks/lib/guard-rules.test.mjs') continue;
       if (targets.some((t) => t.startsWith('.harness/agents/')) &&
           (file.startsWith('.claude/agents/') || (file.startsWith('.agents/') && !file.startsWith('.agents/rules/') && !file.startsWith('.agents/skills/')))) continue;
+      // Docs (except AGENTS.md, which keeps its own red tripwire) and test files may change outside Target files
+      if (file.endsWith('.md') && file !== 'AGENTS.md' && !file.endsWith('/AGENTS.md')) {
+        notes.push(`Docs file outside Target files (allowed): ${file}`);
+        continue;
+      }
+      if (isTestFile(file)) {
+        notes.push(`Test file outside Target files (allowed): ${file}`);
+        continue;
+      }
       problems.push(`Outside the slice's Target files: ${file}`);
     }
   } else if (active.length === 0) {
