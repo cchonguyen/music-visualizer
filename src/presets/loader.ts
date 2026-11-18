@@ -1,6 +1,8 @@
 // Loader (slice 4.3): turns a validated Preset into a Scene. The layer registry maps a
 // layer type name ("tunnel") to the class that draws it. Adding a layer type = one line here.
+import type { AudioFrame } from '../audio/types';
 import type { RenderLayer } from '../render/layer';
+import { shapeReaction } from '../render/gainStore';
 import { Scene, type BlendMode, type SceneLayerConfig, FEEDBACK_WARP_DEFAULTS } from '../render/scene';
 import { ShapeLayer } from '../render/layers/shape';
 import { BarsLayer } from '../render/layers/bars';
@@ -221,10 +223,69 @@ export function hasReactions(preset: Preset): boolean {
   return (preset.reactions?.length ?? 0) > 0;
 }
 
-/** True when any setting of the preset has an audio link. */
+/** True when any setting of the preset has an audio link or morph. */
 export function hasLinks(preset: Preset): boolean {
-  const all = [...preset.layers.flatMap((l) => Object.values(l.params)), ...Object.values(preset.feedback), ...Object.values(preset.post), ...(preset.warp ?? []).flatMap((op) => Object.values(op.params))];
-  return all.some((setting) => setting.link !== undefined);
+  const all = [
+    ...(preset.layers ?? []).flatMap((l) => Object.values(l.params ?? {})),
+    ...Object.values(preset.feedback ?? {}),
+    ...Object.values(preset.post ?? {}),
+    ...(preset.warp ?? []).flatMap((op) => Object.values(op.params ?? {})),
+  ];
+  return all.some((setting) => setting.link !== undefined || setting.morph !== undefined);
+}
+
+/** Calm mode scales audio-driven visual energy down (motion reduction for sensitive viewers). */
+export const CALM_SCALE = 0.5;
+
+/**
+ * Applies visual gain dynamics shaping and calm mode scaling consistently to an AudioFrame.
+ * Mutates frame in place (matching main loop conventions) and returns it.
+ */
+export function applyVisualGainAndCalm(
+  frame: AudioFrame,
+  gain: number,
+  calm: boolean,
+  calmScale: number = CALM_SCALE,
+): AudioFrame {
+  if (gain !== 1) {
+    const bend = (x: number) => shapeReaction(x, gain);
+    frame.norm.sub = bend(frame.norm.sub);
+    frame.norm.mid = bend(frame.norm.mid);
+    frame.norm.high = bend(frame.norm.high);
+    frame.env.sub = bend(frame.env.sub);
+    frame.env.mid = bend(frame.env.mid);
+    frame.env.high = bend(frame.env.high);
+    frame.energy = bend(frame.energy);
+    frame.loudness = bend(frame.loudness);
+    frame.kickEnv = bend(frame.kickEnv);
+    if (frame.beatStrength !== undefined) {
+      frame.beatStrength = bend(frame.beatStrength);
+    }
+    if (frame.fluxByBand) {
+      frame.fluxByBand.sub = bend(frame.fluxByBand.sub);
+      frame.fluxByBand.mid = bend(frame.fluxByBand.mid);
+      frame.fluxByBand.high = bend(frame.fluxByBand.high);
+    }
+    if (frame.raw) {
+      frame.raw.sub = bend(frame.raw.sub);
+      frame.raw.mid = bend(frame.raw.mid);
+      frame.raw.high = bend(frame.raw.high);
+    }
+  }
+
+  if (calm) {
+    frame.norm.sub *= calmScale;
+    frame.norm.mid *= calmScale;
+    frame.norm.high *= calmScale;
+    frame.env.sub *= calmScale;
+    frame.env.mid *= calmScale;
+    frame.env.high *= calmScale;
+    frame.energy *= calmScale;
+    frame.loudness *= calmScale;
+    frame.kickEnv *= calmScale;
+  }
+
+  return frame;
 }
 
 /**

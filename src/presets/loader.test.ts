@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { applyLinkedPreset, applyPresetToScene, buildScene, createLayersFromPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES } from './loader';
+import { applyLinkedPreset, applyPresetToScene, applyVisualGainAndCalm, buildScene, CALM_SCALE, createLayersFromPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES } from './loader';
+import { shapeReaction } from '../render/gainStore';
 import { LinkRunner, ReactionBank } from './links';
 import { previewPreset } from './session';
 import type { AudioFrame } from '../audio/types';
@@ -448,5 +449,245 @@ describe('warp operator stack (Slice 18.2)', () => {
     expect(scene.getWarpOps()).toHaveLength(1);
     applyPresetToScene(withWarp(undefined), scene);
     expect(scene.getWarpOps()).toEqual([]);
+  });
+});
+
+function makeAudioFrame(overrides: Partial<AudioFrame> = {}): AudioFrame {
+  return {
+    frameIndex: 1,
+    time: 1,
+    dtSec: 1 / 60,
+    raw: { sub: 0.5, mid: 0.5, high: 0.5 },
+    env: { sub: 0.5, mid: 0.5, high: 0.5 },
+    norm: { sub: 0.5, mid: 0.5, high: 0.5 },
+    loudness: 0.5,
+    energy: 0.5,
+    flux: 0,
+    fluxByBand: { sub: 0.5, mid: 0.5, high: 0.5 },
+    beat: false,
+    beatByBand: { sub: false, mid: false, high: false },
+    beatStrength: 0.5,
+    kickEnv: 0.5,
+    kickPulse: false,
+    waveform: new Float32Array(128),
+    bandWaveforms: {
+      sub: new Float32Array(128),
+      mid: new Float32Array(128),
+      high: new Float32Array(128),
+    },
+    spectrum: new Float32Array(64),
+    smoothedSpectrum: new Float32Array(64),
+    sampleRate: 48000,
+    ...overrides,
+  };
+}
+
+describe('hasLinks and morph-only presets (Slice 25.5)', () => {
+  const basePreset = (): Preset => ({
+    version: PRESET_VERSION,
+    name: 'morph-only',
+    tags: [],
+    transition: { style: 'crossfade', seconds: 1 },
+    feedback: { decay: { value: 0.9 } },
+    post: { bloom: { value: 0.2 } },
+    layers: [
+      {
+        type: 'tunnel',
+        enabled: true,
+        opacity: 1,
+        blend: 'max',
+        params: { ringDensity: { value: 0.5 } },
+      },
+    ],
+    warp: [
+      {
+        type: 'swirl',
+        enabled: true,
+        params: { amount: { value: 0.1 } },
+      },
+    ],
+  });
+
+  it('returns false when no setting has a link or morph', () => {
+    expect(hasLinks(basePreset())).toBe(false);
+  });
+
+  it('returns true for morph-only presets across layers, feedback, post, and warp', () => {
+    const layerMorph = basePreset();
+    layerMorph.layers[0]!.params.ringDensity = { value: 0.5, morph: { to: 1.5, rate: 0.5 } };
+    expect(hasLinks(layerMorph)).toBe(true);
+
+    const feedbackMorph = basePreset();
+    feedbackMorph.feedback.decay = { value: 0.9, morph: { to: 0.98, rate: 0.5 } };
+    expect(hasLinks(feedbackMorph)).toBe(true);
+
+    const postMorph = basePreset();
+    postMorph.post.bloom = { value: 0.2, morph: { to: 0.8, rate: 0.5 } };
+    expect(hasLinks(postMorph)).toBe(true);
+
+    const warpMorph = basePreset();
+    warpMorph.warp![0]!.params.amount = { value: 0.1, morph: { to: 0.9, rate: 0.5 } };
+    expect(hasLinks(warpMorph)).toBe(true);
+  });
+
+  it('applyLinkedPreset advances morph values smoothly over dtSec without any audio link', () => {
+    const preset: Preset = {
+      version: PRESET_VERSION,
+      name: 'morph-advance',
+      tags: [],
+      transition: { style: 'crossfade', seconds: 1 },
+      feedback: { decay: { value: 0.9, morph: { to: 0.98, rate: 1.0 } } },
+      post: { bloom: { value: 0.2, morph: { to: 0.8, rate: 1.0 } } },
+      layers: [
+        {
+          type: 'tunnel',
+          enabled: true,
+          opacity: 1,
+          blend: 'max',
+          params: { ringDensity: { value: 0.5, morph: { to: 1.5, rate: 1.0 } } },
+        },
+      ],
+      warp: [
+        {
+          type: 'swirl',
+          enabled: true,
+          params: { amount: { value: 0.1, morph: { to: 0.9, rate: 1.0 } } },
+        },
+      ],
+    };
+
+    const feedbackHistory: Record<string, unknown>[] = [];
+    const scene = buildScene('morph-advance', preset);
+    const origSetFeedback = scene.setFeedback.bind(scene);
+    scene.setFeedback = (v) => {
+      feedbackHistory.push(v);
+      origSetFeedback(v);
+    };
+
+    const runner = new LinkRunner();
+    const frame = makeAudioFrame();
+
+    const post0 = applyLinkedPreset(preset, scene, runner, 'm', { frame, timeSec: 0, sectionContrast: 0 }, 0.05);
+    expect(post0.bloom).toBeCloseTo(0.2, 5);
+    expect(feedbackHistory[0]!.decay as number).toBeCloseTo(0.9, 5);
+    expect((scene.layers[0] as unknown as { p: { ringDensity: number } }).p.ringDensity).toBeCloseTo(0.5, 5);
+    expect(scene.getWarpOps()[0]!.values.amount).toBeCloseTo(0.1, 5);
+
+    // Step in 0.05s increments up to 0.5s (half-cycle at 1.0 Hz -> reaches `to`)
+    let postHalf: Record<string, unknown> = post0;
+    for (let i = 1; i <= 10; i++) {
+      postHalf = applyLinkedPreset(preset, scene, runner, 'm', { frame, timeSec: i * 0.05, sectionContrast: 0 }, 0.05);
+    }
+    expect(postHalf.bloom as number).toBeCloseTo(0.8, 3);
+    expect(feedbackHistory[feedbackHistory.length - 1]!.decay as number).toBeCloseTo(0.98, 3);
+    expect((scene.layers[0] as unknown as { p: { ringDensity: number } }).p.ringDensity).toBeCloseTo(1.5, 3);
+    expect(scene.getWarpOps()[0]!.values.amount as number).toBeCloseTo(0.9, 3);
+
+    // Step another 0.5s up to 1.0s (full cycle -> returns to base)
+    let postFull: Record<string, unknown> = postHalf;
+    for (let i = 11; i <= 20; i++) {
+      postFull = applyLinkedPreset(preset, scene, runner, 'm', { frame, timeSec: i * 0.05, sectionContrast: 0 }, 0.05);
+    }
+    expect(postFull.bloom as number).toBeCloseTo(0.2, 3);
+    expect(feedbackHistory[feedbackHistory.length - 1]!.decay as number).toBeCloseTo(0.9, 3);
+    expect((scene.layers[0] as unknown as { p: { ringDensity: number } }).p.ringDensity).toBeCloseTo(0.5, 3);
+    expect(scene.getWarpOps()[0]!.values.amount as number).toBeCloseTo(0.1, 3);
+  });
+});
+
+describe('applyVisualGainAndCalm (Slice 25.5)', () => {
+  it('leaves frame unchanged when gain = 1 and calm = false', () => {
+    const frame = makeAudioFrame({
+      norm: { sub: 0.6, mid: 0.4, high: 0.2 },
+      env: { sub: 0.7, mid: 0.5, high: 0.3 },
+      energy: 0.8,
+      loudness: 0.65,
+      kickEnv: 0.5,
+      beatStrength: 0.75,
+      fluxByBand: { sub: 0.4, mid: 0.3, high: 0.2 },
+      raw: { sub: 0.55, mid: 0.35, high: 0.15 },
+    });
+    const out = applyVisualGainAndCalm(frame, 1.0, false);
+    expect(out).toBe(frame);
+    expect(out.norm).toEqual({ sub: 0.6, mid: 0.4, high: 0.2 });
+    expect(out.env).toEqual({ sub: 0.7, mid: 0.5, high: 0.3 });
+    expect(out.energy).toBe(0.8);
+    expect(out.loudness).toBe(0.65);
+    expect(out.kickEnv).toBe(0.5);
+    expect(out.beatStrength).toBe(0.75);
+    expect(out.fluxByBand).toEqual({ sub: 0.4, mid: 0.3, high: 0.2 });
+    expect(out.raw).toEqual({ sub: 0.55, mid: 0.35, high: 0.15 });
+  });
+
+  it('applies shapeReaction consistently across all audio signals when gain !== 1', () => {
+    const frame = makeAudioFrame({
+      norm: { sub: 0.8, mid: 0.6, high: 0.4 },
+      env: { sub: 0.7, mid: 0.5, high: 0.3 },
+      energy: 0.75,
+      loudness: 0.6,
+      kickEnv: 0.9,
+      beatStrength: 0.8,
+      fluxByBand: { sub: 0.7, mid: 0.5, high: 0.3 },
+      raw: { sub: 0.6, mid: 0.4, high: 0.2 },
+    });
+    const gain = 1.5;
+    applyVisualGainAndCalm(frame, gain, false);
+
+    expect(frame.norm.sub).toBeCloseTo(shapeReaction(0.8, gain));
+    expect(frame.norm.mid).toBeCloseTo(shapeReaction(0.6, gain));
+    expect(frame.norm.high).toBeCloseTo(shapeReaction(0.4, gain));
+    expect(frame.env.sub).toBeCloseTo(shapeReaction(0.7, gain));
+    expect(frame.env.mid).toBeCloseTo(shapeReaction(0.5, gain));
+    expect(frame.env.high).toBeCloseTo(shapeReaction(0.3, gain));
+    expect(frame.energy).toBeCloseTo(shapeReaction(0.75, gain));
+    expect(frame.loudness).toBeCloseTo(shapeReaction(0.6, gain));
+    expect(frame.kickEnv).toBeCloseTo(shapeReaction(0.9, gain));
+    expect(frame.beatStrength).toBeCloseTo(shapeReaction(0.8, gain));
+    expect(frame.fluxByBand.sub).toBeCloseTo(shapeReaction(0.7, gain));
+    expect(frame.fluxByBand.mid).toBeCloseTo(shapeReaction(0.5, gain));
+    expect(frame.fluxByBand.high).toBeCloseTo(shapeReaction(0.3, gain));
+    expect(frame.raw.sub).toBeCloseTo(shapeReaction(0.6, gain));
+    expect(frame.raw.mid).toBeCloseTo(shapeReaction(0.4, gain));
+    expect(frame.raw.high).toBeCloseTo(shapeReaction(0.2, gain));
+  });
+
+  it('scales norm, env, energy, loudness, and kickEnv by CALM_SCALE (0.5) without double-scaling env.sub', () => {
+    expect(CALM_SCALE).toBe(0.5);
+    const frame = makeAudioFrame({
+      norm: { sub: 0.8, mid: 0.6, high: 0.4 },
+      env: { sub: 0.7, mid: 0.5, high: 0.3 },
+      energy: 0.8,
+      loudness: 0.6,
+      kickEnv: 0.9,
+    });
+    applyVisualGainAndCalm(frame, 1.0, true, CALM_SCALE);
+
+    expect(frame.norm.sub).toBeCloseTo(0.8 * 0.5);
+    expect(frame.norm.mid).toBeCloseTo(0.6 * 0.5);
+    expect(frame.norm.high).toBeCloseTo(0.4 * 0.5);
+    expect(frame.env.sub).toBeCloseTo(0.7 * 0.5);
+    expect(frame.env.mid).toBeCloseTo(0.5 * 0.5);
+    expect(frame.env.high).toBeCloseTo(0.3 * 0.5);
+    expect(frame.energy).toBeCloseTo(0.8 * 0.5);
+    expect(frame.loudness).toBeCloseTo(0.6 * 0.5);
+    expect(frame.kickEnv).toBeCloseTo(0.9 * 0.5);
+  });
+
+  it('applies gain shaping then calm scaling once when both gain !== 1 and calm = true', () => {
+    const frame = makeAudioFrame({
+      norm: { sub: 0.8, mid: 0.5, high: 0.2 },
+      env: { sub: 0.7, mid: 0.5, high: 0.3 },
+      energy: 0.6,
+      loudness: 0.6,
+      kickEnv: 0.9,
+    });
+    const gain = 1.5;
+    applyVisualGainAndCalm(frame, gain, true);
+
+    expect(frame.norm.sub).toBeCloseTo(shapeReaction(0.8, gain) * 0.5);
+    expect(frame.env.sub).toBeCloseTo(shapeReaction(0.7, gain) * 0.5);
+    expect(frame.energy).toBeCloseTo(shapeReaction(0.6, gain) * 0.5);
+    expect(frame.loudness).toBeCloseTo(shapeReaction(0.6, gain) * 0.5);
+    expect(frame.kickEnv).toBeCloseTo(shapeReaction(0.9, gain) * 0.5);
   });
 });
