@@ -24,7 +24,12 @@ import {
 } from '../render/globalDirector';
 import { getSystemSubfolder, type SystemSubfolder } from './builtin';
 import type { IAdminGateway } from './adminGateway';
-import type { RemotePresetRecord } from './remotePresets';
+import {
+  isRemoteConfigured,
+  softDeleteRemotePreset,
+  upsertRemotePreset,
+  type RemotePresetRecord,
+} from './remotePresets';
 
 if (!(GlobalDirector.prototype as any).registerPalette) {
   (GlobalDirector.prototype as any).registerPalette = function (this: GlobalDirector, palette: DirectorPaletteAsset) {
@@ -323,6 +328,15 @@ export interface RemotePresetWriter {
   onResult?(result: RemotePresetResult): void;
 }
 
+/** Creates a RemotePresetWriter backed by the Worker proxy when remote config is available. */
+export function createRemotePresetWriter(fetchFn: typeof fetch = fetch): RemotePresetWriter | undefined {
+  if (!isRemoteConfigured()) return undefined;
+  return {
+    upsert: (record) => upsertRemotePreset(record, fetchFn),
+    softDelete: (id) => softDeleteRemotePreset(id, fetchFn),
+  };
+}
+
 export interface PresetSessionOptions {
   adminGateway?: IAdminGateway;
   remoteWriter?: RemotePresetWriter;
@@ -346,6 +360,7 @@ export class PresetSession {
   private systemTagOverrides: Record<string, string[]> = {};
   private adminGateway?: IAdminGateway;
   private remoteWriter?: RemotePresetWriter;
+  private remoteListeners = new Set<(result: RemotePresetResult) => void>();
 
   constructor(
     private readonly host: SceneHost,
@@ -373,6 +388,21 @@ export class PresetSession {
 
   setRemoteWriter(writer: RemotePresetWriter | undefined): void {
     this.remoteWriter = writer;
+  }
+
+  getRemoteWriter(): RemotePresetWriter | undefined {
+    return this.remoteWriter;
+  }
+
+  hasRemoteWriter(): boolean {
+    return Boolean(this.remoteWriter);
+  }
+
+  subscribeRemoteResult(listener: (result: RemotePresetResult) => void): () => void {
+    this.remoteListeners.add(listener);
+    return () => {
+      this.remoteListeners.delete(listener);
+    };
   }
 
   getAdminGateway(): IAdminGateway | undefined {
@@ -1562,6 +1592,13 @@ export class PresetSession {
           writer.onResult?.(result);
         } catch (err) {
           console.warn('Remote preset result handler failed:', err);
+        }
+        for (const listener of [...this.remoteListeners]) {
+          try {
+            listener(result);
+          } catch (err) {
+            console.warn('Remote preset listener failed:', err);
+          }
         }
       })
       .catch(() => {

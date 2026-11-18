@@ -46,9 +46,16 @@ import {
 import { type IAdminGateway, adminGateway as defaultAdminGateway } from '../presets/adminGateway';
 import {
   ADMIN_BADGE_LABEL,
+  DELETE_LABEL,
+  DELETE_ARMED_LABEL,
+  SYSTEM_SUBFOLDER_OPTIONS,
+  getAdminActionLabel,
   renderAdminBadge,
   promptAdminLogin,
   adminLogout,
+  saveSystemPresetAction,
+  deleteSystemPresetAction,
+  setSystemPresetSubfolderAction,
   promoteUserPresetAction,
 } from './adminControls';
 
@@ -84,8 +91,6 @@ const FRAME_BUDGET_MS = 16.7;
 
 /** A first Delete tap stays armed for this long. A second tap inside the window deletes. */
 export const DELETE_CONFIRM_MS = 3000;
-const DELETE_LABEL = 'Delete';
-const DELETE_ARMED_LABEL = 'Tap again to delete';
 
 /** Studio view choice (Slice 15.4). Stored under one key; every read and write tolerates missing or failing storage. */
 export type StudioView = 'basic' | 'advanced';
@@ -455,6 +460,10 @@ export class Studio {
   private deleteArmedAt: number | null = null;
   private deleteTimer: number | undefined;
   private deleteBtn: ButtonApi | null = null;
+  private saveBtn: ButtonApi | null = null;
+  private undoBtn: ButtonApi | null = null;
+  private redoBtn: ButtonApi | null = null;
+  private frameTimer: ReturnType<typeof setInterval> | null = null;
   /** Polite live region that announces the "Tap again" state of Delete. */
   private readonly deleteLive: HTMLElement;
   /** The in-panel "Save as" name field, when open. */
@@ -466,8 +475,8 @@ export class Studio {
   /** Admin Gateway instance for verifying administrative capabilities (Slice 11.4). */
   private adminGateway: IAdminGateway;
   private adminUnsubscribe?: () => void;
+  private directorUnsubscribe?: () => void;
   private adminBadgeEl: HTMLElement | null = null;
-  private footerEl: HTMLElement | null = null;
   /** All collapsible section and group folders in the active panel. */
   private sectionFolders: Array<{ expanded: boolean }> = [];
 
@@ -543,9 +552,10 @@ export class Studio {
     };
     this.body.addEventListener('pointerdown', disarmOnOther, true);
     this.body.addEventListener('keydown', disarmOnOther, true);
-    setInterval(() => {
+    this.frameTimer = setInterval(() => {
       if (!this.visible || !this.pane) return;
       this.monitor.ms = this.opts.frameMs?.() ?? 0;
+      this.refreshDirtyState();
       this.pane.refresh();
     }, 500);
   }
@@ -619,7 +629,7 @@ export class Studio {
   }
 
   get footer(): HTMLElement | null {
-    return this.footerEl;
+    return null;
   }
 
   /** Re-render the preset hierarchy dropdown without a full pane rebuild (Slice 10.3). */
@@ -672,6 +682,15 @@ export class Studio {
   }
 
   dispose(): void {
+    if (this.frameTimer !== null) {
+      clearInterval(this.frameTimer);
+      this.frameTimer = null;
+    }
+    this.disarmDelete();
+    if (this.directorUnsubscribe) {
+      this.directorUnsubscribe();
+      this.directorUnsubscribe = undefined;
+    }
     if (this.adminUnsubscribe) {
       this.adminUnsubscribe();
       this.adminUnsubscribe = undefined;
@@ -776,6 +795,17 @@ export class Studio {
     this.id = id;
     this.disarmDelete();
     this.deleteBtn = null;
+    this.saveBtn = null;
+    this.undoBtn = null;
+    this.redoBtn = null;
+    if (this.directorUnsubscribe) {
+      this.directorUnsubscribe();
+      this.directorUnsubscribe = undefined;
+    }
+    const staleFooter = this.container?.querySelector?.('.studio-footer');
+    if (staleFooter && typeof (staleFooter as any).remove === 'function') {
+      (staleFooter as any).remove();
+    }
     this.pane?.dispose();
     this.body.replaceChildren();
     if (this.container && !this.container.contains(this.helperBar)) {
@@ -793,6 +823,10 @@ export class Studio {
     const entry = session.get(id);
     if (!entry) return;
     const preset = entry.preset;
+    const commitEdit = () => {
+      session.commit(id);
+      this.refreshDirtyState();
+    };
 
     // --- Preset bar -----------------------------------------------------------------
     const categorized = typeof session.listCategorized === 'function' ? session.listCategorized() : null;
@@ -855,15 +889,10 @@ export class Studio {
         const currentSubfolder = (typeof session.getSystemPresetSubfolder === 'function'
           ? session.getSystemPresetSubfolder(id)
           : entry.subfolder) ?? getSystemSubfolder(id) ?? 'classics';
-        const subfolderOptions: Record<string, string> = {
-          [SYSTEM_SUBFOLDER_LABELS.showcase]: 'showcase',
-          [SYSTEM_SUBFOLDER_LABELS.flagship]: 'flagship',
-          [SYSTEM_SUBFOLDER_LABELS.classics]: 'classics',
-        };
         const subfolderHolder = { subfolder: currentSubfolder };
         const subfolderBinding = pane.addBinding(subfolderHolder, 'subfolder', {
           label: 'Subfolder',
-          options: subfolderOptions,
+          options: SYSTEM_SUBFOLDER_OPTIONS,
         });
         const onSelectSubfolder = (chosenSubfolder: string) => {
           const normalized: SystemSubfolder =
@@ -871,11 +900,11 @@ export class Studio {
               ? chosenSubfolder
               : 'classics';
           if (typeof session.setSystemPresetSubfolder === 'function') {
-            session.setSystemPresetSubfolder(id, normalized);
+            setSystemPresetSubfolderAction(session, id, normalized);
           } else {
             entry.subfolder = normalized;
+            showToast(`Moved to ${SYSTEM_SUBFOLDER_LABELS[normalized] ?? normalized} locally (remote sync offline)`);
           }
-          showToast(`Moved to ${SYSTEM_SUBFOLDER_LABELS[normalized] ?? normalized}`);
           this.refreshPresetDropdown();
           this.bind(id);
         };
@@ -902,7 +931,7 @@ export class Studio {
       }
     } else {
       nameBinding.on('change', () => {
-        session.commit(id);
+        commitEdit();
         if (entry.builtin && isAdmin) {
           this.refreshPresetDropdown();
         }
@@ -992,7 +1021,6 @@ export class Studio {
       }
     }
 
-    const dirty = session.isDirty(id) ? ' · unsaved changes' : '';
     // Tags for the auto-cycle (T2): "favourite" and "skip".
     const tagHolder = { favourite: preset.tags.includes('favourite'), skip: preset.tags.includes('skip') };
     const setTag = (tag: string, on: boolean) => {
@@ -1002,7 +1030,7 @@ export class Studio {
         session.setPresetTags(id, currentTags);
       } else {
         preset.tags = currentTags;
-        session.commit(id);
+        commitEdit();
       }
     };
     const favBinding = pane.addBinding(tagHolder, 'favourite', { label: 'Favourite (auto-cycle)' });
@@ -1016,10 +1044,10 @@ export class Studio {
       label: 'Transition style',
       options: Object.fromEntries(TRANSITION_STYLES.map((t) => [t, t])),
     });
-    transStyleBinding.on('change', () => session.commit(id));
+    transStyleBinding.on('change', commitEdit);
     attachControlHelper(transStyleBinding, { ...STYLE_SPEC, label: 'Transition style' }, this.onHelper);
     const transSecBinding = pane.addBinding(preset.transition as unknown as Record<string, unknown>, 'seconds', { label: 'Transition seconds', min: 0.3, max: 10, step: 0.05 });
-    transSecBinding.on('change', () => session.commit(id));
+    transSecBinding.on('change', commitEdit);
     attachControlHelper(transSecBinding, { ...SECONDS_SPEC, label: 'Transition seconds' }, this.onHelper);
     // Display time (slice 23.3): 0 means auto-cycle timer. Values below the minimum remove the stored field.
     const displayHolder = { displaySec: preset.displaySec ?? 0 };
@@ -1029,7 +1057,7 @@ export class Studio {
       const clamped = clampDisplaySec(value);
       if (value < PRESET_DISPLAY_MIN_SEC || clamped === undefined) delete preset.displaySec;
       else preset.displaySec = clamped;
-      session.commit(id);
+      commitEdit();
     });
     this.attachHelp(displayBinding, 'Display time', 'How long this preset stays on screen in Timer mode (5–300 s; 0 uses the global timer).');
     // Action buttons share one grid wrapper (slice 10.2). Each button's element is collected, then moved into the wrapper below.
@@ -1049,24 +1077,31 @@ export class Studio {
           showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
         });
       } else {
-        tile(
-          pane.addButton({ title: `Save System Preset 👑${dirty}` }),
+        const saveSysBtn = tile(
+          pane.addButton({ title: this.formatSaveTitle(id, true) }),
           'Save System Preset',
           'Overwrite this built-in system preset with your current edits.',
-        ).on('click', () => {
-          if (typeof session.saveSystemPreset === 'function') {
-            this.run(() => session.saveSystemPreset(id), 'System preset saved');
-          } else {
-            this.run(() => session.save(id), 'System preset saved');
-          }
+        );
+        this.saveBtn = saveSysBtn;
+        saveSysBtn.on('click', () => {
+          this.runAdmin(() => {
+            if (typeof session.saveSystemPreset === 'function') {
+              saveSystemPresetAction(session, id);
+            } else {
+              session.save(id);
+              showToast('System preset saved locally (remote sync offline)');
+            }
+          });
         });
       }
     } else {
-      tile(
-        pane.addButton({ title: `Save${dirty}` }),
+      const saveUserBtn = tile(
+        pane.addButton({ title: this.formatSaveTitle(id, false) }),
         'Save',
         'Save changes to this user preset in your browser library.',
-      ).on('click', () => this.run(() => session.save(id), 'Saved'));
+      );
+      this.saveBtn = saveUserBtn;
+      saveUserBtn.on('click', () => this.run(() => session.save(id), 'Saved'));
     }
     tile(
       pane.addButton({ title: 'Save as…' }),
@@ -1129,6 +1164,7 @@ export class Studio {
       'Undo',
       'Revert the most recent edit to this preset.',
     );
+    this.undoBtn = undo;
     undo.disabled = !session.canUndo(id);
     undo.on('click', () => this.run(() => {
       session.undo(id);
@@ -1138,6 +1174,7 @@ export class Studio {
       'Redo',
       'Reapply the most recently undone edit to this preset.',
     );
+    this.redoBtn = redo;
     redo.disabled = !session.canRedo(id);
     redo.on('click', () => this.run(() => {
       session.redo(id);
@@ -1182,7 +1219,8 @@ export class Studio {
     // --- Global Director (Sector 483, Slice 7.32) -----------------------------------
     const dirFolder = pane.addFolder({ title: 'Global Director', expanded: false });
     this.sectionFolders.push(dirFolder);
-    buildGlobalDirectorControls(dirFolder, undefined, this.onHelper);
+    const dirControls = buildGlobalDirectorControls(dirFolder, undefined, this.onHelper);
+    this.directorUnsubscribe = dirControls.unsubscribe;
     // Per-preset: false applies this preset's own camera or colour profile on load (Slice 15.7).
     const profileFlags = {
       useGlobalCamera: preset.directorProfile?.useGlobalCamera !== false,
@@ -1194,7 +1232,7 @@ export class Studio {
         preset.directorProfile = { cameraMode: g.cameraMode, colorMood: g.colorMood, colorIntensity: g.colorIntensity };
       }
       preset.directorProfile[key] = value;
-      session.commit(id);
+      commitEdit();
     };
     const useGlobalCamBinding = dirFolder.addBinding(profileFlags, 'useGlobalCamera', { label: 'Use global camera' });
     useGlobalCamBinding.on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalCamera', Boolean(ev.value)));
@@ -1244,6 +1282,7 @@ export class Studio {
         undefined,
         id,
         this.onHelper,
+        () => this.refreshDirtyState(),
       );
       const mon = { solo: session.isSolo(id, this.selected), mute: session.isMuted(id, this.selected) };
       const soloBinding = pane.addBinding(mon, 'solo', { label: 'Solo (preview only)' });
@@ -1364,13 +1403,13 @@ export class Studio {
 
     // --- Administrator Mode Access (Slice 11.4) -------------------------------------
     pane.addBlade({ view: 'separator' });
-    const adminActionTitle = isAdmin ? 'Exit Admin Mode 👑' : 'Admin Access';
+    const adminActionTitle = getAdminActionLabel(isAdmin);
     const adminBtn = pane.addButton({ title: adminActionTitle });
     adminBtn.on('click', () => {
       if (this.isAdmin()) {
         adminLogout(this.adminGateway);
       } else {
-        this.handleAdminLogin();
+        void this.handleAdminLogin();
       }
     });
     this.attachHelp(
@@ -1380,47 +1419,6 @@ export class Studio {
         ? 'Sign out of Administrator Mode and return to standard user permissions.'
         : 'Sign in as an administrator to edit or promote built-in system presets.',
     );
-
-    this.renderFooter(isAdmin);
-  }
-
-  private renderFooter(isAdmin: boolean): void {
-    const doc = this.container.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
-    if (!doc) return;
-
-    let footer = this.container.querySelector<HTMLElement>('.studio-footer');
-    if (!footer) {
-      footer = doc.createElement('div');
-      footer.className = 'studio-footer';
-      this.container.append(footer);
-    }
-    this.footerEl = footer;
-
-    if (typeof footer.replaceChildren === 'function') {
-      footer.replaceChildren();
-    } else {
-      footer.textContent = '';
-    }
-
-    const btn = doc.createElement('button');
-    btn.type = 'button';
-    btn.className = 'studio-admin-action-btn' + (isAdmin ? ' admin-active' : '');
-    btn.textContent = isAdmin ? 'Exit Admin Mode 👑' : 'Admin Access';
-    btn.addEventListener('click', () => {
-      if (this.isAdmin()) {
-        adminLogout(this.adminGateway);
-      } else {
-        this.handleAdminLogin();
-      }
-    });
-    this.attachHelp(
-      btn,
-      isAdmin ? 'Exit Admin Mode' : 'Admin Access',
-      isAdmin
-        ? 'Sign out of Administrator Mode and return to standard user permissions.'
-        : 'Sign in as an administrator to edit or promote built-in system presets.',
-    );
-    footer.append(btn);
   }
 
   /** Pick one numeric setting, then add, edit or remove its audio link. */
@@ -1453,7 +1451,10 @@ export class Studio {
       return;
     }
     const link = setting.link;
-    const onEdit = () => session.commit(id);
+    const onEdit = () => {
+      session.commit(id);
+      this.refreshDirtyState();
+    };
     const sourceBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'source', {
       label: 'Source',
       options: Object.fromEntries(AUDIO_SOURCES.map((s) => [s, s])),
@@ -1530,7 +1531,10 @@ export class Studio {
     const op = list[this.warpIndex];
     if (!op) return;
 
-    const onEdit = () => session.commit(id);
+    const onEdit = () => {
+      session.commit(id);
+      this.refreshDirtyState();
+    };
     const typeBox = { type: op.type as string };
     const opTypeBinding = pane.addBinding(typeBox, 'type', { label: 'Operator type', options: warpTypeOptions() });
     opTypeBinding.on('change', (ev) => {
@@ -1610,7 +1614,10 @@ export class Studio {
     const reaction = list[this.reactionIndex];
     if (!reaction) return;
 
-    const onEdit = () => session.commit(id);
+    const onEdit = () => {
+      session.commit(id);
+      this.refreshDirtyState();
+    };
     const trigger = { type: reaction.trigger.type as string };
     const whenBinding = pane.addBinding(trigger, 'type', {
       label: 'When',
@@ -1670,7 +1677,10 @@ export class Studio {
     if (!target || (target.spec.type !== 'float' && target.spec.type !== 'int')) return;
     const { spec, setting } = target;
     const session = this.opts.session;
-    const onEdit = () => session.commit(id);
+    const onEdit = () => {
+      session.commit(id);
+      this.refreshDirtyState();
+    };
     if (!setting.morph) {
       const addMorphBtn = pane.addButton({ title: 'Add morph (swing to a second value)' });
       addMorphBtn.on('click', () => {
@@ -1722,7 +1732,10 @@ export class Studio {
       specs,
       settings,
       apply,
-      () => this.opts.session.commit(this.id),
+      () => {
+        this.opts.session.commit(this.id);
+        this.refreshDirtyState();
+      },
       (spec) => renderHelperContent(this.helperBar, spec),
       onEdit
         ? (spec, value) => onEdit({ presetId: this.id, section: edit.section, layerIndex: edit.layerIndex, name: spec.name, value })
@@ -1900,21 +1913,24 @@ export class Studio {
     this.disarmDelete();
     if (step.confirm) {
       const isBuiltin = Boolean(this.opts.session.get(id)?.builtin);
-      this.run(() => {
-        if (isBuiltin) {
+      if (isBuiltin) {
+        this.runAdmin(() => {
           if (typeof this.opts.session.removeSystemPreset === 'function') {
-            this.opts.session.removeSystemPreset(id);
+            deleteSystemPresetAction(this.opts.session, id);
           } else {
             this.opts.session.remove(id);
+            showToast('System preset removed locally (remote sync offline)');
           }
           const remaining = this.opts.session.list();
           const nextId = this.opts.session.shownId ?? remaining.find((e) => e.id !== id)?.id ?? 'crown';
           this.opts.switchTo(nextId);
-        } else {
+        });
+      } else {
+        this.run(() => {
           this.opts.session.remove(id);
           this.opts.switchTo('crown');
-        }
-      }, isBuiltin ? 'System preset deleted' : 'Deleted');
+        }, 'Deleted');
+      }
       return;
     }
     this.deleteArmedAt = step.armedAt;
@@ -1931,6 +1947,39 @@ export class Studio {
     this.deleteArmedAt = null;
     if (this.deleteBtn) this.deleteBtn.title = DELETE_LABEL;
     this.deleteLive.textContent = deleteAnnouncement(false);
+  }
+
+  private formatSaveTitle(id: string, isSystemAdmin: boolean): string {
+    const dirty = this.opts.session.isDirty(id) ? ' *' : '';
+    return isSystemAdmin ? `Save System Preset 👑${dirty}` : `Save${dirty}`;
+  }
+
+  private refreshDirtyState(): void {
+    if (!this.id) return;
+    const entry = this.opts.session.get(this.id);
+    if (!entry) return;
+    if (this.saveBtn && !(entry.builtin && !this.isAdmin())) {
+      const nextTitle = this.formatSaveTitle(this.id, entry.builtin && this.isAdmin());
+      if (this.saveBtn.title !== nextTitle) {
+        this.saveBtn.title = nextTitle;
+      }
+    }
+    if (this.undoBtn && typeof this.opts.session.canUndo === 'function') {
+      this.undoBtn.disabled = !this.opts.session.canUndo(this.id);
+    }
+    if (this.redoBtn && typeof this.opts.session.canRedo === 'function') {
+      this.redoBtn.disabled = !this.opts.session.canRedo(this.id);
+    }
+  }
+
+  private runAdmin(action: () => void): void {
+    try {
+      action();
+      const stillThere = this.opts.session.get(this.id) ? this.id : 'crown';
+      this.bind(stillThere);
+    } catch (err) {
+      showToast((err as Error).message);
+    }
   }
 
   private run(action: () => void, doneMessage: string): void {
@@ -2210,6 +2259,7 @@ export function buildLayerControls(
   gl?: WebGL2RenderingContext,
   id?: string,
   onHelperUpdate?: (spec: ParamSpec | null) => void,
+  onEdit?: () => void,
 ): { opacityBinding: any; blendBinding: any; trailsBinding: any } {
   const onLayerConfigChange = () => {
     applyPresetToScene(p, currentScene, gl);
@@ -2225,6 +2275,7 @@ export function buildLayerControls(
         // ignore
       }
     }
+    onEdit?.();
   };
 
   const opacityKey = (OPACITY_SPEC as any).key ?? OPACITY_SPEC.name;
@@ -2495,8 +2546,31 @@ export function buildGlobalDirectorControls(
   onHelperUpdate?: (info: ControlHelperDescriptor | null) => void,
 ) {
   const settings = { ...director.getSettings() };
+  let syncing = false;
+  let experienceModeBinding: any;
+  let cameraModeBinding: any;
+  let cameraIntensityBinding: any;
+  let colorMoodBinding: any;
+  let colorIntensityBinding: any;
+  let triggerCadenceBinding: any;
 
-  const experienceModeBinding = folder.addBinding(settings, 'experienceMode', {
+  const syncFromDirector = () => {
+    if (syncing) return;
+    syncing = true;
+    try {
+      Object.assign(settings, director.getSettings());
+      experienceModeBinding?.refresh?.();
+      cameraModeBinding?.refresh?.();
+      cameraIntensityBinding?.refresh?.();
+      colorMoodBinding?.refresh?.();
+      colorIntensityBinding?.refresh?.();
+      triggerCadenceBinding?.refresh?.();
+    } finally {
+      syncing = false;
+    }
+  };
+
+  experienceModeBinding = folder.addBinding(settings, 'experienceMode', {
     label: 'Experience mode',
     options: {
       'Cinematic': 'cinematic',
@@ -2507,7 +2581,9 @@ export function buildGlobalDirectorControls(
     },
   });
   experienceModeBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
     director.setExperienceMode(ev.value as ExperienceMode);
+    syncFromDirector();
   });
   attachControlHelper(
     experienceModeBinding,
@@ -2518,7 +2594,7 @@ export function buildGlobalDirectorControls(
     onHelperUpdate,
   );
 
-  const cameraModeBinding = folder.addBinding(settings, 'cameraMode', {
+  cameraModeBinding = folder.addBinding(settings, 'cameraMode', {
     label: 'Camera motion',
     options: {
       'Auto (Complementary)': 'auto',
@@ -2531,7 +2607,9 @@ export function buildGlobalDirectorControls(
     },
   });
   cameraModeBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
     director.updateSettings({ cameraMode: ev.value as CameraMode });
+    syncFromDirector();
   });
   attachControlHelper(
     cameraModeBinding,
@@ -2542,14 +2620,16 @@ export function buildGlobalDirectorControls(
     onHelperUpdate,
   );
 
-  const cameraIntensityBinding = folder.addBinding(settings, 'cameraIntensity', {
+  cameraIntensityBinding = folder.addBinding(settings, 'cameraIntensity', {
     label: 'Camera intensity',
     min: 0,
     max: 1,
     step: 0.05,
   });
   cameraIntensityBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
     director.updateSettings({ cameraIntensity: Number(ev.value) });
+    syncFromDirector();
   });
   attachControlHelper(
     cameraIntensityBinding,
@@ -2560,7 +2640,7 @@ export function buildGlobalDirectorControls(
     onHelperUpdate,
   );
 
-  const colorMoodBinding = folder.addBinding(settings, 'colorMood', {
+  colorMoodBinding = folder.addBinding(settings, 'colorMood', {
     label: 'Color mood',
     options: {
       'Auto-cycle palettes': 'auto',
@@ -2573,7 +2653,9 @@ export function buildGlobalDirectorControls(
     },
   });
   colorMoodBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
     director.updateSettings({ colorMood: ev.value as ColorMood });
+    syncFromDirector();
   });
   attachControlHelper(
     colorMoodBinding,
@@ -2584,14 +2666,16 @@ export function buildGlobalDirectorControls(
     onHelperUpdate,
   );
 
-  const colorIntensityBinding = folder.addBinding(settings, 'colorIntensity', {
+  colorIntensityBinding = folder.addBinding(settings, 'colorIntensity', {
     label: 'Color intensity',
     min: 0,
     max: 1,
     step: 0.05,
   });
   colorIntensityBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
     director.updateSettings({ colorIntensity: Number(ev.value) });
+    syncFromDirector();
   });
   attachControlHelper(
     colorIntensityBinding,
@@ -2602,7 +2686,7 @@ export function buildGlobalDirectorControls(
     onHelperUpdate,
   );
 
-  const triggerCadenceBinding = folder.addBinding(settings, 'triggerCadence', {
+  triggerCadenceBinding = folder.addBinding(settings, 'triggerCadence', {
     label: 'Transition trigger',
     options: {
       'Song section (35s+)': 'section',
@@ -2613,7 +2697,9 @@ export function buildGlobalDirectorControls(
     },
   });
   triggerCadenceBinding?.on?.('change', (ev: { value: any }) => {
+    if (syncing) return;
     director.updateSettings({ triggerCadence: ev.value as TriggerCadence });
+    syncFromDirector();
   });
   attachControlHelper(
     triggerCadenceBinding,
@@ -2624,6 +2710,13 @@ export function buildGlobalDirectorControls(
     onHelperUpdate,
   );
 
+  const unsubscribe =
+    typeof director.subscribeExperienceChange === 'function'
+      ? director.subscribeExperienceChange(() => {
+          syncFromDirector();
+        })
+      : () => {};
+
   return {
     experienceModeBinding,
     cameraModeBinding,
@@ -2631,5 +2724,6 @@ export function buildGlobalDirectorControls(
     colorMoodBinding,
     colorIntensityBinding,
     triggerCadenceBinding,
+    unsubscribe,
   };
 }
