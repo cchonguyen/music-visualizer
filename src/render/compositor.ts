@@ -157,7 +157,6 @@ export class Compositor implements RenderLayer {
   private readonly pair2: [string, number] = ['', 0];
   private readonly activeNames: string[] = [];
   private readonly scaledTarget: RenderTarget = { kind: 'fbo', framebuffer: null as unknown as WebGLFramebuffer, texture: null as unknown as WebGLTexture, width: 1, height: 1 };
-  private calmEl: HTMLInputElement | null | undefined = undefined;
   private gl: WebGL2RenderingContext | null = null;
   private prog: WebGLProgram | null = null;
   private postProg: WebGLProgram | null = null;
@@ -684,11 +683,7 @@ export class Compositor implements RenderLayer {
     }
 
     // Estimated brightness target: loudness-driven, with a dim floor (the limiter enforces the floor).
-    // The calm checkbox is looked up once, not on every frame.
-    if (this.calmEl === undefined && typeof document !== 'undefined') {
-      this.calmEl = document.getElementById('calm') as HTMLInputElement | null;
-    }
-    const isCalm = this.calm || Boolean(this.calmEl?.checked);
+    const isCalm = this.calm;
     this.limiter.calm = isCalm;
 
     const now = performance.now();

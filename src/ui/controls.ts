@@ -509,13 +509,10 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
   const fileInput = $<HTMLInputElement>('file-input');
   const fileBtn = $<HTMLButtonElement>('file-btn');
   const testSelect = $<HTMLSelectElement>('test-select');
-  const playBtn = $<HTMLButtonElement>('play-btn');
   const seek = $<HTMLInputElement>('seek');
-  const time = $<HTMLSpanElement>('time');
   const volume = $<HTMLInputElement>('volume');
   const fsBtn = $<HTMLButtonElement>('fs-btn');
   const sourceLabel = $<HTMLSpanElement>('source-label');
-  const playback = $<HTMLElement>('playback');
   applySourcePickerVisibility();
   const sourceButtons = [...controls.querySelectorAll<HTMLButtonElement>('button[data-source]')];
 
@@ -635,8 +632,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       } else if (s === 'mic') {
         void engine.useMic();
         setSourceOpen(false);
-      } else if (s === 'stop') {
-        engine.stop();
       }
     });
   }
@@ -656,7 +651,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     if (media.paused) void media.play();
     else media.pause();
   };
-  playBtn.addEventListener('click', togglePlay);
 
   playbackActionBtn?.addEventListener('click', () => {
     if (engine.kind === 'file') {
@@ -844,61 +838,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     syncExperienceUI(mode);
   });
 
-  // Global Director HUD mode (slice 7.32). Optional in test mock DOM.
-  const directorSelect = document.getElementById('director-mode') as HTMLSelectElement | null;
-  if (directorSelect) {
-    const s = getGlobalDirector().getSettings();
-    if (s.cameraMode === 'off' && s.colorMood === 'native') {
-      directorSelect.value = 'off';
-    } else if (s.cameraMode === 'off') {
-      directorSelect.value = 'colorOnly';
-    } else if (s.colorMood === 'native') {
-      directorSelect.value = 'cameraOnly';
-    } else if (s.cameraIntensity <= 0.35 && s.colorIntensity <= 0.3) {
-      directorSelect.value = 'subtle';
-    } else {
-      directorSelect.value = 'auto';
-    }
-
-    directorSelect.addEventListener('change', () => {
-      const mode = directorSelect.value;
-      if (mode === 'auto') {
-        getGlobalDirector().updateSettings({
-          cameraMode: 'auto',
-          cameraIntensity: 0.65,
-          colorMood: 'auto',
-          colorIntensity: 0.45,
-        });
-      } else if (mode === 'subtle') {
-        getGlobalDirector().updateSettings({
-          cameraMode: 'auto',
-          cameraIntensity: 0.3,
-          colorMood: 'auto',
-          colorIntensity: 0.25,
-        });
-      } else if (mode === 'cameraOnly') {
-        const cur = getGlobalDirector().getSettings();
-        getGlobalDirector().updateSettings({
-          cameraMode: 'auto',
-          cameraIntensity: cur.cameraIntensity > 0 ? cur.cameraIntensity : 0.65,
-          colorMood: 'native',
-        });
-      } else if (mode === 'colorOnly') {
-        const cur = getGlobalDirector().getSettings();
-        getGlobalDirector().updateSettings({
-          cameraMode: 'off',
-          colorMood: 'auto',
-          colorIntensity: cur.colorIntensity > 0 ? cur.colorIntensity : 0.45,
-        });
-      } else if (mode === 'off') {
-        getGlobalDirector().updateSettings({
-          cameraMode: 'off',
-          colorMood: 'native',
-        });
-      }
-    });
-  }
-
   // Intensity control (slice 21.3): Full, Reduced or Calm. It only tightens the brightness
   // limiter, which main.ts applies each frame from state.intensity. Built here, next to the
   // experience HUD, so index.html needs no change.
@@ -978,22 +917,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
     gainValue.textContent = `${v.toFixed(2)}×`;
   });
 
-  // Value buttons (slice 11.6): Volume, Visual gain and Beat sensitivity open their slider inline.
-  // One is open at a time. A second tap or a tap outside closes it. Escape closes it too.
-  const valueItems = [...controls.querySelectorAll<HTMLElement>('.value-item')];
-  const valueBtnOf = (item: HTMLElement) => item.querySelector<HTMLButtonElement>('.value-btn');
-  const openItem = () => valueItems.find((it) => valueBtnOf(it)?.getAttribute('aria-expanded') === 'true') ?? null;
-  const setOpenValue = (item: HTMLElement | null) => {
-    for (const it of valueItems) {
-      const open = it === item;
-      valueBtnOf(it)?.setAttribute('aria-expanded', String(open));
-      const panel = it.querySelector<HTMLElement>('.value-panel');
-      if (panel) panel.hidden = !open;
-    }
-  };
-  for (const item of valueItems) {
-    valueBtnOf(item)?.addEventListener('click', () => setOpenValue(openItem() === item ? null : item));
-  }
   document.addEventListener('pointerdown', (e) => {
     const target = e.target as Node | null;
     if (!target) return;
@@ -1007,17 +930,13 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         setExperienceOpen(false);
       }
     }
-    const open = openItem();
-    if (open && !open.contains(target)) setOpenValue(null);
   });
   controls.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       setSourceOpen(false);
       setExperienceOpen(false);
-      setOpenValue(null);
     }
   });
-  setOpenValue(null);
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
@@ -1167,7 +1086,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       case 'Escape':
         setSourceOpen(false);
         setExperienceOpen(false);
-        setOpenValue(null);
         break;
       case 'ArrowLeft':
       case 'ArrowRight':
@@ -1228,7 +1146,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       }
       if (scrubberSegment) scrubberSegment.hidden = false;
       if (timelineSeparator) timelineSeparator.hidden = false;
-      if (playback) playback.hidden = false;
     } else if (kind === 'display' || kind === 'mic' || kind.startsWith('test:')) {
       if (playbackActionBtn) {
         playbackActionBtn.hidden = false;
@@ -1241,7 +1158,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       }
       if (scrubberSegment) scrubberSegment.hidden = true;
       if (timelineSeparator) timelineSeparator.hidden = true;
-      if (playback) playback.hidden = true;
     } else {
       // none / idle
       if (playbackActionBtn) {
@@ -1250,7 +1166,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       }
       if (scrubberSegment) scrubberSegment.hidden = true;
       if (timelineSeparator) timelineSeparator.hidden = true;
-      if (playback) playback.hidden = true;
     }
   };
 
@@ -1292,13 +1207,10 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
       // Keys C, B and X change the same state, so the menu follows them (slice 21.13).
       syncCycleUI();
       const media = engine.media;
-      if (playback) playback.hidden = !media;
       if (!media) return;
       const isPaused = media.paused;
       const action = isPaused ? 'Play' : 'Pause';
-      if (playBtn.textContent !== action) playBtn.textContent = action;
       const label = `${action} (Space)`;
-      if (playBtn.getAttribute('aria-label') !== label) playBtn.setAttribute('aria-label', label);
 
       if (playbackActionBtn && engine.kind === 'file') {
         const icon = isPaused ? '▶' : '⏸';
@@ -1322,7 +1234,6 @@ export function setupControls(engine: AudioEngine, state: ControlsState): { tick
         const tot = formatTime(media.duration);
         if (timeCurrent) timeCurrent.textContent = cur;
         if (timeTotal) timeTotal.textContent = tot;
-        if (time) time.textContent = `${cur} / ${tot}`;
       }
     },
   };
