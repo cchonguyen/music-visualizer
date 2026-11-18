@@ -2,7 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { Scene, FEEDBACK_WARP_DEFAULTS } from '../scene';
 import feedbackSrc from '../shaders/feedback.frag.glsl?raw';
 import { FULLSCREEN_VERT, compileProgram } from '../../gl/shader';
-import { assertValidSpec, coerceValue, defaultsFor, FEEDBACK_WARP_SPECS } from '../../presets/schema';
+import {
+  assertValidSpec,
+  coerceValue,
+  defaultsFor,
+  FEEDBACK_POST_LAYOUT,
+  FEEDBACK_WARP_SPECS,
+  WARP_AUDIO_SOURCES,
+} from '../../presets/schema';
 import { FEEDBACK_SPECS } from '../../presets/layerSchemas';
 import { valuesOf, buildScene, readFeedbackSettings } from '../../presets/loader';
 import type { AudioFrame } from '../../audio/types';
@@ -167,11 +174,19 @@ describe('Feedback Warp Overhaul (Slice 7.22)', () => {
       expect(defaults.mobiusSwirl).toBe(0.65);
       expect(defaults.mobiusWander).toBe(0.55);
       expect(defaults.mobiusMode).toBe('auto');
+      expect(defaults.warpAudioSource).toBe('sub');
+      expect(defaults.warpReactivity).toBe(0.0);
+      expect(defaults.warpAttackMs).toBe(15);
+      expect(defaults.warpReleaseMs).toBe(250);
     });
 
     it('FEEDBACK_WARP_DEFAULTS matches typed defaults', () => {
       expect(FEEDBACK_WARP_DEFAULTS).toEqual({
         warpMode: 'classic',
+        warpAudioSource: 'sub',
+        warpReactivity: 0.0,
+        warpAttackMs: 15,
+        warpReleaseMs: 250,
         kaleidoN: 6,
         portalRadius: 0.0,
         rgbSplit: 0.0,
@@ -663,5 +678,149 @@ describe('Warp field operators (Slice 18.3)', () => {
     expect(Array.from(types)).toEqual([4, 5, 6, 7]);
     const on = (gl.uniform1f as unknown as { mock: { calls: [unknown, number][] } }).mock.calls.filter(([loc]) => (loc as { name: string })?.name === 'uWarpFieldOn');
     expect(on[on.length - 1]![1]).toBe(1);
+  });
+});
+
+describe('Feedback Warp Audio Envelope & Responsiveness (Slice 25.4)', () => {
+  it('defines WARP_AUDIO_SOURCES, FEEDBACK_WARP_SPECS entries, and FEEDBACK_POST_LAYOUT.Warp keys', () => {
+    expect(WARP_AUDIO_SOURCES).toEqual(['sub', 'bass', 'mid', 'high', 'energy', 'kick']);
+    for (const key of ['warpAudioSource', 'warpReactivity', 'warpAttackMs', 'warpReleaseMs']) {
+      const spec = FEEDBACK_WARP_SPECS.find((s) => s.name === key);
+      expect(spec).toBeDefined();
+      expect(spec!.description).toBeTruthy();
+      expect(FEEDBACK_POST_LAYOUT.Warp).toContain(key);
+    }
+    const sourceSpec = FEEDBACK_WARP_SPECS.find((s) => s.name === 'warpAudioSource')!;
+    if (sourceSpec.type === 'enum') {
+      expect(sourceSpec.options).toEqual(['sub', 'bass', 'mid', 'high', 'energy', 'kick']);
+      expect(sourceSpec.default).toBe('sub');
+    }
+  });
+
+  it('preserves exact baseline uniforms when warpReactivity is 0', () => {
+    const gl = createMockGl();
+    const scene = new Scene('baseline', []);
+    scene.init(gl);
+    scene.setFeedback({
+      warpMode: 'classic',
+      warp: 0.35,
+      rgbSplit: 0.04,
+      warpReactivity: 0.0,
+      warpAudioSource: 'kick',
+    });
+
+    const f1 = gl.uniform1f as unknown as { mock: { calls: [{ name: string }, number][] } };
+    const hotFrame = makeMockFrame({
+      dtSec: 0.016,
+      norm: { sub: 1, mid: 1, high: 1 },
+      env: { sub: 1, mid: 1, high: 1 },
+      energy: 1,
+      kickEnv: 1,
+      kickPulse: true,
+    });
+    scene.draw(hotFrame, mockClock);
+
+    expect(scene.getSmoothedWarpAudio()).toBe(0);
+    expect(scene.getEffectiveWarp()).toBe(0.35);
+
+    const lastUniform = (name: string) =>
+      f1.mock.calls.filter(([loc]) => loc?.name === name).pop()![1];
+    expect(lastUniform('uWarp')).toBe(0.35);
+    expect(lastUniform('uWarpAmp')).toBe(0.35);
+    expect(lastUniform('uRgbSplit')).toBe(0.04);
+  });
+
+  it('applies asymmetric one-pole attack and release smoothing to getSmoothedWarpAudio()', () => {
+    const gl = createMockGl();
+    const scene = new Scene('envelope', []);
+    scene.init(gl);
+    scene.setFeedback({
+      warp: 0.4,
+      warpAudioSource: 'sub',
+      warpReactivity: 1.0,
+      warpAttackMs: 15,
+      warpReleaseMs: 250,
+    });
+
+    const dt = 0.015;
+    scene.draw(
+      makeMockFrame({ dtSec: dt, norm: { sub: 1.0, mid: 0, high: 0 } }),
+      mockClock,
+    );
+    const expectedAttack = 1 - Math.exp(-dt / 0.015);
+    expect(scene.getSmoothedWarpAudio()).toBeCloseTo(expectedAttack, 6);
+    expect(scene.getEffectiveWarp()).toBeCloseTo(0.4 * (1 + expectedAttack), 6);
+
+    // Release step from peak back toward 0 should decay much slower than attack rose
+    const prev = scene.getSmoothedWarpAudio();
+    scene.draw(
+      makeMockFrame({ dtSec: dt, norm: { sub: 0.0, mid: 0, high: 0 } }),
+      mockClock,
+    );
+    const afterRelease = scene.getSmoothedWarpAudio();
+    const expectedRelease = prev + (0 - prev) * (1 - Math.exp(-dt / 0.25));
+    expect(afterRelease).toBeCloseTo(expectedRelease, 6);
+    expect(prev - afterRelease).toBeLessThan(expectedAttack);
+  });
+
+  it.each([
+    ['sub', { norm: { sub: 0.8, mid: 0, high: 0 }, env: { sub: 0.1, mid: 0, high: 0 } }, 0.8],
+    ['bass', { norm: { sub: 0.1, mid: 0, high: 0 }, env: { sub: 0.9, mid: 0, high: 0 } }, 0.9],
+    ['mid', { norm: { sub: 0, mid: 0.7, high: 0 } }, 0.7],
+    ['high', { norm: { sub: 0, mid: 0, high: 0.6 } }, 0.6],
+    ['energy', { energy: 0.75 }, 0.75],
+    ['kick', { kickEnv: 0.85, kickPulse: false }, 0.85],
+    ['kick', { kickEnv: 0.0, kickPulse: true }, 1.0],
+  ] as const)('tracks warpAudioSource "%s" accurately and clamps warpReactivity', (source, frameOverrides, expectedTarget) => {
+    const gl = createMockGl();
+    const scene = new Scene(`src-${source}`, []);
+    scene.init(gl);
+    scene.setFeedback({
+      warp: 0.5,
+      warpAudioSource: source,
+      warpReactivity: 2.5, // clamped to 1.0
+      warpAttackMs: 5,
+      warpReleaseMs: 250,
+    });
+
+    scene.draw(makeMockFrame({ dtSec: 0.5, ...frameOverrides }), mockClock);
+    expect(scene.getSmoothedWarpAudio()).toBeCloseTo(expectedTarget, 5);
+
+    const f1 = gl.uniform1f as unknown as { mock: { calls: [{ name: string }, number][] } };
+    const uWarp = f1.mock.calls.filter(([loc]) => loc?.name === 'uWarp').pop()![1];
+    const uWarpAmp = f1.mock.calls.filter(([loc]) => loc?.name === 'uWarpAmp').pop()![1];
+    expect(uWarp).toBeCloseTo(0.5 * (1 + scene.getSmoothedWarpAudio()), 5);
+    expect(uWarpAmp).toBeCloseTo(uWarp, 6);
+  });
+
+  it('scales uRgbSplit by smoothedWarpAudio only when warpMode is rgbSplit', () => {
+    const gl = createMockGl();
+    const scene = new Scene('rgbsplit', []);
+    scene.init(gl);
+    const f1 = gl.uniform1f as unknown as { mock: { calls: [{ name: string }, number][] } };
+
+    // In classic mode, uRgbSplit stays at baseline
+    scene.setFeedback({
+      warpMode: 'classic',
+      rgbSplit: 0.04,
+      warpAudioSource: 'sub',
+      warpReactivity: 1.0,
+      warpAttackMs: 5,
+    });
+    scene.draw(makeMockFrame({ dtSec: 0.5, norm: { sub: 1.0, mid: 0, high: 0 } }), mockClock);
+    const classicRgbSplit = f1.mock.calls.filter(([loc]) => loc?.name === 'uRgbSplit').pop()![1];
+    expect(classicRgbSplit).toBeCloseTo(0.04, 6);
+
+    // In rgbSplit mode, uRgbSplit scales smoothly with smoothedWarpAudio
+    scene.setFeedback({
+      warpMode: 'rgbSplit',
+      rgbSplit: 0.04,
+      warpAudioSource: 'sub',
+      warpReactivity: 1.0,
+      warpAttackMs: 5,
+    });
+    scene.draw(makeMockFrame({ dtSec: 0.5, norm: { sub: 1.0, mid: 0, high: 0 } }), mockClock);
+    const splitModeRgbSplit = f1.mock.calls.filter(([loc]) => loc?.name === 'uRgbSplit').pop()![1];
+    expect(splitModeRgbSplit).toBeCloseTo(0.04 * (1 + scene.getSmoothedWarpAudio()), 5);
   });
 });

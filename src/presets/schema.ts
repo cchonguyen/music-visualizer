@@ -11,6 +11,10 @@ export const AUDIO_SOURCES = [
 ] as const;
 export type AudioSource = (typeof AUDIO_SOURCES)[number];
 
+/** Audio sources available to drive feedback warp coordinate swells. */
+export const WARP_AUDIO_SOURCES = ["sub", "bass", "mid", "high", "energy", "kick"] as const;
+export type WarpAudioSource = (typeof WARP_AUDIO_SOURCES)[number];
+
 export type Vec3 = [number, number, number];
 
 export type ParamValue = number | boolean | string | Vec3 | undefined;
@@ -145,6 +149,7 @@ export const FEEDBACK_POST_LAYOUT: Readonly<Record<string, readonly string[]>> =
   Motion: ["zoom", "rotate", "centreX", "centreY", "driftX", "driftY", "stretchX", "stretchY"],
   Warp: [
     "warpMode", "warp", "warpScale", "warpSpeed",
+    "warpAudioSource", "warpReactivity", "warpAttackMs", "warpReleaseMs",
     "curlOctaves", "curlTurbulence", "curlFlowPattern",
     "portalRadius", "radialFold", "mandalaTile", "mandalaCounterSpin", "mandalaPattern",
     "mobiusPoleOffset", "mobiusFlow", "mobiusSwirl", "mobiusWander", "mobiusMode",
@@ -264,6 +269,48 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     default: "classic",
     options: ["classic", "curl", "polarFold", "mobius", "rgbSplit"],
     description: "Selects the coordinate warp algorithm applied to feedback coordinates each frame.",
+  },
+  {
+    type: "enum",
+    name: "warpAudioSource",
+    label: "Warp audio source",
+    group: "Warp",
+    default: "sub",
+    options: [...WARP_AUDIO_SOURCES],
+    description: "Selects the frequency band or transient signal driving dynamic coordinate warp swells.",
+  },
+  {
+    type: "float",
+    name: "warpReactivity",
+    label: "Warp audio swell",
+    group: "Warp",
+    default: 0.0,
+    min: 0.0,
+    max: 1.0,
+    step: 0.05,
+    description: "Scales audio-driven warp coordinate displacement and flow velocity.",
+  },
+  {
+    type: "float",
+    name: "warpAttackMs",
+    label: "Warp attack (ms)",
+    group: "Warp",
+    default: 15,
+    min: 5,
+    max: 200,
+    step: 5,
+    description: "Sets envelope rise time in milliseconds for warp transient expansion.",
+  },
+  {
+    type: "float",
+    name: "warpReleaseMs",
+    label: "Warp release (ms)",
+    group: "Warp",
+    default: 250,
+    min: 50,
+    max: 1000,
+    step: 10,
+    description: "Sets envelope recovery time in milliseconds as warp settles back to resting scale.",
   },
   {
     type: "float",
