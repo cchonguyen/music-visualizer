@@ -743,3 +743,69 @@ describe('vignette options (Slice 18.9)', () => {
     expect(postSrc.indexOf('uVigBlend == 0')).toBeLessThan(postSrc.indexOf('applySafety(c)'));
   });
 });
+
+describe('0s instant cut (Slice 26.4)', () => {
+  it('snaps weights immediately on the first frame when setFadeSeconds(0) is set', () => {
+    const { comp, frame } = rig(['a', 'b']);
+    comp.setFadeSeconds(0);
+    comp.setWeights({ a: 1 });
+    frame(0.016);
+    expect(comp.getWeight('a')).toBe(1);
+
+    // Switch to an unprepared scene 'b': should still snap cleanly on the same frame.
+    comp.setWeights({ b: 1 });
+    frame(0.016);
+    expect(comp.getWeight('b')).toBe(1);
+    expect(comp.getWeight('a')).toBe(0);
+  });
+
+  it('bypasses the 0.6s morph ramp when setFadeSeconds(0) is active', () => {
+    const { comp, frame } = rig(['a', 'b']);
+    comp.setTransition('morph');
+    comp.setFadeSeconds(0);
+    comp.setWeights({ a: 1 });
+    frame(0.016);
+    expect(comp.getWeight('a')).toBe(1);
+    expect(comp.isMorphing()).toBe(false);
+
+    comp.setWeights({ b: 1 });
+    frame(0.016);
+    expect(comp.isMorphing()).toBe(false);
+    expect(comp.getWeight('b')).toBe(1);
+    expect(comp.getWeight('a')).toBe(0);
+  });
+
+  it('clamps negative fadeSeconds to 0 and keeps positive fade durations crossfading normally', () => {
+    const { comp, frame } = rig(['a', 'b']);
+    comp.setFadeSeconds(1.0);
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 60; i++) frame(0.2);
+    comp.prepare('b');
+    comp.setWeights({ b: 1 });
+    frame(0.05);
+    expect(comp.getWeight('b')).toBeGreaterThan(0);
+    expect(comp.getWeight('b')).toBeLessThan(1);
+    expect(comp.getWeight('a')).toBeGreaterThan(0);
+
+    // Negative fade clamps to 0 and snaps immediately.
+    comp.setFadeSeconds(-2);
+    frame(0.016);
+    expect(comp.getWeight('b')).toBe(1);
+    expect(comp.getWeight('a')).toBe(0);
+  });
+
+  it('continues running the morph ramp when fade duration is positive', () => {
+    const { comp, frame } = rig(['a', 'b']);
+    comp.setTransition('morph');
+    comp.setFadeSeconds(0.5);
+    comp.setWeights({ a: 1 });
+    frame(0.1);
+    comp.setWeights({ b: 1 });
+    frame(0.1);
+    expect(comp.isMorphing()).toBe(true);
+    expect(comp.getWeight('b')).toBe(1);
+    expect(comp.getWeight('a')).toBe(0);
+    for (let i = 0; i < 6; i++) frame(0.1);
+    expect(comp.isMorphing()).toBe(false);
+  });
+});

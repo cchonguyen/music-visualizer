@@ -248,9 +248,9 @@ export class Compositor implements RenderLayer {
     this.targets.delete(name);
   }
 
-  /** Crossfade time for scene switches, in seconds (0.05 to 10). Set per preset. */
+  /** Crossfade time for scene switches, in seconds (0 to 10; 0 = instant cut). Set per preset. */
   setFadeSeconds(seconds: number): void {
-    this.fadeSec = Math.min(10, Math.max(0.05, seconds));
+    this.fadeSec = Number.isFinite(seconds) ? Math.min(10, Math.max(0, seconds)) : 1.2;
   }
 
   /**
@@ -507,6 +507,10 @@ export class Compositor implements RenderLayer {
   private easeOne(name: string, w: number, dtSec: number): void {
     const t = this.targets.get(name) ?? 0;
     const fade = this.effectiveFadeSec();
+    if (fade <= 0) {
+      this.weights.set(name, t);
+      return;
+    }
     let next = releaseEnvelope(w, t, dtSec, fade, fade);
     if (Math.abs(next - t) < 1e-3) next = t; // settle exactly, so finished fades free buffers
     this.weights.set(name, next);
@@ -584,7 +588,7 @@ export class Compositor implements RenderLayer {
     // The render scale changed (the owner's choice or automatic scaling): re-fit the chain's buffers.
     if (getEffectiveRenderScale() !== this.appliedScale) this.fitScaleBuffers(gl);
 
-    const isMorph = TRANSITIONS[this.transition] === 'morph';
+    const isMorph = TRANSITIONS[this.transition] === 'morph' && this.effectiveFadeSec() > 0;
 
     if (isMorph) {
       // Find outgoing scene (weight > 0, target == 0) and incoming scene (target > 0)
@@ -652,6 +656,7 @@ export class Compositor implements RenderLayer {
         }
       }
     } else {
+      if (this.morphing && this.morphScene) this.morphScene.setForegroundOpacity(1.0);
       this.morphing = false;
       this.morphScene = null;
       // A scene that is about to fade in is made ready first. If that took a compile, the fade starts
@@ -661,7 +666,7 @@ export class Compositor implements RenderLayer {
         if (t > 0 && this.bringUp(gl, name)) initialising = true;
       }
       // Bring scenes up and down with their weights (eased toward the key-press targets).
-      if (!initialising) this.easeWeights(clock.dtSec);
+      if (!initialising || this.effectiveFadeSec() <= 0) this.easeWeights(clock.dtSec);
     }
     const active = this.activeNames;
     active.length = 0;
