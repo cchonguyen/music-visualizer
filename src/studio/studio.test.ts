@@ -1228,7 +1228,8 @@ describe('Helper Bar & Warning Badge System (Slice 9.8)', () => {
     expect(helperBar.querySelector('.helper-param-desc')?.textContent).toBe(intenseSpec.description!);
     const warnEl = helperBar.querySelector('.helper-warning');
     expect(warnEl).not.toBeNull();
-    expect(warnEl?.textContent).toContain('⚠️');
+    expect(warnEl?.textContent).not.toContain('⚠️');
+    expect(warnEl?.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('alert-triangle');
     expect(warnEl?.textContent).toContain(intenseSpec.warning!);
 
     // Mouseleave restores idle text & clears highlights
@@ -2100,8 +2101,10 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(session.commit).toHaveBeenCalledWith('crown');
 
     // 4. Save System Preset button is active
-    const saveBtn = pane.buttons.find((b: any) => b.title.includes('Save System Preset 👑'));
+    const saveBtn = pane.buttons.find((b: any) => b.title.includes('Save System Preset'));
     expect(saveBtn).toBeDefined();
+    expect(saveBtn.title).toBe('Save System Preset');
+    expect(saveBtn.element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
     saveBtn.fire('click');
     expect(session.saveSystemPreset).toHaveBeenCalledWith('crown');
     expect(showToastSpy).toHaveBeenCalledWith('System preset saved locally (remote sync offline)');
@@ -2123,7 +2126,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     showToastSpy.mockRestore();
   });
 
-  it('renders "Promote to System Preset 👑" button and promotes via inline subfolder select in admin mode', () => {
+  it('renders "Promote to System Preset" button with crown SVG icon and promotes via inline subfolder select in admin mode', () => {
     const { container, studio, getPane, session, switchTo } = setupTest({ admin: true });
     const showToastSpy = vi.spyOn(toastModule, 'showToast').mockImplementation(() => {});
     const origPrompt = (globalThis as any).prompt;
@@ -2135,8 +2138,9 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
       const pane = getPane();
 
       // Promote button should be available
-      const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
+      const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset');
       expect(promoteBtn).toBeDefined();
+      expect(promoteBtn.element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
 
       promoteBtn.fire('click');
       expect(globalPromptSpy).not.toHaveBeenCalled();
@@ -2167,7 +2171,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
 
     studio.bind('user-1');
     const pane = getPane();
-    const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset 👑');
+    const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset');
     promoteBtn.fire('click');
 
     const promptRow = container.querySelector('.studio-inline-prompt');
@@ -2202,7 +2206,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     pane = getPane();
     expect(studio.adminBadge).not.toBeNull();
     expect(studio.adminBadge?.textContent).toBe(ADMIN_BADGE_LABEL);
-    expect(pane.buttons.find((b: any) => b.title.includes('Save System Preset 👑'))).toBeDefined();
+    expect(pane.buttons.find((b: any) => b.title.includes('Save System Preset'))).toBeDefined();
     expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeDefined();
 
     // Logout
@@ -3937,15 +3941,17 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
       expect(session.isDirty(userId)).toBe(false);
       expect(getSaveBtn().title).toBe('Save');
 
-      // 2. Admin editing system preset updates 'Save System Preset 👑' -> 'Save System Preset 👑 *'
+      // 2. Admin editing system preset updates 'Save System Preset' -> 'Save System Preset *'
       studio.bind('crown');
-      expect(getSaveBtn().title).toBe('Save System Preset 👑');
+      expect(getSaveBtn().title).toBe('Save System Preset');
+      expect(getSaveBtn().element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
       const nameB = pane.bindings.find((b: any) => b.options?.label === 'Name');
       nameB.target.name = 'Crown Edited';
       nameB.fire('change', 'Crown Edited');
 
       expect(session.isDirty('crown')).toBe(true);
-      expect(getSaveBtn().title).toBe('Save System Preset 👑 *');
+      expect(getSaveBtn().title).toBe('Save System Preset *');
+      expect(getSaveBtn().element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
 
       studio.dispose();
     } finally {
@@ -4310,5 +4316,75 @@ describe('Slice 26.1: Studio inline SVG icons replace crown emoji in Admin contr
     attachButtonIcon(buttonWrapper, 'crown', false);
     expect(btnEl.querySelectorAll('.ui-icon')).toHaveLength(0);
     expect(textEl.textContent).toBe('Save System Preset *');
+  });
+});
+
+describe('Slice 26.2: Studio helper bar and Tweakpane admin buttons replace emojis with inline SVGs', () => {
+  it('renderHelperContent renders alert-triangle SVG instead of warning emoji while keeping intense badge intact', () => {
+    const helperBar = createMockElement('div');
+    const target = createMockElement('div');
+    const labelEl = createMockElement('div');
+    labelEl.className = 'tp-lblv_l';
+    labelEl.textContent = 'Strobe';
+    target.appendChild(labelEl);
+
+    attachControlHelper(
+      target,
+      { label: 'Strobe', description: 'Rapid brightness pulse.', intense: true },
+      (info) => renderHelperContent(helperBar as unknown as HTMLElement, info),
+    );
+
+    expect(target.querySelector('.intense-badge')?.textContent).toBe('(!)');
+
+    target.dispatchEvent({ type: 'mouseenter' });
+    const warnRow = helperBar.querySelector('.helper-warning');
+    expect(warnRow).not.toBeNull();
+    expect(warnRow?.textContent).toBe('High-intensity effect');
+    expect(warnRow?.textContent).not.toContain('⚠️');
+    const icon = warnRow?.querySelector('.ui-icon');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('data-icon')).toBe('alert-triangle');
+    expect(icon?.getAttribute('viewBox')).toBe('0 0 24 24');
+    expect(icon?.getAttribute('aria-hidden')).toBe('true');
+    const span = warnRow?.querySelector('span');
+    expect(span?.textContent).toBe('High-intensity effect');
+  });
+
+  it('Studio Tweakpane admin buttons use plain-text titles without crown emoji and attach crown SVG when admin', () => {
+    const { studio, getPane, session } = setupTest({ admin: true });
+
+    // System preset in admin mode: Save System Preset + Exit Admin Mode
+    studio.bind('crown');
+    let pane = getPane();
+    const saveSysBtn = pane.buttons.find((b: any) => b.title === 'Save System Preset');
+    expect(saveSysBtn).toBeDefined();
+    expect(saveSysBtn.element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
+
+    const exitAdminBtn = pane.buttons.find((b: any) => b.title === EXIT_ADMIN_LABEL);
+    expect(exitAdminBtn).toBeDefined();
+    expect(exitAdminBtn.title).not.toContain('👑');
+    expect(exitAdminBtn.element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
+
+    // User preset in admin mode: Promote to System Preset
+    studio.bind('user-1');
+    pane = getPane();
+    const promoteBtn = pane.buttons.find((b: any) => b.title === 'Promote to System Preset');
+    expect(promoteBtn).toBeDefined();
+    expect(promoteBtn.element.querySelector('.ui-icon')?.getAttribute('data-icon')).toBe('crown');
+
+    for (const btn of pane.buttons) {
+      expect(btn.title).not.toContain('👑');
+      expect(btn.title).not.toContain('⚠️');
+    }
+
+    // Standard user mode: Admin Access button has no crown SVG
+    const standard = setupTest({ admin: false });
+    standard.studio.bind('crown');
+    const standardPane = standard.getPane();
+    const adminAccessBtn = standardPane.buttons.find((b: any) => b.title === ADMIN_ACCESS_LABEL);
+    expect(adminAccessBtn).toBeDefined();
+    expect(adminAccessBtn.element.querySelector('.ui-icon')).toBeNull();
+
+    expect(session).toBeDefined();
   });
 });

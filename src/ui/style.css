@@ -36,7 +36,13 @@
 .helper-warning {
   color: var(--warn);
   font-weight: 600;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.helper-warning .ui-icon {
+  flex-shrink: 0;
 }
 
 .intense-badge {
