@@ -370,4 +370,36 @@ export function filterPresetsByGroup(
   return presets.filter((p) => p.group === group);
 }
 
+/** Human-readable display labels for every layer type in LAYER_FACTORIES (plus retired/legacy types). */
+export const LAYER_TYPE_LABELS: Readonly<Record<string, string>> = {
+  shape: 'Shape',
+  tunnel: 'Forward Flight Tunnel',
+  particles: 'Treble Particles',
+  crown: 'Crown',
+  rings: 'Rings',
+  shockwave: 'Shockwave',
+  bars: 'Bars',
+  bassPulse: 'Bass Pulse',
+  moire: 'Moiré Interference',
+  spectralTerrain: 'Spectral Terrain',
+  chladniSand: 'Chladni Cymatics Sand',
+  ferrofluid: 'Ferrofluid',
+  julia: 'Julia Fractal',
+  orbit: 'Orbit',
+  architecture: 'Architecture',
+  reactionDiffusion: 'Reaction Diffusion',
+  waveform: 'Waveform',
+};
+
+/** Human-readable label for a layer type key, with a clean camelCase fallback. */
+export function formatLayerType(type: string): string {
+  if (!type) return '';
+  if (LAYER_TYPE_LABELS[type]) return LAYER_TYPE_LABELS[type];
+  return type
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
 
