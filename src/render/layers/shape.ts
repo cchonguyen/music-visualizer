@@ -42,6 +42,7 @@ const BASE_SHAPE_MAP: Record<ShapeBaseType, number> = {
   spiral: 6,
   figure8: 7,
   knot3d: 8,
+  twistWave: 9,
 };
 
 const EDGE_MODE_MAP: Record<ShapeEdgeMode, number> = {
@@ -214,6 +215,8 @@ export function computeShapeBounceExtents(
       };
     case 'knot3d':
       return { halfX: 1.05 * s, halfY: 1.05 * s };
+    case 'twistWave':
+      return { halfX: s * 1.15, halfY: s * 1.15 };
     default:
       return { halfX: s, halfY: s };
   }
@@ -325,6 +328,14 @@ export function stepBouncePhysics(
   };
 }
 
+export interface ShapeTwistState {
+  phaseA: [number, number, number, number];
+  phaseB: [number, number, number, number];
+}
+
+const TWIST_INIT_A: readonly [number, number, number, number] = [0.7, 1.9, 3.1, 4.7];
+const TWIST_INIT_B: readonly [number, number, number, number] = [0.3, 1.4, 2.6, 0.9];
+
 export class ShapeLayer implements RenderLayer {
   /** Accent swap mix from ColourSwap (0 = normal, 1 = swapped). */
   accentSwap = 0;
@@ -351,6 +362,13 @@ export class ShapeLayer implements RenderLayer {
       vy: this.bounceVy,
       spinDir: this.bounceSpinDir,
       active: this.bounceActive,
+    };
+  }
+
+  getTwistState(): ShapeTwistState {
+    return {
+      phaseA: [...this.twistPhaseA],
+      phaseB: [...this.twistPhaseB],
     };
   }
 
@@ -399,6 +417,9 @@ export class ShapeLayer implements RenderLayer {
   private uTexMid: WebGLUniformLocation | null = null;
   private uTexHigh: WebGLUniformLocation | null = null;
   private uKnot: WebGLUniformLocation | null = null;
+  private uTwistA: WebGLUniformLocation | null = null;
+  private uTwistB: WebGLUniformLocation | null = null;
+  private uTwistChaos: WebGLUniformLocation | null = null;
   /** Loudness averages for the loudness-driven rings option (Slice 19.9d). */
   private readonly slowLoud = new SlowFollower(3);
   private readonly slowSubEnv = new SlowFollower(2);
@@ -406,6 +427,9 @@ export class ShapeLayer implements RenderLayer {
   private knotPitch = 0;
   private knotYaw = 0;
   private knotPhase = 0;
+  /** Organic multi-harmonic twist phases (Stage 28.1). */
+  private readonly twistPhaseA: [number, number, number, number] = [...TWIST_INIT_A];
+  private readonly twistPhaseB: [number, number, number, number] = [...TWIST_INIT_B];
   /** Band textures for the band texture option (Slice 19.9b). Created on first use. */
   private readonly band = new BandTexture();
   private bandReady = false;
@@ -493,9 +517,20 @@ export class ShapeLayer implements RenderLayer {
     this.uTexMid = gl.getUniformLocation(this.program, 'uTexMid');
     this.uTexHigh = gl.getUniformLocation(this.program, 'uTexHigh');
     this.uKnot = gl.getUniformLocation(this.program, 'uKnot');
+    this.uTwistA = gl.getUniformLocation(this.program, 'uTwistA');
+    this.uTwistB = gl.getUniformLocation(this.program, 'uTwistB');
+    this.uTwistChaos = gl.getUniformLocation(this.program, 'uTwistChaos');
     this.knotPitch = 0;
     this.knotYaw = 0;
     this.knotPhase = 0;
+    this.twistPhaseA[0] = TWIST_INIT_A[0];
+    this.twistPhaseA[1] = TWIST_INIT_A[1];
+    this.twistPhaseA[2] = TWIST_INIT_A[2];
+    this.twistPhaseA[3] = TWIST_INIT_A[3];
+    this.twistPhaseB[0] = TWIST_INIT_B[0];
+    this.twistPhaseB[1] = TWIST_INIT_B[1];
+    this.twistPhaseB[2] = TWIST_INIT_B[2];
+    this.twistPhaseB[3] = TWIST_INIT_B[3];
     this.bandReady = false; // a fresh context needs fresh band textures
     this.uInstOffset = gl.getUniformLocation(this.program, 'uInstOffset[0]');
     this.uInstTransform = gl.getUniformLocation(this.program, 'uInstTransform[0]');
@@ -597,9 +632,22 @@ export class ShapeLayer implements RenderLayer {
     } else if (this.p.audioSource === 'scope') {
       // Signed oscilloscope trace: keeps the sign so silence stays at zero.
       const wf = frame.waveform;
-      const step = wf.length / sampleCount;
-      for (let i = 0; i < sampleCount; i++) {
-        rawBins[i] = bucketExtreme(wf, i, step);
+      if (this.p.baseShape === 'twistWave' && wf.length > 1024) {
+        const windowLen = 1024;
+        const start = wf.length - windowLen;
+        for (let i = 0; i < sampleCount; i++) {
+          const t = sampleCount > 1 ? i / (sampleCount - 1) : 0;
+          const pos = start + t * (windowLen - 1);
+          const idx0 = Math.floor(pos);
+          const idx1 = Math.min(wf.length - 1, idx0 + 1);
+          const frac = pos - idx0;
+          rawBins[i] = (wf[idx0] ?? 0) * (1 - frac) + (wf[idx1] ?? 0) * frac;
+        }
+      } else {
+        const step = wf.length / sampleCount;
+        for (let i = 0; i < sampleCount; i++) {
+          rawBins[i] = bucketExtreme(wf, i, step);
+        }
       }
     } else if (this.p.audioSource === 'sub' || this.p.audioSource === 'bass') {
       const wf = frame.bandWaveforms.sub;
@@ -916,6 +964,48 @@ export class ShapeLayer implements RenderLayer {
       this.knotPhase += (dt * (0.45 + frame.norm.mid * 0.85) + (frame.kickPulse ? 0.12 : 0)) * spin;
     }
     gl.uniform3f(this.uKnot, this.knotPitch, this.knotYaw, this.knotPhase);
+    // Organic twisting waveform (Stage 28.1): advance multi-harmonic phase state while twistWave is selected.
+    const twistSpeed = Math.max(0, Number.isFinite(this.p.twistSpeed) ? this.p.twistSpeed : 0);
+    if (this.p.baseShape === 'twistWave' && twistSpeed > 0 && bounceDt > 0) {
+      const sub = Number.isFinite(frame.norm.sub) ? frame.norm.sub : 0;
+      const mid = Number.isFinite(frame.norm.mid) ? frame.norm.mid : 0;
+      const high = Number.isFinite(frame.norm.high) ? frame.norm.high : 0;
+      const energy = Number.isFinite(frame.energy) ? frame.energy : 0;
+      const kickEnv = Number.isFinite(frame.kickEnv) ? frame.kickEnv : 0;
+      const kickBoost = ((frame.kickPulse ? 0.08 : 0) + kickEnv * 0.35 * bounceDt) * twistSpeed;
+
+      const a0 = this.twistPhaseA[0];
+      const a1 = this.twistPhaseA[1];
+      const a2 = this.twistPhaseA[2];
+      const a3 = this.twistPhaseA[3];
+      const b0 = this.twistPhaseB[0];
+      const b1 = this.twistPhaseB[1];
+      const b2 = this.twistPhaseB[2];
+      const b3 = this.twistPhaseB[3];
+
+      const da0 = (0.43 * (0.35 + 1.15 * Math.sin(b1 * 0.9 + a2 * 0.5)) + sub * 0.55 + energy * 0.25) * twistSpeed * bounceDt + kickBoost * 0.6;
+      const da1 = (0.61 * (0.25 + 1.25 * Math.cos(a0 * 0.7 - b2 * 0.6)) + mid * 0.65 + energy * 0.20) * twistSpeed * bounceDt + kickBoost * 0.4;
+      const da2 = (0.79 * (0.20 + 1.35 * Math.sin(a1 * 0.8 + b3 * 0.7)) + high * 0.60 + energy * 0.25) * twistSpeed * bounceDt;
+      const da3 = (0.37 * (0.45 + 1.05 * Math.cos(b0 * 0.6 + a3 * 0.4)) + (sub + mid) * 0.35) * twistSpeed * bounceDt + kickBoost;
+
+      const db0 = (0.53 * (0.15 + 1.40 * Math.sin(a3 * 0.8 - b1 * 0.5)) + sub * 0.50) * twistSpeed * bounceDt + kickBoost * 0.5;
+      const db1 = (0.71 * (0.15 + 1.40 * Math.cos(a2 * 0.7 + b0 * 0.6)) + high * 0.55) * twistSpeed * bounceDt;
+      const db2 = (0.89 * (0.20 + 1.30 * Math.sin(b0 * 0.9 + a1 * 0.4)) + mid * 0.50 + energy * 0.20) * twistSpeed * bounceDt;
+      const db3 = (0.41 * (0.10 + 1.45 * Math.cos(a0 * 0.5 - b2 * 0.8)) + energy * 0.35) * twistSpeed * bounceDt + kickBoost * 0.3;
+
+      this.twistPhaseA[0] = a0 + da0;
+      this.twistPhaseA[1] = a1 + da1;
+      this.twistPhaseA[2] = a2 + da2;
+      this.twistPhaseA[3] = a3 + da3;
+      this.twistPhaseB[0] = b0 + db0;
+      this.twistPhaseB[1] = b1 + db1;
+      this.twistPhaseB[2] = b2 + db2;
+      this.twistPhaseB[3] = b3 + db3;
+    }
+    const twistChaos = Math.max(0, Math.min(1, Number.isFinite(this.p.twistChaos) ? this.p.twistChaos : 0.65));
+    gl.uniform4f(this.uTwistA, this.twistPhaseA[0], this.twistPhaseA[1], this.twistPhaseA[2], this.twistPhaseA[3]);
+    gl.uniform4f(this.uTwistB, this.twistPhaseB[0], this.twistPhaseB[1], this.twistPhaseB[2], this.twistPhaseB[3]);
+    gl.uniform1f(this.uTwistChaos, twistChaos);
     gl.uniform1f(this.uSize, this.p.size);
     gl.uniform1f(this.uBasePulse, this.p.basePulse);
     gl.uniform1i(this.uNormalMode, NORMAL_MODE_MAP[this.p.normalMode] ?? 0);

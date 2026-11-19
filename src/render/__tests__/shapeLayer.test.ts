@@ -98,6 +98,9 @@ function createMockGl(): WebGL2RenderingContext & {
     uniform3f: vi.fn((loc: any, x: number, y: number, z: number) => {
       if (loc?.name) uniformValues.set(loc.name, [x, y, z]);
     }),
+    uniform4f: vi.fn((loc: any, x: number, y: number, z: number, w: number) => {
+      if (loc?.name) uniformValues.set(loc.name, [x, y, z, w]);
+    }),
     uniform2fv: vi.fn((loc: any, val: Float32Array) => {
       if (loc?.name) uniformValues.set(loc.name, new Float32Array(val));
     }),
@@ -297,6 +300,7 @@ describe('ShapeLayer', () => {
       'spiral',
       'figure8',
       'knot3d',
+      'twistWave',
     ] as const;
 
     it.each(geometries)('renders baseShape %s with proper uniform upload', (shape) => {
@@ -1028,5 +1032,162 @@ describe('Wall-bounce physics (Slice 27.1)', () => {
     expect(clamped.state.y).toBeCloseTo(0.5 * invNorm * 0.1, 6);
     expect(Math.abs(clamped.state.x)).toBeLessThanOrEqual(limitX);
     expect(Math.abs(clamped.state.y)).toBeLessThanOrEqual(limitY);
+  });
+});
+
+describe('Organic twistWave baseShape (Stage 28.1)', () => {
+  it('uploads uBaseShape == 9, uTwistA, uTwistB, and uTwistChaos', () => {
+    const gl = createMockGl();
+    const layer = new ShapeLayer({ baseShape: 'twistWave', twistChaos: 0.42 });
+    layer.init(gl);
+    layer.draw(makeMockFrame(), mockClock, mockTarget);
+
+    expect(gl.uniformValues.get('uBaseShape')).toBe(9);
+    expect(gl.uniformValues.get('uTwistChaos')).toBeCloseTo(0.42, 5);
+    const a = gl.uniformValues.get('uTwistA') as number[];
+    const b = gl.uniformValues.get('uTwistB') as number[];
+    expect(a).toHaveLength(4);
+    expect(b).toHaveLength(4);
+    expect(a.every(Number.isFinite)).toBe(true);
+    expect(b.every(Number.isFinite)).toBe(true);
+  });
+
+  it('initializes persistent twist state, progresses non-monotonically, resets on init(), and preserves across setParams()', () => {
+    const gl = createMockGl();
+    const layer = new ShapeLayer({ baseShape: 'twistWave', twistSpeed: 1.5 });
+    expect(layer.getTwistState()).toEqual({
+      phaseA: [0.7, 1.9, 3.1, 4.7],
+      phaseB: [0.3, 1.4, 2.6, 0.9],
+    });
+
+    layer.init(gl);
+    const frame = makeMockFrame({ norm: { sub: 0.1, mid: 0.1, high: 0.1 }, energy: 0.1, kickEnv: 0 });
+    let minDelta = Infinity;
+    let maxDelta = -Infinity;
+    let prevB0 = layer.getTwistState().phaseB[0];
+    for (let i = 0; i < 400; i++) {
+      layer.draw(frame, { timeSec: i * 0.05, dtSec: 0.05, frameIndex: i }, mockTarget);
+      const curB0 = layer.getTwistState().phaseB[0];
+      const delta = curB0 - prevB0;
+      if (delta < minDelta) minDelta = delta;
+      if (delta > maxDelta) maxDelta = delta;
+      prevB0 = curB0;
+    }
+    // Wander/reversals produce both negative and positive velocity over time
+    expect(minDelta).toBeLessThan(0);
+    expect(maxDelta).toBeGreaterThan(0);
+
+    const midState = layer.getTwistState();
+    layer.setParams({ glow: 1.2, twistChaos: 0.9 });
+    expect(layer.getTwistState()).toEqual(midState);
+
+    layer.init(gl);
+    expect(layer.getTwistState()).toEqual({
+      phaseA: [0.7, 1.9, 3.1, 4.7],
+      phaseB: [0.3, 1.4, 2.6, 0.9],
+    });
+  });
+
+  it('responds to audio bands and kick impulses, holds still at twistSpeed === 0 or other baseShapes, and clamps large dt', () => {
+    const run = (params: Record<string, unknown>, frames: number, frame: AudioFrame, dtSec = 0.016) => {
+      const g = createMockGl();
+      const l = new ShapeLayer(params);
+      l.init(g);
+      for (let i = 0; i < frames; i++) l.draw(frame, { timeSec: i * dtSec, dtSec, frameIndex: i }, mockTarget);
+      return l.getTwistState();
+    };
+
+    const calm = makeMockFrame({ norm: { sub: 0, mid: 0, high: 0 }, energy: 0, kickEnv: 0, kickPulse: false });
+    const loudKick = makeMockFrame({ norm: { sub: 1, mid: 1, high: 1 }, energy: 1, kickEnv: 1, kickPulse: true });
+
+    const sCalm = run({ baseShape: 'twistWave', twistSpeed: 1.0 }, 10, calm);
+    const sLoud = run({ baseShape: 'twistWave', twistSpeed: 1.0 }, 10, loudKick);
+    expect(sLoud.phaseA[0]).not.toBeCloseTo(sCalm.phaseA[0], 3);
+    expect(sLoud.phaseA[3]).toBeGreaterThan(sCalm.phaseA[3]);
+
+    // Hold still when twistSpeed === 0 or when baseShape !== 'twistWave'
+    const frozen = run({ baseShape: 'twistWave', twistSpeed: 0 }, 20, loudKick);
+    expect(frozen).toEqual({ phaseA: [0.7, 1.9, 3.1, 4.7], phaseB: [0.3, 1.4, 2.6, 0.9] });
+    const otherShape = run({ baseShape: 'circle', twistSpeed: 2.0 }, 20, loudKick);
+    expect(otherShape).toEqual({ phaseA: [0.7, 1.9, 3.1, 4.7], phaseB: [0.3, 1.4, 2.6, 0.9] });
+
+    // Large dtSec is clamped via clampDt() so 10s step matches 0.1s step
+    const sClamped = run({ baseShape: 'twistWave', twistSpeed: 1.0 }, 1, calm, 10.0);
+    const sMaxDt = run({ baseShape: 'twistWave', twistSpeed: 1.0 }, 1, calm, 0.1);
+    expect(sClamped).toEqual(sMaxDt);
+  });
+
+  it('computes 1.15 * effSize bounce extents for twistWave', () => {
+    const ext = computeShapeBounceExtents({ baseShape: 'twistWave' }, 0.6, 0.8, 16 / 9);
+    expect(ext.halfX).toBeCloseTo(0.6 * 1.15, 6);
+    expect(ext.halfY).toBeCloseTo(0.6 * 1.15, 6);
+  });
+
+  it('samples a smooth 1024-sample recent tail window on 8192-sample scope waveforms for twistWave while preserving 1024 and non-twistWave behavior', () => {
+    const wf8192 = new Float32Array(8192);
+    // Put huge spikes in the pre-tail region [0..7167] and a clean linear ramp [-0.5 .. +0.5] in the tail [7168..8191]
+    for (let i = 0; i < 7168; i++) {
+      wf8192[i] = i % 2 === 0 ? 1.0 : -1.0;
+    }
+    for (let i = 0; i < 1024; i++) {
+      wf8192[7168 + i] = -0.5 + (i / 1023);
+    }
+
+    const glTwist = createMockGl();
+    const twistLayer = new ShapeLayer({
+      baseShape: 'twistWave',
+      audioSource: 'scope',
+      sampleCount: 256,
+      reactivity: 1.0,
+      attackMs: 1,
+    });
+    twistLayer.init(glTwist);
+    twistLayer.draw(makeMockFrame({ waveform: wf8192 }), { timeSec: 1, dtSec: 0.1, frameIndex: 1 }, mockTarget);
+
+    // Pre-tail ±1 spikes are ignored; tail starts at -0.5 and ends at +0.5 smoothly
+    expect(twistLayer.smoothedSamples[0]).toBeCloseTo(-0.5, 2);
+    expect(twistLayer.smoothedSamples[SHAPE_TEXELS - 1]).toBeCloseTo(0.5, 2);
+    expect(twistLayer.smoothedSamples[SHAPE_TEXELS / 2]).toBeCloseTo(0, 1);
+
+    // Non-twistWave still uses bucketExtreme over the whole 8192 buffer (picks up pre-tail ±1 spikes)
+    const glCircle = createMockGl();
+    const circleLayer = new ShapeLayer({
+      baseShape: 'circle',
+      audioSource: 'scope',
+      sampleCount: 256,
+      reactivity: 1.0,
+      attackMs: 1,
+    });
+    circleLayer.init(glCircle);
+    circleLayer.draw(makeMockFrame({ waveform: wf8192 }), { timeSec: 1, dtSec: 0.1, frameIndex: 1 }, mockTarget);
+    expect(Math.abs(circleLayer.smoothedSamples[0]!)).toBeGreaterThan(0.9);
+
+    // 1024-sample waveform on twistWave still uses standard bucketExtreme verbatim
+    const wf1024 = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) wf1024[i] = i === 1 ? -0.9 : 0.1;
+    const glTwist1024 = createMockGl();
+    const twist1024 = new ShapeLayer({
+      baseShape: 'twistWave',
+      audioSource: 'scope',
+      sampleCount: 256,
+      reactivity: 1.0,
+      attackMs: 1,
+    });
+    twist1024.init(glTwist1024);
+    twist1024.draw(makeMockFrame({ waveform: wf1024 }), { timeSec: 1, dtSec: 0.1, frameIndex: 1 }, mockTarget);
+    expect(twist1024.smoothedSamples[0]).toBeCloseTo(-0.9, 2);
+  });
+
+  it('defines twistWave shader uniforms, branch, 3D projection, and leaves knot3d & bandTexture hooks intact', () => {
+    expect(vertSrc).toContain('uniform vec4 uTwistA;');
+    expect(vertSrc).toContain('uniform vec4 uTwistB;');
+    expect(vertSrc).toContain('uniform float uTwistChaos;');
+    expect(vertSrc).toContain('} else if (uBaseShape == 9) {');
+    expect(vertSrc).toContain('vec3 twistWave3D(float u, float effSize)');
+    expect(vertSrc).toContain('2.4 - p3.z * 0.55');
+    // knot3d & existing test hooks preserved
+    expect(vertSrc).toContain('} else if (uBaseShape == 8) {');
+    expect(vertSrc).toContain('vec2 knotPoint(float u, float effSize)');
+    expect(vertSrc).toContain('vAlpha = instAlpha * brightMul;');
   });
 });

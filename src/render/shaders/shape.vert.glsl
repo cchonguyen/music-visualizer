@@ -6,7 +6,7 @@ precision highp int;
 uniform vec2 uInstOffset[16];
 uniform vec4 uInstTransform[16]; // x: scale, y: rotation (rad), z: alpha, w: delay attenuation
 
-uniform int uBaseShape;        // 0: centerLine, 1: edgeLine, 2: circle, 3: arc, 4: polygon, 5: star, 6: spiral, 7: figure8, 8: knot3d
+uniform int uBaseShape;        // 0: centerLine, 1: edgeLine, 2: circle, 3: arc, 4: polygon, 5: star, 6: spiral, 7: figure8, 8: knot3d, 9: twistWave
 uniform int uEdgeMode;         // 0: bottom, 1: top, 2: dualHorizontal, 3: dualVertical, 4: frame
 uniform int uSides;            // 3..12
 uniform float uStarInner;      // 0.2..0.9
@@ -45,9 +45,13 @@ out float vU;
 out float vUAudio;
 
 uniform vec3 uKnot;            // 3D curve: x = pitch (rad), y = yaw (rad), z = phase (rad). Only read when uBaseShape == 8
+uniform vec4 uTwistA;          // 3D organic twist phase A (morph harmonics & torsion). Only read when uBaseShape == 9
+uniform vec4 uTwistB;          // 3D organic twist phase B (pitch/yaw/roll & center drift). Only read when uBaseShape == 9
+uniform float uTwistChaos;     // 0..1: blends smooth ribbon (0) to multi-harmonic 3D knot (1)
 
 const float PI = 3.141592653589793;
 const float TAU = 6.283185307179586;
+const float AMP_MAX = 10.0;
 
 // 3D curve base (Slice 19.9c): a Lissajous knot, rotated by pitch then yaw and drawn in perspective.
 vec3 knotRot(vec3 p, float pitch, float yaw) {
@@ -65,6 +69,140 @@ vec2 knotPoint(float u, float effSize) {
   vec3 p3 = knotRot(knot, uKnot.x, uKnot.y);
   float depth = 2.2 - p3.z * 0.55;
   return effSize * 1.6 * p3.xy / depth;
+}
+
+vec3 normalizeSafe3(vec3 v, vec3 fallback) {
+  float lenV = length(v);
+  return (lenV > 1e-5) ? (v / lenV) : fallback;
+}
+
+vec2 normalizeSafe2(vec2 v, vec2 fallback) {
+  float lenV = length(v);
+  return (lenV > 1e-5) ? (v / lenV) : fallback;
+}
+
+float mapSymmetryU(float uPos) {
+  float uSym = uPos;
+  if (abs(uTravel) > 0.00001) {
+    uSym = fract(uPos + uTravel);
+  }
+  float uAud = uSym;
+  if (uSymmetry == 1) { // mirror: 0 -> 1 -> 0
+    uAud = 1.0 - abs(2.0 * uSym - 1.0);
+  } else if (uSymmetry == 2) { // repeat2
+    uAud = fract(2.0 * uSym);
+  } else if (uSymmetry == 3) { // repeat4
+    uAud = 1.0 - abs(2.0 * fract(2.0 * uSym) - 1.0);
+  }
+  return clamp(uAud, 0.0, 1.0);
+}
+
+// Organic 3D twisting ribbon spine (Stage 28.1)
+vec3 twistWave3D(float u, float effSize) {
+  float chaos = clamp(uTwistChaos, 0.0, 1.0);
+  float s = 2.0 * u - 1.0;
+  float t = TAU * u;
+
+  vec3 smoothSpine = vec3(
+    0.72 * s + 0.14 * sin(PI * s + uTwistA.x),
+    0.24 * sin(1.5 * PI * s + uTwistA.y) + 0.08 * cos(t + uTwistA.z),
+    0.28 * cos(PI * s + uTwistA.w)
+  );
+
+  vec3 knotSpine = vec3(
+    0.45 * sin(2.0 * t + uTwistA.x) + 0.22 * cos(3.0 * t - uTwistA.y) + 0.08 * sin(5.0 * PI * u + uTwistB.x),
+    0.42 * cos(3.0 * t + uTwistA.y) + 0.20 * sin(2.0 * t + uTwistA.z) + 0.08 * cos(5.0 * PI * u - uTwistB.y),
+    0.48 * sin(2.0 * t - uTwistA.z) + 0.24 * cos(3.0 * t + uTwistA.w)
+  );
+
+  vec3 spine = mix(smoothSpine, knotSpine, chaos);
+  float pitch = mix(0.28, 0.95, chaos) * sin(uTwistB.x * 0.7 + uTwistA.x * 0.3);
+  float yaw = mix(0.35, 1.25, chaos) * cos(uTwistB.y * 0.65 - uTwistA.y * 0.25);
+  float roll = mix(0.18, 0.75, chaos) * sin(uTwistB.z * 0.55);
+
+  vec3 r = knotRot(spine, pitch, yaw);
+  float cr = cos(roll);
+  float sr = sin(roll);
+  r = vec3(cr * r.x - sr * r.y, sr * r.x + cr * r.y, r.z);
+
+  vec3 drift = vec3(
+    0.06 * sin(uTwistB.w * 0.8 + uTwistA.x * 0.4),
+    0.05 * cos(uTwistB.w * 0.9 - uTwistA.y * 0.3),
+    0.04 * sin(uTwistB.w * 0.6)
+  );
+  r += drift;
+
+  return vec3(r.xy * (effSize * 2.15), r.z * clamp(effSize, 0.35, 1.35));
+}
+
+void twistWaveFrame(float uPos, float effSize, out vec3 c0, out vec3 T3, out vec3 N3, out vec3 B3) {
+  float chaos = clamp(uTwistChaos, 0.0, 1.0);
+  c0 = twistWave3D(uPos, effSize);
+  float eps = 0.002;
+  vec3 cMinus = twistWave3D(max(0.0, uPos - eps), effSize);
+  vec3 cPlus = twistWave3D(min(1.0, uPos + eps), effSize);
+  T3 = normalizeSafe3(cPlus - cMinus, vec3(1.0, 0.0, 0.0));
+
+  vec3 refUp = (abs(T3.y) < 0.92) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 bBase = normalizeSafe3(cross(T3, refUp), vec3(0.0, 0.0, 1.0));
+  vec3 nBase = normalizeSafe3(cross(bBase, T3), vec3(0.0, 1.0, 0.0));
+
+  float twistAngle = uTwistA.w * 0.9 + uTwistB.x * 0.6 + (2.5 + 5.5 * chaos) * PI * uPos + 0.8 * sin(TAU * uPos + uTwistB.z);
+  float ct = cos(twistAngle);
+  float st = sin(twistAngle);
+  N3 = ct * nBase + st * bBase;
+  B3 = -st * nBase + ct * bBase;
+}
+
+float sampleTwistDelta(float uPos, float uAud, float delayScale, int sampleIdx) {
+  float amp = min(texture(uAudioTex, vec2(uAud, 0.5)).r, AMP_MAX) * delayScale;
+  float peak = min(texture(uPeakTex, vec2(uAud, 0.5)).r, AMP_MAX) * delayScale;
+  if (uTexGain > 0.0) {
+    float midS = texture(uTexMid, vec2(uAud, 0.5)).r;
+    float hMul = max(0.0, 1.0 + uTexGain * (midS - 0.5));
+    amp *= hMul;
+    peak *= hMul;
+  }
+  float mAmp = (uPeakCaps == 1 && (uEffectType == 4 || uEffectType == 5)) ? max(amp, peak) : amp;
+  if (uEffectType == 0) {
+    mAmp = 0.0;
+  }
+  float d = mAmp * uEffectLength;
+  if (uEffectType == 3) {
+    d += 0.15 * sin(uPos * 16.0 * PI + uTime * 4.0) * amp * uEffectLength;
+  }
+  if (uExtrudeDir == 1 || (uExtrudeDir == 3 && (sampleIdx % 2 != 0))) {
+    d = -d;
+  }
+  return d;
+}
+
+void evalTwistWavePoint(
+  float uPos,
+  float effSize,
+  float delayScale,
+  int sampleIdx,
+  out vec2 pBaseOut,
+  out vec2 pDisplacedOut,
+  out float depthOut
+) {
+  vec3 c0, T3, N3, B3;
+  twistWaveFrame(uPos, effSize, c0, T3, N3, B3);
+
+  float uAud = mapSymmetryU(uPos);
+  float qRaw = uAud + 0.0625;
+  float uQuad = (qRaw <= 1.0) ? qRaw : (2.0 - qRaw);
+
+  float w1 = sampleTwistDelta(uPos, uAud, delayScale, sampleIdx);
+  float w2 = sampleTwistDelta(uPos, uQuad, delayScale, sampleIdx);
+
+  float depthBase = max(0.45, 2.4 - c0.z * 0.55);
+  pBaseOut = c0.xy / depthBase;
+
+  vec3 p3 = c0 + w1 * N3 + (0.65 * w2) * B3;
+  float depth = max(0.45, 2.4 - p3.z * 0.55);
+  depthOut = depth;
+  pDisplacedOut = p3.xy / depth;
 }
 
 void evaluateBaseCurve(
@@ -255,6 +393,18 @@ void evaluateBaseCurve(
     float lenDr = length(dr);
     T0 = (lenDr > 0.00001) ? (dr / lenDr) : vec2(1.0, 0.0);
     N0 = vec2(-T0.y, T0.x);
+  } else if (uBaseShape == 9) {
+    // twistWave: 2D fallback (main() uses full 3D quadrature + projection)
+    vec3 c0 = twistWave3D(u, effSize);
+    float depth0 = max(0.45, 2.4 - c0.z * 0.55);
+    P0 = c0.xy / depth0;
+    vec3 cMinus = twistWave3D(max(0.0, u - 0.002), effSize);
+    vec3 cPlus = twistWave3D(min(1.0, u + 0.002), effSize);
+    vec2 pMinus = cMinus.xy / max(0.45, 2.4 - cMinus.z * 0.55);
+    vec2 pPlus = cPlus.xy / max(0.45, 2.4 - cPlus.z * 0.55);
+    vec2 dr = pPlus - pMinus;
+    T0 = normalizeSafe2(dr, vec2(1.0, 0.0));
+    N0 = vec2(-T0.y, T0.x);
   } else {
     // figure8
     float theta = TAU * u;
@@ -296,22 +446,9 @@ void main() {
   }
 
   // Symmetry mapping to audio coordinate uAudio
-  float uSym = u;
-  if (abs(uTravel) > 0.00001) {
-    uSym = fract(u + uTravel);
-  }
-  float uAudio = uSym;
-  if (uSymmetry == 1) { // mirror: 0 -> 1 -> 0
-    uAudio = 1.0 - abs(2.0 * uSym - 1.0);
-  } else if (uSymmetry == 2) { // repeat2
-    uAudio = fract(2.0 * uSym);
-  } else if (uSymmetry == 3) { // repeat4
-    uAudio = 1.0 - abs(2.0 * fract(2.0 * uSym) - 1.0);
-  }
-  uAudio = clamp(uAudio, 0.0, 1.0);
+  float uAudio = mapSymmetryU(u);
 
   // Sample audio amplitude and peak hold (ceiling matches SHAPE_AMP_MAX in shape.ts)
-  const float AMP_MAX = 10.0;
   float audioAmp = min(texture(uAudioTex, vec2(uAudio, 0.5)).r, AMP_MAX);
   float peakHold = min(texture(uPeakTex, vec2(uAudio, 0.5)).r, AMP_MAX);
 
@@ -378,7 +515,68 @@ void main() {
   }
 
   vec2 P;
-  if (uIsRibbon == 1) {
+  float twistDepthAlpha = 1.0;
+  if (uBaseShape == 9) {
+    vec2 pBase, pMain;
+    float depthMain;
+    evalTwistWavePoint(u, effSize, delayScale, sampleIdx, pBase, pMain, depthMain);
+
+    float du = 0.5 / float(max(16, uSampleCount));
+    float uMinus = max(0.0, u - du);
+    float uPlus = min(1.0, u + du);
+    vec2 pBaseDummy, pMinus, pPlus;
+    float depthDummy;
+    evalTwistWavePoint(uMinus, effSize, delayScale, sampleIdx, pBaseDummy, pMinus, depthDummy);
+    evalTwistWavePoint(uPlus, effSize, delayScale, sampleIdx, pBaseDummy, pPlus, depthDummy);
+
+    vec2 Tscreen = normalizeSafe2(pPlus - pMinus, T0);
+    vec2 ribNorm = vec2(-Tscreen.y, Tscreen.x);
+
+    float depthCue = clamp(2.4 / depthMain, 0.55, 1.65);
+    twistDepthAlpha = clamp(2.4 / depthMain, 0.45, 1.15);
+
+    if (uIsRibbon == 1) {
+      if (uEffectType == 7) { // auroraFill
+        float tSide = (side + 1.0) * 0.5;
+        P = mix(pBase, pMain, tSide);
+        vLocalUv = vec2(side, tSide);
+      } else {
+        float halfWidth = 0.003 * uThickness * depthCue;
+        P = pMain + side * halfWidth * ribNorm;
+        vLocalUv = vec2(side, 0.5);
+      }
+    } else {
+      int vertId = gl_VertexID;
+      float barWidth = (effSize / float(max(1, uSampleCount))) * 0.5 * (uThickness / 3.0) * depthCue;
+      vec2 widthOffset = Tscreen * barWidth;
+
+      if (uEffectType == 6) { // dots
+        vec2 qCorner = vec2(
+          (vertId == 0 || vertId == 2) ? -1.0 : 1.0,
+          (vertId == 0 || vertId == 1) ? -1.0 : 1.0
+        );
+        float dotRadius = 0.008 * uThickness * depthCue;
+        P = pMain + qCorner.x * Tscreen * dotRadius + qCorner.y * ribNorm * dotRadius;
+        vLocalUv = qCorner;
+      } else {
+        vec2 qCorner;
+        if (vertId == 0) {
+          P = pBase - widthOffset;
+          qCorner = vec2(-1.0, 0.0);
+        } else if (vertId == 1) {
+          P = pBase + widthOffset;
+          qCorner = vec2(1.0, 0.0);
+        } else if (vertId == 2) {
+          P = pMain - widthOffset;
+          qCorner = vec2(-1.0, 1.0);
+        } else {
+          P = pMain + widthOffset;
+          qCorner = vec2(1.0, 1.0);
+        }
+        vLocalUv = qCorner;
+      }
+    }
+  } else if (uIsRibbon == 1) {
     if (uEffectType == 7) { // auroraFill
       float tSide = (side + 1.0) * 0.5;
       P = mix(extrudeBase, extrudeTip, tSide);
@@ -442,6 +640,9 @@ void main() {
   vAudioAmp = abs(audioAmp);
   vPeakHold = peakHold;
   vAlpha = instAlpha * brightMul;
+  if (uBaseShape == 9) {
+    vAlpha *= twistDepthAlpha;
+  }
   vU = u;
   vUAudio = uAudio;
 }
