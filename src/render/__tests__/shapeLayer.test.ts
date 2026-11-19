@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ShapeLayer, SHAPE_AMP_MAX, SHAPE_REACTIVITY_MAX, SHAPE_HISTORY_FRAMES, SHAPE_TEXELS, elementLagFrames, applyCopyMotion, bucketExtreme, peakBandValues } from '../layers/shape';
+import {
+  ShapeLayer,
+  SHAPE_AMP_MAX,
+  SHAPE_REACTIVITY_MAX,
+  SHAPE_HISTORY_FRAMES,
+  SHAPE_TEXELS,
+  BOUNCE_WALL_INSET,
+  elementLagFrames,
+  applyCopyMotion,
+  bucketExtreme,
+  peakBandValues,
+  computeShapeBounceExtents,
+  stepBouncePhysics,
+} from '../layers/shape';
 import { SHAPE_DEFAULTS, SHAPE_SPECS } from '../../presets/layerSchemas';
 import { getVisualGain, setVisualGain } from '../gainStore';
 import type { AudioFrame } from '../../audio/types';
@@ -848,5 +861,172 @@ describe('Raised sample cap (Slice 19.14)', () => {
   it('spreads the per-element delay across all 1024 texels', () => {
     expect(elementLagFrames(1, 1023)).toBe(SHAPE_HISTORY_FRAMES - 1);
     expect(elementLagFrames(1, 0)).toBe(0);
+  });
+});
+
+describe('Wall-bounce physics (Slice 27.1)', () => {
+  it('keeps bounceSpeed === 0 as a complete no-op on position and spin', () => {
+    const gl = createMockGl();
+    const layer = new ShapeLayer({ posX: 0.35, posY: -0.25, spinSpeed: 1.5, bounceSpeed: 0 });
+    layer.init(gl);
+    const frame = makeMockFrame({ kickEnv: 0.8, energy: 0.9 });
+    layer.draw(frame, { timeSec: 1.0, dtSec: 0.25, frameIndex: 1 }, mockTarget);
+
+    const offsets = gl.uniformValues.get('uInstOffset[0]') as Float32Array;
+    const transforms = gl.uniformValues.get('uInstTransform[0]') as Float32Array;
+    expect(offsets[0]).toBeCloseTo(0.35, 6);
+    expect(offsets[1]).toBeCloseTo(-0.25, 6);
+    expect(transforms[1]).toBeCloseTo(1.5 * 0.25, 6);
+    expect(layer.getBounceState().active).toBe(false);
+  });
+
+  it('reflects horizontally and vertically within 16:9 viewport bounds', () => {
+    const aspect = 16 / 9;
+    const extents = { halfX: 0.2, halfY: 0.2 };
+    const limitX = aspect - BOUNCE_WALL_INSET - extents.halfX;
+    const limitY = 1.0 - BOUNCE_WALL_INSET - extents.halfY;
+
+    // Horizontal reflection off right wall (+limitX)
+    const rightHit = stepBouncePhysics(
+      { x: limitX - 0.02, y: 0, vx: 2.0, vy: 0, spinDir: 1, active: true },
+      { posX: 0, posY: 0, bounceSpeed: 2.0, bounceAngle: 0, bounceAudioBoost: 0, bounceFlipSpin: true },
+      0.05,
+      aspect,
+      extents,
+      0,
+    );
+    expect(rightHit.hit).toBe(true);
+    expect(rightHit.state.x).toBeLessThanOrEqual(limitX);
+    expect(rightHit.state.x).toBeCloseTo(limitX - 0.08, 6);
+    expect(rightHit.state.vx).toBeLessThan(0);
+
+    // Vertical reflection off bottom wall (-limitY)
+    const bottomHit = stepBouncePhysics(
+      { x: 0, y: -limitY + 0.02, vx: 0, vy: -2.0, spinDir: 1, active: true },
+      { posX: 0, posY: 0, bounceSpeed: 2.0, bounceAngle: 270, bounceAudioBoost: 0, bounceFlipSpin: true },
+      0.05,
+      aspect,
+      extents,
+      0,
+    );
+    expect(bottomHit.hit).toBe(true);
+    expect(bottomHit.state.y).toBeGreaterThanOrEqual(-limitY);
+    expect(bottomHit.state.y).toBeCloseTo(-limitY + 0.08, 6);
+    expect(bottomHit.state.vy).toBeGreaterThan(0);
+  });
+
+  it('computes rotated AABB half-extents for centerLine', () => {
+    const aspect = 16 / 9;
+    const size = 0.3;
+    const unrotated = computeShapeBounceExtents({ baseShape: 'centerLine' }, size, 0, aspect);
+    expect(unrotated.halfX).toBeCloseTo(size * aspect, 6);
+    expect(unrotated.halfY).toBeCloseTo(0, 6);
+
+    const rot90 = computeShapeBounceExtents({ baseShape: 'centerLine' }, size, Math.PI / 2, aspect);
+    expect(rot90.halfX).toBeCloseTo(0, 6);
+    expect(rot90.halfY).toBeCloseTo(size * aspect, 6);
+
+    const rot45 = computeShapeBounceExtents({ baseShape: 'centerLine' }, size, Math.PI / 4, aspect);
+    const expected = size * aspect * Math.SQRT1_2;
+    expect(rot45.halfX).toBeCloseTo(expected, 6);
+    expect(rot45.halfY).toBeCloseTo(expected, 6);
+  });
+
+  it('flips spinDir and reverses spinPhase advance on wall hit when bounceFlipSpin is enabled', () => {
+    const gl = createMockGl();
+    const layer = new ShapeLayer({
+      baseShape: 'circle',
+      size: 0.2,
+      posX: 1.4,
+      posY: 0,
+      spinSpeed: 2.0,
+      bounceSpeed: 2.0,
+      bounceAngle: 0,
+      bounceAudioBoost: 0,
+      bounceFlipSpin: true,
+      basePulse: 0,
+    });
+    layer.init(gl);
+
+    const quiet = makeMockFrame({ kickEnv: 0, energy: 0 });
+    // First draw: activates at posX=1.4 (within limitX ≈ 1.5577), moves +0.1 -> 1.5, no wall hit yet
+    layer.draw(quiet, { timeSec: 0.05, dtSec: 0.05, frameIndex: 1 }, mockTarget);
+    const stateBeforeHit = layer.getBounceState();
+    const spinAfterFirst = (gl.uniformValues.get('uInstTransform[0]') as Float32Array)[1]!;
+    expect(stateBeforeHit.spinDir).toBe(1);
+    expect(spinAfterFirst).toBeCloseTo(2.0 * 0.05, 6);
+
+    // Second draw: crosses limitX -> reflects and flips spinDir to -1
+    layer.draw(quiet, { timeSec: 0.10, dtSec: 0.05, frameIndex: 2 }, mockTarget);
+    const stateAfterHit = layer.getBounceState();
+    const spinAfterHit = (gl.uniformValues.get('uInstTransform[0]') as Float32Array)[1]!;
+    expect(stateAfterHit.spinDir).toBe(-1);
+    expect(spinAfterHit).toBeLessThan(spinAfterFirst);
+    expect(spinAfterHit).toBeCloseTo(0, 6);
+  });
+
+  it('scales bounce velocity dynamically via bounceAudioBoost', () => {
+    const aspect = 16 / 9;
+    const extents = { halfX: 0.1, halfY: 0.1 };
+    const initial = { x: 0, y: 0, vx: 1.0, vy: 0, spinDir: 1 as const, active: true };
+    const params = { posX: 0, posY: 0, bounceSpeed: 1.0, bounceAngle: 0, bounceAudioBoost: 1.5, bounceFlipSpin: true };
+
+    const quietStep = stepBouncePhysics(initial, params, 0.1, aspect, extents, 0);
+    const loudStep = stepBouncePhysics(initial, params, 0.1, aspect, extents, 0.8);
+
+    expect(quietStep.state.x).toBeCloseTo(0.1, 6);
+    expect(loudStep.state.x).toBeCloseTo(0.1 * (1 + 1.5 * 0.8), 6);
+    expect(loudStep.state.x).toBeGreaterThan(quietStep.state.x);
+  });
+
+  it('preserves mid-flight bounce state across setParams() calls', () => {
+    const gl = createMockGl();
+    const layer = new ShapeLayer({
+      baseShape: 'circle',
+      size: 0.2,
+      posX: 0,
+      posY: 0,
+      bounceSpeed: 1.0,
+      bounceAngle: 37,
+      bounceAudioBoost: 0,
+    });
+    layer.init(gl);
+
+    const frame = makeMockFrame({ kickEnv: 0, energy: 0 });
+    layer.draw(frame, { timeSec: 0.05, dtSec: 0.05, frameIndex: 1 }, mockTarget);
+    const midFlight = layer.getBounceState();
+    expect(midFlight.active).toBe(true);
+    expect(midFlight.x).toBeGreaterThan(0);
+
+    // Simulate per-frame audio link / reaction parameter mutation
+    layer.setParams({ glow: 1.5, bounceSpeed: 2.0 });
+    const afterSetParams = layer.getBounceState();
+    expect(afterSetParams).toEqual(midFlight);
+
+    layer.draw(frame, { timeSec: 0.10, dtSec: 0.05, frameIndex: 2 }, mockTarget);
+    const nextFlight = layer.getBounceState();
+    expect(nextFlight.x).toBeGreaterThan(midFlight.x);
+  });
+
+  it('clamps large dt without tunneling past viewport bounds', () => {
+    const aspect = 16 / 9;
+    const extents = { halfX: 0.2, halfY: 0.2 };
+    const limitX = aspect - BOUNCE_WALL_INSET - extents.halfX;
+    const limitY = 1.0 - BOUNCE_WALL_INSET - extents.halfY;
+
+    const clamped = stepBouncePhysics(
+      { x: 0, y: 0, vx: 1.0, vy: 0.5, spinDir: 1, active: true },
+      { posX: 0, posY: 0, bounceSpeed: 1.0, bounceAngle: 26, bounceAudioBoost: 0, bounceFlipSpin: false },
+      5.0,
+      aspect,
+      extents,
+      0,
+    );
+    // Clamped to MAX_DT_SEC = 0.1 and normalized heading to speed 1.0
+    const invNorm = 1 / Math.hypot(1.0, 0.5);
+    expect(clamped.state.x).toBeCloseTo(1.0 * invNorm * 0.1, 6);
+    expect(clamped.state.y).toBeCloseTo(0.5 * invNorm * 0.1, 6);
+    expect(Math.abs(clamped.state.x)).toBeLessThanOrEqual(limitX);
+    expect(Math.abs(clamped.state.y)).toBeLessThanOrEqual(limitY);
   });
 });

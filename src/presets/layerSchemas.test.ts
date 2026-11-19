@@ -85,7 +85,7 @@ describe("layer schemas", () => {
   });
 
   it("SHAPE_SPECS covers all 5 orthogonal categories and validates correctly", () => {
-    expect(SHAPE_SPECS.length).toBe(45);
+    expect(SHAPE_SPECS.length).toBe(49);
     SHAPE_SPECS.forEach(assertValidSpec);
 
     const groups = new Set(SHAPE_SPECS.map(s => s.group));
@@ -96,6 +96,7 @@ describe("layer schemas", () => {
     expect(baseSpecs.map(s => s.name)).toEqual([
       'baseShape', 'edgeMode', 'sides', 'starInner', 'cornerRadius', 'arcSweep',
       'spiralTurns', 'knotSpin', 'size', 'posX', 'posY', 'rotation', 'spinSpeed', 'basePulse',
+      'bounceSpeed', 'bounceAngle', 'bounceAudioBoost', 'bounceFlipSpin',
     ]);
 
     // Category 2: Effect
@@ -171,6 +172,14 @@ describe("layer schemas", () => {
     expect(specMap.get('rotation')?.showWhen).toBeUndefined();
     expect(specMap.get('spinSpeed')?.showWhen).toBeUndefined();
     expect(specMap.get('basePulse')?.showWhen).toBeUndefined();
+    expect(specMap.get('bounceSpeed')?.showWhen).toBeUndefined();
+    expect(specMap.get('bounceAngle')?.showWhen).toEqual({ bounceSpeed: { above: 0 } });
+    expect(specMap.get('bounceAudioBoost')?.showWhen).toEqual({ bounceSpeed: { above: 0 } });
+    expect(specMap.get('bounceFlipSpin')?.showWhen).toEqual({ bounceSpeed: { above: 0 } });
+    for (const name of ['bounceSpeed', 'bounceAngle', 'bounceAudioBoost', 'bounceFlipSpin']) {
+      expect(typeof specMap.get(name)?.description).toBe('string');
+      expect(specMap.get(name)!.description!.trim().length).toBeGreaterThan(0);
+    }
     expect(specMap.get('effectType')?.showWhen).toBeUndefined();
     expect(specMap.get('thickness')?.showWhen).toBeUndefined();
     expect(specMap.get('symmetry')?.showWhen).toBeUndefined();

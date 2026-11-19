@@ -402,6 +402,10 @@ export interface ShapeParams {
   rotation: number;       // -180..180 (degrees)
   spinSpeed: number;      // -2.0..2.0 (rad/s)
   basePulse: number;      // 0..1.0
+  bounceSpeed: number;    // 0.0..3.0 (viewport half-height units/s; 0 = off)
+  bounceAngle: number;    // 0..360 (launch heading in degrees)
+  bounceAudioBoost: number; // 0.0..2.0 (audio speed multiplier)
+  bounceFlipSpin: boolean;  // true = reverse spin direction on wall hit
 
   // Category 2 — Reactive Effect ("Effect")
   effectType: ShapeEffectType;
@@ -458,6 +462,10 @@ export const SHAPE_DEFAULTS: ShapeParams = {
   rotation: 0,
   spinSpeed: 0.0,
   basePulse: 0.15,
+  bounceSpeed: 0.0,
+  bounceAngle: 37,
+  bounceAudioBoost: 0.5,
+  bounceFlipSpin: true,
 
   effectType: 'bars',
   sampleCount: 64,
@@ -511,6 +519,10 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'rotation', label: 'Rotation', group: 'Base', default: SHAPE_DEFAULTS.rotation, min: -180, max: 180, step: 1, description: 'Rotates base geometry about its local origin in degrees.' },
   { type: 'float', name: 'spinSpeed', label: 'Spin speed', group: 'Base', default: SHAPE_DEFAULTS.spinSpeed, min: -2.0, max: 2.0, step: 0.05, description: 'Applies continuous angular spin velocity to base geometry.' },
   { type: 'float', name: 'basePulse', label: 'Base pulse', group: 'Base', default: SHAPE_DEFAULTS.basePulse, min: 0, max: 1.0, step: 0.05, description: 'Scales rhythmic geometric expansion driven by low-frequency pulses.' },
+  { type: 'float', name: 'bounceSpeed', label: 'Wall bounce speed', group: 'Base', default: SHAPE_DEFAULTS.bounceSpeed, min: 0.0, max: 3.0, step: 0.05, description: 'Moves the shape across the viewport and reflects it off the screen walls (0 = off).' },
+  { type: 'float', name: 'bounceAngle', label: 'Bounce launch angle (°)', group: 'Base', default: SHAPE_DEFAULTS.bounceAngle, min: 0, max: 360, step: 1, showWhen: { bounceSpeed: { above: 0 } }, description: 'Sets the launch direction in degrees when wall bounce activates (37° avoids repeating loops).' },
+  { type: 'float', name: 'bounceAudioBoost', label: 'Bounce audio speed boost', group: 'Base', default: SHAPE_DEFAULTS.bounceAudioBoost, min: 0.0, max: 2.0, step: 0.05, showWhen: { bounceSpeed: { above: 0 } }, description: 'Accelerates wall-bounce velocity dynamically on kicks and energy peaks.' },
+  { type: 'bool', name: 'bounceFlipSpin', label: 'Flip spin on wall hit', group: 'Base', default: SHAPE_DEFAULTS.bounceFlipSpin, showWhen: { bounceSpeed: { above: 0 } }, description: 'Reverses spin direction whenever the shape reflects off a screen wall.' },
 
   // Category 2 — Reactive Effect ("Effect")
   { type: 'enum', name: 'effectType', label: 'Effect type', group: 'Effect', default: SHAPE_DEFAULTS.effectType, options: ['solidLine', 'pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'], description: 'Selects reactive visual rendering mode drawn along the blueprint curve.' },
