@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "name": "Bouncing Ribbon Wave",
+  "tags": ["built-in", "flagship", "waveform"],
+  "theme": "waveform",
+  "mood": "driving",
+  "transition": { "style": "crossfade", "seconds": 0.4 },
+  "feedback": {
+    "decay": 0.93,
+    "zoom": 1.02,
+    "rotate": 0.006,
+    "warpMode": "curl",
+    "warp": 0.16,
+    "warpScale": 2.0,
+    "warpSpeed": 0.65,
+    "warpAudioSource": "kick",
+    "warpReactivity": 0.35,
+    "warpAttackMs": 15,
+    "warpReleaseMs": 220,
+    "curlOctaves": 2,
+    "curlTurbulence": 0.4,
+    "curlFlowPattern": "plumes",
+    "hueDrift": 0.012,
+    "decayRgb": [0.93, 0.94, 0.98]
+  },
+  "warp": [
+    {
+      "type": "radial",
+      "params": {
+        "amount": 0.1,
+        "scale": 1,
+        "speed": 0,
+        "exponent": 1.6
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "trigger": { "type": "beat" },
+      "response": "kick",
+      "target": { "group": "feedback", "name": "zoom" },
+      "amount": 0.05,
+      "ease": 0.35
+    }
+  ],
+  "layers": [
+    {
+      "type": "shape",
+      "enabled": true,
+      "opacity": 1.0,
+      "blend": "add",
+      "trails": true,
+      "params": {
+        "baseShape": "centerLine",
+        "size": 0.42,
+        "posX": 0.0,
+        "posY": 0.0,
+        "rotation": 15,
+        "spinSpeed": 0.28,
+        "basePulse": 0.22,
+        "bounceSpeed": 0.85,
+        "bounceAngle": 37,
+        "bounceAudioBoost": 0.65,
+        "bounceFlipSpin": true,
+        "effectType": "waveform",
+        "audioSource": "scope",
+        "symmetry": "wrap",
+        "extrudeDirection": "outward",
+        "sampleCount": 384,
+        "effectLength": 0.48,
+        "reactivity": 2.1,
+        "attackMs": 6,
+        "releaseMs": 65,
+        "thickness": 2.8,
+        "colorMode": "frequencyGradient",
+        "glow": 1.0
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.75,
+    "bloomThreshold": 0.4,
+    "vignette": 0.35
+  }
+}

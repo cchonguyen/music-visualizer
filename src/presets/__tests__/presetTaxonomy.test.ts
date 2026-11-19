@@ -58,6 +58,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
     '28-julia-drift',
     '29-orbit-hall',
     '30-corridor-glide',
+    '31-bouncing-ribbon-wave',
   ];
 
   const EXPECTED_FLAGSHIP_IDS = [
@@ -92,7 +93,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   });
 
   it('categorizes all 45+ built-in presets accurately into their subfolders', () => {
-    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(18);
+    expect(EXPECTED_SHOWCASE_IDS).toHaveLength(19);
     expect(EXPECTED_FLAGSHIP_IDS).toHaveLength(11);
     expect(EXPECTED_CLASSICS_IDS).toHaveLength(6);
 
@@ -116,7 +117,7 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
   });
 
   it('ensures every built-in preset in ALL_PRESETS belongs to exactly one subfolder', () => {
-    expect(ALL_PRESETS.length).toBe(35);
+    expect(ALL_PRESETS.length).toBe(36);
     const validSubfolders: SystemSubfolder[] = ['showcase', 'flagship', 'classics'];
 
     const seenIds = new Set<string>();
@@ -228,6 +229,7 @@ describe('Stage 18 showcase presets 21 to 24 (Slice 18.10)', () => {
       if (
         NEW_IDS.includes(p.id) ||
         STAGE_20_IDS.includes(p.id) ||
+        p.id === '31-bouncing-ribbon-wave' ||
         ['01-curl-fluid-warp', '02-kaleidoscopic-mandala', '03-solarized-contour-rings', '04-mobius-dual-vortex'].includes(p.id)
       ) continue;
       expect(p.preset.warp, p.id).toBeUndefined();
@@ -372,5 +374,44 @@ describe('Slice 20.9: generator showcase presets 27 to 30', () => {
       expect(e!.preset.mood).toBeTruthy();
       expect(['light', 'medium', 'heavy']).toContain(presetCost(e!.preset).level);
     }
+  });
+});
+
+describe('Stage 27 showcase preset 31: Bouncing Ribbon Wave (Slice 27.2)', () => {
+  const entry = () => ALL_PRESETS.find((e) => e.id === '31-bouncing-ribbon-wave');
+
+  it('loads with 0 warnings, showcase subfolder, and valid taxonomy without forbidden words', () => {
+    const e = entry();
+    expect(e).toBeDefined();
+    expect(e!.warnings).toEqual([]);
+    expect(e!.subfolder).toBe('showcase');
+    expect(getSystemSubfolder('31-bouncing-ribbon-wave')).toBe('showcase');
+    expect(e!.id.toLowerCase()).not.toContain('milkdrop');
+    expect(e!.preset.name.toLowerCase()).not.toContain('milkdrop');
+    expect(e!.preset.theme).toBe('waveform');
+    expect(e!.preset.mood).toBe('driving');
+    expect(e!.preset.tags).toEqual(expect.arrayContaining(['built-in', 'flagship', 'waveform']));
+  });
+
+  it('uses wall-bounce physics on its oscilloscope centerLine Shape layer, radial warp, beat zoom reaction, and bloom', () => {
+    const { preset } = entry()!;
+    const shapeLayer = preset.layers.find((l) => l.type === 'shape');
+    expect(shapeLayer).toBeDefined();
+    expect(shapeLayer!.blend).toBe('add');
+    expect(shapeLayer!.trails).toBe(true);
+    expect(shapeLayer!.params.baseShape!.value).toBe('centerLine');
+    expect(shapeLayer!.params.effectType!.value).toBe('waveform');
+    expect(shapeLayer!.params.audioSource!.value).toBe('scope');
+    expect(shapeLayer!.params.bounceSpeed!.value as number).toBeGreaterThan(0);
+
+    const radial = preset.warp?.find((w) => w.type === 'radial');
+    expect(radial).toBeDefined();
+    expect(radial!.params.exponent!.value).toBe(1.6);
+
+    const reaction = preset.reactions?.find(
+      (r) => r.trigger.type === 'beat' && r.response === 'kick' && r.target.group === 'feedback' && r.target.name === 'zoom',
+    );
+    expect(reaction).toBeDefined();
+    expect(preset.post.bloom!.value as number).toBeGreaterThan(0);
   });
 });
