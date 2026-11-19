@@ -1,21 +1,18 @@
-# Session Handoff: Stage 26 Optional Polish & Parked Visual Improvements
+# Session Handoff: Stage 27 True Wall-Bounce Physics & Bouncing Ribbon Wave Preset
 
 ## Last Active State
-- **Last Active Branch**: `visual_improvements_tooltips_audit` (rebased on `origin/main` at `f0ca49f`).
+- **Last Active Branch**: `stage-27-spec` (branched from `origin/main` at `ba28d54`).
 - **Active Task**: none. No `[IN_PROGRESS]` slice.
-- **Status**: Stages 1 through 25 (including deferred Slice 24.10 CSS prune, PR #387) are complete and archived in `.spec/HISTORY.md`. Stage 26 is planned, specified in `.spec/specs/stage-26-optional-polish-parked-visuals.md` (`[496]`), and queued in `.spec/PROGRESS.md` (`Slice 26.1` through `Slice 26.13`).
+- **Status**: Stages 1 through 26 (Slices `26.1`–`26.13` ending at `ba28d54`) are complete and archived in `.spec/HISTORY.md`. Stage 27 is planned, specified in `.spec/specs/stage-27-wall-bounce-and-ribbon-preset.md` (`[497]`), and queued in `.spec/PROGRESS.md` (`Slice 27.1` and `Slice 27.2`).
 
 ## What changed (recent)
-- Completed Stage 25 (Slices 25.1–25.11): dead parameter/uniform pruning, half-wired controls activation, CPU-smoothed warp responsiveness, 100% tooltips & Studio helper bar, inline DOM prompts, and Studio cleanup.
-- Completed Stage 24 (Slice 24.10, PR #387): pruned redundant CSS rules and tokens in `src/style.css`, `src/ui/style.css`, and `src/app.css`.
-- Archived Slice 24.10 into `.spec/HISTORY.md` and authored Stage 26 spec (`[496]`) + ADR + atomic slices (`26.1`–`26.13`).
+- Completed Stage 26 (Slices `26.1`–`26.13`): Studio inline SVGs, per-preset `blendSec` + `0s` hard-cut beat mode, 4 Global Director palettes + live tint pickers, persistent Low-Power Mode, `invert` post effect, and radial `exponent` (`zoomexp`) WarpField parameter.
+- Archived Stage 26 (`26.1`–`26.13`) into `.spec/HISTORY.md` and authored Stage 27 spec (`[497]`), ADR, system spec summary, and atomic slices (`27.1`–`27.2`).
 
-## Queued Stage 26 Scope
-1. **Slices 26.1–26.2**: Replace `👑` and `⚠️` emojis in Studio Admin controls, helper bar, Tweakpane admin buttons, and toasts with Lucide-style 16px inline `<svg class="ui-icon">` icons.
-2. **Slices 26.3–26.6**: Add optional per-preset `blendSec` (`0..10` s), `hardCut` beat auto-cycle mode, and `0s` instant cut support in `Compositor`, `PresetSession`, `Studio`, and the Visuals panel.
-3. **Slices 26.7–26.10**: Add 4 roadmap Global Director palettes (`noir`, `acid`, `aurora`, `sunset`), live `shadowTint` / `highlightTint` RGB pickers in Studio, and persistent Low-Power Mode (`LOW_POWER_SCALE = 0.5` + Compositor post-pass bypass with safety preserved).
-4. **Slices 26.11–26.13**: Add `invert` post-processing effect and `radial` `exponent` (`zoomexp`) WarpField parameter with full test coverage.
+## Queued Stage 27 Scope
+1. **Slice 27.1**: Add untiered `bounceSpeed`, `bounceAngle`, `bounceAudioBoost`, and `bounceFlipSpin` controls to `SHAPE_SPECS` / `SHAPE_DEFAULTS` / `ShapeParams` (preserving 8 `'basic'` controls and `posX`/`posY` `showWhen: undefined`), and implement persistent aspect-corrected wall-bounce physics (`computeShapeBounceExtents`, `stepBouncePhysics`, `getBounceState()`, `clampDt`) on `ShapeLayer` with unit tests.
+2. **Slice 27.2**: Add built-in showcase preset `31-bouncing-ribbon-wave` (*Bouncing Ribbon Wave*) pairing wall-bounce `centerLine` `scope` waveform with MilkDrop-style curl trails (`warpAudioSource: 'kick'`), radial `exponent: 1.6` warp field, `beat` `kick` reaction on `feedback.zoom`, and bloom post; register in `src/presets/builtin/index.ts` and update `src/presets/__tests__/presetTaxonomy.test.ts` (`19` showcase / `36` total).
 
 ## Next Steps
-1. Execute `Slice 26.1` through `Slice 26.13` sequentially via Tier 3 workers from `.spec/PROGRESS.md`.
+1. Execute `Slice 27.1` and `Slice 27.2` sequentially via Tier 3 workers from `.spec/PROGRESS.md`.
 2. Verify `npm run typecheck && npm test && npm run build` and `node .harness/scripts/navigator.mjs --check` after each slice.
