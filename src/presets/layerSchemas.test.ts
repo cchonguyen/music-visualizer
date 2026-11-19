@@ -5,7 +5,7 @@ import { parsePreset, PRESET_VERSION } from "./format";
 import {
   BARS_DEFAULTS, BARS_SPECS, BASS_PULSE_DEFAULTS, BASS_PULSE_SPECS, CROWN_DEFAULTS, CROWN_SPECS, LAYER_SPECS, PARTICLE_DEFAULTS, PARTICLE_SPECS,
   RINGS_DEFAULTS, RINGS_SPECS, SHAPE_DEFAULTS, SHAPE_SPECS, SHOCKWAVE_DEFAULTS, SHOCKWAVE_SPECS, TUNNEL_DEFAULTS, TUNNEL_SPECS,
-  WAVEFORM_DEFAULTS, WAVEFORM_SPECS, WAVEFORM_SCHEMA, POST_SPECS, FEEDBACK_SPECS, CHLADNI_PLATE_MODE_SPEC,
+  WAVEFORM_DEFAULTS, WAVEFORM_SPECS, WAVEFORM_SCHEMA, POST_SPECS, FEEDBACK_SPECS, CHLADNI_PLATE_MODE_SPEC, tierOf,
 } from "./layerSchemas";
 
 describe("layer schemas", () => {
@@ -85,7 +85,7 @@ describe("layer schemas", () => {
   });
 
   it("SHAPE_SPECS covers all 5 orthogonal categories and validates correctly", () => {
-    expect(SHAPE_SPECS.length).toBe(49);
+    expect(SHAPE_SPECS.length).toBe(51);
     SHAPE_SPECS.forEach(assertValidSpec);
 
     const groups = new Set(SHAPE_SPECS.map(s => s.group));
@@ -97,6 +97,7 @@ describe("layer schemas", () => {
       'baseShape', 'edgeMode', 'sides', 'starInner', 'cornerRadius', 'arcSweep',
       'spiralTurns', 'knotSpin', 'size', 'posX', 'posY', 'rotation', 'spinSpeed', 'basePulse',
       'bounceSpeed', 'bounceAngle', 'bounceAudioBoost', 'bounceFlipSpin',
+      'twistSpeed', 'twistChaos',
     ]);
 
     // Category 2: Effect
@@ -180,6 +181,38 @@ describe("layer schemas", () => {
       expect(typeof specMap.get(name)?.description).toBe('string');
       expect(specMap.get(name)!.description!.trim().length).toBeGreaterThan(0);
     }
+
+    const baseShapeSpec = specMap.get('baseShape') as ParamSpec & { options: readonly string[] };
+    expect(baseShapeSpec.options[9]).toBe('twistWave');
+    expect(LAYER_SPECS.shape!.filter((s) => tierOf(s) === 'basic')).toHaveLength(8);
+
+    const twistSpeed = specMap.get('twistSpeed')!;
+    expect(twistSpeed).toMatchObject({
+      type: 'float',
+      label: 'Twist speed',
+      group: 'Base',
+      default: 1.0,
+      min: 0.0,
+      max: 3.0,
+      step: 0.05,
+      showWhen: { baseShape: 'twistWave' },
+    });
+    expect(twistSpeed.description!.trim().length).toBeGreaterThan(0);
+    expect(tierOf(LAYER_SPECS.shape!.find((s) => s.name === 'twistSpeed')!)).toBe('advanced');
+
+    const twistChaos = specMap.get('twistChaos')!;
+    expect(twistChaos).toMatchObject({
+      type: 'float',
+      label: 'Twist complexity',
+      group: 'Base',
+      default: 0.65,
+      min: 0.0,
+      max: 1.0,
+      step: 0.05,
+      showWhen: { baseShape: 'twistWave' },
+    });
+    expect(twistChaos.description!.trim().length).toBeGreaterThan(0);
+    expect(tierOf(LAYER_SPECS.shape!.find((s) => s.name === 'twistChaos')!)).toBe('advanced');
     expect(specMap.get('effectType')?.showWhen).toBeUndefined();
     expect(specMap.get('thickness')?.showWhen).toBeUndefined();
     expect(specMap.get('symmetry')?.showWhen).toBeUndefined();

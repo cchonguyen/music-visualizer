@@ -320,7 +320,8 @@ export type ShapeBaseType =
   | 'star'
   | 'spiral'
   | 'figure8'
-  | 'knot3d';
+  | 'knot3d'
+  | 'twistWave';
 
 export type ShapeEdgeMode =
   | 'bottom'
@@ -406,6 +407,8 @@ export interface ShapeParams {
   bounceAngle: number;    // 0..360 (launch heading in degrees)
   bounceAudioBoost: number; // 0.0..2.0 (audio speed multiplier)
   bounceFlipSpin: boolean;  // true = reverse spin direction on wall hit
+  twistSpeed: number;       // 0.0..3.0 (organic twist & morph speed; 0 holds still)
+  twistChaos: number;       // 0.0..1.0 (smooth flowing ribbons to wild 3D knots)
 
   // Category 2 — Reactive Effect ("Effect")
   effectType: ShapeEffectType;
@@ -466,6 +469,8 @@ export const SHAPE_DEFAULTS: ShapeParams = {
   bounceAngle: 37,
   bounceAudioBoost: 0.5,
   bounceFlipSpin: true,
+  twistSpeed: 1.0,
+  twistChaos: 0.65,
 
   effectType: 'bars',
   sampleCount: 64,
@@ -505,7 +510,7 @@ export const SHAPE_DEFAULTS: ShapeParams = {
 
 export const SHAPE_SPECS: readonly ParamSpec[] = [
   // Category 1 — Base Geometry ("Base")
-  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8', 'knot3d'], description: 'Selects the underlying geometric blueprint curve. 3D curve is a rotating knot seen in perspective.' },
+  { type: 'enum', name: 'baseShape', label: 'Base shape', group: 'Base', default: SHAPE_DEFAULTS.baseShape, options: ['centerLine', 'edgeLine', 'circle', 'arc', 'polygon', 'star', 'spiral', 'figure8', 'knot3d', 'twistWave'], description: 'Selects the underlying geometric blueprint curve. 3D curve is a rotating knot seen in perspective.' },
   { type: 'enum', name: 'edgeMode', label: 'Edge mode', group: 'Base', default: SHAPE_DEFAULTS.edgeMode, options: ['bottom', 'top', 'dualHorizontal', 'dualVertical', 'frame'], showWhen: { baseShape: 'edgeLine' }, description: 'Configures viewport edge alignment anchoring for line geometries.' },
   { type: 'int', name: 'sides', label: 'Sides', group: 'Base', default: SHAPE_DEFAULTS.sides, min: 3, max: 12, step: 1, showWhen: { baseShape: ['polygon', 'star'] }, description: 'Sets the number of polygonal vertices or star points.' },
   { type: 'float', name: 'starInner', label: 'Star inner ratio', group: 'Base', default: SHAPE_DEFAULTS.starInner, min: 0.2, max: 0.9, step: 0.05, showWhen: { baseShape: 'star' }, description: 'Adjusts the inner radius indentation ratio for star shapes.' },
@@ -523,6 +528,8 @@ export const SHAPE_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'bounceAngle', label: 'Bounce launch angle (°)', group: 'Base', default: SHAPE_DEFAULTS.bounceAngle, min: 0, max: 360, step: 1, showWhen: { bounceSpeed: { above: 0 } }, description: 'Sets the launch direction in degrees when wall bounce activates (37° avoids repeating loops).' },
   { type: 'float', name: 'bounceAudioBoost', label: 'Bounce audio speed boost', group: 'Base', default: SHAPE_DEFAULTS.bounceAudioBoost, min: 0.0, max: 2.0, step: 0.05, showWhen: { bounceSpeed: { above: 0 } }, description: 'Accelerates wall-bounce velocity dynamically on kicks and energy peaks.' },
   { type: 'bool', name: 'bounceFlipSpin', label: 'Flip spin on wall hit', group: 'Base', default: SHAPE_DEFAULTS.bounceFlipSpin, showWhen: { bounceSpeed: { above: 0 } }, description: 'Reverses spin direction whenever the shape reflects off a screen wall.' },
+  { type: 'float', name: 'twistSpeed', label: 'Twist speed', group: 'Base', default: SHAPE_DEFAULTS.twistSpeed, min: 0.0, max: 3.0, step: 0.05, showWhen: { baseShape: 'twistWave' }, description: 'Controls how fast the centered waveform spine twists, curls, and morphs organically over time.' },
+  { type: 'float', name: 'twistChaos', label: 'Twist complexity', group: 'Base', default: SHAPE_DEFAULTS.twistChaos, min: 0.0, max: 1.0, step: 0.05, showWhen: { baseShape: 'twistWave' }, description: 'Blends between smooth flowing ribbons (0) and wild multi-harmonic 3D knots and folds (1).' },
 
   // Category 2 — Reactive Effect ("Effect")
   { type: 'enum', name: 'effectType', label: 'Effect type', group: 'Effect', default: SHAPE_DEFAULTS.effectType, options: ['solidLine', 'pulsingLine', 'waveform', 'harmonicWave', 'bars', 'segmentedBars', 'dots', 'auroraFill'], description: 'Selects reactive visual rendering mode drawn along the blueprint curve.' },
