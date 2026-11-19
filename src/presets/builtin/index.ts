@@ -56,6 +56,7 @@ import preset27 from './27-ink-flow.json';
 import preset28 from './28-julia-drift.json';
 import preset29 from './29-orbit-hall.json';
 import preset30 from './30-corridor-glide.json';
+import preset31 from './31-bouncing-ribbon-wave.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -141,6 +142,8 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   '28-julia-drift': 'showcase',
   '29-orbit-hall': 'showcase',
   '30-corridor-glide': 'showcase',
+  // Wall-bounce ribbon showcase (31, Stage 27).
+  '31-bouncing-ribbon-wave': 'showcase',
 
   // Flagship (01–12)
   '01-curl-fluid-warp': 'flagship',
@@ -279,6 +282,11 @@ export const SHOWCASE_PRESETS_27_30: readonly BuiltinPresetEntry[] = [
   { id: '30-corridor-glide', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset30, SCHEMAS) },
 ];
 
+/** Stage 27 wall-bounce ribbon showcase preset 31. */
+export const SHOWCASE_PRESETS_31: readonly BuiltinPresetEntry[] = [
+  { id: '31-bouncing-ribbon-wave', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset31, SCHEMAS) },
+];
+
 export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...BUILTIN_PRESETS,
   ...FLAGSHIP_PRESETS,
@@ -289,6 +297,7 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...SHOWCASE_PRESETS_21_24,
   ...SHOWCASE_PRESETS_25_26,
   ...SHOWCASE_PRESETS_27_30,
+  ...SHOWCASE_PRESETS_31,
 ];
 
 /**
@@ -326,6 +335,7 @@ export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood
   '28-julia-drift': { theme: 'fractal', mood: 'dreamy' },
   '29-orbit-hall': { theme: 'orbit', mood: 'dreamy' },
   '30-corridor-glide': { theme: 'architecture', mood: 'driving' },
+  '31-bouncing-ribbon-wave': { theme: 'waveform', mood: 'driving' },
   'crown': { theme: 'geometric', mood: 'driving' },
   'flight': { theme: 'hypnotic', mood: 'driving' },
   'bars': { theme: 'waveform', mood: 'driving' },
