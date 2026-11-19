@@ -140,6 +140,29 @@ describe('radial exponent (Slice 26.12)', () => {
     expect(extras[3]).toBeCloseTo(0.25, 5);
     expect(extras[6]).toBeCloseTo(4, 5);
   });
+
+  it('packs boundary radial exponents (0.25, 1.0, 4.0) and falls back cleanly on non-finite values', () => {
+    expect(radialExponent({ exponent: 0.25 })).toBe(0.25);
+    expect(radialExponent({ exponent: 1.0 })).toBe(1.0);
+    expect(radialExponent({ exponent: 4.0 })).toBe(4.0);
+    expect(radialExponent({ exponent: -2 })).toBe(0.25);
+    expect(radialExponent({ exponent: Number.NaN })).toBe(1.0);
+    expect(radialExponent({ exponent: Number.POSITIVE_INFINITY })).toBe(1.0);
+
+    const gl = mockGl();
+    const field = new WarpField(gl, {} as WebGLVertexArrayObject, 1);
+    expect(field.update([
+      op('radial', 0.5, true, { exponent: 0.25 }),
+      op('radial', 0.5, true, { exponent: 1.0 }),
+      op('radial', 0.5, true, { exponent: 4.0 }),
+      op('radial', 0.5, true, { exponent: Number.NaN }),
+    ], 1, 1 / 60, 1)).toBe(true);
+    const extras = gl.uniform3fv.mock.calls[0]![1] as Float32Array;
+    expect(extras[0]).toBeCloseTo(0.25, 5);
+    expect(extras[3]).toBeCloseTo(1.0, 5);
+    expect(extras[6]).toBeCloseTo(4.0, 5);
+    expect(extras[9]).toBeCloseTo(1.0, 5);
+  });
 });
 
 describe('fractal fold operator (Slice 20.2)', () => {

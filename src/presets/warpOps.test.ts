@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { WARP_OP_MAX, WARP_OP_TYPES, WARP_OP_LABELS, isWarpOpType, warpOpSpecs } from "./warpOps";
-import { assertValidSpec, defaultsFor } from "./schema";
+import { assertValidSpec, coerceValue, defaultsFor } from "./schema";
+import { SCHEMAS } from "./builtin";
+import { parsePreset, PRESET_VERSION } from "./format";
 
 describe("warp operator schema", () => {
   it("allows a stack of four", () => {
@@ -52,6 +54,51 @@ describe("warp operator schema", () => {
     expect(spec && spec.type === "float" && [spec.min, spec.max, spec.step]).toEqual([0.25, 4.0, 0.05]);
     expect(defaultsFor(warpOpSpecs("radial")).exponent).toBe(1.0);
     expect(spec?.description?.trim().length).toBeGreaterThan(0);
+  });
+
+  it("coerces and round-trips radial exponent through preset parsing", () => {
+    const spec = warpOpSpecs("radial").find((s) => s.name === "exponent")!;
+    expect(coerceValue(spec, 0.25)).toEqual({ value: 0.25 });
+    expect(coerceValue(spec, 1.0)).toEqual({ value: 1.0 });
+    expect(coerceValue(spec, 4.0)).toEqual({ value: 4.0 });
+    expect(coerceValue(spec, 0.05).value).toBe(0.25);
+    expect(coerceValue(spec, 9.0).value).toBe(4.0);
+    expect(coerceValue(spec, "bad").value).toBe(1.0);
+
+    const registry = { feedback: SCHEMAS.feedback, post: SCHEMAS.post, layers: SCHEMAS.layers };
+    const { preset, warnings } = parsePreset(
+      {
+        version: PRESET_VERSION,
+        name: "radial exponent roundtrip",
+        warp: [
+          { type: "radial", enabled: true, params: { amount: 0.4, exponent: 2.35 } },
+          { type: "radial", enabled: true, params: { amount: 0.4 } },
+        ],
+      },
+      registry,
+    );
+    expect(warnings).toEqual([]);
+    expect(preset.warp?.[0]?.params.exponent?.value).toBe(2.35);
+    expect(preset.warp?.[1]?.params.exponent?.value).toBe(1.0);
+
+    const reparsed = parsePreset(JSON.parse(JSON.stringify(preset)), registry);
+    expect(reparsed.warnings).toEqual([]);
+    expect(reparsed.preset.warp?.[0]?.params.exponent?.value).toBe(2.35);
+
+    const clamped = parsePreset(
+      {
+        version: PRESET_VERSION,
+        name: "radial exponent clamp",
+        warp: [
+          { type: "radial", enabled: true, params: { amount: 0.4, exponent: 0.05 } },
+          { type: "radial", enabled: true, params: { amount: 0.4, exponent: 12 } },
+        ],
+      },
+      registry,
+    );
+    expect(clamped.preset.warp?.[0]?.params.exponent?.value).toBe(0.25);
+    expect(clamped.preset.warp?.[1]?.params.exponent?.value).toBe(4.0);
+    expect(clamped.warnings.length).toBe(2);
   });
 
   it("fractal fold adds an iterations setting from 3 to 6", () => {
