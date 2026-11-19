@@ -36,14 +36,22 @@ describe("warp operator schema", () => {
     expect([...WARP_OP_TYPES]).toEqual(["radial", "swirl", "ripple", "stripes", "stretch", "tile", "tunnel", "sphere", "curl", "flow", "fold"]);
   });
 
-  it("every type has the common settings, and only Curl noise and Fractal fold have more", () => {
+  it("every type has the common settings, and only Radial, Curl noise, and Fractal fold have more", () => {
     const names = (t: (typeof WARP_OP_TYPES)[number]) => warpOpSpecs(t).map((s) => s.name);
-    const common = names("radial");
+    const common = names("swirl");
     for (const type of WARP_OP_TYPES) {
       expect(names(type).slice(0, common.length)).toEqual(common);
-      if (type !== "curl" && type !== "fold") expect(names(type)).toEqual(common);
+      if (type !== "radial" && type !== "curl" && type !== "fold") expect(names(type)).toEqual(common);
     }
+    expect(names("radial").slice(common.length)).toEqual(["exponent"]);
     expect(names("curl").slice(common.length)).toEqual(["octaves", "turbulence", "flow"]);
+  });
+
+  it("radial adds an exponent setting from 0.25 to 4.0 defaulting to 1.0", () => {
+    const spec = warpOpSpecs("radial").find((s) => s.name === "exponent");
+    expect(spec && spec.type === "float" && [spec.min, spec.max, spec.step]).toEqual([0.25, 4.0, 0.05]);
+    expect(defaultsFor(warpOpSpecs("radial")).exponent).toBe(1.0);
+    expect(spec?.description?.trim().length).toBeGreaterThan(0);
   });
 
   it("fractal fold adds an iterations setting from 3 to 6", () => {

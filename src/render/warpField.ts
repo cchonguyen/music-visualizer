@@ -64,6 +64,14 @@ export function foldIterations(values: Record<string, ParamValue>, renderScale: 
   return Math.min(wanted, cap);
 }
 
+export const RADIAL_EXPONENT_MIN = 0.25;
+export const RADIAL_EXPONENT_MAX = 4.0;
+
+/** Radial exponent as the shader reads it, clamped to 0.25..4.0 (default 1.0). */
+export function radialExponent(values: Record<string, ParamValue>): number {
+  return Math.max(RADIAL_EXPONENT_MIN, Math.min(RADIAL_EXPONENT_MAX, numberOf(values, 'exponent', 1)));
+}
+
 export class WarpField {
   private readonly gl: WebGL2RenderingContext;
   private pp: PingPong;
@@ -121,7 +129,11 @@ export class WarpField {
       this.speeds[n] = numberOf(op.values, 'speed', 0);
       this.centres[n * 2] = numberOf(op.values, 'centreX', 0);
       this.centres[n * 2 + 1] = numberOf(op.values, 'centreY', 0);
-      if (op.type === 'curl') {
+      if (op.type === 'radial') {
+        this.extras[n * 3] = radialExponent(op.values);
+        this.extras[n * 3 + 1] = 0;
+        this.extras[n * 3 + 2] = 0;
+      } else if (op.type === 'curl') {
         const [octaves, turbulence, flow] = curlExtras(op.values);
         this.extras[n * 3] = octaves;
         this.extras[n * 3 + 1] = turbulence;
