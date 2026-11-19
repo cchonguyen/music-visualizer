@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "name": "Twisting Scope Wave",
+  "tags": ["built-in", "flagship", "waveform", "oscilloscope"],
+  "theme": "waveform",
+  "mood": "dreamy",
+  "transition": { "style": "crossfade", "seconds": 0.4 },
+  "feedback": {
+    "decay": 0.95,
+    "zoom": 1.018,
+    "rotate": 0.006,
+    "warpMode": "curl",
+    "warp": 0.14,
+    "warpScale": 2.0,
+    "warpSpeed": 0.55,
+    "warpAudioSource": "sub",
+    "warpReactivity": 0.3,
+    "warpAttackMs": 18,
+    "warpReleaseMs": 260,
+    "curlOctaves": 2,
+    "curlTurbulence": 0.4,
+    "curlFlowPattern": "eddies",
+    "hueDrift": 0.012,
+    "decayRgb": [0.93, 0.94, 0.98]
+  },
+  "warp": [
+    {
+      "type": "radial",
+      "params": {
+        "amount": 0.08,
+        "scale": 1,
+        "speed": 0,
+        "exponent": 1.5
+      }
+    },
+    {
+      "type": "swirl",
+      "params": {
+        "amount": 0.06,
+        "scale": 1,
+        "speed": 0.12
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "trigger": { "type": "beat" },
+      "response": "kick",
+      "target": { "group": "feedback", "name": "zoom" },
+      "amount": 0.04,
+      "ease": 0.35
+    }
+  ],
+  "layers": [
+    {
+      "type": "shape",
+      "enabled": true,
+      "opacity": 1.0,
+      "blend": "add",
+      "trails": true,
+      "params": {
+        "baseShape": "twistWave",
+        "size": 0.52,
+        "posX": 0.0,
+        "posY": 0.0,
+        "rotation": 0,
+        "spinSpeed": 0.0,
+        "basePulse": 0.18,
+        "twistSpeed": 1.0,
+        "twistChaos": 0.72,
+        "effectType": "waveform",
+        "audioSource": "scope",
+        "symmetry": "wrap",
+        "extrudeDirection": "outward",
+        "sampleCount": 512,
+        "effectLength": 0.45,
+        "reactivity": 2.2,
+        "attackMs": 6,
+        "releaseMs": 70,
+        "thickness": 2.6,
+        "colorMode": "frequencyGradient",
+        "glow": 1.05
+      }
+    },
+    {
+      "type": "shape",
+      "enabled": true,
+      "opacity": 0.55,
+      "blend": "add",
+      "trails": true,
+      "params": {
+        "baseShape": "twistWave",
+        "size": 0.32,
+        "posX": 0.0,
+        "posY": 0.0,
+        "rotation": 0,
+        "spinSpeed": 0.0,
+        "basePulse": 0.18,
+        "twistSpeed": 1.35,
+        "twistChaos": 0.5,
+        "effectType": "dots",
+        "audioSource": "scope",
+        "symmetry": "wrap",
+        "extrudeDirection": "outward",
+        "sampleCount": 192,
+        "effectLength": 0.3,
+        "reactivity": 1.8,
+        "attackMs": 6,
+        "releaseMs": 70,
+        "thickness": 1.4,
+        "colorMode": "palette",
+        "glow": 0.9
+      }
+    }
+  ],
+  "post": {
+    "bloom": 0.8,
+    "bloomThreshold": 0.35,
+    "vignette": 0.35
+  }
+}

@@ -57,6 +57,7 @@ import preset28 from './28-julia-drift.json';
 import preset29 from './29-orbit-hall.json';
 import preset30 from './30-corridor-glide.json';
 import preset31 from './31-bouncing-ribbon-wave.json';
+import preset32 from './32-twisting-scope-wave.json';
 
 // Support 'alpha' and 'screen' in layer blend specification
 if (!BLEND_MODES.includes('alpha' as any)) {
@@ -144,6 +145,8 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   '30-corridor-glide': 'showcase',
   // Wall-bounce ribbon showcase (31, Stage 27).
   '31-bouncing-ribbon-wave': 'showcase',
+  // Organic twisting oscilloscope waveform showcase (32, Stage 28).
+  '32-twisting-scope-wave': 'showcase',
 
   // Flagship (01–12)
   '01-curl-fluid-warp': 'flagship',
@@ -287,6 +290,11 @@ export const SHOWCASE_PRESETS_31: readonly BuiltinPresetEntry[] = [
   { id: '31-bouncing-ribbon-wave', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset31, SCHEMAS) },
 ];
 
+/** Stage 28 organic twisting oscilloscope waveform showcase preset 32. */
+export const SHOWCASE_PRESETS_32: readonly BuiltinPresetEntry[] = [
+  { id: '32-twisting-scope-wave', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset32, SCHEMAS) },
+];
+
 export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...BUILTIN_PRESETS,
   ...FLAGSHIP_PRESETS,
@@ -298,6 +306,7 @@ export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
   ...SHOWCASE_PRESETS_25_26,
   ...SHOWCASE_PRESETS_27_30,
   ...SHOWCASE_PRESETS_31,
+  ...SHOWCASE_PRESETS_32,
 ];
 
 /**
@@ -336,6 +345,7 @@ export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood
   '29-orbit-hall': { theme: 'orbit', mood: 'dreamy' },
   '30-corridor-glide': { theme: 'architecture', mood: 'driving' },
   '31-bouncing-ribbon-wave': { theme: 'waveform', mood: 'driving' },
+  '32-twisting-scope-wave': { theme: 'waveform', mood: 'dreamy' },
   'crown': { theme: 'geometric', mood: 'driving' },
   'flight': { theme: 'hypnotic', mood: 'driving' },
   'bars': { theme: 'waveform', mood: 'driving' },
