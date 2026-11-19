@@ -96,8 +96,14 @@ function curlSpecs(): ParamSpec[] {
   ];
 }
 
+function radialSpecs(): ParamSpec[] {
+  return [
+    num("exponent", "Radial exponent", 1.0, 0.25, 4.0, 0.05, "Shapes the radial falloff curve from the centre to the edges (1 is linear; higher concentrates near edges, lower near the centre)."),
+  ];
+}
+
 /**
- * The settings list for one operator type. Every type has the common settings; Curl noise adds three more and Fractal fold adds one.
+ * The settings list for one operator type. Every type has the common settings; Radial adds exponent, Curl noise adds three more and Fractal fold adds one.
  * Code that changes an operator's type must fill in any setting the new type has and the old one lacked.
  */
 export function warpOpSpecs(type: WarpOpType): readonly ParamSpec[] {
@@ -105,6 +111,7 @@ export function warpOpSpecs(type: WarpOpType): readonly ParamSpec[] {
   const common = scaleDefault === undefined
     ? commonSpecs()
     : commonSpecs().map((spec) => (spec.name === "scale" && spec.type === "float" ? { ...spec, default: scaleDefault } : spec));
+  if (type === "radial") return [...common, ...radialSpecs()];
   if (type === "curl") return [...common, ...curlSpecs()];
   if (type === "fold") return [...common, ...foldSpecs()];
   return common;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { WarpField, curlExtras, foldIterations, warpFieldSize, activeWarpOpCount, isActiveWarpOp, WARP_FIELD_WIDTH, WARP_FIELD_HEIGHT, type ResolvedWarpOp } from './warpField';
+import { WarpField, curlExtras, foldIterations, radialExponent, warpFieldSize, activeWarpOpCount, isActiveWarpOp, WARP_FIELD_WIDTH, WARP_FIELD_HEIGHT, type ResolvedWarpOp } from './warpField';
 import warpFieldSrc from './shaders/warpField.frag.glsl?raw';
 import feedbackSrc from './shaders/feedback.frag.glsl?raw';
 import { WARP_OP_TYPES } from '../presets/warpOps';
@@ -114,8 +114,31 @@ describe('curl noise operator (Slice 18.5)', () => {
     curl.values.flow = 'outflow';
     expect(field.update([op('radial', 0.5), curl], 1, 1 / 60, 2, 0.8)).toBe(true);
     const extras = gl.uniform3fv.mock.calls[0]![1] as Float32Array;
-    expect(Array.from(extras.slice(0, 6))).toEqual([0, 0, 0, 3, 0.5, 2]);
+    expect(Array.from(extras.slice(0, 6))).toEqual([1, 0, 0, 3, 0.5, 2]);
     expect(gl.uniform1f).toHaveBeenCalledWith({ name: 'uHigh' }, 0.8);
+  });
+});
+
+describe('radial exponent (Slice 26.12)', () => {
+  it('defaults to 1.0 and clamps exponent to 0.25..4.0', () => {
+    expect(radialExponent({})).toBe(1);
+    expect(radialExponent({ exponent: 2.5 })).toBe(2.5);
+    expect(radialExponent({ exponent: 0.05 })).toBe(0.25);
+    expect(radialExponent({ exponent: 10 })).toBe(4);
+  });
+
+  it('packs clamped radial exponent into uOpExtra[n].x', () => {
+    const gl = mockGl();
+    const field = new WarpField(gl, {} as WebGLVertexArrayObject, 1);
+    expect(field.update([
+      op('radial', 0.5, true, { exponent: 2.25 }),
+      op('radial', 0.5, true, { exponent: 0.1 }),
+      op('radial', 0.5, true, { exponent: 8 }),
+    ], 1, 1 / 60, 1)).toBe(true);
+    const extras = gl.uniform3fv.mock.calls[0]![1] as Float32Array;
+    expect(extras[0]).toBeCloseTo(2.25, 5);
+    expect(extras[3]).toBeCloseTo(0.25, 5);
+    expect(extras[6]).toBeCloseTo(4, 5);
   });
 });
 

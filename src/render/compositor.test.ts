@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Compositor, parseHexColour, RETAIN_MAX_BYTES, RETAIN_MAX_SCENES, aspectBox, retainLimit, sceneBufferBytes } from './compositor';
+import { Compositor, POST_IDENTITY, parseHexColour, RETAIN_MAX_BYTES, RETAIN_MAX_SCENES, aspectBox, retainLimit, sceneBufferBytes } from './compositor';
 import { Scene } from './scene';
 import type { AudioFrame } from '../audio/types';
 import type { RenderLayer, RenderTarget } from './layer';
@@ -886,5 +886,37 @@ describe('Low-Power Mode post-pass bypass & safety (Slice 26.9)', () => {
     expect(r.layers.get('b')!.draw.mock.calls.length).toBe(bBefore + 2);
     for (let i = 0; i < 10; i++) r.frame(0.1);
     expect(r.comp.getWeight('a')).toBeLessThan(0.2);
+  });
+});
+
+describe('invert post effect (Slice 26.12)', () => {
+  it('defaults POST_IDENTITY.invert to 0 and enables hasPost when invert > 0', () => {
+    expect(POST_IDENTITY.invert).toBe(0);
+    const c = new Compositor([]);
+    c.setPost({});
+    expect(c.hasPost()).toBe(false);
+    c.setPost({ invert: 0.45 });
+    expect(c.hasPost()).toBe(true);
+    c.setPost({ invert: 0 });
+    expect(c.hasPost()).toBe(false);
+  });
+
+  it('binds uInvert during postPass and applies invert before safety in post.frag', () => {
+    const t = createTracingGl();
+    const comp = new Compositor([new Scene('a', [spyLayer()])]);
+    comp.init(t.gl);
+    comp.resize(64, 36, 1);
+    comp.setPost({ invert: 0.75 });
+    comp.setWeights({ a: 1 });
+    for (let i = 0; i < 3; i++) comp.draw(FRAME, clock(0.1), TARGET);
+
+    t.uniforms.length = 0;
+    comp.draw(FRAME, clock(0.1), TARGET);
+
+    const uInvert = t.uniforms.filter((u) => u.name === 'uInvert');
+    expect(uInvert).toHaveLength(1);
+    expect(uInvert[0]!.value).toBe(0.75);
+    expect(postSrc.indexOf('uInvert')).toBeGreaterThan(0);
+    expect(postSrc.indexOf('uInvert')).toBeLessThan(postSrc.indexOf('applySafety(c)'));
   });
 });

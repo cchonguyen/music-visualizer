@@ -10,7 +10,7 @@ uniform float uOpAmount[4];  // signed, -1..1
 uniform float uOpScale[4];
 uniform float uOpSpeed[4];
 uniform vec2 uOpCentre[4];   // in uv, 0,0 = screen middle
-uniform vec3 uOpExtra[4];    // curl noise: octaves, turbulence, flow style (0 plumes, 1 eddies, 2 outflow, 3 inflow). fold: iterations in x
+uniform vec3 uOpExtra[4];    // radial: exponent in x. curl noise: octaves, turbulence, flow style (0 plumes, 1 eddies, 2 outflow, 3 inflow). fold: iterations in x
 uniform float uHigh;         // treble level, 0..1, adds turbulence to curl noise
 uniform float uTime;
 uniform float uDt;           // clamped time step, seconds
@@ -149,7 +149,9 @@ vec2 operatorAt(int type, vec2 q, float amount, float scale, float speed, vec3 e
   float t = uTime * speed;
   if (type == 0) {
     // Radial: positive amount pulls the middle in and pushes the edges out. Negative reverses it.
-    float edge = clamp(r * scale * 1.4, 0.0, 1.0);
+    float expVal = clamp(extra.x > 0.0 ? extra.x : 1.0, 0.25, 4.0);
+    float lin = clamp(r * scale * 1.4, 0.0, 1.0);
+    float edge = lin <= 0.0 ? 0.0 : (abs(expVal - 1.0) < 1e-6 ? lin : pow(lin, expVal));
     return -dir * (edge * 2.0 - 1.0) * amount;
   } else if (type == 1) {
     // Swirl: turns the picture around the centre, strongest near it.
