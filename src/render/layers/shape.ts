@@ -5,7 +5,7 @@ import type { AudioFrame } from '../../audio/types';
 import { compileProgram } from '../../gl/shader';
 import { createDataTexture, type DataTexture, updateDataTexture } from '../../gl/texture';
 import { createVao } from '../../gl/vao';
-import type { RenderClock } from '../clock';
+import { clampDt, type RenderClock } from '../clock';
 import { bindTarget, type RenderLayer, type RenderTarget } from '../layer';
 import { getPalette, type Palette } from '../palette';
 import { getCurrentPalette } from '../paletteStore';
@@ -177,6 +177,154 @@ export function elementLagFrames(delay: number, j: number): number {
   return Math.round(d * (SHAPE_HISTORY_FRAMES - 1) * (j / (SHAPE_TEXELS - 1)));
 }
 
+export const BOUNCE_WALL_INSET = 0.02;
+
+export interface ShapeBounceState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  spinDir: 1 | -1;
+  active: boolean;
+}
+
+export function computeShapeBounceExtents(
+  p: Pick<ShapeParams, 'baseShape'>,
+  effSize: number,
+  rotRad: number,
+  aspect: number,
+): { halfX: number; halfY: number } {
+  const safeAspect = Math.max(0.01, Number.isFinite(aspect) ? aspect : 1);
+  const s = Math.max(0, Number.isFinite(effSize) ? effSize : 0);
+  const absCos = Math.abs(Math.cos(rotRad));
+  const absSin = Math.abs(Math.sin(rotRad));
+
+  switch (p.baseShape) {
+    case 'centerLine':
+      return { halfX: s * safeAspect * absCos, halfY: s * safeAspect * absSin };
+    case 'edgeLine':
+      return {
+        halfX: 0.92 * s * safeAspect * absCos + 0.92 * s * absSin,
+        halfY: 0.92 * s * safeAspect * absSin + 0.92 * s * absCos,
+      };
+    case 'figure8':
+      return {
+        halfX: s * absCos + 0.55 * s * absSin,
+        halfY: s * absSin + 0.55 * s * absCos,
+      };
+    case 'knot3d':
+      return { halfX: 1.05 * s, halfY: 1.05 * s };
+    default:
+      return { halfX: s, halfY: s };
+  }
+}
+
+function reflectBounceAxis(
+  pos: number,
+  vel: number,
+  limit: number,
+): { pos: number; vel: number; hit: boolean } {
+  if (limit <= 0) {
+    return { pos: 0, vel, hit: false };
+  }
+  let nextPos = pos;
+  let nextVel = vel;
+  let hit = false;
+  for (let i = 0; i < 8; i++) {
+    if (nextPos > limit) {
+      nextPos = 2 * limit - nextPos;
+      nextVel = -Math.abs(nextVel);
+      hit = true;
+    } else if (nextPos < -limit) {
+      nextPos = -2 * limit - nextPos;
+      nextVel = Math.abs(nextVel);
+      hit = true;
+    } else {
+      break;
+    }
+  }
+  if (nextPos > limit) {
+    nextPos = limit;
+    nextVel = -Math.abs(nextVel);
+    hit = true;
+  } else if (nextPos < -limit) {
+    nextPos = -limit;
+    nextVel = Math.abs(nextVel);
+    hit = true;
+  }
+  return { pos: nextPos, vel: nextVel, hit };
+}
+
+export function stepBouncePhysics(
+  state: ShapeBounceState,
+  p: Pick<ShapeParams, 'posX' | 'posY' | 'bounceSpeed' | 'bounceAngle' | 'bounceAudioBoost' | 'bounceFlipSpin'>,
+  dtSec: number,
+  aspect: number,
+  extents: { halfX: number; halfY: number },
+  audioLevel: number,
+): { state: ShapeBounceState; hit: boolean } {
+  if (!Number.isFinite(p.bounceSpeed) || p.bounceSpeed <= 0) {
+    return {
+      state: { x: p.posX, y: p.posY, vx: 0, vy: 0, spinDir: 1, active: false },
+      hit: false,
+    };
+  }
+
+  const dt = clampDt(dtSec);
+  const safeAspect = Math.max(0.01, Number.isFinite(aspect) ? aspect : 1);
+  const limitX = Math.max(0, safeAspect - BOUNCE_WALL_INSET - Math.max(0, extents.halfX));
+  const limitY = Math.max(0, 1.0 - BOUNCE_WALL_INSET - Math.max(0, extents.halfY));
+  const speed = p.bounceSpeed;
+  const angleRad = ((Number.isFinite(p.bounceAngle) ? p.bounceAngle : 37) * Math.PI) / 180;
+
+  let x: number;
+  let y: number;
+  let vx: number;
+  let vy: number;
+  let spinDir: 1 | -1;
+
+  if (!state.active) {
+    const seedX = Number.isFinite(p.posX) ? p.posX : 0;
+    const seedY = Number.isFinite(p.posY) ? p.posY : 0;
+    x = Math.max(-limitX, Math.min(limitX, seedX));
+    y = Math.max(-limitY, Math.min(limitY, seedY));
+    vx = Math.cos(angleRad) * speed;
+    vy = Math.sin(angleRad) * speed;
+    spinDir = 1;
+  } else {
+    x = Number.isFinite(state.x) ? state.x : 0;
+    y = Number.isFinite(state.y) ? state.y : 0;
+    spinDir = state.spinDir;
+    const mag = Math.hypot(state.vx, state.vy);
+    if (mag > 1e-6) {
+      vx = (state.vx / mag) * speed;
+      vy = (state.vy / mag) * speed;
+    } else {
+      vx = Math.cos(angleRad) * speed;
+      vy = Math.sin(angleRad) * speed;
+    }
+  }
+
+  const boost = Math.max(0, Number.isFinite(p.bounceAudioBoost) ? p.bounceAudioBoost : 0);
+  const audio = Math.max(0, Number.isFinite(audioLevel) ? audioLevel : 0);
+  const speedMult = 1 + boost * audio;
+
+  x += vx * speedMult * dt;
+  y += vy * speedMult * dt;
+
+  const rx = reflectBounceAxis(x, vx, limitX);
+  const ry = reflectBounceAxis(y, vy, limitY);
+  const hit = rx.hit || ry.hit;
+  if (hit && p.bounceFlipSpin) {
+    spinDir = spinDir === 1 ? -1 : 1;
+  }
+
+  return {
+    state: { x: rx.pos, y: ry.pos, vx: rx.vel, vy: ry.vel, spinDir, active: true },
+    hit,
+  };
+}
+
 export class ShapeLayer implements RenderLayer {
   /** Accent swap mix from ColourSwap (0 = normal, 1 = swapped). */
   accentSwap = 0;
@@ -193,6 +341,17 @@ export class ShapeLayer implements RenderLayer {
 
   getParams(): ShapeParams {
     return { ...this.p };
+  }
+
+  getBounceState(): ShapeBounceState {
+    return {
+      x: this.bounceX,
+      y: this.bounceY,
+      vx: this.bounceVx,
+      vy: this.bounceVy,
+      spinDir: this.bounceSpinDir,
+      active: this.bounceActive,
+    };
   }
 
   private gl: WebGL2RenderingContext | null = null;
@@ -277,6 +436,12 @@ export class ShapeLayer implements RenderLayer {
   private propSelfSpinPhase = 0;
   private travelPhase = 0;
   private wobblePhase = 0;
+  private bounceX = 0;
+  private bounceY = 0;
+  private bounceVx = 0;
+  private bounceVy = 0;
+  private bounceSpinDir: 1 | -1 = 1;
+  private bounceActive = false;
   private readonly shockwaveSlots: ShockwaveSlot[] = [
     { active: false, age: 0 },
     { active: false, age: 0 },
@@ -352,6 +517,12 @@ export class ShapeLayer implements RenderLayer {
     this.edges = [];
     this.edgeSampleRate = -1;
     this.edgeFftSize = -1;
+    this.bounceX = 0;
+    this.bounceY = 0;
+    this.bounceVx = 0;
+    this.bounceVy = 0;
+    this.bounceSpinDir = 1;
+    this.bounceActive = false;
   }
 
   resize(_width: number, _height: number, _dpr: number): void {
@@ -372,10 +543,33 @@ export class ShapeLayer implements RenderLayer {
     bindTarget(gl, target);
 
     const dt = Math.max(0, clock.dtSec);
+    const bounceDt = clampDt(clock.dtSec);
+    const aspect = target.width / Math.max(1, target.height);
+    const rotRad = (this.p.rotation * Math.PI) / 180;
     const sampleCount = Math.min(SHAPE_TEXELS, Math.max(16, Math.round(this.p.sampleCount)));
 
-    // 1. Advance motion phases
-    this.spinPhase += this.p.spinSpeed * dt;
+    // 1. Advance motion phases & wall-bounce physics
+    if (this.p.bounceSpeed > 0) {
+      const effSize = this.p.size * (1.0 + this.p.basePulse * (frame.kickEnv ?? 0));
+      const extents = computeShapeBounceExtents(this.p, effSize, rotRad + this.spinPhase, aspect);
+      const audioLevel = Math.max(frame.kickEnv ?? 0, frame.energy ?? 0);
+      const { state } = stepBouncePhysics(this.getBounceState(), this.p, bounceDt, aspect, extents, audioLevel);
+      this.bounceX = state.x;
+      this.bounceY = state.y;
+      this.bounceVx = state.vx;
+      this.bounceVy = state.vy;
+      this.bounceSpinDir = state.spinDir;
+      this.bounceActive = state.active;
+      this.spinPhase += this.p.spinSpeed * this.bounceSpinDir * bounceDt;
+    } else {
+      this.bounceActive = false;
+      this.bounceSpinDir = 1;
+      this.bounceVx = 0;
+      this.bounceVy = 0;
+      this.bounceX = this.p.posX;
+      this.bounceY = this.p.posY;
+      this.spinPhase += this.p.spinSpeed * dt;
+    }
     this.propPhase += 0.35 * this.p.propSpeed * (1.0 + 0.4 * frame.env.sub) * dt;
     this.propSelfSpinPhase += this.p.propSelfSpin * dt;
     this.travelPhase = (this.travelPhase + this.p.pathTravel * dt) % 1.0;
@@ -511,7 +705,8 @@ export class ShapeLayer implements RenderLayer {
     updateDataTexture(gl, this.peakTex, this.peakHoldSamples);
 
     // 4. Propagation engine: compute instance transforms
-    const rotRad = (this.p.rotation * Math.PI) / 180;
+    const anchorX = this.bounceActive ? this.bounceX : this.p.posX;
+    const anchorY = this.bounceActive ? this.bounceY : this.p.posY;
     const mode = this.p.propMode;
     let activePropCount = 1;
 
@@ -535,8 +730,8 @@ export class ShapeLayer implements RenderLayer {
 
     if (mode === 'single') {
       activePropCount = 1;
-      this.instOffset[0] = this.p.posX;
-      this.instOffset[1] = this.p.posY;
+      this.instOffset[0] = anchorX;
+      this.instOffset[1] = anchorY;
       this.instTransform[0] = 1.0;
       this.instTransform[1] = rotRad + this.spinPhase;
       this.instTransform[2] = 1.0;
@@ -548,8 +743,8 @@ export class ShapeLayer implements RenderLayer {
       for (let m = 0; m < count; m++) {
         const idx2 = m * 2;
         const idx4 = m * 4;
-        this.instOffset[idx2] = this.p.posX;
-        this.instOffset[idx2 + 1] = this.p.posY;
+        this.instOffset[idx2] = anchorX;
+        this.instOffset[idx2 + 1] = anchorY;
 
         let s = (this.p.propDirection === 'inward')
           ? Math.max(0.08, 1.0 - m * deltaS)
@@ -597,8 +792,8 @@ export class ShapeLayer implements RenderLayer {
       const active = this.shockwaveSlots.filter(s => s.active);
       if (active.length === 0) {
         activePropCount = 1;
-        this.instOffset[0] = this.p.posX;
-        this.instOffset[1] = this.p.posY;
+        this.instOffset[0] = anchorX;
+        this.instOffset[1] = anchorY;
         this.instTransform[0] = 1.0;
         this.instTransform[1] = rotRad + this.spinPhase;
         this.instTransform[2] = 0.0; // fully transparent
@@ -616,8 +811,8 @@ export class ShapeLayer implements RenderLayer {
           const a = (1.0 - k) * (1.0 - k);
           const d = 1.0 - this.p.propDelay * k;
 
-          this.instOffset[idx2] = this.p.posX;
-          this.instOffset[idx2 + 1] = this.p.posY;
+          this.instOffset[idx2] = anchorX;
+          this.instOffset[idx2 + 1] = anchorY;
           this.instTransform[idx4] = s;
           this.instTransform[idx4 + 1] = rotRad + this.spinPhase;
           this.instTransform[idx4 + 2] = a;
@@ -638,8 +833,8 @@ export class ShapeLayer implements RenderLayer {
         const a = Math.sin(Math.PI * pm);
         const d = 1.0 - this.p.propDelay * pm;
 
-        this.instOffset[idx2] = this.p.posX;
-        this.instOffset[idx2 + 1] = this.p.posY;
+        this.instOffset[idx2] = anchorX;
+        this.instOffset[idx2 + 1] = anchorY;
         this.instTransform[idx4] = s;
         this.instTransform[idx4 + 1] = rotRad + this.spinPhase;
         this.instTransform[idx4 + 2] = a;
@@ -654,8 +849,8 @@ export class ShapeLayer implements RenderLayer {
         const idx2 = m * 2;
         const idx4 = m * 4;
         const beta = (2.0 * Math.PI * m) / count + sigma * this.propPhase;
-        const ox = this.p.posX + rOrbit * Math.cos(beta);
-        const oy = this.p.posY + rOrbit * Math.sin(beta);
+        const ox = anchorX + rOrbit * Math.cos(beta);
+        const oy = anchorY + rOrbit * Math.sin(beta);
         const r = beta + rotRad + this.propSelfSpinPhase;
         const d = 1.0 - this.p.propDelay * (m / Math.max(1, count - 1));
 
@@ -675,8 +870,8 @@ export class ShapeLayer implements RenderLayer {
         const idx2 = m * 2;
         const idx4 = m * 4;
         const beta = (2.0 * Math.PI * m) / count + this.propPhase;
-        const ox = this.p.posX + offsetDist * Math.cos(beta);
-        const oy = this.p.posY + offsetDist * Math.sin(beta);
+        const ox = anchorX + offsetDist * Math.cos(beta);
+        const oy = anchorY + offsetDist * Math.sin(beta);
         const r = beta + rotRad + this.propSelfSpinPhase;
         const d = 1.0 - this.p.propDelay * (m / Math.max(1, count - 1));
 
@@ -695,7 +890,6 @@ export class ShapeLayer implements RenderLayer {
     const palette: Palette = getPalette(getCurrentPalette());
     const blendedAccent = blendAccents(palette.accentA, palette.accentB, this.accentSwap);
     const solidRgb = parseHexColor(this.p.solidColor);
-    const aspect = target.width / Math.max(1, target.height);
     const layerOpacity = options?.uLayerOpacity ?? options?.opacity ?? 1.0;
 
     // 6. Bind program and set uniforms
