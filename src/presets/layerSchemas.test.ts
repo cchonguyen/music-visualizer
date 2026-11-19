@@ -240,6 +240,24 @@ describe("layer schemas", () => {
       const maxNonIntenseIndex = Math.max(...nonIntenseIndices);
       expect(minIntenseIndex).toBeGreaterThan(maxNonIntenseIndex);
     });
+
+    it("defines invert in POST_SPECS with Colour group, 0..1 float range, and intense warning", () => {
+      const spec = POST_SPECS.find((s) => s.name === "invert");
+      expect(spec).toBeDefined();
+      assertValidSpec(spec!);
+      expect(spec).toMatchObject({
+        type: "float",
+        min: 0,
+        max: 1,
+        default: 0,
+        intense: true,
+        group: "Colour",
+      });
+      expect(typeof spec!.description).toBe("string");
+      expect(spec!.description!.trim().length).toBeGreaterThan(0);
+      expect(typeof spec!.warning).toBe("string");
+      expect(spec!.warning!.trim().length).toBeGreaterThan(0);
+    });
   });
 });
 
