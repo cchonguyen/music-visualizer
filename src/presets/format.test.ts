@@ -3,9 +3,16 @@ import {
   BLEND_SECONDS_SPEC,
   BLEND_SEC_MAX,
   BLEND_SEC_MIN,
+  LINK_COOLDOWN_MAX,
+  LINK_COOLDOWN_MIN,
+  LINK_FLIP_SLEW_MAX,
+  LINK_FLIP_SLEW_MIN,
+  LINK_THRESHOLD_MAX,
+  LINK_THRESHOLD_MIN,
   PRESET_BLEND_MAX_SEC,
   PRESET_BLEND_MIN_SEC,
   clampBlendSec,
+  parseLink,
   parsePreset,
   presetBlendSec,
   presetDisplaySec,
@@ -128,6 +135,123 @@ describe("parsePreset: audio links", () => {
     );
     expect(preset.feedback.zoom?.link).toEqual({ source: "beat", amount: 1, smooth: 0 });
   });
+
+  it("parses and clamps extended link fields and swaps inverted bounds", () => {
+    const warnings: string[] = [];
+    const parsed = parseLink(
+      {
+        source: "drop",
+        amount: 0.5,
+        smooth: 0.25,
+        mode: "flipOnDrop",
+        curve: "gate",
+        threshold: 2.0,
+        flipSlew: 0.01,
+        cooldownSec: 120,
+        minBound: 0.8,
+        maxBound: 0.2,
+        enumOptions: ["curl", "", 42, "mobius"],
+      },
+      "feedback.zoom.link",
+      warnings,
+    );
+    expect(warnings).toEqual([]);
+    expect(parsed).toEqual({
+      source: "drop",
+      amount: 0.5,
+      smooth: 0.25,
+      mode: "flipOnDrop",
+      curve: "gate",
+      threshold: LINK_THRESHOLD_MAX,
+      flipSlew: LINK_FLIP_SLEW_MIN,
+      cooldownSec: LINK_COOLDOWN_MAX,
+      minBound: 0.2,
+      maxBound: 0.8,
+      enumOptions: ["curl", "mobius"],
+    });
+
+    const lowClampedWarnings: string[] = [];
+    const lowClamped = parseLink(
+      {
+        source: "phrase16",
+        amount: 0.3,
+        smooth: 0.1,
+        threshold: -1,
+        flipSlew: 99,
+        cooldownSec: 0,
+        minBound: -0.5,
+        maxBound: 1.5,
+        enumOptions: ["", 123],
+      },
+      "feedback.zoom.link",
+      lowClampedWarnings,
+    );
+    expect(lowClampedWarnings).toEqual([]);
+    expect(lowClamped).toEqual({
+      source: "phrase16",
+      amount: 0.3,
+      smooth: 0.1,
+      threshold: LINK_THRESHOLD_MIN,
+      flipSlew: LINK_FLIP_SLEW_MAX,
+      cooldownSec: LINK_COOLDOWN_MIN,
+      minBound: 0,
+      maxBound: 1,
+    });
+  });
+
+  it("warns and omits invalid mode, curve, and non-finite numeric optional fields", () => {
+    const warnings: string[] = [];
+    const parsed = parseLink(
+      {
+        source: "energySlow",
+        amount: 0.4,
+        smooth: 0.5,
+        mode: "invalidMode",
+        curve: "invalidCurve",
+        threshold: "bad",
+        flipSlew: Number.NaN,
+        cooldownSec: Number.POSITIVE_INFINITY,
+      },
+      "feedback.zoom.link",
+      warnings,
+    );
+    expect(parsed).toEqual({ source: "energySlow", amount: 0.4, smooth: 0.5 });
+    expect(warnings.length).toBe(5);
+    expect(warnings[0]).toMatch(/unknown link mode "invalidMode"/);
+    expect(warnings[1]).toMatch(/unknown link curve "invalidCurve"/);
+  });
+
+  it("round-trips extended audio links via JSON.stringify + parsePreset", () => {
+    const first = parsePreset(
+      {
+        ...minimal,
+        feedback: {
+          zoom: {
+            value: 1.0,
+            link: {
+              source: "breakdown",
+              amount: 0.4,
+              smooth: 0.3,
+              mode: "bipolar",
+              curve: "punch",
+              threshold: 0.45,
+              flipSlew: 0.8,
+              minBound: 0.1,
+              maxBound: 0.9,
+              cooldownSec: 12,
+              enumOptions: ["a", "b"],
+            },
+          },
+        },
+      },
+      registry,
+    );
+    expect(first.warnings).toEqual([]);
+    const saved = JSON.parse(JSON.stringify(first.preset));
+    const second = parsePreset(saved, registry);
+    expect(second.warnings).toEqual([]);
+    expect(second.preset).toEqual(first.preset);
+  });
 });
 
 describe("parsePreset: round trip", () => {
@@ -149,6 +273,47 @@ describe("parsePreset: round trip", () => {
     expect(second.preset).toEqual(first);
     expect(second.warnings).toEqual([]);
     expect(first.tags).toEqual(["calm"]);
+  });
+
+  it("parses, warns on invalid, omits absent, and round-trips LayerEntry.opacityLink", () => {
+    const plain = parsePreset(
+      { ...minimal, layers: [{ type: "tunnel", opacity: 0.8 }] },
+      registry,
+    );
+    expect(plain.warnings).toEqual([]);
+    expect("opacityLink" in plain.preset.layers[0]!).toBe(false);
+
+    const invalid = parsePreset(
+      { ...minimal, layers: [{ type: "tunnel", opacity: 0.8, opacityLink: { source: "nope", amount: 0.5, smooth: 0.2 } }] },
+      registry,
+    );
+    expect("opacityLink" in invalid.preset.layers[0]!).toBe(false);
+    expect(invalid.warnings.some((w) => w.includes("layers[0] (tunnel).opacityLink"))).toBe(true);
+
+    const valid = parsePreset(
+      {
+        ...minimal,
+        layers: [
+          {
+            type: "tunnel",
+            opacity: 0.5,
+            opacityLink: { source: "bass", amount: 0.5, smooth: 0.2, curve: "swell" },
+          },
+        ],
+      },
+      registry,
+    );
+    expect(valid.warnings).toEqual([]);
+    expect(valid.preset.layers[0]?.opacityLink).toEqual({
+      source: "bass",
+      amount: 0.5,
+      smooth: 0.2,
+      curve: "swell",
+    });
+
+    const roundTripped = parsePreset(JSON.parse(JSON.stringify(valid.preset)), registry);
+    expect(roundTripped.warnings).toEqual([]);
+    expect(roundTripped.preset).toEqual(valid.preset);
   });
 });
 

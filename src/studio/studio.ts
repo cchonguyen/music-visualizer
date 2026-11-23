@@ -87,6 +87,11 @@ export const AUDIO_SOURCE_LABELS: Readonly<Record<AudioSource, string>> = {
   time: 'Time',
   kickEnv: 'Kick Envelope',
   centroid: 'Spectral Centroid',
+  drop: 'Drop Surge',
+  breakdown: 'Breakdown',
+  phrase16: 'Phrase (16 Beats)',
+  phrase32: 'Phrase (32 Beats)',
+  energySlow: 'Energy Arc (Slow)',
 };
 
 /** Human-readable display labels for preset transition styles. */

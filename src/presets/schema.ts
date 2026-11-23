@@ -8,6 +8,7 @@ export const AUDIO_SOURCES = [
   "beatStrength", "brightness", "subFlux", "midFlux", "highFlux",
   "lfoSine", "lfoSaw", "lfoRandom", "time",
   "kickEnv", "centroid",
+  "drop", "breakdown", "phrase16", "phrase32", "energySlow",
 ] as const;
 export type AudioSource = (typeof AUDIO_SOURCES)[number];
 

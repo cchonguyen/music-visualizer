@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parsePreset } from "./format";
 import {
+  AUDIO_SOURCES,
   assertValidSpec,
   coerceValue,
   defaultsFor,
@@ -327,5 +328,16 @@ describe("Retired CRT post controls", () => {
     const { preset, warnings } = parsePreset(raw, registry);
     expect(warnings).toEqual([]);
     expect(preset.post).not.toHaveProperty("crtScanlines");
+  });
+});
+
+describe("AUDIO_SOURCES", () => {
+  it("includes song-arc sources alongside existing sources", () => {
+    for (const s of ["sub", "bass", "mid", "high", "energy", "kickEnv", "centroid"]) {
+      expect(AUDIO_SOURCES).toContain(s);
+    }
+    for (const s of ["drop", "breakdown", "phrase16", "phrase32", "energySlow"]) {
+      expect(AUDIO_SOURCES).toContain(s);
+    }
   });
 });

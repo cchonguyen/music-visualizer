@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { applyLinkedPreset, applyPresetToScene, applyVisualGainAndCalm, buildScene, CALM_SCALE, createLayersFromPreset, hasCrownLayer, hasLinks, LAYER_FACTORIES } from './loader';
 import { shapeReaction } from '../render/gainStore';
 import { LinkRunner, ReactionBank } from './links';
@@ -7,7 +7,7 @@ import type { AudioFrame } from '../audio/types';
 import type { Preset } from './format';
 import { ALL_PRESETS, BUILTIN_PRESETS, REVIEW_PRESETS } from './builtin';
 import { parsePreset, PRESET_VERSION } from './format';
-import { LAYER_SPECS } from './layerSchemas';
+import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { defaultsFor } from './schema';
 import { ShapeLayer } from '../render/layers/shape';
 import { TunnelLayer } from '../render/layers/tunnel';
@@ -689,5 +689,88 @@ describe('applyVisualGainAndCalm (Slice 25.5)', () => {
     expect(frame.energy).toBeCloseTo(shapeReaction(0.6, gain) * 0.5);
     expect(frame.loudness).toBeCloseTo(shapeReaction(0.6, gain) * 0.5);
     expect(frame.kickEnv).toBeCloseTo(shapeReaction(0.9, gain) * 0.5);
+  });
+});
+
+describe('hasLinks & applyLinkedPreset: calm damping and layer opacityLink (Stage 29.1)', () => {
+  const fullSchemas = { feedback: FEEDBACK_SPECS, post: POST_SPECS, layers: LAYER_SPECS };
+  const emptyFrame = (over: Partial<AudioFrame> = {}): AudioFrame => {
+    const bands = { sub: 0, mid: 0, high: 0 };
+    return {
+      frameIndex: 0,
+      time: 0,
+      dtSec: 0.016,
+      raw: { ...bands },
+      env: { ...bands, sub: 0.5 },
+      norm: { ...bands, sub: 1.0 },
+      loudness: 0.5,
+      energy: 0.5,
+      flux: 0,
+      fluxByBand: { ...bands },
+      beat: false,
+      beatByBand: { sub: false, mid: false, high: false },
+      beatStrength: 0,
+      kickEnv: 0,
+      kickPulse: false,
+      waveform: new Float32Array(0),
+      bandWaveforms: { sub: new Float32Array(0), mid: new Float32Array(0), high: new Float32Array(0) },
+      spectrum: new Float32Array(0),
+      smoothedSpectrum: new Float32Array(0),
+      sampleRate: 48000,
+      ...over,
+    };
+  };
+
+  it('applyLinkedPreset forwards calm damping to LinkRunner', () => {
+    const preset = parsePreset(
+      {
+        version: 1,
+        name: 'calmCheck',
+        feedback: {
+          zoom: { value: 1.0, link: { source: 'sub', amount: 0.5, smooth: 0 } },
+        },
+        layers: [{ type: 'bars' }],
+      },
+      fullSchemas,
+    ).preset;
+    const scene = buildScene('calmCheck', preset);
+
+    const runnerLoud = new LinkRunner();
+    applyLinkedPreset(preset, scene, runnerLoud, 'p', { frame: emptyFrame(), timeSec: 0, sectionContrast: 0, calm: false }, 10);
+    const loudZoom = runnerLoud.resolvedByKey('pF.zoom')!;
+
+    const runnerCalm = new LinkRunner();
+    applyLinkedPreset(preset, scene, runnerCalm, 'p', { frame: emptyFrame(), timeSec: 0, sectionContrast: 0, calm: true }, 10);
+    const calmZoom = runnerCalm.resolvedByKey('pF.zoom')!;
+
+    expect(loudZoom - 1.0).toBeGreaterThan(calmZoom - 1.0);
+    expect((calmZoom - 1.0) / (loudZoom - 1.0)).toBeCloseTo(0.35, 2);
+  });
+
+  it('hasLinks detects layer opacityLink and applyLinkedPreset resolves layer opacity dynamically', () => {
+    const preset = parsePreset(
+      {
+        version: 1,
+        name: 'opacityLinked',
+        layers: [
+          {
+            type: 'bars',
+            opacity: 0.25,
+            opacityLink: { source: 'sub', amount: 0.5, smooth: 0 },
+          },
+        ],
+      },
+      fullSchemas,
+    ).preset;
+    expect(hasLinks(preset)).toBe(true);
+
+    const scene = buildScene('opacityLinked', preset);
+    const spy = vi.spyOn(scene, 'setLayerConfig');
+    const runner = new LinkRunner();
+
+    // sub = 1.0 -> opacity = 0.25 + 0.5 * 1.0 * 1.0 = 0.75
+    applyLinkedPreset(preset, scene, runner, 'op', { frame: emptyFrame(), timeSec: 0, sectionContrast: 0 }, 10);
+    expect(runner.resolvedByKey('opL0.opacity')).toBeCloseTo(0.75, 4);
+    expect(spy).toHaveBeenCalledWith(0, expect.objectContaining({ opacity: expect.closeTo(0.75, 4) }));
   });
 });
