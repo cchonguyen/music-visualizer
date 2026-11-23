@@ -9,11 +9,11 @@
     "warpScale": 2.8,
     "warpSpeed": { "value": 0.85, "link": { "source": "bass", "amount": 0.4, "smooth": 0.15 } },
     "curlOctaves": 3,
-    "curlTurbulence": 0.55,
-    "curlFlowPattern": "plumes",
+    "curlTurbulence": { "value": 0.55, "link": { "source": "high", "amount": 0.25, "smooth": 0.15, "curve": "swell" } },
+    "curlFlowPattern": { "value": "plumes", "link": { "source": "section", "amount": 1, "smooth": 0, "cooldownSec": 12 } },
     "decay": 0.92,
     "decayRgb": [0.95, 0.91, 0.96],
-    "hueDrift": 0.018
+    "hueDrift": { "value": 0.018, "link": { "source": "phrase32", "amount": 0.18, "smooth": 0.25, "mode": "bipolar" } }
   },
   "warp": [
     { "type": "flow", "params": { "amount": 0.16, "scale": 1.4, "speed": 0.3 } }
@@ -41,6 +41,7 @@
     {
       "type": "particles",
       "opacity": 0.55,
+      "opacityLink": { "source": "drop", "amount": 0.25, "smooth": 0.2, "curve": "gate", "threshold": 0.25 },
       "blend": "add",
       "params": {
         "shape": "dot",

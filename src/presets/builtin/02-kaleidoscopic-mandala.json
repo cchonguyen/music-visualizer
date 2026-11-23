@@ -8,11 +8,11 @@
     "kaleidoN": 8,
     "mandalaPattern": "auto",
     "radialFold": 0.48,
-    "mandalaTile": 0.35,
-    "mandalaCounterSpin": 0.3,
+    "mandalaTile": { "value": 0.35, "link": { "source": "drop", "amount": 0.22, "smooth": 0.2, "curve": "gate", "threshold": 0.25 } },
+    "mandalaCounterSpin": { "value": 0.3, "link": { "source": "mid", "amount": 0.25, "smooth": 0.15, "mode": "flipOnSection", "flipSlew": 0.8 } },
     "mandalaKickFlare": 0.4,
-    "zoom": 1.038,
-    "rotate": 0.015,
+    "zoom": { "value": 1.038, "link": { "source": "kickEnv", "amount": 0.07, "smooth": 0.05, "curve": "punch" } },
+    "rotate": { "value": 0.015, "link": { "source": "energy", "amount": 0.15, "smooth": 0.15, "mode": "flipOnDrop", "flipSlew": 0.6 } },
     "decay": 0.90,
     "fade": 0.005,
     "decayRgb": [0.92, 0.90, 0.96]
@@ -43,6 +43,7 @@
     },
     {
       "type": "particles",
+      "opacityLink": { "source": "energySlow", "amount": 0.2, "smooth": 0.3, "curve": "swell" },
       "blend": "add",
       "params": {
         "shape": "streak",
