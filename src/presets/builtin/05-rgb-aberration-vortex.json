@@ -5,7 +5,9 @@
   "transition": { "style": "crossfade", "seconds": 0.32 },
   "feedback": {
     "warpMode": "rgbSplit",
-    "rgbSplit": 0.03,
+    "rgbSplit": { "value": 0.03, "link": { "source": "kickEnv", "amount": 0.2, "smooth": 0.05, "curve": "punch" } },
+    "rotate": { "value": 0, "link": { "source": "bass", "amount": 0.12, "smooth": 0.1, "mode": "flipOnBeat", "flipSlew": 0.35 } },
+    "zoom": { "value": 1, "link": { "source": "drop", "amount": 0.08, "smooth": 0.2, "curve": "gate" } },
     "decay": 0.94
   },
   "layers": [
@@ -14,7 +16,8 @@
       "params": {
         "baseShape": "star",
         "sides": 7,
-        "starInner": 0.5,
+        "starInner": { "value": 0.5, "link": { "source": "sub", "amount": 0.18, "smooth": 0.15, "curve": "swell" } },
+        "spinSpeed": { "value": 0, "link": { "source": "energy", "amount": 0.25, "smooth": 0.15, "mode": "flipOnDrop", "flipSlew": 0.5 } },
         "size": 0.45,
         "effectType": "waveform",
         "thickness": 2.2,
@@ -40,5 +43,7 @@
       }
     }
   ],
-  "post": {}
+  "post": {
+    "chroma": { "value": 0, "link": { "source": "kickEnv", "amount": 0.15, "smooth": 0.05, "curve": "gate", "threshold": 0.45 } }
+  }
 }

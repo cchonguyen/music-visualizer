@@ -151,6 +151,8 @@ interface MockElement {
   firstChild?: MockElement | null;
   parentElement?: MockElement | null;
   before?(...nodes: any[]): void;
+  after?(...nodes: any[]): void;
+  remove?(): void;
 }
 
 function createMockElement(tagName: string): MockElement {
@@ -270,6 +272,30 @@ function createMockElement(tagName: string): MockElement {
         el.parentElement.children.splice(idx, 0, ...addedNodes);
       }
     },
+    after(...nodes: (MockElement | string)[]) {
+      if (!el.parentElement) return;
+      const idx = el.parentElement.children.indexOf(el);
+      if (idx !== -1) {
+        const addedNodes: MockElement[] = [];
+        for (const n of nodes) {
+          if (typeof n === 'string') {
+            const span = createMockElement('span');
+            span.textContent = n;
+            span.parentElement = el.parentElement;
+            addedNodes.push(span);
+          } else if (n) {
+            n.parentElement = el.parentElement;
+            addedNodes.push(n);
+          }
+        }
+        el.parentElement.children.splice(idx + 1, 0, ...addedNodes);
+      }
+    },
+    remove() {
+      if (el.parentElement) {
+        el.parentElement.removeChild?.(el);
+      }
+    },
     replaceChildren(...nodes: (MockElement | string)[]) {
       el.children = [];
       _text = '';
@@ -351,7 +377,15 @@ function createMockElement(tagName: string): MockElement {
   return el;
 }
 
-function createMockPane() {
+function createMockPane(isFolder = false) {
+  const paneElement = createMockElement('div');
+  paneElement.className = isFolder ? 'tp-fldv' : 'tp-rotv';
+  const contentEl = isFolder ? createMockElement('div') : paneElement;
+  if (isFolder) {
+    contentEl.className = 'tp-fldv_c';
+    paneElement.appendChild(contentEl);
+  }
+
   const bindings: Array<{
     target: any;
     prop: any;
@@ -396,6 +430,11 @@ function createMockPane() {
       }
       element.appendChild(selectEl);
     } else {
+      if (options?.min !== undefined && options?.max !== undefined) {
+        const sldTrack = createMockElement('div');
+        sldTrack.className = 'tp-sldv_t';
+        element.appendChild(sldTrack);
+      }
       inputEl = createMockElement('input');
       if (options?.view === 'color') {
         inputEl.setAttribute('type', 'color');
@@ -409,6 +448,7 @@ function createMockPane() {
       }
       element.appendChild(inputEl);
     }
+    contentEl.appendChild(element);
 
     const item = {
       target,
@@ -442,15 +482,18 @@ function createMockPane() {
   };
 
   const addFolder = (options: any) => {
-    const folder = createMockPane();
+    const folder = createMockPane(true);
     (folder as any).expanded = options?.expanded ?? true;
     (folder as any).title = options?.title ?? '';
+    contentEl.appendChild(folder.element);
     folders.push({ options, folder });
     return folder;
   };
 
   const addBlade = (options: any) => {
-    const blade = { options, hidden: false, element: createMockElement('div') };
+    const bladeEl = createMockElement('div');
+    contentEl.appendChild(bladeEl);
+    const blade = { options, hidden: false, element: bladeEl };
     blades.push(blade);
     return blade;
   };
@@ -462,6 +505,7 @@ function createMockPane() {
     buttonChild.className = 'tp-btnv_b';
     buttonChild.textContent = options?.title ?? '';
     element.appendChild(buttonChild);
+    contentEl.appendChild(element);
     const listeners: Record<string, ((ev: any) => void)[]> = {};
     const btn = {
       title: options?.title ?? '',
@@ -482,7 +526,7 @@ function createMockPane() {
     return btn;
   };
 
-  return { addBinding, bindings, addFolder, folders, addBlade, blades, addButton, buttons, dispose: () => {}, refresh: () => {} };
+  return { element: paneElement, addBinding, bindings, addFolder, folders, addBlade, blades, addButton, buttons, dispose: () => {}, refresh: () => {} };
 }
 
 describe('buildLayerControls (live Opacity, Blend, Trails)', () => {
@@ -4564,5 +4608,735 @@ describe('Slice 26.2: Studio helper bar and Tweakpane admin buttons replace emoj
     expect(adminAccessBtn.element.querySelector('.ui-icon')).toBeNull();
 
     expect(session).toBeDefined();
+  });
+});
+
+describe('Slice 29.2: Studio Inline Reactive Sliders, Live Track Overlays & Active Links Overview', () => {
+  function setupReactiveStudio(initialPreset?: Partial<Preset>) {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    const preset: Preset = {
+      version: 1,
+      name: 'Reactive Test',
+      tags: [],
+      transition: { style: 'crossfade', seconds: 0.5 },
+      feedback: {
+        zoom: { value: 1.0 },
+        rotate: {
+          value: 0,
+          link: { source: 'bass', amount: 0.2, smooth: 0.25 },
+        },
+        decay: { value: 0.94, morph: { to: 0.85, rate: 0.1 } },
+      },
+      layers: [
+        {
+          type: 'tunnel',
+          enabled: true,
+          opacity: 1,
+          blend: 'add',
+          params: { ringDensity: { value: 0.5 }, twist: { value: 0 } },
+        },
+      ],
+      post: { bloom: { value: 0.25 } },
+      ...initialPreset,
+    };
+
+    const scene = {
+      layers: [{ setParams: vi.fn() }],
+      setFeedback: vi.fn(),
+      setLayerConfig: vi.fn(),
+      setWarpOps: vi.fn(),
+    };
+
+    const session: any = {
+      get: vi.fn((id: string) => (id === 'reactive-1' ? { id, builtin: false, preset } : undefined)),
+      list: vi.fn(() => [{ id: 'reactive-1', builtin: false, preset }]),
+      listCategorized: vi.fn(() => ({
+        system: { showcase: [], flagship: [], classics: [] },
+        user: { folders: [], unfiled: [{ id: 'reactive-1', builtin: false, preset }] },
+      })),
+      getFolders: vi.fn(() => []),
+      getPresetFolder: vi.fn(() => undefined),
+      monitorOf: vi.fn(() => undefined),
+      isSolo: vi.fn(() => false),
+      isMuted: vi.fn(() => false),
+      isDirty: vi.fn(() => false),
+      canUndo: () => false,
+      canRedo: () => false,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      sceneOf: vi.fn(() => scene),
+      commit: vi.fn(),
+      refreshPost: vi.fn(),
+      rebuild: vi.fn(),
+    };
+
+    let activePane: any = null;
+    const paneFactory = vi.fn(() => {
+      activePane = createMockPane();
+      return activePane;
+    });
+
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory,
+      linkResolved: () => undefined,
+      isCalm: () => false,
+    });
+
+    studio.bind('reactive-1');
+
+    const findBinding = (label: string) => {
+      const searchPane = (p: any): any => {
+        for (const b of p.bindings) {
+          if (b.options?.label === label) return b;
+        }
+        for (const f of p.folders) {
+          const found = searchPane(f.folder);
+          if (found) return found;
+        }
+        return undefined;
+      };
+      return searchPane(activePane);
+    };
+
+    const activeLinksEntry = activePane.folders.find((f: any) => f.options?.title === '⚡ Active Links');
+
+    return {
+      container,
+      body,
+      preset,
+      scene,
+      session,
+      studio,
+      paneFactory,
+      getPane: () => activePane,
+      findBinding,
+      activeLinksFolder: activeLinksEntry?.folder,
+    };
+  }
+
+  it('renders inline ⚡ bolt buttons on numeric blades and reflects active link/morph state', () => {
+    const { findBinding } = setupReactiveStudio();
+
+    const zoomBinding = findBinding('Zoom');
+    const rotateBinding = findBinding('Spin per frame (rad)');
+    const decayBinding = findBinding('Trail length');
+    expect(zoomBinding).toBeDefined();
+    expect(rotateBinding).toBeDefined();
+    expect(decayBinding).toBeDefined();
+
+    const zoomBolt = zoomBinding.element.querySelector('.mv-react-bolt');
+    const rotateBolt = rotateBinding.element.querySelector('.mv-react-bolt');
+    const decayBolt = decayBinding.element.querySelector('.mv-react-bolt');
+
+    expect(zoomBolt).not.toBeNull();
+    expect(zoomBolt!.classList.contains('mv-react-bolt-active')).toBe(false);
+
+    expect(rotateBolt).not.toBeNull();
+    expect(rotateBolt!.classList.contains('mv-react-bolt-active')).toBe(true);
+    expect(rotateBolt!.title).toContain('bass +20%');
+
+    expect(decayBolt).not.toBeNull();
+    expect(decayBolt!.classList.contains('mv-react-bolt-active')).toBe(true);
+    expect(decayBolt!.title).toContain('morph → 0.85');
+  });
+
+  it('clicking ⚡ opens the inline drawer and opening a second drawer closes the first', () => {
+    const { findBinding } = setupReactiveStudio();
+
+    const zoomBinding = findBinding('Zoom');
+    const rotateBinding = findBinding('Spin per frame (rad)');
+    const zoomBolt = zoomBinding.element.querySelector('.mv-react-bolt')!;
+    const rotateBolt = rotateBinding.element.querySelector('.mv-react-bolt')!;
+
+    // Open Zoom drawer
+    zoomBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    expect(zoomBinding.element.parentElement.querySelectorAll('.mv-react-drawer')).toHaveLength(1);
+    const zoomDrawer = zoomBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    expect(zoomDrawer.textContent).toContain('Zoom Reactivity');
+
+    // Open Rotate drawer: Zoom drawer should close so only one drawer is open
+    rotateBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    expect(zoomBinding.element.parentElement.querySelectorAll('.mv-react-drawer')).toHaveLength(1);
+    const openDrawer = rotateBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    expect(openDrawer.textContent).toContain('Spin per frame (rad) Reactivity');
+  });
+
+  it('clicking a 1-click recipe chip applies scaled AudioLink, commits undo, and updates Active Links without rebuilding pane', () => {
+    const { findBinding, preset, session, paneFactory, activeLinksFolder } = setupReactiveStudio();
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+
+    const zoomBinding = findBinding('Zoom');
+    const zoomBolt = zoomBinding.element.querySelector('.mv-react-bolt')!;
+    zoomBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+
+    const drawer = zoomBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    const chips = drawer.querySelectorAll('.mv-react-chip');
+    const kickPunchChip = chips.find((c: any) => c.getAttribute('data-recipe-id') === 'kickPunch');
+    expect(kickPunchChip).toBeDefined();
+
+    kickPunchChip!.dispatchEvent({ type: 'click' });
+
+    // Parameter-aware scaling for zoom (0.35 * 0.25 = 0.09)
+    expect(preset.feedback.zoom!.link).toEqual({
+      source: 'kickEnv',
+      amount: 0.09,
+      smooth: 0.08,
+      mode: 'add',
+      curve: 'punch',
+    });
+    expect(session.commit).toHaveBeenCalledWith('reactive-1', expect.any(Number), true);
+    expect(zoomBolt.classList.contains('mv-react-bolt-active')).toBe(true);
+    // Must NOT rebuild the whole pane
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+
+    // Active Links overview should update in-place
+    const activeRows = activeLinksFolder.element.querySelectorAll('.mv-active-links-row');
+    expect(activeRows).toHaveLength(3);
+    expect(activeLinksFolder.element.textContent).toContain('Feedback · Zoom');
+  });
+
+  it('clearing via drawer Clear or Active Links × / Clear All removes link/morph and commits undo', () => {
+    const { findBinding, preset, session, paneFactory, activeLinksFolder } = setupReactiveStudio();
+
+    // 1. Drawer Clear on Rotate
+    const rotateBinding = findBinding('Spin per frame (rad)');
+    const rotateBolt = rotateBinding.element.querySelector('.mv-react-bolt')!;
+    rotateBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    const drawer = rotateBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    const clearBtn = drawer.querySelector('.mv-react-clear-btn')!;
+    clearBtn.dispatchEvent({ type: 'click' });
+
+    expect(preset.feedback.rotate!.link).toBeUndefined();
+    expect(rotateBolt.classList.contains('mv-react-bolt-active')).toBe(false);
+    expect(session.commit).toHaveBeenCalledWith('reactive-1', expect.any(Number), true);
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+
+    // Active Links should now only list Trail length (decay)
+    expect(activeLinksFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(1);
+
+    // 2. Active Links × remove on Trail length (decay)
+    const removeBtn = activeLinksFolder.element.querySelector('.mv-active-links-remove')!;
+    removeBtn.dispatchEvent({ type: 'click' });
+    expect(preset.feedback.decay!.morph).toBeUndefined();
+    expect(activeLinksFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(0);
+
+    // 3. Re-add link and test Clear All
+    const zoomBinding = findBinding('Zoom');
+    const zoomBolt = zoomBinding.element.querySelector('.mv-react-bolt')!;
+    zoomBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    const zoomDrawer = zoomBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    zoomDrawer.querySelector('.mv-react-chip')!.dispatchEvent({ type: 'click' });
+    expect(activeLinksFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(1);
+
+    const clearAllBtn = activeLinksFolder.element.querySelector('.mv-active-links-clear-all')!;
+    clearAllBtn.dispatchEvent({ type: 'click' });
+    expect(preset.feedback.zoom!.link).toBeUndefined();
+    expect(activeLinksFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(0);
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers ⚡ Active Links folder in Expand All / Collapse All and supports click-to-jump', () => {
+    const { getPane, activeLinksFolder, findBinding } = setupReactiveStudio();
+    const pane = getPane();
+
+    // Expand All / Collapse All should toggle ⚡ Active Links folder
+    const expandBtn = pane.buttons.find((b: any) => b.title === 'Expand All');
+    const collapseBtn = pane.buttons.find((b: any) => b.title === 'Collapse All');
+    expandBtn.fire('click');
+    expect(activeLinksFolder.expanded).toBe(true);
+    collapseBtn.fire('click');
+    expect(activeLinksFolder.expanded).toBe(false);
+
+    // Jump button expands owning section/group folders and opens Rotate drawer
+    const jumpBtns = activeLinksFolder.element.querySelectorAll('.mv-active-links-jump');
+    const rotateJump = jumpBtns.find((b: any) => b.textContent.includes('Feedback · Spin per frame (rad)'));
+    expect(rotateJump).toBeDefined();
+
+    rotateJump!.dispatchEvent({ type: 'click' });
+    const feedbackFolder = pane.folders.find((f: any) => f.options?.title === 'Feedback and post')?.folder;
+    expect(feedbackFolder.expanded).toBe(true);
+    const rotateBinding = findBinding('Spin per frame (rad)');
+    expect(rotateBinding.element.parentElement.querySelector('.mv-react-drawer')?.textContent).toContain('Spin per frame (rad) Reactivity');
+  });
+
+  it('creates missing Setting objects in merged Feedback/Post bag when attaching reactivity', () => {
+    const { findBinding, preset } = setupReactiveStudio({
+      post: {},
+    });
+    expect(preset.post.bloom).toBeUndefined();
+
+    const bloomBinding = findBinding('Bloom amount');
+    expect(bloomBinding).toBeDefined();
+    const bolt = bloomBinding.element.querySelector('.mv-react-bolt')!;
+    bolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+
+    const drawer = bloomBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    const kickChip = drawer.querySelectorAll('.mv-react-chip').find((c: any) => c.getAttribute('data-recipe-id') === 'kickPunch')!;
+    kickChip.dispatchEvent({ type: 'click' });
+
+    expect(preset.post.bloom).toBeDefined();
+    expect(preset.post.bloom!.link).toBeDefined();
+    expect(preset.feedback.bloom).toBeUndefined();
+  });
+
+  it('attaches inline ⚡ reactivity to Warp Operator sliders & enums and supports Active Links jump/remove', () => {
+    const op0 = newWarpOperator('curl');
+    const op1 = newWarpOperator('radial');
+    const { findBinding, getPane, activeLinksFolder } = setupReactiveStudio({
+      warp: [op0, op1],
+    });
+
+    // Warp 0 is selected initially; its Amount slider & Flow enum should have ⚡ buttons
+    const warpFolder = getPane().folders.find((f: any) => String(f.options?.title).startsWith('Warp operator 1:'))?.folder;
+    expect(warpFolder).toBeDefined();
+    const collectAllBindings = (p: any): any[] => [
+      ...p.bindings,
+      ...p.folders.flatMap((f: any) => collectAllBindings(f.folder)),
+    ];
+    const warpBindings = collectAllBindings(warpFolder);
+    const warpAmount = warpBindings.find((b: any) => b.options?.label === 'Amount');
+    const warpFlow = warpBindings.find((b: any) => b.options?.label === 'Flow style');
+    expect(warpAmount).toBeDefined();
+    expect(warpFlow).toBeDefined();
+
+    const amtBolt = warpAmount.element.querySelector('.mv-react-bolt')!;
+    expect(amtBolt).not.toBeNull();
+    amtBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    const amtDrawer = warpAmount.element.parentElement.querySelector('.mv-react-drawer')!;
+    amtDrawer.querySelector('.mv-react-chip')!.dispatchEvent({ type: 'click' });
+    expect(op0.params.amount!.link).toBeDefined();
+    expect(activeLinksFolder.element.textContent).toContain('Warp 1. Curl noise · Amount');
+
+    // Switch to Warp operator 2 via picker and test cross-operator Active Links jump back to Warp 1
+    const warpPick = findBinding('Warp operator');
+    warpPick.fire('change', '1');
+    const freshActiveLinks = getPane().folders.find((f: any) => f.options?.title === '⚡ Active Links')!.folder;
+    const jumpToWarp1 = freshActiveLinks.element
+      .querySelectorAll('.mv-active-links-jump')
+      .find((b: any) => b.textContent.includes('Warp 1. Curl noise · Amount'))!;
+    expect(jumpToWarp1).toBeDefined();
+    jumpToWarp1.dispatchEvent({ type: 'click' });
+
+    expect(findBinding('Warp operator').target.index).toBe('0');
+  });
+});
+
+describe('Slice 29.2: Studio Inline Reactivity for Enums, Layer Opacity & Colours', () => {
+  function setupPhase2Studio(layers: LayerEntry[], feedbackOverride?: Preset['feedback']) {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    const preset: Preset = {
+      version: 1,
+      name: 'Phase 2 Reactive Test',
+      tags: [],
+      transition: { style: 'crossfade', seconds: 0.5 },
+      feedback: {
+        zoom: { value: 1.0 },
+        warpMode: { value: 'none' },
+        ...feedbackOverride,
+      },
+      layers,
+      post: { bloom: { value: 0.25 } },
+    };
+
+    const scene = {
+      layers: layers.filter((l) => l.enabled).map(() => ({ setParams: vi.fn() })),
+      setFeedback: vi.fn(),
+      setLayerConfig: vi.fn(),
+      setWarpOps: vi.fn(),
+    };
+
+    const session: any = {
+      get: vi.fn((id: string) => (id === 'p2-1' ? { id, builtin: false, preset } : undefined)),
+      list: vi.fn(() => [{ id: 'p2-1', builtin: false, preset }]),
+      listCategorized: vi.fn(() => ({
+        system: { showcase: [], flagship: [], classics: [] },
+        user: { folders: [], unfiled: [{ id: 'p2-1', builtin: false, preset }] },
+      })),
+      getFolders: vi.fn(() => []),
+      getPresetFolder: vi.fn(() => undefined),
+      monitorOf: vi.fn(() => undefined),
+      isSolo: vi.fn(() => false),
+      isMuted: vi.fn(() => false),
+      isDirty: vi.fn(() => false),
+      canUndo: () => false,
+      canRedo: () => false,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      sceneOf: vi.fn(() => scene),
+      commit: vi.fn(),
+      refreshPost: vi.fn(),
+      rebuild: vi.fn(),
+    };
+
+    let activePane: any = null;
+    const paneFactory = vi.fn(() => {
+      activePane = createMockPane();
+      return activePane;
+    });
+
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory,
+      linkResolved: () => undefined,
+      isCalm: () => false,
+    });
+
+    studio.bind('p2-1');
+
+    const findBinding = (label: string) => {
+      const searchPane = (p: any): any => {
+        for (const b of p.bindings) {
+          if (b.options?.label === label) return b;
+        }
+        for (const f of p.folders) {
+          const found = searchPane(f.folder);
+          if (found) return found;
+        }
+        return undefined;
+      };
+      return searchPane(activePane);
+    };
+
+    const getActiveLinksFolder = () =>
+      activePane.folders.find((f: any) => f.options?.title === '⚡ Active Links')?.folder;
+
+    return {
+      container,
+      preset,
+      scene,
+      session,
+      studio,
+      paneFactory,
+      getPane: () => activePane,
+      findBinding,
+      getActiveLinksFolder,
+    };
+  }
+
+  it('enum blade renders ⚡ button, drawer shows trigger, cooldown & option chips, and updates setting.link + Active Links', () => {
+    const shapeLayer = defaultLayer('shape');
+    const { findBinding, session, paneFactory, getActiveLinksFolder } = setupPhase2Studio([shapeLayer]);
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+
+    const baseShapeBinding = findBinding('Base shape');
+    expect(baseShapeBinding).toBeDefined();
+    const bolt = baseShapeBinding.element.querySelector('.mv-react-bolt')!;
+    expect(bolt).not.toBeNull();
+    expect(bolt.classList.contains('mv-react-bolt-active')).toBe(false);
+
+    bolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    const drawer = baseShapeBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    expect(drawer).not.toBeNull();
+    expect(drawer.textContent).toContain('⚡ Base shape Switching');
+
+    // Trigger select + Cooldown range + Option chips
+    const triggerSelect = drawer.querySelector('.mv-react-select')!;
+    const cooldownRange = drawer.querySelector('.mv-react-range')!;
+    const optChips = drawer.querySelectorAll('.mv-react-opt-chip');
+    expect(triggerSelect).not.toBeNull();
+    expect(cooldownRange).not.toBeNull();
+    expect(optChips.length).toBeGreaterThan(2);
+    // All option chips active initially when enumOptions is omitted
+    expect(optChips.every((c: any) => c.classList.contains('mv-react-opt-chip-active'))).toBe(true);
+
+    // Toggle off one option -> populates enumOptions subset and commits undo
+    const firstOpt = optChips[0]!;
+    const removedOptName = firstOpt.getAttribute('data-enum-option');
+    firstOpt.dispatchEvent({ type: 'click' });
+    expect(shapeLayer.params.baseShape!.link).toBeDefined();
+    expect(shapeLayer.params.baseShape!.link!.enumOptions).not.toContain(removedOptName);
+    expect(firstOpt.classList.contains('mv-react-opt-chip-active')).toBe(false);
+    expect(session.commit).toHaveBeenCalledWith('p2-1', expect.any(Number), true);
+
+    // Change Trigger to 'drop' and Cooldown to 12
+    triggerSelect.value = 'drop';
+    triggerSelect.dispatchEvent({ type: 'change' });
+    cooldownRange.value = '12';
+    cooldownRange.dispatchEvent({ type: 'change' });
+
+    expect(shapeLayer.params.baseShape!.link!.source).toBe('drop');
+    expect(shapeLayer.params.baseShape!.link!.cooldownSec).toBe(12);
+    expect(bolt.classList.contains('mv-react-bolt-active')).toBe(true);
+    expect(bolt.title).toBe('drop · 12s');
+
+    // Active Links shows concise enum summary
+    const activeLinksFolder = getActiveLinksFolder();
+    expect(activeLinksFolder.element.textContent).toContain('Base shape');
+    expect(activeLinksFolder.element.textContent).toContain('drop · 12s');
+
+    // Toggle option back on -> restores all options -> deletes enumOptions
+    firstOpt.dispatchEvent({ type: 'click' });
+    expect(shapeLayer.params.baseShape!.link!.enumOptions).toBeUndefined();
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it('colour blade renders ⚡ button and applying a colour recipe sets setting.link and commits undo', () => {
+    const shapeLayer = defaultLayer('shape');
+    shapeLayer.params.colorMode = { value: 'solid' };
+    shapeLayer.params.solidColor = { value: '#ff3366' };
+
+    const { findBinding, session, paneFactory, getActiveLinksFolder } = setupPhase2Studio([shapeLayer]);
+
+    const colorBinding = findBinding('Solid color');
+    expect(colorBinding).toBeDefined();
+    const bolt = colorBinding.element.querySelector('.mv-react-bolt')!;
+    expect(bolt).not.toBeNull();
+
+    bolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    const drawer = colorBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    expect(drawer.textContent).toContain('⚡ Solid color Hue Shift');
+    expect(drawer.textContent).toContain('Hue Depth');
+    expect(drawer.querySelector('.mv-react-morph')).toBeNull();
+
+    const chips = drawer.querySelectorAll('.mv-react-chip');
+    const phraseHueChip = chips.find((c: any) => c.getAttribute('data-recipe-id') === 'phraseHueDrift')!;
+    expect(phraseHueChip).toBeDefined();
+    phraseHueChip.dispatchEvent({ type: 'click' });
+
+    expect(shapeLayer.params.solidColor!.link).toEqual({
+      source: 'phrase32',
+      mode: 'bipolar',
+      curve: 'linear',
+      amount: 0.5,
+      smooth: 0.55,
+    });
+    expect(drawer.textContent).toContain('+180°');
+    expect(bolt.classList.contains('mv-react-bolt-active')).toBe(true);
+    expect(session.commit).toHaveBeenCalledWith('p2-1', expect.any(Number), true);
+    expect(getActiveLinksFolder().element.textContent).toContain('Solid color');
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it('selected layer Opacity renders ⚡ button without Morph, writes layer.opacityLink, and clears via × / Clear All / Clear', () => {
+    const tunnelLayer: LayerEntry = {
+      type: 'tunnel',
+      enabled: true,
+      opacity: 0.85,
+      blend: 'add',
+      params: { ringDensity: { value: 0.5 }, twist: { value: 0 } },
+    };
+    const shapeLayer = defaultLayer('shape');
+
+    const { findBinding, session, paneFactory, getActiveLinksFolder } = setupPhase2Studio([tunnelLayer, shapeLayer]);
+
+    const opacityBinding = findBinding('Opacity');
+    expect(opacityBinding).toBeDefined();
+    const bolt = opacityBinding.element.querySelector('.mv-react-bolt')!;
+    expect(bolt).not.toBeNull();
+
+    bolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    const drawer = opacityBinding.element.parentElement.querySelector('.mv-react-drawer')!;
+    expect(drawer.textContent).toContain('⚡ Opacity Reactivity');
+    // Layer Opacity drawer must omit Morph controls
+    expect(drawer.querySelector('.mv-react-morph')).toBeNull();
+
+    // Apply Kick Punch recipe
+    const kickChip = drawer
+      .querySelectorAll('.mv-react-chip')
+      .find((c: any) => c.getAttribute('data-recipe-id') === 'kickPunch')!;
+    kickChip.dispatchEvent({ type: 'click' });
+
+    expect(tunnelLayer.opacityLink).toEqual({
+      source: 'kickEnv',
+      amount: 0.35,
+      smooth: 0.08,
+      mode: 'add',
+      curve: 'punch',
+    });
+    expect(bolt.classList.contains('mv-react-bolt-active')).toBe(true);
+    expect(session.commit).toHaveBeenCalledWith('p2-1', expect.any(Number), true);
+    expect(paneFactory).toHaveBeenCalledTimes(1);
+
+    const activeFolder = getActiveLinksFolder();
+    expect(activeFolder.element.textContent).toContain('1. Forward Flight Tunnel · Opacity');
+
+    // Drawer Clear deletes opacityLink safely without breaking backing getter/setter
+    drawer.querySelector('.mv-react-clear-btn')!.dispatchEvent({ type: 'click' });
+    expect(tunnelLayer.opacityLink).toBeUndefined();
+    expect(bolt.classList.contains('mv-react-bolt-active')).toBe(false);
+    expect(activeFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(0);
+
+    // Re-apply and remove via Active Links ×
+    kickChip.dispatchEvent({ type: 'click' });
+    expect(tunnelLayer.opacityLink).toBeDefined();
+    expect(activeFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(1);
+
+    activeFolder.element.querySelector('.mv-active-links-remove')!.dispatchEvent({ type: 'click' });
+    expect(tunnelLayer.opacityLink).toBeUndefined();
+    expect(activeFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(0);
+
+    // Re-apply and test Clear All
+    kickChip.dispatchEvent({ type: 'click' });
+    expect(tunnelLayer.opacityLink).toBeDefined();
+    activeFolder.element.querySelector('.mv-active-links-clear-all')!.dispatchEvent({ type: 'click' });
+    expect(tunnelLayer.opacityLink).toBeUndefined();
+    expect(activeFolder.element.querySelectorAll('.mv-active-links-row')).toHaveLength(0);
+  });
+
+  it('closes reactive drawer when showWhen hides its parameter and supports cross-layer Opacity jump', () => {
+    const tunnelLayer: LayerEntry = {
+      type: 'tunnel',
+      enabled: true,
+      opacity: 1,
+      blend: 'add',
+      params: { ringDensity: { value: 0.5 }, twist: { value: 0 } },
+    };
+    const shapeLayer = defaultLayer('shape');
+    shapeLayer.params.colorMode = { value: 'solid' };
+    shapeLayer.params.solidColor = { value: '#ff3366' };
+    shapeLayer.opacityLink = { source: 'bass', amount: 0.3, smooth: 0.2 };
+
+    const { findBinding, getActiveLinksFolder } = setupPhase2Studio([tunnelLayer, shapeLayer]);
+
+    // Open Solid color drawer, then switch colorMode to 'palette' -> drawer should auto-close
+    const solidColorBinding = findBinding('Solid color');
+    const colorBolt = solidColorBinding.element.querySelector('.mv-react-bolt')!;
+    colorBolt.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    expect(solidColorBinding.element.parentElement.querySelectorAll('.mv-react-drawer')).toHaveLength(1);
+
+    const colorModeBinding = findBinding('Color mode');
+    colorModeBinding.fire('change', 'palette');
+    expect(solidColorBinding.hidden).toBe(true);
+    expect(solidColorBinding.element.parentElement.querySelectorAll('.mv-react-drawer')).toHaveLength(0);
+
+    // Jump to layer 2 Opacity from Active Links while layer 1 is selected -> switches layer & opens drawer
+    const activeFolder = getActiveLinksFolder();
+    const jumpBtn = activeFolder.element
+      .querySelectorAll('.mv-active-links-jump')
+      .find((b: any) => b.textContent.includes('2. Shape (circle · bars) · Opacity'))!;
+    expect(jumpBtn).toBeDefined();
+    jumpBtn.dispatchEvent({ type: 'click' });
+
+    const layerSelBinding = findBinding('Layer');
+    expect(layerSelBinding.target.selected).toBe(1);
+    const opacityBinding = findBinding('Opacity');
+    expect(opacityBinding.element.parentElement.querySelector('.mv-react-drawer')?.textContent).toContain('⚡ Opacity Reactivity');
+  });
+});
+
+describe('Slice 29.2: Deferred Pane Disposal on Rebind', () => {
+  it('defers oldPane.dispose() to a microtask during bind() while Studio.dispose() remains synchronous', async () => {
+    const container = createMockElement('div');
+    const body = createMockElement('div');
+    body.className = 'studio-body';
+    container.appendChild(body);
+
+    const tunnelLayer: LayerEntry = {
+      type: 'tunnel',
+      enabled: true,
+      opacity: 1,
+      blend: 'add',
+      params: { ringDensity: { value: 0.5 }, twist: { value: 0 } },
+    };
+    const shapeLayer = defaultLayer('shape');
+
+    const preset: Preset = {
+      version: 1,
+      name: 'Deferred Dispose Test',
+      tags: [],
+      transition: { style: 'crossfade', seconds: 0.5 },
+      feedback: {
+        zoom: { value: 1.0 },
+        warpMode: { value: 'none' },
+      },
+      layers: [tunnelLayer, shapeLayer],
+      post: { bloom: { value: 0.25 } },
+    };
+
+    const scene = {
+      layers: preset.layers.map(() => ({ setParams: vi.fn() })),
+      setFeedback: vi.fn(),
+      setLayerConfig: vi.fn(),
+    };
+
+    const session: any = {
+      get: vi.fn((id: string) => (id === 'd-1' ? { id, builtin: false, preset } : undefined)),
+      list: vi.fn(() => [{ id: 'd-1', builtin: false, preset }]),
+      listCategorized: vi.fn(() => ({
+        system: { showcase: [], flagship: [], classics: [] },
+        user: { folders: [], unfiled: [{ id: 'd-1', builtin: false, preset }] },
+      })),
+      getFolders: vi.fn(() => []),
+      getPresetFolder: vi.fn(() => undefined),
+      monitorOf: vi.fn(() => undefined),
+      isSolo: vi.fn(() => false),
+      isMuted: vi.fn(() => false),
+      isDirty: vi.fn(() => false),
+      canUndo: () => false,
+      canRedo: () => false,
+      undo: vi.fn(),
+      redo: vi.fn(),
+      sceneOf: vi.fn(() => scene),
+      commit: vi.fn(),
+      refreshPost: vi.fn(),
+      rebuild: vi.fn(),
+    };
+
+    const panes: Array<ReturnType<typeof createMockPane> & { dispose: ReturnType<typeof vi.fn> }> = [];
+    const paneFactory = vi.fn(() => {
+      const pane = { ...createMockPane(), dispose: vi.fn() };
+      panes.push(pane);
+      return pane;
+    });
+
+    const studio = new Studio(container as any, {
+      session,
+      switchTo: vi.fn(),
+      paneFactory,
+      linkResolved: () => undefined,
+      isCalm: () => false,
+    });
+
+    studio.bind('d-1');
+    expect(panes).toHaveLength(1);
+    const firstPane = panes[0]!;
+
+    const findBinding = (pane: any, label: string): any => {
+      for (const b of pane.bindings) {
+        if (b.options?.label === label) return b;
+      }
+      for (const f of pane.folders) {
+        const found = findBinding(f.folder, label);
+        if (found) return found;
+      }
+      return undefined;
+    };
+
+    const layerSelBinding = findBinding(firstPane, 'Layer');
+    expect(layerSelBinding).toBeDefined();
+
+    // Simulate Tweakpane's RackController continuing to unwind after the binding's change handler calls studio.bind()
+    let disposeCountDuringChangeTurn = -1;
+    layerSelBinding.on('change', () => {
+      disposeCountDuringChangeTurn = firstPane.dispose.mock.calls.length;
+    });
+
+    layerSelBinding.fire('change', 1);
+
+    // Rebind occurred synchronously (new pane created), but oldPane.dispose was NOT called synchronously
+    expect(panes).toHaveLength(2);
+    expect(disposeCountDuringChangeTurn).toBe(0);
+    expect(firstPane.dispose).not.toHaveBeenCalled();
+
+    // Flushing microtasks disposes the old pane once
+    await Promise.resolve();
+    expect(firstPane.dispose).toHaveBeenCalledTimes(1);
+
+    // Studio.dispose() still disposes the active pane synchronously
+    const secondPane = panes[1]!;
+    expect(secondPane.dispose).not.toHaveBeenCalled();
+    studio.dispose();
+    expect(secondPane.dispose).toHaveBeenCalledTimes(1);
   });
 });

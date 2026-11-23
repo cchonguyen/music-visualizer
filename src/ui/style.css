@@ -98,3 +98,426 @@
     padding: var(--space-2) var(--space-4) calc(var(--space-2) + env(safe-area-inset-bottom));
   }
 }
+
+/* Inline Music-Reactive Sliders, Overlays, Drawers & Active Links Overview (Stage 29) */
+.studio .tp-lblv_l {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.mv-react-bolt {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  min-height: 20px;
+  padding: 0 4px;
+  margin-left: auto;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.mv-react-bolt:hover {
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--line);
+}
+
+.mv-react-bolt.mv-react-bolt-active {
+  color: var(--warn);
+  background: var(--warn-tint);
+  border-color: var(--warn);
+}
+
+.mv-react-bolt.mv-react-bolt-open {
+  border-color: var(--accent);
+}
+
+.mv-react-bolt:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.mv-react-band {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--warn) 35%, transparent);
+  border: 1px solid color-mix(in oklch, var(--warn) 70%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mv-react-dot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--warn) 85%, transparent);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.mv-react-drawer {
+  margin: 4px 4px 8px;
+  padding: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.mv-react-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mv-react-title {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mv-react-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.mv-react-clear-btn,
+.mv-react-close-btn {
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.mv-react-clear-btn:hover,
+.mv-react-close-btn:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.mv-react-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mv-react-chip {
+  padding: 3px 6px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.mv-react-chip:hover {
+  border-color: var(--accent);
+}
+
+.mv-react-chip.mv-react-chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.mv-react-opt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mv-react-opt-chip {
+  padding: 2px 7px;
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.mv-react-opt-chip:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.mv-react-opt-chip.mv-react-opt-chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.mv-react-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mv-react-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mv-react-field-label {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.mv-react-select {
+  width: 100%;
+  min-width: 0;
+  padding: 3px 4px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+}
+
+.mv-react-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mv-react-slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mv-react-slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mv-react-slider-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-size: 10.5px;
+}
+
+.mv-react-range {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+}
+
+.mv-react-morph {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.mv-react-morph-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mv-react-morph-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Active Links Overview Folder */
+.mv-active-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 4px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.mv-active-links-empty {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 4px 2px;
+}
+
+.mv-active-links-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mv-active-links-count {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.mv-active-links-clear-all {
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.mv-active-links-clear-all:hover {
+  border-color: var(--accent);
+}
+
+.mv-active-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mv-active-links-row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.mv-active-links-jump {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 4px 6px;
+  text-align: left;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mv-active-links-jump:hover {
+  border-color: var(--accent);
+}
+
+.mv-active-links-label {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.mv-active-links-summary {
+  font-size: 10.5px;
+  color: var(--warn);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.mv-active-links-remove {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 0 6px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.mv-active-links-remove:hover {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+@media (max-width: 599px) {
+  .mv-react-bolt {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .mv-react-clear-btn,
+  .mv-react-close-btn,
+  .mv-react-chip,
+  .mv-react-opt-chip,
+  .mv-react-select,
+  .mv-active-links-clear-all,
+  .mv-active-links-jump,
+  .mv-active-links-remove {
+    min-height: 44px;
+  }
+  .mv-react-opt-chips {
+    gap: 6px;
+  }
+  .mv-react-opt-chip {
+    padding: 4px 10px;
+  }
+  .mv-active-links-remove {
+    min-width: 44px;
+  }
+  .mv-react-grid {
+    grid-template-columns: 1fr;
+  }
+  .mv-react-range {
+    min-height: 44px;
+    height: 44px;
+  }
+  .mv-react-morph-toggle {
+    min-height: 44px;
+  }
+  .mv-react-morph-toggle input[type="checkbox"] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}

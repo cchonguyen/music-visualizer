@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { LinkRunner, ReactionBank, sourceValue, type LinkInputs } from './links';
+import {
+  applyLinkCurve,
+  hexToHsl,
+  hslToHex,
+  LinkRunner,
+  neutralPointForSpec,
+  ReactionBank,
+  shiftHexHue,
+  sourceValue,
+  type LinkInputs,
+} from './links';
 import type { Reaction } from './reactions';
 import type { AudioFrame } from '../audio/types';
 import { AUDIO_SOURCES, type Settings } from './format';
@@ -261,5 +271,382 @@ describe('ReactionBank', () => {
     });
     expect(results[0]).toBe(results[1]);
     expect(results[0]).not.toBe(results[2]);
+  });
+});
+
+describe('song-arc sources (13.2)', () => {
+  it('AUDIO_SOURCES includes the 5 song-arc sources', () => {
+    for (const s of ['drop', 'breakdown', 'phrase16', 'phrase32', 'energySlow']) {
+      expect(AUDIO_SOURCES).toContain(s);
+    }
+  });
+
+  it('sourceValue evaluates drop, breakdown, phrase16, phrase32, and energySlow', () => {
+    expect(sourceValue('drop', inputs({ sectionContrast: 0.25 }))).toBeCloseTo(0.5, 5);
+    expect(sourceValue('drop', inputs({ sectionContrast: -0.25 }))).toBe(0);
+    expect(sourceValue('breakdown', inputs({ sectionContrast: -0.3 }))).toBeCloseTo(0.6, 5);
+    expect(sourceValue('breakdown', inputs({ sectionContrast: 0.3 }))).toBe(0);
+    expect(sourceValue('phrase16', inputs({ timeSec: 2 }))).toBeCloseTo(0.25, 5);
+    expect(sourceValue('phrase32', inputs({ timeSec: 4 }))).toBeCloseTo(0.25, 5);
+    expect(sourceValue('energySlow', inputs({ frame: frame({ energy: 0.85 }) }))).toBeCloseTo(0.85, 5);
+  });
+
+  it('LinkRunner tracks stateful phrase16/phrase32 beat counts once beats arrive and advances once per frame', () => {
+    const runner = new LinkRunner();
+    const unit: ParamSpec = { type: 'float', name: 'u', label: 'U', group: 'G', default: 0, min: 0, max: 1, step: 0.01 };
+    const p16Settings: Settings = { u: { value: 0, link: { source: 'phrase16', amount: 1, smooth: 0 } } };
+    const p32Settings: Settings = { u: { value: 0, link: { source: 'phrase32', amount: 1, smooth: 0 } } };
+
+    // Before first beat: falls back to time ramp (timeSec=4 -> phrase16 = 0.5).
+    const pre = runner.resolve('P16', p16Settings, [unit], inputs({ timeSec: 4, frame: frame({ frameIndex: 1 }) }), 10);
+    expect(pre.u as number).toBeCloseTo(0.5, 3);
+
+    // Beat 1 at t=5.0 -> beatCount=1. Calling resolve multiple times in same frame does NOT double-count.
+    const fBeat1 = frame({ frameIndex: 2, kickPulse: true });
+    runner.resolve('P16', p16Settings, [unit], inputs({ timeSec: 5.0, frame: fBeat1 }), 10);
+    const sameFrame = runner.resolve('P32', p32Settings, [unit], inputs({ timeSec: 5.0, frame: fBeat1 }), 10);
+    expect(runner.resolvedByKey('P16.u')).toBeCloseTo(1 / 16, 3);
+    expect(sameFrame.u as number).toBeCloseTo(1 / 32, 3);
+
+    // Release beat, then trigger beat 2 after 180ms cooldown.
+    runner.resolve('P16', p16Settings, [unit], inputs({ timeSec: 5.1, frame: frame({ frameIndex: 3, kickPulse: false }) }), 0.1);
+    runner.resolve('P16', p16Settings, [unit], inputs({ timeSec: 5.3, frame: frame({ frameIndex: 4, beatByBand: { sub: true, mid: false, high: false } }) }), 10);
+    expect(runner.resolvedByKey('P16.u')).toBeCloseTo(2 / 16, 3);
+  });
+
+  it('LinkRunner seeds energySlow on first call and smooths with tau = 10s', () => {
+    const runner = new LinkRunner();
+    const unit: ParamSpec = { type: 'float', name: 'u', label: 'U', group: 'G', default: 0, min: 0, max: 1, step: 0.01 };
+    const s: Settings = { u: { value: 0, link: { source: 'energySlow', amount: 1, smooth: 0 } } };
+
+    // Seed at 0.2
+    const first = runner.resolve('E', s, [unit], inputs({ timeSec: 0, frame: frame({ frameIndex: 1, energy: 0.2 }) }), 0.016);
+    expect(first.u as number).toBeCloseTo(0.2, 4);
+
+    // Jump energy to 1.0 over dt = 10s -> energySlow moves 1 - e^-1 (~0.632) toward 1.0: 0.2 + 0.8 * 0.63212 = 0.7057
+    const second = runner.resolve('E', s, [unit], inputs({ timeSec: 10, frame: frame({ frameIndex: 2, energy: 1.0 }) }), 10);
+    expect(second.u as number).toBeCloseTo(0.2 + 0.8 * (1 - Math.exp(-1)), 2);
+  });
+});
+
+describe('applyLinkCurve and neutralPointForSpec (13.2)', () => {
+  it('applies linear, punch, swell, and gate curves', () => {
+    expect(applyLinkCurve(0.5)).toBeCloseTo(0.5, 5);
+    expect(applyLinkCurve(0.5, 'linear')).toBeCloseTo(0.5, 5);
+    expect(applyLinkCurve(0.5, 'punch')).toBeCloseTo(Math.pow(0.5, 2.2), 5);
+    expect(applyLinkCurve(0.25, 'swell')).toBeCloseTo(0.5, 5);
+    expect(applyLinkCurve(0.3, 'gate', 0.35)).toBe(0);
+    expect(applyLinkCurve(0.35, 'gate', 0.35)).toBe(0);
+    expect(applyLinkCurve(0.675, 'gate', 0.35)).toBeCloseTo(0.5, 5);
+    expect(applyLinkCurve(1.0, 'gate', 0.35)).toBeCloseTo(1.0, 5);
+    // Clamps threshold bounds and handles NaN
+    expect(applyLinkCurve(0.5, 'gate', Number.NaN)).toBeCloseTo((0.5 - 0.35) / 0.65, 5);
+  });
+
+  it('computes neutral points for zoom, signed ranges, and default fallback', () => {
+    expect(neutralPointForSpec(zoom)).toBe(1.0);
+    expect(neutralPointForSpec({ name: 'rotate', default: 0.2, min: -1, max: 1 })).toBe(0.0);
+    expect(neutralPointForSpec({ name: 'decay', default: 0.92, min: 0.5, max: 0.99 })).toBe(0.92);
+  });
+});
+
+describe('LinkRunner modes, bounds, calm damping, resolvedByKey & clear (13.2)', () => {
+  const rotate: ParamSpec = { type: 'float', name: 'rotate', label: 'Rotate', group: 'G', default: 0, min: -1, max: 1, step: 0.01 };
+  const flash: ParamSpec = { type: 'float', name: 'flash', label: 'Flash', group: 'G', default: 0, min: 0, max: 1, step: 0.01, intense: true };
+
+  it('bipolar mode centers modulation around start value', () => {
+    const runner = new LinkRunner();
+    const s: Settings = { rotate: { value: 0, link: { source: 'sub', amount: 0.5, smooth: 0, mode: 'bipolar' } } };
+    // sub = 0 -> curved = 0 -> 0 + 0.5 * 2 * (0 - 1) = -1
+    const low = runner.resolve('F', s, [rotate], inputs({ frame: frame({ frameIndex: 1, norm: { sub: 0, mid: 0, high: 0 } }) }), 10);
+    expect(low.rotate as number).toBeCloseTo(-1, 3);
+    // sub = 0.5 -> curved*2 - 1 = 0 -> 0
+    const mid = runner.resolve('F', s, [rotate], inputs({ timeSec: 1, frame: frame({ frameIndex: 2, norm: { sub: 0.5, mid: 0, high: 0 } }) }), 10);
+    expect(mid.rotate as number).toBeCloseTo(0, 3);
+  });
+
+  it('flipOnBeat flips polarity around neutral point for zoom (1.0) and rotate (0.0) with slew', () => {
+    const runner = new LinkRunner();
+    const s: Settings = {
+      zoom: { value: 1.0, link: { source: 'sub', amount: 0.5, smooth: 0, mode: 'flipOnBeat', flipSlew: 0.2 } },
+      rotate: { value: 0.1, link: { source: 'sub', amount: 0.25, smooth: 0, mode: 'flipOnBeat', flipSlew: 0.2 } },
+    };
+    // Initial frame without beat: polarity = +1
+    const f0 = runner.resolve('F', s, [zoom, rotate], inputs({ timeSec: 0, frame: frame({ frameIndex: 1, norm: { sub: 0.5, mid: 0, high: 0 } }) }), 10);
+    // zoom: 1.0 + (0 + 0.5*0.4*0.5)*1 = 1.1; rotate: 0 + (0.1 + 0.25*2*0.5)*1 = 0.35
+    expect(f0.zoom as number).toBeCloseTo(1.1, 3);
+    expect(f0.rotate as number).toBeCloseTo(0.35, 3);
+
+    // Beat triggers flip target -> -1; dt=0.1s with flipSlew=0.2s moves current by (2/0.2)*0.1 = 1.0 -> current = 0.0
+    const f1 = runner.resolve('F', s, [zoom, rotate], inputs({ timeSec: 0.1, frame: frame({ frameIndex: 2, kickPulse: true, norm: { sub: 0.5, mid: 0, high: 0 } }) }), 0.1);
+    expect(f1.zoom as number).toBeCloseTo(1.0, 3);
+    expect(f1.rotate as number).toBeCloseTo(0.0, 3);
+
+    // Another dt=0.1s completes slew to -1
+    const f2 = runner.resolve('F', s, [zoom, rotate], inputs({ timeSec: 0.2, frame: frame({ frameIndex: 3, kickPulse: false, norm: { sub: 0.5, mid: 0, high: 0 } }) }), 0.1);
+    expect(f2.zoom as number).toBeCloseTo(0.9, 3);
+    expect(f2.rotate as number).toBeCloseTo(-0.35, 3);
+  });
+
+  it('flipOnDrop and flipOnSection flip on contrast edges', () => {
+    const runner = new LinkRunner();
+    const s: Settings = {
+      rotate: { value: 0, link: { source: 'sub', amount: 0.5, smooth: 0, mode: 'flipOnDrop', flipSlew: 0.1 } },
+      zoom: { value: 1, link: { source: 'sub', amount: 0.5, smooth: 0, mode: 'flipOnSection', flipSlew: 0.1 } },
+    };
+    const init = runner.resolve('F', s, [rotate, zoom], inputs({ timeSec: 0, sectionContrast: 0, frame: frame({ frameIndex: 1, norm: { sub: 1, mid: 0, high: 0 } }) }), 10);
+    expect(init.rotate as number).toBeCloseTo(1.0, 3);
+    expect(init.zoom as number).toBeCloseTo(1.2, 3);
+
+    // sectionContrast >= 0.22 triggers both dropEdge (>=0.18) and sectionEdge (>=0.22)
+    const flipped = runner.resolve('F', s, [rotate, zoom], inputs({ timeSec: 1, sectionContrast: 0.25, frame: frame({ frameIndex: 2, norm: { sub: 1, mid: 0, high: 0 } }) }), 0.2);
+    expect(flipped.rotate as number).toBeCloseTo(-1.0, 3);
+    expect(flipped.zoom as number).toBeCloseTo(0.8, 3);
+  });
+
+  it('enforces normalized minBound / maxBound even if reversed', () => {
+    const runner = new LinkRunner();
+    const s: Settings = {
+      zoom: { value: 1.0, link: { source: 'sub', amount: 1, smooth: 0, minBound: 0.75, maxBound: 0.25 } },
+    };
+    // span 0.4, min 0.8 -> [0.9, 1.1]
+    const out = runner.resolve('F', s, [zoom], inputs({ frame: frame({ norm: { sub: 1, mid: 0, high: 0 } }) }), 10);
+    expect(out.zoom as number).toBeCloseTo(1.1, 4);
+  });
+
+  it('applies calm damping (0.35x normal, 0.2x intense)', () => {
+    const runner = new LinkRunner();
+    const s: Settings = {
+      rotate: { value: 0, link: { source: 'sub', amount: 0.5, smooth: 0 } },
+      flash: { value: 0, link: { source: 'sub', amount: 1.0, smooth: 0 } },
+    };
+    const out = runner.resolve('F', s, [rotate, flash], inputs({ calm: true, frame: frame({ norm: { sub: 1, mid: 0, high: 0 } }) }), 10);
+    // rotate: 0 + (0.5 * 0.35) * 2 * 1 = 0.35
+    expect(out.rotate as number).toBeCloseTo(0.35, 4);
+    // flash (intense): 0 + (1.0 * 0.2) * 1 * 1 = 0.20
+    expect(out.flash as number).toBeCloseTo(0.2, 4);
+  });
+
+  it('exposes resolvedByKey for linked and morph-only settings and resets on clear()', () => {
+    const runner = new LinkRunner();
+    const s: Settings = {
+      zoom: { value: 1, link: { source: 'sub', amount: 0.5, smooth: 0 } },
+      rotate: { value: 0, morph: { to: 0.5, rate: 0.5 } },
+    };
+    runner.resolve('F', s, [zoom, rotate], inputs({ timeSec: 1, frame: frame({ frameIndex: 1, kickPulse: true }) }), 10);
+    expect(runner.resolvedByKey('F.zoom')).toBeCloseTo(1.12, 3);
+    expect(runner.resolvedByKey('F.rotate')).toBeCloseTo(0.5, 4);
+    expect(runner.meterByKey('F.zoom')).toBeCloseTo(0.6, 3);
+
+    runner.clear();
+    expect(runner.resolvedByKey('F.zoom')).toBeUndefined();
+    expect(runner.resolvedByKey('F.rotate')).toBeUndefined();
+    expect(runner.meterByKey('F.zoom')).toBeUndefined();
+  });
+});
+
+describe('linkedEnum (13.5)', () => {
+  const modeSpec: ParamSpec = {
+    type: 'enum',
+    name: 'warpMode',
+    label: 'Warp Mode',
+    group: 'G',
+    default: 'none',
+    options: ['none', 'curl', 'radial', 'mobius'],
+  };
+
+  it('steps through options on section, drop, and beat triggers with cooldown and calm 2x cooldown', () => {
+    const runner = new LinkRunner();
+    const sBeat: Settings = {
+      warpMode: {
+        value: 'none',
+        link: { source: 'beat', amount: 0.5, smooth: 0, cooldownSec: 4 },
+      },
+    };
+
+    // Frame 1: no beat -> stays at 'none'
+    const r0 = runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 0, frame: frame({ frameIndex: 1 }) }), 0.016);
+    expect(r0.warpMode).toBe('none');
+    expect(runner.resolvedStringByKey('F.warpMode')).toBe('none');
+    expect(runner.resolvedByKey('F.warpMode')).toBeUndefined();
+
+    // Frame 2: beat at t=1 -> switches to 'curl'
+    const r1 = runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 1, frame: frame({ frameIndex: 2, kickPulse: true }) }), 0.016);
+    expect(r1.warpMode).toBe('curl');
+    expect(runner.resolvedStringByKey('F.warpMode')).toBe('curl');
+
+    // Release beat, then another beat at t=3 (< 4s cooldown) -> blocked
+    runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 2, frame: frame({ frameIndex: 3, kickPulse: false }) }), 0.016);
+    const rBlocked = runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 3, frame: frame({ frameIndex: 4, kickPulse: true }) }), 0.016);
+    expect(rBlocked.warpMode).toBe('curl');
+
+    // Release beat, then beat at t=6 in calm mode (cooldown = 4 * 2 = 8s -> 6 - 1 = 5 < 8 -> blocked)
+    runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 5, calm: true, frame: frame({ frameIndex: 5, kickPulse: false }) }), 0.016);
+    const rCalmBlocked = runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 6, calm: true, frame: frame({ frameIndex: 6, kickPulse: true }) }), 0.016);
+    expect(rCalmBlocked.warpMode).toBe('curl');
+
+    // Release beat, then beat at t=9 in calm mode (9 - 1 = 8 >= 8 -> switches to 'radial')
+    runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 8, calm: true, frame: frame({ frameIndex: 7, kickPulse: false }) }), 0.016);
+    const rCalmAllowed = runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 9, calm: true, frame: frame({ frameIndex: 8, kickPulse: true }) }), 0.016);
+    expect(rCalmAllowed.warpMode).toBe('radial');
+
+    // clear() resets string and enum state
+    runner.clear();
+    expect(runner.resolvedStringByKey('F.warpMode')).toBeUndefined();
+    const rAfterClear = runner.resolve('F', sBeat, [modeSpec], inputs({ timeSec: 10, frame: frame({ frameIndex: 9 }) }), 0.016);
+    expect(rAfterClear.warpMode).toBe('none');
+  });
+
+  it('supports section and drop triggers, enumOptions subset, and negative step', () => {
+    const runner = new LinkRunner();
+    const sDrop: Settings = {
+      warpMode: {
+        value: 'curl',
+        link: {
+          source: 'drop',
+          amount: -0.5,
+          smooth: 0,
+          cooldownSec: 1,
+          enumOptions: ['curl', 'mobius', 'invalidOption'],
+        },
+      },
+    };
+    const sSection: Settings = {
+      warpMode: {
+        value: 'none',
+        link: { source: 'section', amount: 0.5, smooth: 0, cooldownSec: 1 },
+      },
+    };
+
+    // Initial seed
+    expect(runner.resolve('D', sDrop, [modeSpec], inputs({ timeSec: 0, sectionContrast: 0, frame: frame({ frameIndex: 1 }) }), 0.016).warpMode).toBe('curl');
+    expect(runner.resolve('S', sSection, [modeSpec], inputs({ timeSec: 0, sectionContrast: 0, frame: frame({ frameIndex: 1 }) }), 0.016).warpMode).toBe('none');
+
+    // sectionContrast = 0.25 fires both dropEdge and sectionEdge; D steps backward through ['curl', 'mobius'] -> 'mobius'
+    expect(runner.resolve('D', sDrop, [modeSpec], inputs({ timeSec: 2, sectionContrast: 0.25, frame: frame({ frameIndex: 2 }) }), 0.016).warpMode).toBe('mobius');
+    expect(runner.resolve('S', sSection, [modeSpec], inputs({ timeSec: 2, sectionContrast: 0.25, frame: frame({ frameIndex: 2 }) }), 0.016).warpMode).toBe('curl');
+  });
+
+  it('triggers phrase16 on 8s time buckets before first beat, then every 16th beat after beats arrive', () => {
+    const runner = new LinkRunner();
+    const sPhrase: Settings = {
+      warpMode: {
+        value: 'none',
+        link: { source: 'phrase16', amount: 0.5, smooth: 0, cooldownSec: 1 },
+      },
+    };
+
+    // t=0 seeds bucket 0 -> stays 'none'
+    expect(runner.resolve('P', sPhrase, [modeSpec], inputs({ timeSec: 0, frame: frame({ frameIndex: 1 }) }), 0.016).warpMode).toBe('none');
+    // t=8 changes bucket to 1 -> switches to 'curl'
+    expect(runner.resolve('P', sPhrase, [modeSpec], inputs({ timeSec: 8, frame: frame({ frameIndex: 2 }) }), 0.016).warpMode).toBe('curl');
+
+    // Feed 16 beats; only the 16th beat should trigger a switch to 'radial'
+    let t = 10;
+    let frameIdx = 3;
+    for (let b = 1; b <= 16; b++) {
+      const res = runner.resolve('P', sPhrase, [modeSpec], inputs({ timeSec: t, frame: frame({ frameIndex: frameIdx++, kickPulse: true }) }), 0.016);
+      if (b < 16) expect(res.warpMode).toBe('curl');
+      else expect(res.warpMode).toBe('radial');
+      t += 0.2;
+      runner.resolve('P', sPhrase, [modeSpec], inputs({ timeSec: t, frame: frame({ frameIndex: frameIdx++, kickPulse: false }) }), 0.016);
+      t += 0.2;
+    }
+  });
+});
+
+describe('HSL helpers & linkedColour (13.5)', () => {
+  const hueSpec: ParamSpec = { type: 'colour', name: 'colour', label: 'Colour', group: 'G', default: '#ff0000' };
+  const intenseColour: ParamSpec = { type: 'colour', name: 'flashCol', label: 'Flash Colour', group: 'G', default: '#ff0000', intense: true };
+
+  it('converts #rrggbb to HSL and back, enforces dark floor, and preserves grayscale/invalid on shiftHexHue', () => {
+    const hslRed = hexToHsl('#FF0000');
+    expect(hslRed).not.toBeNull();
+    expect(hslRed![0]).toBeCloseTo(0, 5);
+    expect(hslRed![1]).toBeCloseTo(1, 5);
+    expect(hslRed![2]).toBeCloseTo(0.5, 5);
+    expect(hexToHsl('not-hex')).toBeNull();
+
+    expect(hslToHex(120, 1, 0.5)).toBe('#00ff00');
+    expect(hslToHex(-120, 1, 0.5)).toBe('#0000ff');
+    expect(hslToHex(480, 1, 0.5)).toBe('#00ff00');
+    expect(hslToHex(200, 1, 0)).toBe('#000000');
+    expect(hslToHex(200, 1, 1e-5)).toBe('#000000');
+
+    expect(shiftHexHue('#ff0000', 120)).toBe('#00ff00');
+    expect(shiftHexHue('#000000', 120)).toBe('#000000');
+    expect(shiftHexHue('#808080', 120)).toBe('#808080');
+    expect(shiftHexHue('bad', 120)).toBe('bad');
+  });
+
+  it('modulates colour hue in add, bipolar, flipOnBeat, and calm modes and caches resolvedStringByKey', () => {
+    const runner = new LinkRunner();
+    const sAdd: Settings = {
+      colour: { value: '#ff0000', link: { source: 'sub', amount: 0.5, smooth: 0 } },
+    };
+    // sub = 0.5 -> delta = 0.5 * 360 * 0.5 = 90 deg -> hue 90 (yellow-green #80ff00)
+    const outAdd = runner.resolve(
+      'C',
+      sAdd,
+      [hueSpec],
+      inputs({ frame: frame({ frameIndex: 1, norm: { sub: 0.5, mid: 0, high: 0 } }) }),
+      10,
+    );
+    expect(outAdd.colour).toBe(hslToHex(90, 1, 0.5));
+    expect(runner.resolvedStringByKey('C.colour')).toBe(outAdd.colour);
+    expect(runner.resolvedByKey('C.colour')).toBeUndefined();
+
+    // Bipolar at sub = 0 -> modFactor = -1 -> delta = -180 -> cyan #00ffff
+    const sBipolar: Settings = {
+      colour: { value: '#ff0000', link: { source: 'sub', amount: 0.5, smooth: 0, mode: 'bipolar' } },
+    };
+    const outBi = runner.resolve(
+      'CB',
+      sBipolar,
+      [hueSpec],
+      inputs({ frame: frame({ frameIndex: 2, norm: { sub: 0, mid: 0, high: 0 } }) }),
+      10,
+    );
+    expect(outBi.colour).toBe('#00ffff');
+
+    // flipOnBeat flips hue shift sign after beat + slew
+    const sFlip: Settings = {
+      colour: { value: '#ff0000', link: { source: 'sub', amount: 1 / 3, smooth: 0, mode: 'flipOnBeat', flipSlew: 0.1 } },
+    };
+    const fInit = runner.resolve(
+      'CF',
+      sFlip,
+      [hueSpec],
+      inputs({ timeSec: 0, frame: frame({ frameIndex: 3, norm: { sub: 1, mid: 0, high: 0 } }) }),
+      10,
+    );
+    expect(fInit.colour).toBe(hslToHex(120, 1, 0.5));
+
+    const fFlipped = runner.resolve(
+      'CF',
+      sFlip,
+      [hueSpec],
+      inputs({ timeSec: 0.2, frame: frame({ frameIndex: 4, kickPulse: true, norm: { sub: 1, mid: 0, high: 0 } }) }),
+      0.2,
+    );
+    expect(fFlipped.colour).toBe(hslToHex(240, 1, 0.5));
+
+    // Calm damping: normal = 0.35x, intense = 0.2x
+    const sCalm: Settings = {
+      colour: { value: '#ff0000', link: { source: 'sub', amount: 1, smooth: 0 } },
+      flashCol: { value: '#ff0000', link: { source: 'sub', amount: 1, smooth: 0 } },
+    };
+    const outCalm = runner.resolve(
+      'CC',
+      sCalm,
+      [hueSpec, intenseColour],
+      inputs({ calm: true, frame: frame({ frameIndex: 5, norm: { sub: 1, mid: 0, high: 0 } }) }),
+      10,
+    );
+    expect(outCalm.colour).toBe(hslToHex(0.35 * 360, 1, 0.5));
+    expect(outCalm.flashCol).toBe(hslToHex(0.2 * 360, 1, 0.5));
+
+    runner.clear();
+    expect(runner.resolvedStringByKey('C.colour')).toBeUndefined();
   });
 });

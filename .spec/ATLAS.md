@@ -7,9 +7,8 @@
 - `130` `.spec/BLACK_BOX.md` — Circuit-breaker crash reports (on-demand)
 - `140` `.spec/SESSION_HANDOFF.md` — Cross-session handoff summary
 - `150` `.spec/SCOUT.md` — Scope & contract scout metadata
-## Sector 200 — Boundaries
+## Sector 200–300 — Boundaries & Contracts
 - `230` `.spec/EXTERNAL_AGENT_RULES.md` — External agent guardrail rules
-## Sector 300 — Contracts
 - `305` `.harness/config/thresholds.json` — Line budgets & fast-path thresholds
 ## Sector 400 — System Spec & Architecture
 - `400` `.spec/SYSTEM_SPEC.md` — Core architecture, pipelines, and contracts
@@ -48,3 +47,4 @@
 - `496` `.spec/specs/stage-26-optional-polish-parked-visuals.md` — Stage 26 Optional Polish & Parked Visuals spec
 - `497` `.spec/specs/stage-27-wall-bounce-and-ribbon-preset.md` — Stage 27 True Wall-Bounce Physics & Bouncing Ribbon Wave spec
 - `498` `.spec/specs/stage-28-twist-wave-ribbon.md` — Stage 28 Organic Twisting Center Waveform & Preset spec
+- `499` `.spec/specs/stage-29-music-reactive-sliders.md` — Stage 29 Music-Reactive Core Sliders & Song-Arc Modulation spec

@@ -15,7 +15,14 @@
       "value": 1.018
     },
     "rotate": {
-      "value": 0.006
+      "value": 0.006,
+      "link": {
+        "source": "energy",
+        "amount": 0.15,
+        "smooth": 0.15,
+        "mode": "flipOnDrop",
+        "flipSlew": 0.65
+      }
     },
     "centreX": {
       "value": 0
@@ -138,6 +145,12 @@
       "type": "moire",
       "enabled": true,
       "opacity": 0.28,
+      "opacityLink": {
+        "source": "breakdown",
+        "amount": 0.25,
+        "smooth": 0.25,
+        "curve": "swell"
+      },
       "blend": "screen",
       "trails": true,
       "params": {
@@ -163,7 +176,13 @@
           "value": 0.7
         },
         "patternMode": {
-          "value": "starburstLoom"
+          "value": "starburstLoom",
+          "link": {
+            "source": "section",
+            "amount": 1,
+            "smooth": 0,
+            "cooldownSec": 16
+          }
         },
         "audioWarp": {
           "value": 0.4
@@ -256,10 +275,26 @@
           "value": 0.91
         },
         "propSpeed": {
-          "value": 0.4
+          "value": 0.4,
+          "link": {
+            "source": "bass",
+            "amount": 0.22,
+            "smooth": 0.15,
+            "curve": "swell"
+          }
         },
         "propDirection": {
-          "value": "outward"
+          "value": "outward",
+          "link": {
+            "source": "drop",
+            "amount": 1,
+            "smooth": 0,
+            "cooldownSec": 8,
+            "enumOptions": [
+              "cw",
+              "ccw"
+            ]
+          }
         },
         "propSelfSpin": {
           "value": -0.8
@@ -331,7 +366,14 @@
           "value": 0
         },
         "spinSpeed": {
-          "value": -0.3
+          "value": -0.3,
+          "link": {
+            "source": "sub",
+            "amount": 0.18,
+            "smooth": 0.1,
+            "mode": "flipOnBeat",
+            "flipSlew": 0.35
+          }
         },
         "basePulse": {
           "value": 0.15
@@ -437,7 +479,13 @@
       "value": 0
     },
     "bloom": {
-      "value": 0.65
+      "value": 0.65,
+      "link": {
+        "source": "drop",
+        "amount": 0.18,
+        "smooth": 0.2,
+        "curve": "gate"
+      }
     },
     "bloomThreshold": {
       "value": 0.6

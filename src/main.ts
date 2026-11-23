@@ -409,6 +409,8 @@ function start(): void {
           switchTo: (id) => switchTo(id, true),
           frameMs: () => frameMs,
           linkMeter: (key) => linkRunner.meterByKey(key),
+          linkResolved: (key) => linkRunner.resolvedByKey(key),
+          isCalm: () => state.calm,
           adminGateway,
         });
         studioPanel = panel;
@@ -903,7 +905,7 @@ function start(): void {
         compositor?.setPost(restoreBasePreset(session.previewOf(shown), session.sceneOf(shown)));
       }
       if (entry && (hasLinks(entry.preset) || reactions)) {
-        const post = applyLinkedPreset(session.previewOf(shown), session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast }, dtSec, reactions);
+        const post = applyLinkedPreset(session.previewOf(shown), session.sceneOf(shown), linkRunner, shown, { frame, timeSec: performance.now() / 1000, sectionContrast: contrast, calm: state.calm }, dtSec, reactions);
         compositor?.setPost(post);
       }
     }

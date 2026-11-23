@@ -6,11 +6,13 @@
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
 import { isLayerRendered } from '../presets/session';
-import { LAYER_FACTORIES, applyPresetToScene, applyValues, readWarpOps, valuesOf } from '../presets/loader';
+import { LAYER_FACTORIES, applyPresetToScene, applyValues, hasLinks, readWarpOps, valuesOf } from '../presets/loader';
 import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
 import { SCHEMAS, SYSTEM_SUBFOLDER_LABELS, formatLayerType, getSystemSubfolder, type SystemSubfolder } from '../presets/builtin';
-import { AUDIO_SOURCES, BLEND_MODES, BLEND_SECONDS_SPEC, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, PRESET_BLEND_MAX_SEC, PRESET_BLEND_MIN_SEC, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, clampBlendSec, clampDisplaySec, type AudioSource, type LayerEntry, type Preset, type Settings, type Setting, type Transition, type WarpOperator } from '../presets/format';
+import { AUDIO_SOURCES, BLEND_MODES, BLEND_SECONDS_SPEC, BLEND_SPEC, LFO_RATE_DEFAULT, LFO_RATE_MAX, LFO_RATE_MIN, LINK_COOLDOWN_DEFAULT, MORPH_RATE_DEFAULT, MORPH_RATE_MAX, MORPH_RATE_MIN, OPACITY_SPEC, PRESET_BLEND_MAX_SEC, PRESET_BLEND_MIN_SEC, PRESET_DISPLAY_MAX_SEC, PRESET_DISPLAY_MIN_SEC, SECONDS_SPEC, STYLE_SPEC, TRAILS_SPEC, TRANSITION_STYLES, clampBlendSec, clampDisplaySec, type AudioLink, type AudioSource, type LayerEntry, type Preset, type Settings, type Setting, type Transition, type WarpOperator } from '../presets/format';
+import { summarizeAudioLink } from '../presets/linkRecipes';
+import { attachReactiveSlider, type ReactiveSliderHandle } from './reactiveSlider';
 import type { Scene } from '../render/scene';
 import { MAX_LAYER_SEED, applyMashup, mutateSettings, newLayerSeed, randomiseLayerSettings, randomiseSettings } from '../presets/variation';
 import type { PresetSession, SessionEntry, UserPresetFolder } from '../presets/session';
@@ -87,6 +89,11 @@ export const AUDIO_SOURCE_LABELS: Readonly<Record<AudioSource, string>> = {
   time: 'Time',
   kickEnv: 'Kick Envelope',
   centroid: 'Spectral Centroid',
+  drop: 'Drop Surge',
+  breakdown: 'Breakdown',
+  phrase16: 'Phrase (16 Beats)',
+  phrase32: 'Phrase (32 Beats)',
+  energySlow: 'Energy Arc (Slow)',
 };
 
 /** Human-readable display labels for preset transition styles. */
@@ -170,10 +177,41 @@ export interface StudioOptions {
   frameMs?: () => number;
   /** Live link value (0..1) for a key `${presetId}L${layerIndexAmongEnabled}.${name}` or `${presetId}F.${name}`. */
   linkMeter?: (key: string) => number | undefined;
+  /** Live resolved parameter value for a key `${presetId}L${k}.${name}`, `${presetId}F.${name}`, `${presetId}P.${name}`, or `${presetId}W${w}.${name}`. */
+  linkResolved?: (key: string) => number | undefined;
+  /** Current calm-mode flag for scaling modulation preview bands. */
+  isCalm?: () => boolean;
   /** Optional custom Pane factory for testing in node / mock environments. */
   paneFactory?: (options: { container: HTMLElement; title: string }) => any;
   /** Optional Admin Gateway instance for verifying administrative capabilities. */
   adminGateway?: IAdminGateway;
+}
+
+export interface ReactiveSectionContext {
+  scopePrefix: string;
+  scopeForSpec?: (specName: string) => string;
+  onDrawerToggle?: (handle: ReactiveSliderHandle | null) => void;
+  registerHandle?: (handle: ReactiveSliderHandle) => void;
+  onReactiveMutate?: (discrete: boolean, apply?: () => void) => void;
+  onRegisterTarget?: (
+    meterKey: string,
+    handle: ReactiveSliderHandle,
+    folders: Array<{ expanded: boolean }>,
+    element?: HTMLElement,
+    apply?: () => void,
+  ) => void;
+}
+
+export interface OpacityReactiveOptions {
+  meterKey: string;
+  onMutate: (discrete: boolean) => void;
+  onDrawerToggle?: (handle: ReactiveSliderHandle | null) => void;
+  registerHandle?: (handle: ReactiveSliderHandle) => void;
+  onRegisterTarget?: (handle: ReactiveSliderHandle, element?: HTMLElement) => void;
+}
+
+function isLinkableSpecType(t: ParamSpec['type']): boolean {
+  return t === 'float' || t === 'int' || t === 'enum' || t === 'colour';
 }
 
 /** Frame budget at 60 fps. The readout turns into a warning above this. */
@@ -577,6 +615,21 @@ export class Studio {
   private adminBadgeEl: HTMLElement | null = null;
   /** All collapsible section and group folders in the active panel. */
   private sectionFolders: Array<{ expanded: boolean }> = [];
+  /** Inline reactive slider handles bound in the current panel. */
+  private reactiveHandles: ReactiveSliderHandle[] = [];
+  private openReactiveDrawer: ReactiveSliderHandle | null = null;
+  private switchingReactiveDrawer = false;
+  private reactiveTargets = new Map<
+    string,
+    {
+      handle: ReactiveSliderHandle;
+      folders: Array<{ expanded: boolean }>;
+      element?: HTMLElement;
+      apply?: () => void;
+    }
+  >();
+  private activeLinksHostEl: HTMLElement | null = null;
+  private rafId: number | null = null;
 
   /** Where the Tweakpane pane is built (the header with Close stays in the container). */
   private readonly body: HTMLElement;
@@ -693,11 +746,13 @@ export class Studio {
       ) {
         void this.adminGateway.checkCloudflareAccess();
       }
+      this.syncLiveOverlayLoop();
       if (typeof requestAnimationFrame === 'function') {
         requestAnimationFrame(() => this.focusFirst());
       }
     } else {
       this.container.hidden = true;
+      this.stopLiveOverlayLoop();
       const back = this.opener;
       this.opener = null;
       if (back?.isConnected) back.focus();
@@ -963,6 +1018,8 @@ export class Studio {
       clearInterval(this.frameTimer);
       this.frameTimer = null;
     }
+    this.stopLiveOverlayLoop();
+    this.disposeReactiveHandles();
     this.closeSaveAsField();
     this.closeInlinePrompt();
     this.disarmDelete();
@@ -1131,8 +1188,25 @@ export class Studio {
     if (staleFooter && typeof (staleFooter as any).remove === 'function') {
       (staleFooter as any).remove();
     }
-    this.pane?.dispose();
+    this.stopLiveOverlayLoop();
+    this.disposeReactiveHandles();
+    this.openReactiveDrawer = null;
+    this.reactiveTargets.clear();
+    this.activeLinksHostEl = null;
+    const oldPane = this.pane;
+    this.pane = null;
     this.body.replaceChildren();
+    if (oldPane) {
+      const disposeOld = () => {
+        try {
+          oldPane.dispose();
+        } catch {
+          // Ignore views already disposed during teardown.
+        }
+      };
+      if (typeof queueMicrotask === 'function') queueMicrotask(disposeOld);
+      else disposeOld();
+    }
     if (this.container && !this.container.contains(this.helperBar)) {
       this.container.append(this.helperBar);
     }
@@ -1145,6 +1219,15 @@ export class Studio {
       ? (this.opts.paneFactory({ container: this.body, title: 'Preset Studio' }) as unknown as Pane)
       : new Pane({ container: this.body, title: 'Preset Studio' });
     this.pane = pane;
+    if (
+      this.opts.paneFactory &&
+      (pane as any).element &&
+      typeof this.body.contains === 'function' &&
+      !this.body.contains((pane as any).element) &&
+      typeof this.body.append === 'function'
+    ) {
+      this.body.append((pane as any).element);
+    }
     const session = this.opts.session;
     const entry = session.get(id);
     if (!entry) return;
@@ -1632,6 +1715,48 @@ export class Studio {
     useGlobalColBinding.on('change', (ev: { value: unknown }) => setProfileFlag('useGlobalColour', Boolean(ev.value)));
     this.attachHelp(useGlobalColBinding, 'Use global colour', 'When on, Global Director applies its colour mood; turn off to keep this preset’s own palette.');
 
+    const makeReactiveCtx = (
+      scopePrefixOrFn: string | ((specName: string) => string),
+      applyFn: () => void,
+    ): ReactiveSectionContext => ({
+      scopePrefix: typeof scopePrefixOrFn === 'string' ? scopePrefixOrFn : '',
+      scopeForSpec: typeof scopePrefixOrFn === 'function' ? scopePrefixOrFn : undefined,
+      onDrawerToggle: (handle) => {
+        if (handle) {
+          const prev = this.openReactiveDrawer;
+          this.openReactiveDrawer = handle;
+          if (prev && prev !== handle) {
+            this.switchingReactiveDrawer = true;
+            try {
+              prev.closeDrawer();
+            } finally {
+              this.switchingReactiveDrawer = false;
+            }
+          }
+        } else if (!this.switchingReactiveDrawer) {
+          this.openReactiveDrawer = null;
+        }
+      },
+      registerHandle: (handle) => {
+        this.reactiveHandles.push(handle);
+      },
+      onReactiveMutate: (discrete, secApply) => {
+        session.commit(id, Date.now(), discrete);
+        this.refreshDirtyState();
+        (secApply ?? applyFn)();
+        this.refreshActiveLinksOverview(id, preset);
+        this.syncLiveOverlayLoop();
+      },
+      onRegisterTarget: (meterKey, handle, folders, element, secApply) => {
+        this.reactiveTargets.set(meterKey, {
+          handle,
+          folders,
+          element,
+          apply: secApply ?? applyFn,
+        });
+      },
+    });
+
     // --- Layer stack ----------------------------------------------------------------
     pane.addBlade({ view: 'separator' });
     this.selected = preset.layers.length === 0 ? 0 : Math.min(this.selected, preset.layers.length - 1);
@@ -1664,6 +1789,14 @@ export class Studio {
       const varyLayerBtn = pane.addButton({ title: 'Randomise this layer' });
       varyLayerBtn.on('click', () => this.varyLayer());
       this.attachHelp(varyLayerBtn, 'Randomise this layer', 'Randomise only the currently selected layer using the Layer seed above.');
+      const monitor = typeof session.monitorOf === 'function' ? session.monitorOf(id) : undefined;
+      const liveIdx = isLayerRendered(layer, this.selected, monitor)
+        ? preset.layers.slice(0, this.selected).filter((l, idx) => isLayerRendered(l, idx, monitor)).length
+        : -1;
+      const opacityMeterKey = liveIdx >= 0 ? `${id}L${liveIdx}.opacity` : `${id}L_off_${this.selected}.opacity`;
+      const opacityTargetKey = `${id}L_opacity_${this.selected}`;
+      const applyLayerConfig = () => applyPresetToScene(preset, session.sceneOf(id));
+      const opacityCtx = makeReactiveCtx(opacityTargetKey, applyLayerConfig);
       buildLayerControls(
         pane,
         layer,
@@ -1674,6 +1807,15 @@ export class Studio {
         id,
         this.onHelper,
         () => this.refreshDirtyState(),
+        {
+          meterKey: opacityMeterKey,
+          onMutate: (discrete) => opacityCtx.onReactiveMutate?.(discrete, applyLayerConfig),
+          onDrawerToggle: opacityCtx.onDrawerToggle,
+          registerHandle: opacityCtx.registerHandle,
+          onRegisterTarget: (handle, element) => {
+            opacityCtx.onRegisterTarget?.(opacityTargetKey, handle, [], element, applyLayerConfig);
+          },
+        },
       );
       const mon = { solo: session.isSolo(id, this.selected), mute: session.isMuted(id, this.selected) };
       const soloBinding = pane.addBinding(mon, 'solo', { label: 'Solo (preview only)' });
@@ -1749,30 +1891,45 @@ export class Studio {
     let live = 0;
     for (let i = 0; i < preset.layers.length; i++) {
       const layerEntry = preset.layers[i]!;
-      if (!isLayerRendered(layerEntry, i, session.monitorOf(id))) continue;
+      const monitorState = typeof session.monitorOf === 'function' ? session.monitorOf(id) : undefined;
+      if (!isLayerRendered(layerEntry, i, monitorState)) continue;
       const k = live++;
       const title = formatLayerTitle(layerEntry, i);
-      this.bindSection(pane, title, LAYER_SPECS[layerEntry.type] ?? [], layerEntry.params, () => {
+      const applyLayer = () => {
         const current = session.sceneOf(id).layers[k];
         if (current) applyValues(current, valuesOf(layerEntry.params));
-      }, { section: 'layer', layerIndex: i });
+      };
+      this.bindSection(
+        pane,
+        title,
+        LAYER_SPECS[layerEntry.type] ?? [],
+        layerEntry.params,
+        applyLayer,
+        { section: 'layer', layerIndex: i },
+        makeReactiveCtx(`${id}L${k}`, applyLayer),
+      );
     }
     // Slice 15.2: Feedback and Post share one section with four groups (Motion, Warp, Trails, Colour).
     const postNames = new Set(SCHEMAS.post.map((s) => s.name));
+    const applyFeedbackPost = () => {
+      session.sceneOf(id).setFeedback(valuesOf(preset.feedback));
+      session.refreshPost(id);
+    };
     this.bindSection(
       pane,
       'Feedback and post',
       layoutFeedbackPost(SCHEMAS.feedback, SCHEMAS.post),
       mergeSettings(preset.feedback, preset.post, postNames),
-      () => {
-        session.sceneOf(id).setFeedback(valuesOf(preset.feedback));
-        session.refreshPost(id);
-      },
+      applyFeedbackPost,
       { section: 'feedbackPost', layerIndex: null },
+      makeReactiveCtx((name) => (postNames.has(name) ? `${id}P` : `${id}F`), applyFeedbackPost),
     );
 
     // --- Warp field operators (Slice 18.4) ----------------------------------------------
-    this.bindWarpEditor(pane, id, preset);
+    this.bindWarpEditor(pane, id, preset, (applyWarp) => makeReactiveCtx(`${id}W${this.warpIndex}`, applyWarp));
+
+    // --- Active Links Overview (Slice 29.2) ---------------------------------------------
+    this.bindActiveLinksOverview(pane, id, preset);
 
     // --- Audio link (slice E2) --------------------------------------------------------
     this.bindLinkEditor(pane, id, preset);
@@ -1809,6 +1966,8 @@ export class Studio {
         ? 'Sign out of Administrator Mode and return to standard user permissions.'
         : 'Sign in as an administrator to edit or promote built-in system presets.',
     );
+
+    this.syncLiveOverlayLoop();
   }
 
   /** Pick one numeric setting, then add, edit or remove its audio link. */
@@ -1882,7 +2041,12 @@ export class Studio {
    * Warp field (Slice 18.4): a stack of up to four operators that bend the picture. One operator is open at a time:
    * its type, an on/off switch, and its settings (amount, scale, speed, centre). Edits show on the next frame.
    */
-  private bindWarpEditor(pane: Pane, id: string, preset: Preset): void {
+  private bindWarpEditor(
+    pane: Pane,
+    id: string,
+    preset: Preset,
+    makeReactiveCtx?: (applyFn: () => void) => ReactiveSectionContext,
+  ): void {
     const session = this.opts.session;
     const live = () => session.sceneOf(id).setWarpOps(readWarpOps(preset));
     pane.addBlade({ view: 'separator' });
@@ -1942,7 +2106,15 @@ export class Studio {
       onEdit();
     });
     this.attachHelp(opEnabledBinding, 'Operator on', 'Enable or bypass this warp operator without removing it from the stack.');
-    this.bindSection(pane, `Warp operator ${this.warpIndex + 1}: ${WARP_OP_LABELS[op.type]}`, warpOpSpecs(op.type), op.params, live, { section: `warp${this.warpIndex}`, layerIndex: null });
+    this.bindSection(
+      pane,
+      `Warp operator ${this.warpIndex + 1}: ${WARP_OP_LABELS[op.type]}`,
+      warpOpSpecs(op.type),
+      op.params,
+      live,
+      { section: `warp${this.warpIndex}`, layerIndex: null },
+      makeReactiveCtx?.(live),
+    );
     const removeWarpBtn = pane.addButton({ title: 'Remove warp operator' });
     removeWarpBtn.on('click', () => {
       session.commit(id);
@@ -2107,6 +2279,338 @@ export class Studio {
     this.attachHelp(removeMorphBtn, 'Remove morph', 'Stop morphing this setting and keep its base value.');
   }
 
+  private bindActiveLinksOverview(pane: Pane, id: string, preset: Preset): void {
+    const folder = pane.addFolder({ title: '⚡ Active Links', expanded: false });
+    this.sectionFolders.push(folder);
+
+    const folderEl = (folder as any).element as HTMLElement | undefined;
+    const doc =
+      folderEl?.ownerDocument ??
+      this.body.ownerDocument ??
+      (typeof document !== 'undefined' ? document : null);
+    if (!doc) return;
+
+    const host = doc.createElement('div');
+    host.className = 'mv-active-links';
+    const mount =
+      (folderEl && typeof folderEl.querySelector === 'function' ? folderEl.querySelector('.tp-fldv_c') : null) ??
+      folderEl ??
+      this.body;
+    if (mount && typeof mount.append === 'function') {
+      mount.append(host);
+    } else if (mount && typeof mount.appendChild === 'function') {
+      mount.appendChild(host);
+    }
+
+    this.activeLinksHostEl = host;
+    this.refreshActiveLinksOverview(id, preset);
+  }
+
+  private refreshActiveLinksOverview(id: string, preset: Preset): void {
+    const host = this.activeLinksHostEl;
+    if (!host) return;
+    const doc =
+      host.ownerDocument ??
+      this.body.ownerDocument ??
+      (typeof document !== 'undefined' ? document : null);
+    if (!doc) return;
+
+    if (typeof host.replaceChildren === 'function') {
+      host.replaceChildren();
+    } else {
+      host.textContent = '';
+    }
+
+    const session = this.opts.session;
+    const monitor = typeof session.monitorOf === 'function' ? session.monitorOf(id) : undefined;
+
+    interface ActiveTargetEntry {
+      label: string;
+      setting: Setting;
+      spec: ParamSpec;
+      meterKey: string;
+      warpIndex?: number;
+    }
+
+    const activeTargets: ActiveTargetEntry[] = [];
+    let live = 0;
+    preset.layers.forEach((layer, i) => {
+      const k = isLayerRendered(layer, i, monitor) ? live++ : -1;
+      const layerTitle = formatLayerTitle(layer, i);
+      for (const spec of LAYER_SPECS[layer.type] ?? []) {
+        if (!isLinkableSpecType(spec.type)) continue;
+        const setting = layer.params[spec.name];
+        if (!setting || (!setting.link && !setting.morph)) continue;
+        activeTargets.push({
+          label: `${layerTitle} · ${spec.label}`,
+          setting,
+          spec,
+          meterKey: k >= 0 ? `L${k}.${spec.name}` : '',
+        });
+      }
+    });
+    (preset.warp ?? []).forEach((op, w) => {
+      for (const spec of warpOpSpecs(op.type)) {
+        if (!isLinkableSpecType(spec.type)) continue;
+        const setting = op.params[spec.name];
+        if (!setting || (!setting.link && !setting.morph)) continue;
+        activeTargets.push({
+          label: `Warp ${w + 1}. ${WARP_OP_LABELS[op.type]} · ${spec.label}`,
+          setting,
+          spec,
+          meterKey: `W${w}.${spec.name}`,
+          warpIndex: w,
+        });
+      }
+    });
+    for (const spec of SCHEMAS.feedback) {
+      if (!isLinkableSpecType(spec.type)) continue;
+      const setting = preset.feedback[spec.name];
+      if (!setting || (!setting.link && !setting.morph)) continue;
+      activeTargets.push({
+        label: `Feedback · ${spec.label}`,
+        setting,
+        spec,
+        meterKey: `F.${spec.name}`,
+      });
+    }
+    for (const spec of SCHEMAS.post) {
+      if (!isLinkableSpecType(spec.type)) continue;
+      const setting = preset.post[spec.name];
+      if (!setting || (!setting.link && !setting.morph)) continue;
+      activeTargets.push({
+        label: `Post · ${spec.label}`,
+        setting,
+        spec,
+        meterKey: `P.${spec.name}`,
+      });
+    }
+
+    const activeOpacityLayers = preset.layers
+      .map((layer, index) => ({ layer, index }))
+      .filter((item) => Boolean(item.layer.opacityLink));
+
+    const totalActive = activeTargets.length + activeOpacityLayers.length;
+    if (totalActive === 0) {
+      const empty = doc.createElement('div');
+      empty.className = 'mv-active-links-empty';
+      empty.textContent = 'No reactive links yet. Tap ⚡ on any slider above.';
+      host.append(empty);
+      return;
+    }
+
+    const header = doc.createElement('div');
+    header.className = 'mv-active-links-head';
+    const count = doc.createElement('span');
+    count.className = 'mv-active-links-count';
+    count.textContent = `${totalActive} active`;
+
+    const clearAllBtn = doc.createElement('button');
+    clearAllBtn.type = 'button';
+    clearAllBtn.className = 'mv-active-links-clear-all';
+    clearAllBtn.textContent = 'Clear All';
+    clearAllBtn.addEventListener?.('click', () => {
+      for (const t of activeTargets) {
+        delete t.setting.link;
+        delete t.setting.morph;
+      }
+      for (const layer of preset.layers) {
+        delete layer.opacityLink;
+      }
+      session.commit(id, Date.now(), true);
+      this.refreshDirtyState();
+      const scene = session.sceneOf(id);
+      applyPresetToScene(preset, scene);
+      scene.setWarpOps?.(readWarpOps(preset));
+      session.refreshPost(id);
+      for (const h of this.reactiveHandles) {
+        h.syncVisual();
+        h.updateLiveOverlay(undefined, false);
+      }
+      this.refreshActiveLinksOverview(id, preset);
+      this.syncLiveOverlayLoop();
+    });
+    header.append(count, clearAllBtn);
+    host.append(header);
+
+    const items: Array<{
+      label: string;
+      summary: string;
+      onJump: () => void;
+      onRemove: () => void;
+    }> = [];
+
+    for (const { layer, index } of activeOpacityLayers) {
+      const label = `${formatLayerTitle(layer, index)} · Opacity`;
+      const summary = summarizeAudioLink(layer.opacityLink);
+      items.push({
+        label,
+        summary,
+        onJump: () => {
+          if (this.selected !== index) {
+            this.selected = index;
+            this.bind(id);
+          }
+          const reg = this.reactiveTargets.get(`${id}L_opacity_${index}`);
+          if (!reg) return;
+          for (const f of reg.folders) {
+            f.expanded = true;
+          }
+          reg.handle.openDrawer();
+          if (reg.element && typeof (reg.element as any).scrollIntoView === 'function') {
+            (reg.element as any).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        },
+        onRemove: () => {
+          delete layer.opacityLink;
+          session.commit(id, Date.now(), true);
+          this.refreshDirtyState();
+          const reg = this.reactiveTargets.get(`${id}L_opacity_${index}`);
+          if (reg?.apply) {
+            reg.apply();
+          } else {
+            applyPresetToScene(preset, session.sceneOf(id));
+          }
+          if (reg) {
+            reg.handle.syncVisual();
+            reg.handle.updateLiveOverlay(undefined, false);
+          }
+          this.refreshActiveLinksOverview(id, preset);
+          this.syncLiveOverlayLoop();
+        },
+      });
+    }
+
+    for (const target of activeTargets) {
+      const summary =
+        target.spec.type === 'enum' && target.setting.link && !target.setting.morph
+          ? `${target.setting.link.source} · ${target.setting.link.cooldownSec ?? LINK_COOLDOWN_DEFAULT}s`
+          : summarizeAudioLink(target.setting.link, target.setting.morph);
+      items.push({
+        label: target.label,
+        summary,
+        onJump: () => {
+          if (target.warpIndex !== undefined && this.warpIndex !== target.warpIndex) {
+            this.warpIndex = target.warpIndex;
+            this.bind(id);
+          }
+          const reg = target.meterKey ? this.reactiveTargets.get(`${id}${target.meterKey}`) : undefined;
+          if (!reg) return;
+          for (const f of reg.folders) {
+            f.expanded = true;
+          }
+          reg.handle.openDrawer();
+          if (reg.element && typeof (reg.element as any).scrollIntoView === 'function') {
+            (reg.element as any).scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        },
+        onRemove: () => {
+          delete target.setting.link;
+          delete target.setting.morph;
+          session.commit(id, Date.now(), true);
+          this.refreshDirtyState();
+          const reg = target.meterKey ? this.reactiveTargets.get(`${id}${target.meterKey}`) : undefined;
+          if (reg?.apply) {
+            reg.apply();
+          } else {
+            const scene = session.sceneOf(id);
+            applyPresetToScene(preset, scene);
+            scene.setWarpOps?.(readWarpOps(preset));
+            session.refreshPost(id);
+          }
+          if (reg) {
+            reg.handle.syncVisual();
+            reg.handle.updateLiveOverlay(undefined, false);
+          }
+          this.refreshActiveLinksOverview(id, preset);
+          this.syncLiveOverlayLoop();
+        },
+      });
+    }
+
+    const list = doc.createElement('div');
+    list.className = 'mv-active-links-list';
+    for (const item of items) {
+      const row = doc.createElement('div');
+      row.className = 'mv-active-links-row';
+
+      const jumpBtn = doc.createElement('button');
+      jumpBtn.type = 'button';
+      jumpBtn.className = 'mv-active-links-jump';
+      jumpBtn.title = `Jump to ${item.label}`;
+
+      const labelSpan = doc.createElement('span');
+      labelSpan.className = 'mv-active-links-label';
+      labelSpan.textContent = item.label;
+
+      const summarySpan = doc.createElement('span');
+      summarySpan.className = 'mv-active-links-summary';
+      summarySpan.textContent = item.summary;
+
+      jumpBtn.append(labelSpan, summarySpan);
+      jumpBtn.addEventListener?.('click', item.onJump);
+
+      const removeBtn = doc.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'mv-active-links-remove';
+      removeBtn.textContent = '×';
+      removeBtn.title = `Remove ${item.label} reactivity`;
+      removeBtn.setAttribute?.('aria-label', `Remove ${item.label} reactivity`);
+      removeBtn.addEventListener?.('click', item.onRemove);
+
+      row.append(jumpBtn, removeBtn);
+      list.append(row);
+    }
+    host.append(list);
+  }
+
+  private disposeReactiveHandles(): void {
+    for (const h of this.reactiveHandles) {
+      h.dispose();
+    }
+    this.reactiveHandles = [];
+  }
+
+  private hasActiveReactiveLinks(): boolean {
+    if (!this.id || this.reactiveHandles.length === 0) return false;
+    const entry = this.opts.session.get(this.id);
+    return Boolean(entry && hasLinks(entry.preset));
+  }
+
+  private syncLiveOverlayLoop(): void {
+    const shouldRun =
+      this.visible &&
+      typeof requestAnimationFrame === 'function' &&
+      this.hasActiveReactiveLinks();
+    if (!shouldRun) {
+      this.stopLiveOverlayLoop();
+      return;
+    }
+    if (this.rafId !== null) return;
+    const tick = () => {
+      if (!this.visible || !this.hasActiveReactiveLinks()) {
+        this.rafId = null;
+        return;
+      }
+      const calm = this.opts.isCalm?.() ?? false;
+      for (const h of this.reactiveHandles) {
+        h.updateLiveOverlay(this.opts.linkResolved?.(h.meterKey), calm);
+      }
+      this.rafId = requestAnimationFrame(tick);
+    };
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  private stopLiveOverlayLoop(): void {
+    if (this.rafId !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.rafId);
+    }
+    this.rafId = null;
+    for (const h of this.reactiveHandles) {
+      h.updateLiveOverlay(undefined, false);
+    }
+  }
+
   private bindSection(
     pane: Pane,
     title: string,
@@ -2114,6 +2618,7 @@ export class Studio {
     settings: Settings,
     apply: () => void,
     edit: { section: string; layerIndex: number | null },
+    reactiveCtx?: ReactiveSectionContext,
   ): void {
     const onEdit = this.opts.onEdit;
     const res = bindSection(
@@ -2130,6 +2635,7 @@ export class Studio {
       onEdit
         ? (spec, value) => onEdit({ presetId: this.id, section: edit.section, layerIndex: edit.layerIndex, name: spec.name, value })
         : undefined,
+      reactiveCtx,
     );
     if (res.folders) {
       this.sectionFolders.push(...res.folders);
@@ -2661,7 +3167,9 @@ export function buildLayerControls(
   id?: string,
   onHelperUpdate?: (spec: ParamSpec | null) => void,
   onEdit?: () => void,
+  opacityReactive?: OpacityReactiveOptions,
 ): { opacityBinding: any; blendBinding: any; trailsBinding: any } {
+  let opacityHandle: ReactiveSliderHandle | null = null;
   const onLayerConfigChange = () => {
     applyPresetToScene(p, currentScene, gl);
     try {
@@ -2677,6 +3185,7 @@ export function buildLayerControls(
       }
     }
     onEdit?.();
+    opacityHandle?.syncVisual();
   };
 
   const opacityKey = (OPACITY_SPEC as any).key ?? OPACITY_SPEC.name;
@@ -2688,6 +3197,38 @@ export function buildLayerControls(
   }).on('change', onLayerConfigChange);
   attachSpecHelper(opacityBinding, OPACITY_SPEC, onHelperUpdate);
   attachResetControl([opacityBinding], OPACITY_SPEC, entry as any, opacityKey, onLayerConfigChange);
+
+  if (opacityReactive && opacityBinding) {
+    const opacitySetting: Setting = {
+      get value() {
+        return entry.opacity;
+      },
+      set value(v: ParamValue) {
+        entry.opacity = Number(v);
+      },
+      get link() {
+        return entry.opacityLink;
+      },
+      set link(l: AudioLink | undefined) {
+        if (l) entry.opacityLink = l;
+        else delete entry.opacityLink;
+      },
+    };
+    opacityHandle = attachReactiveSlider({
+      blade: opacityBinding,
+      spec: OPACITY_SPEC,
+      setting: opacitySetting,
+      meterKey: opacityReactive.meterKey,
+      allowMorph: false,
+      onClear: () => {
+        delete entry.opacityLink;
+      },
+      onMutate: opacityReactive.onMutate,
+      onDrawerToggle: opacityReactive.onDrawerToggle,
+    });
+    opacityReactive.registerHandle?.(opacityHandle);
+    opacityReactive.onRegisterTarget?.(opacityHandle, opacityBinding?.element);
+  }
 
   const blendKey = (BLEND_SPEC as any).key ?? BLEND_SPEC.name;
   const blendBinding = pane.addBinding(entry as unknown as Record<string, unknown>, blendKey, {
@@ -2736,6 +3277,7 @@ export function bindSection(
   onCommit?: () => void,
   onHelperUpdate?: (spec: ParamSpec | null) => void,
   onEdit?: (spec: ParamSpec, value: number | boolean | string) => void,
+  reactiveCtx?: ReactiveSectionContext,
 ): { specBindings: Array<{ spec: ParamSpec; blades: any[] }>; updateVisibility: () => void; folders: any[] } {
   if (specs.length === 0) return { specBindings: [], updateVisibility: () => {}, folders: [] };
   const folders: any[] = [];
@@ -2760,6 +3302,7 @@ export function bindSection(
   }
 
   const specBindings: Array<{ spec: ParamSpec; blades: any[] }> = [];
+  const reactiveHandles: Array<{ spec: ParamSpec; handle: ReactiveSliderHandle }> = [];
   const groupFolders: Array<{ folder: any; members: Array<{ spec: ParamSpec; blades: any[] }> }> = [];
   const viewHolder: { view: StudioView } = { view: loadStudioView() };
   // A section with no tiered controls (layers registered elsewhere) has no Basic view: show everything, no toggle.
@@ -2774,6 +3317,11 @@ export function bindSection(
         if (b && typeof b === 'object') {
           b.hidden = !visible;
         }
+      }
+    }
+    for (const { spec, handle } of reactiveHandles) {
+      if (!isSpecShown(spec, holder, viewNow())) {
+        handle.closeDrawer();
       }
     }
     // A group folder with nothing to show hides too.
@@ -2836,16 +3384,26 @@ export function bindSection(
       groupFolders.push({ folder: target, members });
     }
     for (const spec of groupSpecs) {
+      let reactiveHandle: ReactiveSliderHandle | null = null;
+      const existingSetting = settings[spec.name];
+      const settingObj: Setting =
+        existingSetting !== null && typeof existingSetting === 'object' && 'value' in existingSetting
+          ? (existingSetting as Setting)
+          : { value: holder[spec.name] };
       const push = () => {
         onCommit?.();
         const s = settings[spec.name];
         if (s !== null && typeof s === 'object' && 'value' in s && !Array.isArray(s)) {
           s.value = holder[spec.name]!;
+        } else if (reactiveCtx && isLinkableSpecType(spec.type)) {
+          settingObj.value = holder[spec.name]!;
+          (settings as Settings)[spec.name] = settingObj;
         } else {
           (settings as any)[spec.name] = holder[spec.name]!;
         }
         updateVisibility();
         apply?.();
+        reactiveHandle?.syncVisual();
         const value = holder[spec.name];
         if (onEdit && (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string')) {
           onEdit(spec, value);
@@ -2856,6 +3414,31 @@ export function bindSection(
       const entry = { spec, blades };
       specBindings.push(entry);
       members.push(entry);
+
+      if (reactiveCtx && isLinkableSpecType(spec.type) && blades[0]) {
+        const scope = reactiveCtx.scopeForSpec ? reactiveCtx.scopeForSpec(spec.name) : reactiveCtx.scopePrefix;
+        const meterKey = `${scope}.${spec.name}`;
+        reactiveHandle = attachReactiveSlider({
+          blade: blades[0],
+          spec: spec as any,
+          setting: settingObj,
+          meterKey,
+          onMutate: (discrete) => {
+            if (settings[spec.name] !== settingObj) {
+              settingObj.value = holder[spec.name]!;
+              (settings as Settings)[spec.name] = settingObj;
+            }
+            reactiveCtx.onReactiveMutate?.(discrete, apply);
+          },
+          onDrawerToggle: reactiveCtx.onDrawerToggle,
+        });
+        reactiveHandles.push({ spec, handle: reactiveHandle });
+        reactiveCtx.registerHandle?.(reactiveHandle);
+        const owningFolders: Array<{ expanded: boolean }> = [];
+        if (sectionFolder && sectionFolder !== pane) owningFolders.push(sectionFolder);
+        if (target && target !== sectionFolder && target !== pane) owningFolders.push(target);
+        reactiveCtx.onRegisterTarget?.(meterKey, reactiveHandle, owningFolders, blades[0]?.element, apply);
+      }
     }
   }
 

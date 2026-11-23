@@ -11,8 +11,9 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
   - 20 Flagship Presets fully tuned and registered.
   - Preset Studio with hierarchical preset folders and user folder management.
   - Photosensitivity safety governor with bidirectional slew clamping.
-  - Unit tests: 993 tests passing across 65 test suites.
+  - Unit tests: 1849 tests passing across 83 test suites.
 - **Stage 14 (trust and foundations):** admin access is Cloudflare Access only (the old client passkey path and direct database writes are gone). The Worker caps and checks request bodies and sends security headers. Frame time steps are clamped to 0.1 s, feedback motion is per second so it looks the same at any refresh rate, and the morph wave no longer jumps when its rate changes.
+- **Stage 29 (music-reactive sliders):** every Studio slider, enum dropdown, colour picker, Warp Operator, and layer opacity slider now has inline `⚡` music-reactivity controls with 1-click recipes, live modulation track overlays, direction-flipping on beats/drops/sections, song-arc sources, and an `⚡ Active Links` overview, with flagship built-in presets updated out of the box.
 - **In Progress:** none
 - **Up Next:** Ongoing refinement and preset authoring.
 

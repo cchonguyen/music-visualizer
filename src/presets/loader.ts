@@ -19,7 +19,7 @@ import { FerrofluidLayer } from '../render/layers/ferrofluid';
 import { JuliaLayer } from '../render/layers/julia';
 import { OrbitLayer } from '../render/layers/orbit';
 import { ArchitectureLayer } from '../render/layers/architecture';
-import type { Preset, Settings } from './format';
+import { OPACITY_SPEC, type Preset, type Settings } from './format';
 import type { ResolvedWarpOp } from '../render/warpField';
 import { warpOpSpecs } from './warpOps';
 import { LinkRunner, type LinkInputs } from './links';
@@ -223,8 +223,9 @@ export function hasReactions(preset: Preset): boolean {
   return (preset.reactions?.length ?? 0) > 0;
 }
 
-/** True when any setting of the preset has an audio link or morph. */
+/** True when any setting of the preset has an audio link, morph, or layer opacityLink. */
 export function hasLinks(preset: Preset): boolean {
+  if ((preset.layers ?? []).some((l) => l.opacityLink !== undefined)) return true;
   const all = [
     ...(preset.layers ?? []).flatMap((l) => Object.values(l.params ?? {})),
     ...Object.values(preset.feedback ?? {}),
@@ -308,8 +309,19 @@ export function applyLinkedPreset(preset: Preset, scene: Scene, runner: LinkRunn
     const layer = scene.layers[k];
     if (!layer) return;
     applyValues(layer, runner.resolve(`${scope}L${k}`, entry.params, LAYER_SPECS[entry.type] ?? [], inputs, dtSec));
+    let opacity = entry.opacity ?? 1.0;
+    if (entry.opacityLink) {
+      const resolvedOpacity = runner.resolve(
+        `${scope}L${k}`,
+        { opacity: { value: opacity, link: entry.opacityLink } },
+        [OPACITY_SPEC],
+        inputs,
+        dtSec,
+      );
+      if (typeof resolvedOpacity.opacity === 'number') opacity = resolvedOpacity.opacity;
+    }
     scene.setLayerConfig(k, {
-      opacity: entry.opacity ?? 1.0,
+      opacity,
       blend: (entry.blend as BlendMode) ?? 'max',
       trails: entry.trails ?? true,
     });

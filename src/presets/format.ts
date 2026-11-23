@@ -17,6 +17,24 @@ export type Transition = (typeof TRANSITION_STYLES)[number];
 export const BLEND_MODES = ["max", "alpha", "add", "screen"] as const;
 export type BlendMode = (typeof BLEND_MODES)[number];
 
+export const LINK_MODES = ["add", "bipolar", "flipOnBeat", "flipOnDrop", "flipOnSection"] as const;
+export type LinkMode = (typeof LINK_MODES)[number];
+
+export const LINK_CURVES = ["linear", "punch", "swell", "gate"] as const;
+export type LinkCurve = (typeof LINK_CURVES)[number];
+
+export const LINK_THRESHOLD_DEFAULT = 0.35;
+export const LINK_THRESHOLD_MIN = 0.05;
+export const LINK_THRESHOLD_MAX = 0.9;
+
+export const LINK_FLIP_SLEW_DEFAULT = 0.45;
+export const LINK_FLIP_SLEW_MIN = 0.1;
+export const LINK_FLIP_SLEW_MAX = 3.0;
+
+export const LINK_COOLDOWN_DEFAULT = 8;
+export const LINK_COOLDOWN_MIN = 1;
+export const LINK_COOLDOWN_MAX = 60;
+
 /** Audio link: final = value + amount × shaped(source), then clamped to the setting's range. */
 export interface AudioLink {
   source: AudioSource;
@@ -24,6 +42,14 @@ export interface AudioLink {
   smooth: number; // 0..1, how slowly the link follows the source
   /** LFO sources only: cycles per second, 0.05..8. Missing means the default (0.5 Hz). */
   rate?: number;
+  mode?: LinkMode;
+  curve?: LinkCurve;
+  threshold?: number;
+  flipSlew?: number;
+  minBound?: number;
+  maxBound?: number;
+  cooldownSec?: number;
+  enumOptions?: string[];
 }
 
 export const LFO_RATE_DEFAULT = 0.5;
@@ -56,6 +82,7 @@ export interface LayerEntry {
   type: string;
   enabled: boolean;
   opacity: number; // 0..1
+  opacityLink?: AudioLink;
   blend: BlendMode;
   trails?: boolean;
   params: Settings;
@@ -283,7 +310,24 @@ export function parseMorph(raw: unknown, spec: ParamSpec, where: string, warning
   return { to: Math.min(spec.max, Math.max(spec.min, raw.to)), rate };
 }
 
-function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink | undefined {
+function parseOptionalClampedNumber(
+  raw: Record<string, unknown>,
+  field: string,
+  min: number,
+  max: number,
+  where: string,
+  warnings: string[],
+): number | undefined {
+  const val = raw[field];
+  if (val === undefined) return undefined;
+  if (typeof val !== "number" || !Number.isFinite(val)) {
+    warnings.push(`${where}: ${field} must be a finite number, ignored`);
+    return undefined;
+  }
+  return Math.min(max, Math.max(min, val));
+}
+
+export function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink | undefined {
   if (raw === undefined) return undefined;
   if (!isRecord(raw)) {
     warnings.push(`${where}: link must be an object, link dropped`);
@@ -305,6 +349,39 @@ function parseLink(raw: unknown, where: string, warnings: string[]): AudioLink |
   };
   if (typeof raw.rate === "number" && Number.isFinite(raw.rate)) {
     link.rate = Math.min(LFO_RATE_MAX, Math.max(LFO_RATE_MIN, raw.rate));
+  }
+  if (raw.mode !== undefined) {
+    if (typeof raw.mode === "string" && (LINK_MODES as readonly string[]).includes(raw.mode)) {
+      link.mode = raw.mode as LinkMode;
+    } else {
+      warnings.push(`${where}: unknown link mode "${String(raw.mode)}", ignored`);
+    }
+  }
+  if (raw.curve !== undefined) {
+    if (typeof raw.curve === "string" && (LINK_CURVES as readonly string[]).includes(raw.curve)) {
+      link.curve = raw.curve as LinkCurve;
+    } else {
+      warnings.push(`${where}: unknown link curve "${String(raw.curve)}", ignored`);
+    }
+  }
+  const threshold = parseOptionalClampedNumber(raw, "threshold", LINK_THRESHOLD_MIN, LINK_THRESHOLD_MAX, where, warnings);
+  if (threshold !== undefined) link.threshold = threshold;
+  const flipSlew = parseOptionalClampedNumber(raw, "flipSlew", LINK_FLIP_SLEW_MIN, LINK_FLIP_SLEW_MAX, where, warnings);
+  if (flipSlew !== undefined) link.flipSlew = flipSlew;
+  const cooldownSec = parseOptionalClampedNumber(raw, "cooldownSec", LINK_COOLDOWN_MIN, LINK_COOLDOWN_MAX, where, warnings);
+  if (cooldownSec !== undefined) link.cooldownSec = cooldownSec;
+
+  let minBound = parseOptionalClampedNumber(raw, "minBound", 0, 1, where, warnings);
+  let maxBound = parseOptionalClampedNumber(raw, "maxBound", 0, 1, where, warnings);
+  if (minBound !== undefined && maxBound !== undefined && minBound > maxBound) {
+    [minBound, maxBound] = [maxBound, minBound];
+  }
+  if (minBound !== undefined) link.minBound = minBound;
+  if (maxBound !== undefined) link.maxBound = maxBound;
+
+  if (Array.isArray(raw.enumOptions)) {
+    const opts = raw.enumOptions.filter((x): x is string => typeof x === "string" && x.length > 0);
+    if (opts.length > 0) link.enumOptions = opts;
   }
   return link;
 }
@@ -433,10 +510,15 @@ export function parsePreset(raw: unknown, registry: SchemaRegistry): ParseResult
     const trails = coerceValue(TRAILS_SPEC, rawLayer.trails ?? TRAILS_SPEC.default);
     if (trails.warning) warnings.push(`${where}.trails: ${trails.warning}`);
 
+    const opacityLink = rawLayer.opacityLink !== undefined
+      ? parseLink(rawLayer.opacityLink, `${where}.opacityLink`, warnings)
+      : undefined;
+
     layers.push({
       type: rawLayer.type,
       enabled: rawLayer.enabled !== false,
       opacity: opacity.value as number,
+      ...(opacityLink ? { opacityLink } : {}),
       blend: blendValue,
       trails: (trails.value as boolean) ?? true,
       params: parseSettings(rawLayer.params, specs, `${where}.params`, warnings, REMOVED_LAYER_SETTINGS),

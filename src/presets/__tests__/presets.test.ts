@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BUILTIN_PRESETS, FLAGSHIP_PRESETS, ALL_PRESETS, SHOWCASE_PRESETS_13_20 } from '../builtin';
-import { PRESET_VERSION } from '../format';
-import { buildScene } from '../loader';
+import { PRESET_VERSION, type AudioLink } from '../format';
+import { buildScene, hasLinks } from '../loader';
 import { BrightnessLimiter, CAP_FLOOR } from '../../render/safety';
 
 describe('Flagship Presets 01–06 (Slice 7.12)', () => {
@@ -421,5 +421,208 @@ describe('Stage 9 Showcase Presets 13–20 (Sector 485, Slice 9.5)', () => {
         expect(Number.isFinite(cap)).toBe(true);
       }
     }
+  });
+});
+
+describe('Slice 29.3: Flagship Built-In Preset Reactivity Pass', () => {
+  const UPGRADED_IDS = [
+    '01-curl-fluid-warp',
+    '02-kaleidoscopic-mandala',
+    '04-mobius-dual-vortex',
+    '05-rgb-aberration-vortex',
+    '08-spectral-ridge-terrain',
+    '10-phyllotaxis-spiral-bloom',
+    '13-solar-crown-eclipse',
+    '14-sacred-orbit-mandala',
+  ] as const;
+
+  function collectAllLinks(preset: (typeof ALL_PRESETS)[number]['preset']): AudioLink[] {
+    const links: AudioLink[] = [];
+    for (const s of Object.values(preset.feedback)) {
+      if (s.link) links.push(s.link);
+    }
+    for (const s of Object.values(preset.post)) {
+      if (s.link) links.push(s.link);
+    }
+    for (const layer of preset.layers) {
+      if (layer.opacityLink) links.push(layer.opacityLink);
+      for (const s of Object.values(layer.params)) {
+        if (s.link) links.push(s.link);
+      }
+    }
+    return links;
+  }
+
+  it('all 8 upgraded flagship presets parse with zero warnings and have active links', () => {
+    for (const id of UPGRADED_IDS) {
+      const entry = ALL_PRESETS.find((p) => p.id === id)!;
+      expect(entry).toBeDefined();
+      expect(entry.warnings).toEqual([]);
+      expect(hasLinks(entry.preset)).toBe(true);
+    }
+  });
+
+  it('preserves origin/main warp, reactions, and post.colourMap* on presets 01, 02, and 04, and skirtOpacity on 08', () => {
+    const p01 = ALL_PRESETS.find((p) => p.id === '01-curl-fluid-warp')!.preset;
+    expect(p01.warp).toHaveLength(1);
+    expect(p01.warp?.[0]?.type).toBe('flow');
+    expect(p01.reactions).toHaveLength(2);
+    expect(p01.post.colourMap?.value).toBe(0.35);
+    expect(p01.post.colourMapBy?.value).toBe('distance');
+    expect(p01.post.colourMapGradient?.value).toBe('aurora');
+    expect(p01.post.colourMapGradient2?.value).toBe('ocean');
+    expect(p01.post.colourMapMix?.value).toBe(0.3);
+
+    const p02 = ALL_PRESETS.find((p) => p.id === '02-kaleidoscopic-mandala')!.preset;
+    expect(p02.warp).toHaveLength(1);
+    expect(p02.warp?.[0]?.type).toBe('swirl');
+    expect(p02.reactions).toHaveLength(3);
+    expect(p02.post.colourMap?.value).toBe(0.4);
+    expect(p02.post.colourMapBy?.value).toBe('angle');
+    expect(p02.post.colourMapGradient?.value).toBe('neon');
+    expect(p02.post.colourMapGradient2?.value).toBe('sunset');
+    expect(p02.post.colourMapMix?.value).toBe(0.3);
+
+    const p04 = ALL_PRESETS.find((p) => p.id === '04-mobius-dual-vortex')!.preset;
+    expect(p04.warp).toHaveLength(1);
+    expect(p04.warp?.[0]?.type).toBe('swirl');
+    expect(p04.reactions).toHaveLength(3);
+    expect(p04.post.colourMap?.value).toBe(0.35);
+    expect(p04.post.colourMapBy?.value).toBe('angle');
+    expect(p04.post.colourMapGradient?.value).toBe('ember');
+    expect(p04.post.colourMapGradient2?.value).toBe('neon');
+    expect(p04.post.colourMapMix?.value).toBe(0.2);
+
+    const p08 = ALL_PRESETS.find((p) => p.id === '08-spectral-ridge-terrain')!.preset;
+    expect(p08.layers[1]!.params.skirtOpacity?.value).toBe(0.2);
+  });
+
+  it('keeps musical modulation safety bounds on zoom, rotate, rgbSplit, chroma, and enum cooldowns', () => {
+    for (const id of UPGRADED_IDS) {
+      const preset = ALL_PRESETS.find((p) => p.id === id)!.preset;
+      if (preset.feedback.zoom?.link) {
+        expect(Math.abs(preset.feedback.zoom.link.amount)).toBeLessThanOrEqual(0.08);
+      }
+      if (preset.feedback.rotate?.link) {
+        expect(Math.abs(preset.feedback.rotate.link.amount)).toBeLessThanOrEqual(0.15);
+      }
+      if (preset.feedback.rgbSplit?.link) {
+        expect(Math.abs(preset.feedback.rgbSplit.link.amount)).toBeLessThanOrEqual(0.22);
+      }
+      if (preset.post.chroma?.link) {
+        expect(Math.abs(preset.post.chroma.link.amount)).toBeLessThanOrEqual(0.22);
+      }
+      for (const link of collectAllLinks(preset)) {
+        if (link.cooldownSec !== undefined) {
+          expect(link.cooldownSec).toBeGreaterThanOrEqual(8);
+          expect(link.cooldownSec).toBeLessThanOrEqual(16);
+        }
+      }
+    }
+  });
+
+  it('covers flipOn* direction flips, song-arc sources, cooldown-gated enum switches, and layer opacityLink', () => {
+    const allLinks = UPGRADED_IDS.flatMap((id) => collectAllLinks(ALL_PRESETS.find((p) => p.id === id)!.preset));
+    const modes = new Set(allLinks.map((l) => l.mode).filter(Boolean));
+    expect(modes.has('flipOnBeat')).toBe(true);
+    expect(modes.has('flipOnDrop')).toBe(true);
+    expect(modes.has('flipOnSection')).toBe(true);
+    expect(modes.has('bipolar')).toBe(true);
+
+    const sources = new Set(allLinks.map((l) => l.source));
+    expect(sources.has('drop')).toBe(true);
+    expect(sources.has('breakdown')).toBe(true);
+    expect(sources.has('phrase16')).toBe(true);
+    expect(sources.has('phrase32')).toBe(true);
+    expect(sources.has('energySlow')).toBe(true);
+
+    const p01 = ALL_PRESETS.find((p) => p.id === '01-curl-fluid-warp')!.preset;
+    expect(p01.feedback.warp?.link).toMatchObject({ source: 'mid', amount: 0.35 });
+    expect(p01.feedback.warpSpeed?.link).toMatchObject({ source: 'bass', amount: 0.4 });
+    expect(p01.layers[0]!.params.reactivity?.link).toMatchObject({ source: 'sub' });
+    expect(p01.feedback.curlTurbulence?.link).toMatchObject({ source: 'high', curve: 'swell', amount: 0.25 });
+    expect(p01.feedback.curlFlowPattern?.link).toMatchObject({ source: 'section', cooldownSec: 12 });
+    expect(p01.feedback.hueDrift?.link).toMatchObject({ source: 'phrase32', mode: 'bipolar', amount: 0.18 });
+    expect(p01.layers[1]!.opacityLink).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.25, threshold: 0.25 });
+
+    const p02 = ALL_PRESETS.find((p) => p.id === '02-kaleidoscopic-mandala')!.preset;
+    expect(p02.feedback.rotate?.link).toMatchObject({ source: 'energy', mode: 'flipOnDrop', amount: 0.15, flipSlew: 0.6 });
+    expect(p02.feedback.zoom?.link).toMatchObject({ source: 'kickEnv', curve: 'punch', amount: 0.07 });
+    expect(p02.feedback.mandalaCounterSpin?.link).toMatchObject({ source: 'mid', mode: 'flipOnSection', amount: 0.25, flipSlew: 0.8 });
+    expect(p02.feedback.mandalaTile?.link).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.22, threshold: 0.25 });
+    expect(p02.layers[1]!.opacityLink).toMatchObject({ source: 'energySlow', curve: 'swell', amount: 0.2 });
+
+    const p04 = ALL_PRESETS.find((p) => p.id === '04-mobius-dual-vortex')!.preset;
+    expect(p04.feedback.mobiusSwirl?.link).toMatchObject({ source: 'energy', mode: 'flipOnDrop', amount: 0.22, flipSlew: 0.65 });
+    expect(p04.feedback.mobiusFlow?.link).toMatchObject({ source: 'bass', curve: 'swell', amount: 0.28 });
+    expect(p04.feedback.mobiusPoleOffset?.link).toMatchObject({ source: 'phrase32', mode: 'bipolar', amount: 0.18 });
+    expect(p04.feedback.mobiusMode?.link).toMatchObject({
+      source: 'section',
+      cooldownSec: 16,
+      enumOptions: ['dipoleFlow', 'doubleVortex', 'figureEight', 'breathingOrbit'],
+    });
+    expect(p04.layers[2]!.opacityLink).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.25 });
+    expect(p04.layers[3]!.params.effectLength?.link).toMatchObject({ source: 'mid', curve: 'punch', amount: 0.22 });
+
+    const p05 = ALL_PRESETS.find((p) => p.id === '05-rgb-aberration-vortex')!.preset;
+    expect(p05.feedback.rgbSplit?.link).toMatchObject({ source: 'kickEnv', curve: 'punch', amount: 0.2 });
+    expect(p05.feedback.rotate?.value).toBe(0);
+    expect(p05.feedback.rotate?.link).toMatchObject({ source: 'bass', mode: 'flipOnBeat', amount: 0.12, flipSlew: 0.35 });
+    expect(p05.feedback.zoom?.value).toBe(1);
+    expect(p05.feedback.zoom?.link).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.08 });
+    expect(p05.layers[0]!.params.spinSpeed?.value).toBe(0);
+    expect(p05.layers[0]!.params.spinSpeed?.link).toMatchObject({ source: 'energy', mode: 'flipOnDrop', amount: 0.25, flipSlew: 0.5 });
+    expect(p05.layers[0]!.params.starInner?.link).toMatchObject({ source: 'sub', curve: 'swell', amount: 0.18 });
+    expect(p05.post.chroma?.value).toBe(0);
+    expect(p05.post.chroma?.link).toMatchObject({ source: 'kickEnv', curve: 'gate', threshold: 0.45, amount: 0.15 });
+
+    const p08 = ALL_PRESETS.find((p) => p.id === '08-spectral-ridge-terrain')!.preset;
+    expect(p08.layers[0]!.opacityLink).toMatchObject({ source: 'sub', curve: 'punch', amount: 0.3 });
+    expect(p08.layers[1]!.params.elevation?.link).toMatchObject({ source: 'bass', curve: 'swell', amount: 0.22 });
+    expect(p08.layers[1]!.params.terrainFlow?.link).toMatchObject({ source: 'energy', curve: 'linear', amount: 0.28 });
+    expect(p08.layers[1]!.params.ridgeShape?.link).toMatchObject({ source: 'section', cooldownSec: 16 });
+    expect(p08.layers[1]!.params.brightness?.link).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.18 });
+    expect(p08.layers[2]!.opacityLink).toMatchObject({ source: 'high', curve: 'swell', amount: 0.25 });
+    expect(p08.feedback.decay?.link).toMatchObject({ source: 'breakdown', curve: 'swell', amount: 0.22 });
+
+    const p10 = ALL_PRESETS.find((p) => p.id === '10-phyllotaxis-spiral-bloom')!.preset;
+    expect(p10.layers[0]!.params.flowSpeed?.link).toMatchObject({ source: 'bass', curve: 'swell', amount: 0.25 });
+    expect(p10.layers[0]!.params.petalStretch?.link).toMatchObject({ source: 'mid', curve: 'linear', amount: 0.2 });
+    expect(p10.layers[0]!.params.hueDrift?.value).toBe(0);
+    expect(p10.layers[0]!.params.hueDrift?.link).toMatchObject({ source: 'phrase32', mode: 'bipolar', amount: 0.15 });
+    expect(p10.layers[1]!.params.propDirection?.link).toMatchObject({
+      source: 'drop',
+      cooldownSec: 10,
+      enumOptions: ['outward', 'inward', 'alternating'],
+    });
+    expect(p10.layers[1]!.opacityLink).toMatchObject({ source: 'kickEnv', curve: 'punch', amount: 0.25 });
+    expect(p10.layers[2]!.opacityLink).toMatchObject({ source: 'energySlow', curve: 'swell', amount: 0.2 });
+    expect(p10.feedback.decay?.link).toMatchObject({ source: 'breakdown', curve: 'swell', amount: 0.08 });
+
+    const p13 = ALL_PRESETS.find((p) => p.id === '13-solar-crown-eclipse')!.preset;
+    expect(p13.feedback.zoom?.link).toMatchObject({ source: 'kickEnv', curve: 'punch', amount: 0.07 });
+    expect(p13.feedback.rotate?.value).toBe(0);
+    expect(p13.feedback.rotate?.link).toMatchObject({ source: 'phrase32', mode: 'bipolar', amount: 0.12 });
+    expect(p13.layers[0]!.opacityLink).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.3 });
+    expect(p13.layers[0]!.params.twist?.value).toBe(0);
+    expect(p13.layers[0]!.params.twist?.link).toMatchObject({ source: 'energy', mode: 'flipOnDrop', amount: 0.2, flipSlew: 0.6 });
+    expect(p13.layers[1]!.params.glow?.link).toMatchObject({ source: 'mid', curve: 'swell', amount: 0.25 });
+    expect(p13.layers[1]!.params.spinSpeed?.value).toBe(0);
+    expect(p13.layers[1]!.params.spinSpeed?.link).toMatchObject({ source: 'phrase16', mode: 'bipolar', amount: 0.12 });
+    expect(p13.layers[3]!.opacityLink).toMatchObject({ source: 'high', curve: 'swell', amount: 0.22 });
+    expect(p13.post.bloom?.link).toMatchObject({ source: 'kickEnv', curve: 'punch', amount: 0.18 });
+
+    const p14 = ALL_PRESETS.find((p) => p.id === '14-sacred-orbit-mandala')!.preset;
+    expect(p14.feedback.rotate?.link).toMatchObject({ source: 'energy', mode: 'flipOnDrop', amount: 0.15, flipSlew: 0.65 });
+    expect(p14.layers[0]!.opacityLink).toMatchObject({ source: 'breakdown', curve: 'swell', amount: 0.25 });
+    expect(p14.layers[0]!.params.patternMode?.link).toMatchObject({ source: 'section', cooldownSec: 16 });
+    expect(p14.layers[1]!.params.propDirection?.link).toMatchObject({
+      source: 'drop',
+      cooldownSec: 8,
+      enumOptions: ['cw', 'ccw'],
+    });
+    expect(p14.layers[1]!.params.propSpeed?.link).toMatchObject({ source: 'bass', curve: 'swell', amount: 0.22 });
+    expect(p14.layers[2]!.params.spinSpeed?.link).toMatchObject({ source: 'sub', mode: 'flipOnBeat', amount: 0.18, flipSlew: 0.35 });
+    expect(p14.post.bloom?.link).toMatchObject({ source: 'drop', curve: 'gate', amount: 0.18 });
   });
 });
