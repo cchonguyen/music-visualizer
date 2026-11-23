@@ -770,6 +770,7 @@ dialog#shortcuts button.key { cursor: pointer; }
 }
 .studio-body, .studio .tp-rotv { min-width: 0; max-width: 100%; }
 .studio .tp-sldv, .studio .tp-sldv_t { touch-action: none; }
+.studio .tp-sldv_t { position: relative; }
 .studio .tp-sldv_t::before { height: 8px; border-radius: 4px; background-color: var(--line-strong); }
 .studio .tp-sldv_k { --btn-bg: var(--text); --btn-bg-h: var(--text); --btn-bg-f: var(--text); --btn-bg-a: var(--text); }
 .studio .tp-sldv_k::before { height: 8px; border-radius: 4px; background-color: var(--accent); }
