@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BEAT_FALLBACK_SEC,
   AutoCycler,
   CYCLE_STORAGE_KEY,
   DEFAULT_CYCLE,
@@ -78,6 +79,25 @@ describe('AutoCycler', () => {
     expect(c.next(5, false, 'a', ['a', 'b'], o)).toBeNull(); // no beat
     expect(c.next(0, true, 'a', ['a', 'b'], o)).toBe('b');
     expect(c.next(1, true, 'b', ['a', 'b'], o)).toBeNull(); // gap not yet passed
+  });
+
+  it('beat mode switches anyway when no strong beat comes for BEAT_FALLBACK_SEC after the gap (Slice 32.1)', () => {
+    const c = new AutoCycler();
+    const o = opts({ mode: 'beat', minGapSec: 5 });
+    expect(c.next(5, false, 'a', ['a', 'b', 'c'], o)).toBeNull(); // gap reached, no beat
+    expect(c.next(BEAT_FALLBACK_SEC - 0.1, false, 'a', ['a', 'b', 'c'], o)).toBeNull(); // still waiting
+    expect(c.next(0.1, false, 'a', ['a', 'b', 'c'], o)).toBe('b'); // quiet passage: switch anyway
+    expect(c.next(1, false, 'b', ['a', 'b', 'c'], o)).toBeNull(); // the gap starts again
+    expect(c.next(5 + BEAT_FALLBACK_SEC, false, 'b', ['a', 'b', 'c'], o)).toBe('c');
+  });
+
+  it('the beat fallback announces the same preset it switches to', () => {
+    const c = new AutoCycler(() => 0.99);
+    const o = opts({ mode: 'beat', minGapSec: 5, shuffle: true });
+    c.next(5, false, 'a', ['a', 'b', 'c'], o);
+    const planned = c.upcoming('a', ['a', 'b', 'c'], o);
+    expect(planned).not.toBeNull();
+    expect(c.next(BEAT_FALLBACK_SEC, false, 'a', ['a', 'b', 'c'], o)).toBe(planned);
   });
 
   it('shuffle picks a different preset, using the injected random', () => {

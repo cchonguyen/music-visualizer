@@ -1,4 +1,5 @@
 // Auto-cycle (slice T2): picks the next preset on a timer or on a strong beat. Pure logic.
+// Beat mode switches anyway BEAT_FALLBACK_SEC after the minimum gap when no strong beat comes (Slice 32.1).
 // Presets tagged "skip" are never picked. With `favouritesOnly`, only presets tagged "favourite" are used.
 // Phrase mode (Slice 22.1) switches on the first beat of every N bars, and acts as Timer when there is no tempo.
 import { withinCost, type CostLevel } from './cost';
@@ -38,6 +39,12 @@ export interface CycleCandidate {
   /** Cost level from presets/cost.ts. Missing counts as Light. */
   cost?: CostLevel;
 }
+
+/**
+ * Beat mode: seconds past the minimum gap to wait for a strong beat before switching anyway (Slice 32.1),
+ * so a breakdown with no kicks cannot hold one preset on screen forever.
+ */
+export const BEAT_FALLBACK_SEC = 3;
 
 /** How many seconds before a switch the next preset is chosen, so it can be prepared (Slice 16.3). */
 export const PREPARE_LEAD_SEC = 3;
@@ -153,7 +160,7 @@ export class AutoCycler {
     this.lastBeatSwitch += Math.max(0, dtSec);
     let due = false;
     if (opts.mode === 'beat') {
-      due = strongBeat && this.lastBeatSwitch >= opts.minGapSec;
+      due = (strongBeat && this.lastBeatSwitch >= opts.minGapSec) || this.lastBeatSwitch >= opts.minGapSec + BEAT_FALLBACK_SEC;
     } else if (opts.mode === 'phrase' && grid) {
       // Phrase: the first beat of a phrase. The minimum gap stops a reset count from switching twice.
       due = rose && grid.beatCount % (BEATS_PER_BAR * phraseBarsOf(opts)) === 0 && this.lastBeatSwitch >= opts.minGapSec;
