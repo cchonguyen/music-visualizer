@@ -125,6 +125,7 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
       expect(expPanel).toMatch(new RegExp(`<option value="${v}">`));
     }
     expect(expPanel).toContain('id="exp-cycle-shuffle"');
+    expect(expPanel).toContain('id="exp-cycle-favourites"');
     expect(expPanel).toMatch(/id="exp-cycle-interval"[^>]*min="5"[^>]*max="120"/);
     expect(expPanel).toContain('id="exp-cycle-interval-value"');
     expect(expPanel).toMatch(/<div[^>]*id="exp-cycle-hard-cut-row"[^>]*hidden/);

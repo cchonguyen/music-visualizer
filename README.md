@@ -44,7 +44,7 @@ It is built on **raw WebGL2** and the **Web Audio API** in TypeScript with Vite.
   - **Showcase:** Solar Crown Eclipse, Sacred Orbit Mandala, Polar Spirograph Bloom, Hexagon Inward Portal, Corridor LED Equalizer, Star Burst Stream, Spiral Pearl Beads, Dual-Rail Aurora Ark, Inhale Exhale, Ripple Pool, Gradient Storm, Mirror Tunnel, Deep Field, Scope Bloom, Ink Flow, Julia Drift, Orbit Hall, Corridor Glide, Bouncing Ribbon Wave, Twisting Scope Wave.
   - **Classics & Textures:** Crown, Flight, Bars, Vortex, Ripple Field, Dust Wave.
 - **Preset browser:** a grid of presets grouped by theme, with favourites and a Light / Medium / Heavy cost badge.
-- **Auto-cycle:** switch presets on a timer, on strong beats, or every musical phrase, in order or shuffled, with an optional hard cut on the beat.
+- **Auto-cycle:** switch presets on a timer, on strong beats, or every musical phrase, in order or shuffled, with an optional hard cut on the beat. Beat mode still moves on in quiet passages, and "Favourites only" cycles just your favourites.
 - **Preset Studio:** edit every layer, feedback, warp and post setting live; add, remove and reorder layers; save, duplicate, export and import presets; undo and redo; randomise or mutate; organise your own presets in folders. Every slider, dropdown and colour can be linked to the music (the ⚡ button) with one-click recipes.
 - **Pop-out Studio:** open the Studio in its own window so the visuals stay full-screen.
 - **System presets:** the owner can publish system presets from the app; the admin path is protected by Cloudflare Access.

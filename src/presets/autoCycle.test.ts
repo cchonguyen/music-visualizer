@@ -27,8 +27,14 @@ describe('eligible', () => {
   });
 
   it('keeps only favourites when asked', () => {
-    const ids = eligible([{ id: 'a', tags: ['favourite'] }, { id: 'b', tags: [] }], opts({ favouritesOnly: true }));
-    expect(ids).toEqual(['a']);
+    const list = [{ id: 'a', tags: ['favourite'] }, { id: 'b', tags: [] }, { id: 'c', tags: ['favourite'] }];
+    expect(eligible(list, opts({ favouritesOnly: true }))).toEqual(['a', 'c']);
+  });
+
+  it('uses every preset when fewer than two are favourites (Slice 32.2)', () => {
+    const list = [{ id: 'a', tags: ['favourite'] }, { id: 'b', tags: [] }, { id: 'c', tags: ['skip'] }];
+    expect(eligible(list, opts({ favouritesOnly: true }))).toEqual(['a', 'b']);
+    expect(eligible([{ id: 'a', tags: [] }, { id: 'b', tags: [] }], opts({ favouritesOnly: true }))).toEqual(['a', 'b']);
   });
 
   it('phone tier skips Heavy presets and keeps Light and Medium', () => {
@@ -245,12 +251,12 @@ describe('saved Visuals menu settings (Slice 21.13)', () => {
     expect(clampInterval(NaN)).toBe(DEFAULT_CYCLE.intervalSec);
   });
 
-  it('round-trips mode, shuffle and timer length', () => {
+  it('round-trips mode, shuffle, favourites only and timer length', () => {
     const s = store();
-    saveCycleSettings(opts({ mode: 'beat', shuffle: true, intervalSec: 45 }), s);
+    saveCycleSettings(opts({ mode: 'beat', shuffle: true, favouritesOnly: true, intervalSec: 45 }), s);
     const target = opts({});
     loadCycleSettings(target, s);
-    expect([target.mode, target.shuffle, target.intervalSec]).toEqual(['beat', true, 45]);
+    expect([target.mode, target.shuffle, target.favouritesOnly, target.intervalSec]).toEqual(['beat', true, true, 45]);
   });
 
   it('keeps the defaults when nothing is saved', () => {

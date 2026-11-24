@@ -717,6 +717,7 @@ export function setupControls(
   // Preset auto-cycle, Shuffle and timer length (slice 21.13). Writes the shared state and saves it.
   const cycleModeSelect = document.getElementById('exp-cycle-mode') as HTMLSelectElement | null;
   const cycleShuffle = document.getElementById('exp-cycle-shuffle') as HTMLInputElement | null;
+  const cycleFavourites = document.getElementById('exp-cycle-favourites') as HTMLInputElement | null;
   const cycleIntervalRow = document.getElementById('exp-cycle-interval-row') as HTMLElement | null;
   const cycleInterval = document.getElementById('exp-cycle-interval') as HTMLInputElement | null;
   const cycleIntervalValue = document.getElementById('exp-cycle-interval-value') as HTMLElement | null;
@@ -729,6 +730,7 @@ export function setupControls(
     if (!cycle) return;
     if (cycleModeSelect && cycleModeSelect.value !== cycle.mode) cycleModeSelect.value = cycle.mode;
     if (cycleShuffle && cycleShuffle.checked !== cycle.shuffle) cycleShuffle.checked = cycle.shuffle;
+    if (cycleFavourites && cycleFavourites.checked !== cycle.favouritesOnly) cycleFavourites.checked = cycle.favouritesOnly;
     // Phrase mode also uses the timer length when there is no tempo, so the row shows for it too.
     if (cycleIntervalRow) cycleIntervalRow.hidden = cycle.mode !== 'timer' && cycle.mode !== 'phrase';
     if (cycleInterval && cycleInterval.value !== String(cycle.intervalSec)) cycleInterval.value = String(cycle.intervalSec);
@@ -758,6 +760,11 @@ export function setupControls(
   cycleShuffle?.addEventListener('change', () => {
     if (!state.cycle) return;
     state.cycle.shuffle = cycleShuffle.checked;
+    saveCycle();
+  });
+  cycleFavourites?.addEventListener('change', () => {
+    if (!state.cycle) return;
+    state.cycle.favouritesOnly = cycleFavourites.checked;
     saveCycle();
   });
   cycleHardCut?.addEventListener('change', () => {

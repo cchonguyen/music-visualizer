@@ -1,6 +1,6 @@
 // Auto-cycle (slice T2): picks the next preset on a timer or on a strong beat. Pure logic.
 // Beat mode switches anyway BEAT_FALLBACK_SEC after the minimum gap when no strong beat comes (Slice 32.1).
-// Presets tagged "skip" are never picked. With `favouritesOnly`, only presets tagged "favourite" are used.
+// Presets tagged "skip" are never picked. With `favouritesOnly`, only presets tagged "favourite" are used (all presets when fewer than two are).
 // Phrase mode (Slice 22.1) switches on the first beat of every N bars, and acts as Timer when there is no tempo.
 import { withinCost, type CostLevel } from './cost';
 import { BEATS_PER_BAR, LOCK_CONFIDENCE } from '../audio/tempo';
@@ -69,9 +69,9 @@ function gridOf(tempo: CycleTempo | undefined): Required<CycleTempo> | undefined
 /** Presets that the cycle may show, in their list order. */
 export function eligible(candidates: readonly CycleCandidate[], opts: CycleOptions): string[] {
   const nonSkipped = candidates.filter((c) => !c.tags.includes('skip'));
-  const favourite = opts.favouritesOnly
-    ? nonSkipped.filter((c) => c.tags.includes('favourite'))
-    : nonSkipped;
+  // Favourites only (Slice 32.2): with fewer than two favourites there is nothing to cycle, so use every preset.
+  const favourites = opts.favouritesOnly ? nonSkipped.filter((c) => c.tags.includes('favourite')) : nonSkipped;
+  const favourite = favourites.length >= 2 ? favourites : nonSkipped;
   // Slice 16.11: devices that cannot keep up skip the heaviest presets, unless that would leave nothing to switch to.
   const max = opts.maxCost;
   const light = max ? favourite.filter((c) => withinCost(c.cost ?? 'light', max)) : favourite;
@@ -213,9 +213,10 @@ export function loadCycleSettings(target: CycleOptions, storage: Pick<Storage, '
   try {
     const raw = storage?.getItem(CYCLE_STORAGE_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw) as Partial<Record<'mode' | 'shuffle' | 'intervalSec' | 'phraseBars' | 'hardCut', unknown>>;
+    const saved = JSON.parse(raw) as Partial<Record<'mode' | 'shuffle' | 'favouritesOnly' | 'intervalSec' | 'phraseBars' | 'hardCut', unknown>>;
     if (saved.mode === 'off' || saved.mode === 'timer' || saved.mode === 'beat' || saved.mode === 'phrase') target.mode = saved.mode;
     if (typeof saved.shuffle === 'boolean') target.shuffle = saved.shuffle;
+    if (typeof saved.favouritesOnly === 'boolean') target.favouritesOnly = saved.favouritesOnly;
     if (saved.intervalSec !== undefined) target.intervalSec = clampInterval(saved.intervalSec);
     // Saves from before Phrase mode have no phraseBars: the current (default) value stays.
     if (typeof saved.phraseBars === 'number' && (PHRASE_BAR_OPTIONS as readonly number[]).includes(saved.phraseBars)) target.phraseBars = saved.phraseBars;
@@ -233,6 +234,7 @@ export function saveCycleSettings(opts: CycleOptions, storage: Pick<Storage, 'se
       JSON.stringify({
         mode: opts.mode,
         shuffle: opts.shuffle,
+        favouritesOnly: opts.favouritesOnly,
         intervalSec: opts.intervalSec,
         phraseBars: phraseBarsOf(opts),
         hardCut: Boolean(opts.hardCut),

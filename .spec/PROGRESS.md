@@ -14,4 +14,4 @@
 
 ## Stage 32 — Auto-Cycle Upgrades (.spec/specs/stage-32-upgrades.md)
 - [x] **Slice 32.1: Beat mode keeps moving in quiet passages** `[CORE / DATA]` worker: lead Target files: `src/presets/autoCycle.ts`, `src/presets/autoCycle.test.ts` | Coords: [530] | Issue: #449 | Verify: npm run typecheck && npx vitest run --maxWorkers=4 && npm run build
-- [ ] **Slice 32.2: "Favourites only" switch for auto-cycle** `[UI / VISUAL]` worker: lead Target files: `index.html`, `src/ui/controls.ts`, `src/presets/autoCycle.ts`, `src/ui/controls.test.ts`, `src/presets/autoCycle.test.ts` | Coords: [530] | Issue: #450 | Verify: npm run typecheck && npx vitest run --maxWorkers=4 && npm run build
+- [x] **Slice 32.2: "Favourites only" switch for auto-cycle** `[UI / VISUAL]` worker: lead Target files: `index.html`, `src/ui/controls.ts`, `src/presets/autoCycle.ts`, `src/ui/controls.test.ts`, `src/presets/autoCycle.test.ts` | Coords: [530] | Issue: #450 | Verify: npm run typecheck && npx vitest run --maxWorkers=4 && npm run build
