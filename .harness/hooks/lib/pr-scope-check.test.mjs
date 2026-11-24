@@ -28,8 +28,30 @@ test('a sync without a managed.json change is not a sync', () => {
   assert.equal(isHubSync(sync({ changed: ['.harness/config/thresholds.json'] })), false);
 });
 
-test('deleting an engine file is never a sync', () => {
+test('deleting an engine file the hub still manages is not a sync', () => {
   assert.equal(isHubSync(sync({ deleted: ['.harness/hooks/vibe.mjs'] })), false);
+  const baseManaged = { files: { ...managed.files } };
+  assert.equal(isHubSync(sync({ deleted: ['.claude/agents/auditor.md'], baseManaged })), false);
+});
+
+test('deleting an engine file the hub removed (in the base manifest, gone from the head one) is a sync', () => {
+  const head = { files: { '.harness/config/thresholds.json': 'aaa' } };
+  const baseManaged = { files: { ...head.files, '.claude/agents/auditor.md': 'bbb' } };
+  assert.equal(isHubSync(sync({ managed: head, baseManaged, deleted: ['.claude/agents/auditor.md'] })), true);
+  // Without the base manifest the deletion cannot be verified.
+  assert.equal(isHubSync(sync({ managed: head, deleted: ['.claude/agents/auditor.md'] })), false);
+  // A removal-only sync (no engine file rewritten) still counts.
+  assert.equal(isHubSync(sync({ managed: head, baseManaged, changed: ['.harness/managed.json'], deleted: ['.claude/agents/auditor.md'] })), true);
+});
+
+test('a verified hub sync does not fire the deletion tripwire for engine files, but does for app files', () => {
+  const changed = ['.harness/managed.json'];
+  const r = analyze({
+    changed, deleted: ['.claude/agents/auditor.md', 'src/app.ts'],
+    diff: new Map(changed.map((f) => [f, { added: [], removed: [] }])), progress: '', strict: true, hubSync: true,
+  });
+  assert.ok(!r.problems.some((p) => p.includes('file deleted): .claude/agents/auditor.md')), r.problems.join('; '));
+  assert.ok(r.problems.some((p) => p.includes('file deleted): src/app.ts')));
 });
 
 test('a PR with no engine files is not a hub sync', () => {
