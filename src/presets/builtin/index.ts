@@ -7,24 +7,7 @@ import crown from './crown.json';
 import flight from './flight.json';
 import bars from './bars.json';
 import starter_vortex from './starter-vortex.json';
-import starter_honeycomb from '../review/starter-honeycomb.json';
-import starter_pentagon_pulse from '../review/starter-pentagon-pulse.json';
-import starter_checker_warp from '../review/starter-checker-warp.json';
-import starter_stripe_drift from '../review/starter-stripe-drift.json';
-import starter_kaleido from '../review/starter-kaleido.json';
-import starter_soft_smoke from '../review/starter-soft-smoke.json';
-import starter_circle_wave from '../review/starter-circle-wave.json';
-import starter_ember from '../review/starter-ember.json';
-import starter_quiet_tunnel from '../review/starter-quiet-tunnel.json';
-import tex_glass_tunnel from '../review/tex-glass-tunnel.json';
-import tex_sub_bloom from '../review/tex-sub-bloom.json';
-import tex_silk_rings from '../review/tex-silk-rings.json';
-import tex_static_rain from '../review/tex-static-rain.json';
-import tex_prism_bars from '../review/tex-prism-bars.json';
-import tex_pulse_skin from '../review/tex-pulse-skin.json';
-import tex_grain_crown from '../review/tex-grain-crown.json';
 import tex_ripple_field from './tex-ripple-field.json';
-import tex_neon_weave from '../review/tex-neon-weave.json';
 import tex_dust_wave from './tex-dust-wave.json';
 import preset01 from './01-curl-fluid-warp.json';
 import preset02 from './02-kaleidoscopic-mandala.json';
@@ -37,7 +20,6 @@ import preset08 from './08-spectral-ridge-terrain.json';
 import preset09 from './09-chladni-cymatic-sand.json';
 import preset10 from './10-phyllotaxis-spiral-bloom.json';
 import preset11 from './11-ferrofluid-magnetic-crown.json';
-import preset12 from '../review/12-reaction-diffusion-coral.json';
 import preset13 from './13-solar-crown-eclipse.json';
 import preset14 from './14-sacred-orbit-mandala.json';
 import preset15 from './15-polar-spirograph-bloom.json';
@@ -148,7 +130,7 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   // Organic twisting oscilloscope waveform showcase (32, Stage 28).
   '32-twisting-scope-wave': 'showcase',
 
-  // Flagship (01–11; Preset 12 is retired and lives in REVIEW_PRESETS)
+  // Flagship (01–11; Preset 12 is retired and lives in src/presets/review/)
   '01-curl-fluid-warp': 'flagship',
   '02-kaleidoscopic-mandala': 'flagship',
   '03-solarized-contour-rings': 'flagship',
@@ -222,31 +204,6 @@ export const FLAGSHIP_PRESETS_09_10: readonly BuiltinPresetEntry[] = [
 export const FLAGSHIP_PRESETS_11: readonly BuiltinPresetEntry[] = [
   { id: '11-ferrofluid-magnetic-crown', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset11, SCHEMAS) },
 ];
-
-/** Retired or near-duplicate presets under src/presets/review/. Not in ALL_PRESETS, so not in the default list. Still parse and build. */
-export const REVIEW_PRESETS: readonly BuiltinPresetEntry[] = [
-  { id: '12-reaction-diffusion-coral', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset12, SCHEMAS) },
-  { id: 'starter-honeycomb', group: 'archive', subfolder: 'classics', ...parsePreset(starter_honeycomb, SCHEMAS) },
-  { id: 'starter-pentagon-pulse', group: 'archive', subfolder: 'classics', ...parsePreset(starter_pentagon_pulse, SCHEMAS) },
-  { id: 'starter-checker-warp', group: 'archive', subfolder: 'classics', ...parsePreset(starter_checker_warp, SCHEMAS) },
-  { id: 'starter-stripe-drift', group: 'archive', subfolder: 'classics', ...parsePreset(starter_stripe_drift, SCHEMAS) },
-  { id: 'starter-kaleido', group: 'archive', subfolder: 'classics', ...parsePreset(starter_kaleido, SCHEMAS) },
-  { id: 'starter-soft-smoke', group: 'archive', subfolder: 'classics', ...parsePreset(starter_soft_smoke, SCHEMAS) },
-  { id: 'starter-circle-wave', group: 'archive', subfolder: 'classics', ...migrateWaveformsInPreset(parsePreset(starter_circle_wave, SCHEMAS)) },
-  { id: 'starter-ember', group: 'archive', subfolder: 'classics', ...parsePreset(starter_ember, SCHEMAS) },
-  { id: 'starter-quiet-tunnel', group: 'archive', subfolder: 'classics', ...parsePreset(starter_quiet_tunnel, SCHEMAS) },
-  { id: 'tex-glass-tunnel', group: 'textures', subfolder: 'classics', ...parsePreset(tex_glass_tunnel, SCHEMAS) },
-  { id: 'tex-sub-bloom', group: 'textures', subfolder: 'classics', ...parsePreset(tex_sub_bloom, SCHEMAS) },
-  { id: 'tex-silk-rings', group: 'textures', subfolder: 'classics', ...parsePreset(tex_silk_rings, SCHEMAS) },
-  { id: 'tex-static-rain', group: 'textures', subfolder: 'classics', ...parsePreset(tex_static_rain, SCHEMAS) },
-  { id: 'tex-prism-bars', group: 'textures', subfolder: 'classics', ...parsePreset(tex_prism_bars, SCHEMAS) },
-  { id: 'tex-pulse-skin', group: 'textures', subfolder: 'classics', ...parsePreset(tex_pulse_skin, SCHEMAS) },
-  { id: 'tex-grain-crown', group: 'textures', subfolder: 'classics', ...parsePreset(tex_grain_crown, SCHEMAS) },
-  { id: 'tex-neon-weave', group: 'textures', subfolder: 'classics', ...parsePreset(tex_neon_weave, SCHEMAS) },
-];
-
-/** Preset 12 (retired ReactionDiffusion coral), kept as a named export for its existing tests. Not in ALL_PRESETS. */
-export const FLAGSHIP_PRESETS_12: readonly BuiltinPresetEntry[] = REVIEW_PRESETS.filter((e) => e.id === '12-reaction-diffusion-coral');
 
 /** Stage 9 Showcase Presets 13–20 (Sector 485, Slice 9.5). */
 export const SHOWCASE_PRESETS_13_20: readonly BuiltinPresetEntry[] = [
@@ -325,7 +282,6 @@ export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood
   '09-chladni-cymatic-sand': { theme: 'particles', mood: 'calm' },
   '10-phyllotaxis-spiral-bloom': { theme: 'geometric', mood: 'dreamy' },
   '11-ferrofluid-magnetic-crown': { theme: 'fluid', mood: 'dark' },
-  '12-reaction-diffusion-coral': { theme: 'fluid', mood: 'dreamy' },
   '13-solar-crown-eclipse': { theme: 'geometric', mood: 'intense' },
   '14-sacred-orbit-mandala': { theme: 'geometric', mood: 'dreamy' },
   '15-polar-spirograph-bloom': { theme: 'geometric', mood: 'bright' },
@@ -350,24 +306,7 @@ export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood
   'flight': { theme: 'hypnotic', mood: 'driving' },
   'bars': { theme: 'waveform', mood: 'driving' },
   'starter-vortex': { theme: 'hypnotic', mood: 'driving' },
-  'starter-honeycomb': { theme: 'geometric', mood: 'calm' },
-  'starter-pentagon-pulse': { theme: 'geometric', mood: 'driving' },
-  'starter-checker-warp': { theme: 'hypnotic', mood: 'driving' },
-  'starter-stripe-drift': { theme: 'hypnotic', mood: 'calm' },
-  'starter-kaleido': { theme: 'geometric', mood: 'dreamy' },
-  'starter-soft-smoke': { theme: 'fluid', mood: 'calm' },
-  'starter-circle-wave': { theme: 'waveform', mood: 'calm' },
-  'starter-ember': { theme: 'particles', mood: 'dark' },
-  'starter-quiet-tunnel': { theme: 'hypnotic', mood: 'calm' },
-  'tex-glass-tunnel': { theme: 'hypnotic', mood: 'calm' },
-  'tex-sub-bloom': { theme: 'hypnotic', mood: 'dark' },
-  'tex-silk-rings': { theme: 'geometric', mood: 'calm' },
-  'tex-static-rain': { theme: 'particles', mood: 'dark' },
-  'tex-prism-bars': { theme: 'waveform', mood: 'bright' },
-  'tex-pulse-skin': { theme: 'hypnotic', mood: 'driving' },
-  'tex-grain-crown': { theme: 'geometric', mood: 'calm' },
   'tex-ripple-field': { theme: 'fluid', mood: 'calm' },
-  'tex-neon-weave': { theme: 'hypnotic', mood: 'bright' },
   'tex-dust-wave': { theme: 'waveform', mood: 'dreamy' },
 };
 
