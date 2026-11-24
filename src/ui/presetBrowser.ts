@@ -166,6 +166,7 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
     const badgeEl = document.createElement('span');
     badgeEl.className = badge.className;
     badgeEl.textContent = badge.label;
+    badgeEl.setAttribute('data-tooltip', 'How hard this preset works your graphics card');
     meta.append(badgeEl);
 
     const fav = document.createElement('button');
@@ -176,6 +177,7 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
     fav.setAttribute('aria-pressed', String(on));
     fav.setAttribute('aria-label', `Favourite ${entry.name}`);
     fav.textContent = on ? '★' : '☆';
+    fav.setAttribute('data-tooltip', 'Add to or remove from your favourites');
     fav.addEventListener('click', () => {
       const next = !isFavourite(entry);
       entry.tags = withFavourite(entry.tags, next);
@@ -208,7 +210,8 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
     );
     select.value = options.some((o) => o.value === filter) ? filter : 'all';
     filter = select.value as ThemeKey | 'all';
-    count.textContent = `${entries.length} presets, ${favouriteCount(entries)} favourite`;
+    const favs = favouriteCount(entries);
+    count.textContent = `${entries.length} presets, ${favs} ${favs === 1 ? 'favourite' : 'favourites'}`;
 
     const sections = groups.map((group) => {
       const section = document.createElement('section');

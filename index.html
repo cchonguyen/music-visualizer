@@ -12,7 +12,7 @@
 
     <section id="start" class="overlay">
       <h1>Music Visualizer</h1>
-      <p class="warn"><strong>Photosensitivity note:</strong> visuals pulse with the music. Flashes are kept under 3 per second, and you can turn motion down at any time with Calm mode in the Visuals panel.</p>
+      <p class="warn"><strong>Photosensitivity note:</strong> visuals pulse with the music. Flashes are kept under 3 per second. To soften the picture at any time, open the Visuals menu and pick Calm mode or a lower Intensity.</p>
       <button id="start-btn" type="button" class="primary" aria-label="Start visualizer" data-tooltip="Open the visualizer and pick an audio source">Start</button>
       <p class="hint">Desktop Chrome or Edge recommended.</p>
     </section>
@@ -33,7 +33,7 @@
     <div id="onboarding-toast" class="onboarding-toast" role="status" aria-live="polite" hidden>
       <div class="onboarding-toast-content">
         <span class="onboarding-toast-icon" aria-hidden="true"><svg class="ui-icon" data-icon="bulb" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>
-        <span class="onboarding-toast-text">Ready to visualize audio — Click <strong>Source ▾</strong> to choose Tab Audio, Microphone, Local File, or Test Signal.</span>
+        <span class="onboarding-toast-text">Ready to go. Click <strong>Source ▾</strong> to pick what to visualize: tab or system audio, your microphone, a music file, or a test signal.</span>
       </div>
       <button type="button" id="dismiss-toast-btn" class="ui-icon-btn ui-icon-btn--dismiss onboarding-toast-dismiss" aria-label="Dismiss guide" data-tooltip="Dismiss this guide">✕</button>
     </div>
@@ -50,27 +50,27 @@
           <span class="panel-title">Audio Source</span>
         </div>
         <div class="source-cards-grid">
-          <button type="button" id="source-card-display" class="source-card" data-source="display" aria-label="Tab or system audio" data-tooltip="Capture audio playing in a browser tab or your system">
+          <button type="button" id="source-card-display" class="source-card" data-source="display" aria-label="Tab or system audio" data-tooltip="Visualize what is playing in a browser tab or on your computer">
             <span class="source-card-icon" aria-hidden="true"><svg class="ui-icon" data-icon="monitor" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></span>
             <div class="source-card-info">
               <span class="source-card-title">Tab / System Audio</span>
-              <span class="source-card-desc">Capture audio stream playing in your browser or desktop.</span>
+              <span class="source-card-desc">Visualize what is playing in a tab or on your computer. In the share prompt, tick “Share audio”.</span>
             </div>
           </button>
           <button type="button" class="source-card" data-source="mic" aria-label="Microphone" data-tooltip="Visualize live audio from your microphone">
             <span class="source-card-icon" aria-hidden="true"><svg class="ui-icon" data-icon="mic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span>
             <div class="source-card-info">
               <span class="source-card-title">Microphone</span>
-              <span class="source-card-desc">Live microphone input with low latency.</span>
+              <span class="source-card-desc">Visualize live sound from your microphone.</span>
             </div>
           </button>
           <div class="source-card source-card-file">
             <span class="source-card-icon" aria-hidden="true"><svg class="ui-icon" data-icon="music" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
             <div class="source-card-info">
               <span class="source-card-title">Local Audio File</span>
-              <span class="source-card-desc">Play MP3, WAV, FLAC, AAC with full timeline scrubbing.</span>
+              <span class="source-card-desc">Play a music file from your computer (MP3, M4A, WAV, FLAC, OGG and more) with a seek bar.</span>
               <div class="source-file-actions">
-                <button type="button" id="file-btn" class="btn" aria-label="Choose a local audio file" data-tooltip="Open an MP3, WAV, FLAC, or AAC file from your device">Browse / Change File</button>
+                <button type="button" id="file-btn" class="btn" aria-label="Choose a local audio file" data-tooltip="Choose a music file from your computer">Browse / Change File</button>
                 <input id="file-input" type="file" accept=".mp3,.m4a,.aac,.wav,.flac,.ogg,.opus,.webm,audio/mpeg,audio/mp4,audio/wav,audio/flac,audio/ogg" hidden />
               </div>
             </div>
@@ -78,9 +78,9 @@
           <div id="source-card-test" class="source-card source-card-test">
             <span class="source-card-icon" aria-hidden="true"><svg class="ui-icon" data-icon="zap" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg></span>
             <div class="source-card-info">
-              <span class="source-card-title">Hardware Test Signal</span>
-              <span class="source-card-desc">Synthesized reference signals for audio &amp; visual calibration.</span>
-              <select id="test-select" aria-label="Test signal" data-tooltip="Play a built-in test tone, kick, or sweep">
+              <span class="source-card-title">Test Signal</span>
+              <span class="source-card-desc">Built-in test sounds for checking that the visuals react.</span>
+              <select id="test-select" aria-label="Test signal" data-tooltip="Play a built-in kick, tone, sweep, or silence">
                 <option value="">Choose test signal…</option>
                 <option value="kick">Kick (60 Hz, 120 BPM)</option>
                 <option value="tone">Tone (2 kHz)</option>
@@ -96,7 +96,7 @@
               <span class="volume-icon" aria-hidden="true"><svg class="ui-icon" data-icon="volume" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span> Master Volume
               <span id="volume-value" class="value-val">80%</span>
             </span>
-            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Master volume" data-tooltip="Adjust audio playback volume (Up / Down arrows)" />
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Master volume" data-tooltip="Playback volume (Up / Down arrow keys)" />
           </div>
         </div>
       </div>
@@ -105,35 +105,35 @@
       <div id="experience-panel" class="hud-panel experience-panel" role="region" aria-label="Visuals and display settings" hidden>
         <div class="exp-header">
           <span class="exp-title">Experience Mode</span>
-          <span class="exp-hint">Key: M</span>
+          <span class="exp-hint">Press M to switch</span>
         </div>
         <div class="exp-modes-grid ui-segmented" role="radiogroup" aria-label="Experience mode">
-          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="cinematic" aria-label="Cinematic mode" data-tooltip="Auto camera with dynamic color cycling">Cinematic</button>
-          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="calm" aria-label="Calm mode" data-tooltip="Gentle motion, softer contrast, and bioluminescent colors">Calm</button>
-          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="minimal" aria-label="Minimal mode" data-tooltip="Camera off with each preset's native colors">Minimal</button>
-          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="colorWalk" aria-label="Color Walk mode" data-tooltip="Still camera with continuous prismatic color shifts">Color Walk</button>
+          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="cinematic" aria-label="Cinematic mode" data-tooltip="Moving camera and colour palettes that change over time">Cinematic</button>
+          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="calm" aria-label="Calm mode" data-tooltip="Slow, gentle camera and soft blue-green colours, with music reactions toned down">Calm</button>
+          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="minimal" aria-label="Minimal mode" data-tooltip="No camera motion, and each preset keeps its own colours">Minimal</button>
+          <button type="button" class="exp-mode-btn ui-segmented__opt" role="radio" aria-checked="false" data-mode="colorWalk" aria-label="Color Walk mode" data-tooltip="Nearly still camera with strong, steadily changing colours">Color Walk</button>
         </div>
         <div class="exp-controls-row">
           <label class="exp-field">
             <span>Camera</span>
-            <select id="exp-camera-select" aria-label="Camera motion" data-tooltip="Choose how the camera drifts and moves">
+            <select id="exp-camera-select" aria-label="Camera motion" data-tooltip="How the camera moves over the picture. Auto picks a move that suits each preset.">
               <option value="auto">Auto</option>
               <option value="craneSway">Crane sway</option>
               <option value="dutchRoll">Dutch roll</option>
-              <option value="breathingPush">Push swell</option>
-              <option value="horizonTilt">Horizon 2.5D</option>
+              <option value="breathingPush">Push in and out</option>
+              <option value="horizonTilt">Horizon tilt</option>
               <option value="stillAnchor">Still anchor</option>
               <option value="off">Off</option>
             </select>
           </label>
           <label class="exp-field">
             <span>Color</span>
-            <select id="exp-color-select" aria-label="Color mood" data-tooltip="Override or cycle the visual color palette">
+            <select id="exp-color-select" aria-label="Color mood" data-tooltip="Tint the picture with a colour palette. Auto changes palettes over time; Native keeps the preset's colours.">
               <option value="auto">Auto-cycle</option>
               <option value="native">Native (preset)</option>
               <option value="cyberpunk">Cyberpunk</option>
               <option value="ember">Ember</option>
-              <option value="biolum">Biolum</option>
+              <option value="biolum">Bioluminescent</option>
               <option value="vapor">Vapor</option>
               <option value="prismatic">Prismatic</option>
               <option value="noir">Monochrome Noir</option>
@@ -149,28 +149,28 @@
               <span>Visual gain</span>
               <span id="gain-value" class="value-val">1.00×</span>
             </div>
-            <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="Visual gain" data-tooltip="Scale how strongly visuals react to audio" />
+            <input id="gain" type="range" min="0.5" max="3" step="0.05" value="1" aria-label="Visual gain" data-tooltip="How strongly the visuals react to the sound" />
           </div>
           <div class="exp-slider-item">
             <div class="exp-slider-header">
               <span>Beat sensitivity</span>
               <span id="beat-value" class="value-val">50%</span>
             </div>
-            <input id="beat-sensitivity" type="range" min="0" max="100" step="1" value="50" aria-label="Beat sensitivity" data-tooltip="Adjust how easily beat flashes and pulses trigger" />
+            <input id="beat-sensitivity" type="range" min="0" max="100" step="1" value="50" aria-label="Beat sensitivity" data-tooltip="Higher counts more sounds as beats, so beat effects fire more often" />
           </div>
         </div>
         <div class="exp-render-row">
           <label class="exp-field">
             <span>Render quality</span>
-            <select id="render-quality" aria-label="Render quality" data-tooltip="Set render resolution scale for performance or sharpness"></select>
+            <select id="render-quality" aria-label="Render quality" data-tooltip="Lower runs faster, higher looks sharper"></select>
           </label>
           <label class="exp-field">
             <span>Reactions</span>
-            <select id="reaction-style" aria-label="Reaction style" data-tooltip="Set overall audio reaction curve (Off, Gentle, Punchy, or Wild)"></select>
+            <select id="reaction-style" aria-label="Reaction style" data-tooltip="Add ready-made beat reactions on top of every preset: Gentle, Punchy, or Wild"></select>
           </label>
           <label class="exp-field">
             <span>Preset auto-cycle</span>
-            <select id="exp-cycle-mode" aria-label="Preset auto-cycle" data-tooltip="Switch presets automatically on a timer, beat, or phrase">
+            <select id="exp-cycle-mode" aria-label="Preset auto-cycle" data-tooltip="Switch presets automatically: on a timer, on strong beats, or every few bars of music">
               <option value="off">Off</option>
               <option value="timer">Timer</option>
               <option value="beat">Beat</option>
@@ -193,13 +193,13 @@
         <div id="exp-cycle-interval-row" class="exp-render-row exp-cycle-interval-row" hidden>
           <label class="exp-field">
             <span>Switch every <output id="exp-cycle-interval-value">20 s</output></span>
-            <input id="exp-cycle-interval" type="range" min="5" max="120" step="1" value="20" aria-label="Seconds between preset switches" data-tooltip="Choose how many seconds before switching presets" />
+            <input id="exp-cycle-interval" type="range" min="5" max="120" step="1" value="20" aria-label="Seconds between preset switches" data-tooltip="Seconds between switches. Phrase mode uses this only when it cannot find the tempo." />
           </label>
         </div>
         <div id="exp-cycle-bars-row" class="exp-render-row exp-cycle-interval-row" hidden>
           <label class="exp-field">
             <span>Phrase length</span>
-            <select id="exp-cycle-bars" aria-label="Bars per phrase" data-tooltip="Choose how many musical bars make one phrase">
+            <select id="exp-cycle-bars" aria-label="Bars per phrase" data-tooltip="Switch presets every 4, 8, or 16 bars of music">
               <option value="4">4 bars</option>
               <option value="8" selected>8 bars</option>
               <option value="16">16 bars</option>
@@ -208,15 +208,15 @@
         </div>
         <div id="exp-cycle-hard-cut-row" class="exp-render-row exp-cycle-interval-row" hidden>
           <label class="exp-checkbox-field">
-            <input id="exp-cycle-hard-cut" type="checkbox" aria-label="Hard cut on beat" data-tooltip="Switch presets instantly with zero fade on strong beats" />
+            <input id="exp-cycle-hard-cut" type="checkbox" aria-label="Hard cut on beat" data-tooltip="Cut straight to the next preset on the beat instead of fading" />
             <span>Hard cut on beat</span>
           </label>
         </div>
         <div class="exp-actions-row">
-          <button type="button" id="exp-export-btn" class="exp-action-btn" aria-label="Export look" data-tooltip="Download your current visual settings as JSON">Export Look</button>
-          <label class="exp-action-btn exp-import-label" aria-label="Import look JSON" data-tooltip="Load visual settings from a JSON file">
-            Import JSON
-            <input type="file" id="exp-import-input" accept="application/json,.json" aria-label="Import look JSON" data-tooltip="Load visual settings from a JSON file" hidden />
+          <button type="button" id="exp-export-btn" class="exp-action-btn" aria-label="Export look" data-tooltip="Download the preset on screen, with your camera and colour choices, as a file">Export Look</button>
+          <label class="exp-action-btn exp-import-label" aria-label="Import look JSON" data-tooltip="Load a look or preset file you exported earlier">
+            Import Look
+            <input type="file" id="exp-import-input" accept="application/json,.json" aria-label="Import look JSON" data-tooltip="Load a look or preset file you exported earlier" hidden />
           </label>
         </div>
       </div>
@@ -238,14 +238,14 @@
           <div id="timeline-separator" class="pill-separator" aria-hidden="true" hidden></div>
           <div id="playback-scrubber-segment" class="pill-segment scrubber-segment" hidden>
             <span id="time-current" class="time-readout">0:00</span>
-            <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" data-tooltip="Scrub playback position (Left / Right arrows)" />
+            <input id="seek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek" data-tooltip="Drag to jump in the track (Left / Right arrow keys)" />
             <span id="time-total" class="time-readout">0:00</span>
           </div>
         </div>
 
         <!-- Pill 2: Visuals & Studio Segmented Pill -->
         <div id="visuals-pill" class="pill-container">
-          <button type="button" id="experience-btn" class="ui-btn ui-btn--ghost pill-segment" aria-expanded="false" aria-controls="experience-panel" aria-haspopup="dialog" aria-label="Visuals and display settings" data-tooltip="Adjust mode, camera, color, and quality">
+          <button type="button" id="experience-btn" class="ui-btn ui-btn--ghost pill-segment" aria-expanded="false" aria-controls="experience-panel" aria-haspopup="dialog" aria-label="Visuals and display settings" data-tooltip="Mode, camera, colour, auto-cycle and quality settings">
             <span class="pill-icon" aria-hidden="true"><svg class="ui-icon" data-icon="sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg></span>
             <span id="experience-label" class="experience-label">Visuals: Cinematic</span>
             <span class="pill-chevron" aria-hidden="true">▾</span>
@@ -283,26 +283,27 @@
         <button type="button" id="shortcuts-close" class="ui-btn close-btn" aria-label="Close keyboard shortcuts" data-tooltip="Close shortcuts (Esc)">Close</button>
       </div>
       <div class="shortcuts-actions">
-        <button type="button" id="reopen-toast-btn" class="ui-btn shortcuts-guide-btn" aria-label="Show Getting Started Guide" data-tooltip="Show the startup audio guide again">Show Getting Started Guide</button>
+        <button type="button" id="reopen-toast-btn" class="ui-btn shortcuts-guide-btn" aria-label="Show Getting Started Guide" data-tooltip="Show the tip about choosing an audio source again">Show Getting Started Guide</button>
       </div>
       <table>
         <tbody>
-          <tr><th scope="row"><button type="button" class="key" data-key=" " aria-label="Space: Play or pause" data-tooltip="Trigger Play or pause (Space)">Space</button></th><td><span class="full">Play or pause (file)</span><span class="short">Play / pause</span></td></tr>
+          <tr><th scope="row"><button type="button" class="key" data-key=" " aria-label="Space: Play or pause" data-tooltip="Play or pause (Space)">Space</button></th><td><span class="full">Play or pause (file)</span><span class="short">Play / pause</span></td></tr>
           <tr class="wide"><th scope="row"><button type="button" class="key" data-key="ArrowLeft" aria-label="Left arrow: Seek 5 s back" data-tooltip="Seek 5 seconds back">←</button> <button type="button" class="key" data-key="ArrowRight" aria-label="Right arrow: Seek 5 s forward" data-tooltip="Seek 5 seconds forward">→</button></th><td><span class="full">Seek 5 s back or forward (file)</span><span class="short">Seek 5 s</span></td></tr>
           <tr class="wide"><th scope="row"><button type="button" class="key" data-key="ArrowUp" aria-label="Up arrow: Volume up" data-tooltip="Increase volume 5%">↑</button> <button type="button" class="key" data-key="ArrowDown" aria-label="Down arrow: Volume down" data-tooltip="Decrease volume 5%">↓</button></th><td><span class="full">Volume up or down 5%</span><span class="short">Volume 5%</span></td></tr>
           <tr><th scope="row"><button type="button" class="key" data-key="F" aria-label="F: Fullscreen" data-tooltip="Toggle fullscreen">F</button></th><td><span class="full">Fullscreen</span><span class="short">Fullscreen</span></td></tr>
-          <tr><th scope="row"><button type="button" class="key" data-key="P" aria-label="P: Next colour palette" data-tooltip="Cycle to next color palette">P</button></th><td><span class="full">Next colour palette</span><span class="short">Palette</span></td></tr>
-          <tr><th scope="row"><button type="button" class="key" data-key="K" aria-label="K: Freeze or resume the picture" data-tooltip="Freeze or resume visual frame">K</button></th><td><span class="full">Freeze or resume the picture</span><span class="short">Freeze</span></td></tr>
+          <tr><th scope="row"><button type="button" class="key" data-key="P" aria-label="P: Next colour palette" data-tooltip="Next colour palette">P</button></th><td><span class="full">Next colour palette</span><span class="short">Palette</span></td></tr>
+          <tr><th scope="row"><button type="button" class="key" data-key="K" aria-label="K: Freeze or resume the picture" data-tooltip="Freeze or resume the picture">K</button></th><td><span class="full">Freeze or resume the picture</span><span class="short">Freeze</span></td></tr>
           <tr><th scope="row"><button type="button" class="key" data-key="." aria-label="Period: Step one frame" data-tooltip="Step one frame forward while frozen">.</button></th><td><span class="full">Step one frame while frozen</span><span class="short">Step frame</span></td></tr>
-          <tr class="wide"><th scope="row"><span class="keys"><button type="button" class="key" data-key="0" aria-label="0: Switch preset" data-tooltip="Switch to preset 0">0</button> <button type="button" class="key" data-key="1" aria-label="1: Switch preset" data-tooltip="Switch to preset 1">1</button> <button type="button" class="key" data-key="2" aria-label="2: Switch preset" data-tooltip="Switch to preset 2">2</button> <button type="button" class="key" data-key="3" aria-label="3: Switch preset" data-tooltip="Switch to preset 3">3</button> <button type="button" class="key" data-key="4" aria-label="4: Switch preset" data-tooltip="Switch to preset 4">4</button> <button type="button" class="key" data-key="5" aria-label="5: Switch preset" data-tooltip="Switch to preset 5">5</button> <button type="button" class="key" data-key="6" aria-label="6: Switch preset" data-tooltip="Switch to preset 6">6</button> <button type="button" class="key" data-key="7" aria-label="7: Switch preset" data-tooltip="Switch to preset 7">7</button> <button type="button" class="key" data-key="8" aria-label="8: Switch preset" data-tooltip="Switch to preset 8">8</button> <button type="button" class="key" data-key="9" aria-label="9: Switch preset" data-tooltip="Switch to preset 9">9</button></span></th><td><span class="full">Switch preset</span><span class="short">Switch preset</span></td></tr>
+          <tr class="wide"><th scope="row"><span class="keys"><button type="button" class="key" data-key="0" aria-label="0: Preset 1" data-tooltip="Switch to preset 1 in the list">0</button> <button type="button" class="key" data-key="1" aria-label="1: Preset 2" data-tooltip="Switch to preset 2 in the list">1</button> <button type="button" class="key" data-key="2" aria-label="2: Preset 3" data-tooltip="Switch to preset 3 in the list">2</button> <button type="button" class="key" data-key="3" aria-label="3: Preset 4" data-tooltip="Switch to preset 4 in the list">3</button> <button type="button" class="key" data-key="4" aria-label="4: Preset 5" data-tooltip="Switch to preset 5 in the list">4</button> <button type="button" class="key" data-key="5" aria-label="5: Preset 6" data-tooltip="Switch to preset 6 in the list">5</button> <button type="button" class="key" data-key="6" aria-label="6: Preset 7" data-tooltip="Switch to preset 7 in the list">6</button> <button type="button" class="key" data-key="7" aria-label="7: Preset 8" data-tooltip="Switch to preset 8 in the list">7</button> <button type="button" class="key" data-key="8" aria-label="8: Preset 9" data-tooltip="Switch to preset 9 in the list">8</button> <button type="button" class="key" data-key="9" aria-label="9: Preset 10" data-tooltip="Switch to preset 10 in the list">9</button></span></th><td><span class="full">Switch to preset 1–10 in the list (0 is the first)</span><span class="short">Preset 1–10</span></td></tr>
           <tr class="wide"><th scope="row"><button type="button" class="key" data-key="[" aria-label="Left bracket: Previous preset" data-tooltip="Switch to previous preset">[</button> <button type="button" class="key" data-key="]" aria-label="Right bracket: Next preset" data-tooltip="Switch to next preset">]</button></th><td><span class="full">Previous or next preset</span><span class="short">Prev / next</span></td></tr>
           <tr><th scope="row"><button type="button" class="key" data-key="C" aria-label="C: Auto-cycle on a timer" data-tooltip="Toggle timer auto-cycle">C</button></th><td><span class="full">Auto-cycle on a timer</span><span class="short">Auto timer</span></td></tr>
           <tr><th scope="row"><button type="button" class="key" data-key="B" aria-label="B: Auto-cycle on strong beats" data-tooltip="Toggle beat auto-cycle">B</button></th><td><span class="full">Auto-cycle on strong beats</span><span class="short">Auto on beat</span></td></tr>
           <tr><th scope="row"><button type="button" class="key" data-key="X" aria-label="X: Shuffle auto-cycle" data-tooltip="Toggle shuffle order">X</button></th><td><span class="full">Shuffle auto-cycle</span><span class="short">Shuffle</span></td></tr>
+          <tr><th scope="row"><span class="key" aria-label="M: Next experience mode">M</span></th><td><span class="full">Next experience mode (Cinematic, Calm, Minimal, Color Walk)</span><span class="short">Mode</span></td></tr>
           <tr><th scope="row"><button type="button" class="key" data-key="E" aria-label="E: Open or close Studio" data-tooltip="Open or close Studio">E</button></th><td><span class="full">Open or close Studio</span><span class="short">Studio</span></td></tr>
           <tr><th scope="row"><span class="key" aria-label="Shift+E: Pop out Studio into its own window">Shift+E</span></th><td><span class="full">Pop out Studio into its own window</span><span class="short">Pop out</span></td></tr>
-          <tr><th scope="row"><button type="button" class="key" data-key="A" aria-label="A: Compare the saved copy (hold)" data-tooltip="Hold to compare saved preset">A</button> (hold)</th><td><span class="full">Compare the saved copy of the current preset</span><span class="short">Compare</span></td></tr>
-          <tr><th scope="row"><button type="button" class="key" data-key="?" aria-label="?: Show or close this list" data-tooltip="Close keyboard shortcuts">?</button></th><td><span class="full">Show this list</span><span class="short">Help</span></td></tr>
+          <tr><th scope="row"><button type="button" class="key" data-key="A" aria-label="A: Compare the saved copy (hold)" data-tooltip="Hold to see the saved copy of this preset">A</button> (hold)</th><td><span class="full">Compare the saved copy of the current preset</span><span class="short">Compare</span></td></tr>
+          <tr><th scope="row"><button type="button" class="key" data-key="?" aria-label="?: Show or close this list" data-tooltip="Close keyboard shortcuts">?</button></th><td><span class="full">Show or close this list</span><span class="short">Help</span></td></tr>
         </tbody>
       </table>
     </dialog>

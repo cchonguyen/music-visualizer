@@ -1,5 +1,7 @@
 # Stage 1 Slice Specs — Audio Core and GPU Proof
 
+> **Historical (checked 2026-11-24):** Stage 1 was built and verified; the status line below is from when this was written. Finished slices are in `.spec/HISTORY.md`.
+
 Companion to `.spec/SYSTEM_SPEC.md` (contracts) and `.spec/PROGRESS.md` (queue). Written 2026-11-04. Not started.
 
 **Stage 1 is done when:** the four checks in `docs/visualization-ladder.md` §3 pass on the owner's Mac and Windows machines, for file, tab/system audio, and mic, with latency under 100 ms shown in the debug panel.

@@ -1,5 +1,7 @@
 # Stage 2 Slice Specs: Visuals on WebGL2
 
+> **Historical (checked 2026-11-24):** Stage 2 was built and verified; the status line below is from when this was written. Finished slices are in `.spec/HISTORY.md`.
+
 Companion to `.spec/SYSTEM_SPEC.md` §7 and `.spec/PROGRESS.md`. Written 2026-11-04 after Stage 1 sign-off. Revised 2026-11-04 after architect review (7 contract fixes). Not started.
 
 Contracts in force: `src/audio/types.ts` (AudioFrame, read-only, reused each frame) and `src/render/layer.ts` (`draw(frame, clock, target)`, no alpha). Motion uses `Phase` from `src/render/clock.ts`, never `time × speed`.

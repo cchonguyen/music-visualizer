@@ -1,5 +1,7 @@
 # Stage 2 Polish Plan (draft, not started)
 
+> **Historical (checked 2026-11-24):** this plan was built (see "Stage 2 polish" in `.spec/HISTORY.md`). The status line below is from when it was written.
+
 Source: external reviewer's feedback on the owner's screen recording (2026-11-04).
 Status: approved by owner 2026-11-04; ready for an implementing agent. Nothing implemented yet.
 

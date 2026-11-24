@@ -1,5 +1,7 @@
 # Scope brief: Stage 3 and effects controls (triage, 2026-11-05)
 
+> **Historical (checked 2026-11-24):** this scope was confirmed and built (see "Stage 3 remaining and effects" in `.spec/HISTORY.md`). The status line below is from when it was written.
+
 Status: draft for owner decision. No slice is started. Build one slice at a time with `/spec`, then `/implement`.
 
 ## Stage 3 (SYSTEM_SPEC: parked, Stage 4 first)

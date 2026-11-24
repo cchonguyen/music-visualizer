@@ -115,13 +115,13 @@ export type PresetGroup = 'flagship' | 'textures' | 'classic' | 'archive';
 export type SystemSubfolder = 'showcase' | 'flagship' | 'classics';
 
 export const SYSTEM_SUBFOLDER_LABELS: Record<SystemSubfolder, string> = {
-  showcase: 'Stage 9 Showcase (13–20)',
-  flagship: 'Flagship Generative (01–12)',
+  showcase: 'Showcase',
+  flagship: 'Flagship Generative',
   classics: 'Classics & Textures',
 };
 
 export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
-  // Showcase (13–20)
+  // Showcase (presets 13–32)
   '13-solar-crown-eclipse': 'showcase',
   '14-sacred-orbit-mandala': 'showcase',
   '15-polar-spirograph-bloom': 'showcase',
@@ -130,7 +130,7 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   '18-star-burst-stream': 'showcase',
   '19-spiral-pearl-beads': 'showcase',
   '20-dual-rail-aurora-ark': 'showcase',
-  // Warp field, bloom and colour showcase (21–24, Stage 18). Kept in this folder; the folder label still says 13–20.
+  // Warp field, bloom and colour showcase (21–24, Stage 18).
   '21-inhale-exhale': 'showcase',
   '22-ripple-pool': 'showcase',
   '23-gradient-storm': 'showcase',
@@ -148,7 +148,7 @@ export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
   // Organic twisting oscilloscope waveform showcase (32, Stage 28).
   '32-twisting-scope-wave': 'showcase',
 
-  // Flagship (01–12)
+  // Flagship (01–11; Preset 12 is retired and lives in REVIEW_PRESETS)
   '01-curl-fluid-warp': 'flagship',
   '02-kaleidoscopic-mandala': 'flagship',
   '03-solarized-contour-rings': 'flagship',

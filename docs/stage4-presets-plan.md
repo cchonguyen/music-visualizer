@@ -1,5 +1,7 @@
 # Stage 4 Plan: Presets, Effects and the Preset Studio
 
+> **Historical (checked 2026-11-24):** Stage 4 was built and deployed. The status line below is from when this was written.
+
 **Status:** draft for owner review, 2026-11-04. Nothing here is built yet.
 **Owner direction (2026-11-04):** Stage 3 polish is parked. Next work: more visual variety, a set of effects, presets you can switch between, and a **Preset Studio** for tuning and saving presets visually.
 **Replaces:** the short Stage 4 plan in `.spec/SYSTEM_SPEC.md` §7 (4a/4b). Still true: our own engine, our own JSON format, Butterchurn and `.milk` stay reference only.

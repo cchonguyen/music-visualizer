@@ -37,11 +37,11 @@ function num(name: string, label: string, def: number, min: number, max: number,
  */
 function commonSpecs(): ParamSpec[] {
   return [
-    num("amount", "Amount", 0.3, -1, 1, 0.01, "Sets the strength and direction of the warp displacement (0 does nothing; negative reverses it)."),
-    num("scale", "Scale", 1, 0.1, 8, 0.01, "Adjusts the spatial frequency or tile count of the warp pattern across the screen."),
-    num("speed", "Speed", 0.2, -4, 4, 0.01, "Controls the animation speed and direction of the warp motion over time."),
-    num("centreX", "Centre X", 0, -1, 1, 0.01, "Shifts the horizontal centre of the warp operator (-1 left, 0 middle, 1 right)."),
-    num("centreY", "Centre Y", 0, -1, 1, 0.01, "Shifts the vertical centre of the warp operator (-1 bottom, 0 middle, 1 top)."),
+    num("amount", "Amount", 0.3, -1, 1, 0.01, "How strong the warp is. 0 does nothing; negative reverses it."),
+    num("scale", "Scale", 1, 0.1, 8, 0.01, "How big or small the warp pattern is. For Tile and mirror, the number of tiles across."),
+    num("speed", "Speed", 0.2, -4, 4, 0.01, "How fast the warp moves. Negative runs it backward."),
+    num("centreX", "Centre X", 0, -1, 1, 0.01, "Moves the warp centre left or right (-1 left, 0 middle, 1 right)."),
+    num("centreY", "Centre Y", 0, -1, 1, 0.01, "Moves the warp centre up or down (-1 bottom, 0 middle, 1 top)."),
   ];
 }
 
@@ -65,7 +65,7 @@ function foldSpecs(): ParamSpec[] {
     min: FOLD_ITERATIONS_MIN,
     max: FOLD_ITERATIONS_MAX,
     step: 1,
-    description: "Sets how many kaleidoscopic fold-and-scale rounds are applied (capped on lower render scales).",
+    description: "How many fold rounds. More gives finer fractal detail. Lower render quality caps it.",
   }];
 }
 
@@ -77,7 +77,7 @@ function curlSpecs(): ParamSpec[] {
     group: "Warp field",
     default: "plumes",
     options: CURL_FLOW_STYLES,
-    description: "Chooses the large-scale flow pattern: rising plumes, stationary eddies, outward expansion, or inward vortex.",
+    description: "The overall flow: rising plumes, still eddies, spreading outward, or a vortex pulling inward.",
   };
   return [
     {
@@ -89,7 +89,7 @@ function curlSpecs(): ParamSpec[] {
       min: 1,
       max: 3,
       step: 1,
-      description: "Sets the number of Simplex noise octave layers blended into the curl flow.",
+      description: "Layers of detail in the flow. More looks finer and costs more.",
     },
     num("turbulence", "Turbulence", 0.45, 0, 1, 0.01, "Controls how strongly treble energy adds fine swirling detail to the curl noise."),
     flow,
@@ -98,7 +98,7 @@ function curlSpecs(): ParamSpec[] {
 
 function radialSpecs(): ParamSpec[] {
   return [
-    num("exponent", "Radial exponent", 1.0, 0.25, 4.0, 0.05, "Shapes the radial falloff curve from the centre to the edges (1 is linear; higher concentrates near edges, lower near the centre)."),
+    num("exponent", "Radial exponent", 1.0, 0.25, 4.0, 0.05, "Where the pull is strongest. 1 is even; higher puts it near the edges, lower near the centre."),
   ];
 }
 

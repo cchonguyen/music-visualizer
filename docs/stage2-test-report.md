@@ -1,5 +1,7 @@
 # Stage 2 Device Test Report
 
+> **Historical (checked 2026-11-24):** Stage 2 device test record. Test counts here are from 2026-11-04.
+
 Live URL: https://music-visualizer.charliechonguyen.com (backup: https://music-visualizer.charliechonguyen.workers.dev)
 Automated checks (2026-11-04): typecheck clean, 122 unit tests pass, production build passes.
 

@@ -1,14 +1,12 @@
 # Music Visualizer
 
-A high-performance, real-time, zero-dependency WebGL2 audio visualizer web application running natively in modern browsers (Chrome, Edge, Safari, Firefox).
+A real-time music visualizer for desktop Chrome and Edge (macOS and Windows). It draws GPU visuals in time with a music file, the audio playing in a browser tab or your whole system, or your microphone.
 
-Built entirely on **raw WebGL2** and the **Web Audio API** in TypeScript with Vite, featuring 13 distinct visual layer synthesizers, complex non-linear feedback warp shaders, multi-pass bloom post-processing, an interactive Preset Studio, and 20 handcrafted flagship generative presets.
-
-Everything runs strictly client-side on the GPU and Web Audio threads: no accounts, no server round-trips, and no audio data leaves your device.
+It is built on **raw WebGL2** and the **Web Audio API** in TypeScript with Vite. The only runtime library is Tweakpane, which the Preset Studio panel uses. Audio is analysed on your device and never uploaded, and you need no account.
 
 ---
 
-## Live Demo
+## Live app
 
 - **Production:** [https://music-visualizer.charliechonguyen.com](https://music-visualizer.charliechonguyen.com)
 - **Backup:** [https://music-visualizer.charliechonguyen.workers.dev](https://music-visualizer.charliechonguyen.workers.dev)
@@ -17,160 +15,122 @@ Everything runs strictly client-side on the GPU and Web Audio threads: no accoun
 
 ## Features
 
-### 1. Audio Engine & Multi-Band Reactivity
-- **Multi-Source Input**: Real-time microphone input, local audio file playback (with scrubber and loop controls), and tab / system audio via `getDisplayMedia`.
-- **128-Bin Frequency Analysis**: Low-latency FFT analysis downsampled into 128 log-spaced frequency bands across Sub, Bass, Low-Mid, Mid, High-Mid, and High frequencies.
-- **Audio Texture Pipeline**: Two-row persistent R32F data texture (Row 0: 512 box-averaged waveform samples; Row 1: 128 log-spectrum bins) passed to GPU shaders every frame.
-- **Dynamic Physics & Envelopes**:
-  - `kickEnv` with exponential decay and discrete `kickPulse` onset triggers.
-  - Spectral centroid tracking with automatic silence freeze.
-  - Adaptive loudness governor, dynamic range compression, and photosensitivity safety guards.
+### 1. Audio sources and analysis
+- **Four sources:** a local audio file (with play, pause and a seek bar), tab or system audio shared through the browser's screen-share prompt (tick "Share audio"), the microphone, and built-in test signals (kick, tone, sweep, silence).
+- **Frequency analysis:** 128 log-spaced frequency bins from 20 Hz to 12 kHz, grouped into sub, bass, mid and high bands.
+- **Audio texture:** a 512 × 2 float texture sent to the shaders every frame (row 0 holds 512 waveform samples, row 1 holds the 128 log-spectrum bins).
+- **Music signals:** kick envelope and onsets, beat and tempo tracking, spectral centroid, loudness, and song-arc signals (drop, breakdown, 16- and 32-beat phrases, slow energy).
 
-### 2. High-Performance WebGL2 Render Engine
-- **Composable Multi-Layer Synthesis**:
-  - **Shape Layer**: Parametric multi-point polygon and logarithmic spiral geometry with beat-reactive radius, rotation, stroke, and inward/outward tapering.
-  - **Spectral Terrain**: 64 perspective 3D horizontal ridges with dark occlusion skirts (`gl.TRIANGLE_STRIP`) and glowing ridge lines (`gl.LINE_STRIP`) driven by audio history ring buffers.
-  - **Chladni Cymatic Sand**: 8,192 seed points simulating 2D nodal standing wave physics with analytical gradient relaxation and harmonic mode morphing.
-  - **Phyllotaxis Spiral Particles**: Outward Fibonacci golden-angle spiral blooms (`r = c * sqrt(i)`, `theta = i * 2.3999...`) with audio phase waves.
-  - **Reaction-Diffusion**: Isolated 256x256 ping-pong Gray-Scott chemical simulation with normal and specular ridge lighting.
-  - **Ferrofluid**: 4-subdivision icosahedron displaced by 3D curl noise and shaded with MatCap metallic reflections.
-  - **Moiré Interference Loom**: Concentric dual-grid procedural interference patterns with screen-space `fwidth()` anti-aliasing.
-  - **Tunnel**: Infinite 3D flight mechanics with polygon wall geometries, round rings, starry cosmic trails, and auto-reversing directional thrust.
-  - **Waveform**: Multi-color ink parametric waveforms, 7-point wireframe stars, and 3D Lissajous parametric knots.
-  - **Rings, Crown, Shockwave & BassPulse**: Audio-reactive geometric rings, radial audio crowns, and transient shockwave bursts.
-- **Non-Linear Feedback Warp Engine**:
-  - Fullscreen GPU feedback pass supporting 2D curl noise advection, complex Möbius transformations `(az+b)/(cz+d)`, polar angle folding, chromatic aberration RGB split, Sobel edge filtering, and sinusoidal solarization.
-- **Post-Processing Chain**:
-  - Half-resolution Gaussian bloom pass with thresholding.
-  - CRT scanlines and barrel distortion.
-  - Contrast, saturation, gamma, vignette, and chromatic aberration controls.
-  - Photosensitive epilepsy safety governor with bidirectional luminance slew damping and high-frequency stripe attenuation.
+### 2. Render engine
+- **Visual layers** (`src/render/layers/`), stacked and blended per preset:
+  - **Shape:** polygons, stars, spirals, rings, waveform lines and ribbons, 3D knots and the twisting oscilloscope wave, with wall-bounce motion and beat-reactive size, spin and stroke. Old waveform layers load as Shape layers.
+  - **Particles:** streaks, dots, stars and rings, including phyllotaxis (golden-angle) spiral layouts.
+  - **Tunnel:** forward flight through ring, grid, spoke, checker or stripe walls, with polygon cross-sections and twist.
+  - **Spectral Terrain:** 3D ridge lines built from the recent spectrum.
+  - **Chladni Sand:** grains that settle on the nodal lines of a vibrating plate.
+  - **Ferrofluid:** a metallic blob pushed by 3D noise.
+  - **Moiré:** two overlapping line grids that make interference patterns.
+  - **Julia, Orbit and Architecture:** a breathing Julia set, bodies on tilted 3D orbits, and a gliding 3D corridor.
+  - **Rings, Crown, Bars, Shockwave and Bass Pulse:** the original Stage 2 visuals.
+- **Feedback and warp:** each frame can feed into the next with zoom, rotation and drift, plus curl, Möbius, polar-fold, RGB-split, edge and solarize warps, trail blur, and a stack of up to four warp operators.
+- **Post effects:** bloom (with tint and beat pulse), hue shift, saturation, contrast, gamma, brightness, vignette, mirror, chromatic aberration, gradient colour mapping and invert.
+- **Global Director:** four experience modes (Cinematic, Calm, Minimal, Color Walk), camera moves and colour palettes applied on top of any preset.
+- **Photosensitivity safety:** flashes are kept under 3 per second, brightness changes are slew-limited, and Calm mode softens motion further.
+- **Performance:** render quality presets, an automatic quality governor, and a Low-power mode that caps resolution and skips heavy post effects.
 
-### 3. Preset Studio & Organizational Hierarchy
-- **20 Handcrafted Flagship Presets**:
-  - `01 Curl Fluid Warp`
-  - `02 Kaleidoscopic Mandala`
-  - `03 Solarized Contour Rings`
-  - `04 Möbius Dual Vortex`
-  - `05 RGB Aberration Vortex`
-  - `06 Lissajous Vector CRT`
-  - `07 Moiré Interference Loom`
-  - `08 Spectral Ridge Terrain`
-  - `09 Chladni Cymatic Sand`
-  - `10 Phyllotaxis Spiral Bloom`
-  - `11 Liquid Metal Ferrofluid`
-  - `12 Reaction Diffusion Turing Lab`
-  - `13 Neon Polygon Nexus`
-  - `14 Sacred Orbit Mandala`
-  - `15 Polar Spirograph Bloom`
-  - `16 Hexagon Inward Portal`
-  - `17 Corridor LED Equalizer`
-  - `18 Quantum Lattice`
-  - `19 Spiral Pearl Beads`
-  - `20 Dual Rail Aurora Ark`
-- **Preset Folders**: Hierarchical categorization with immutable system folders (*Stage 9 Showcase*, *Flagship Generative*, *Classics & Textures*) and full user-defined folder management (create, rename, move, delete).
-- **Studio Inspector**: Real-time parameter tweaking powered by Tweakpane, live parameter linking to audio signals, preset export/import as JSON, undo/redo, and A/B comparison.
+### 3. Presets and the Studio
+- **Built-in presets:** 31 numbered presets plus Classics & Textures, in three system folders (number 12 was retired with the Reaction-Diffusion layer):
+  - **Flagship Generative (presets 01–11):** Curl Fluid Warp, Kaleidoscopic Mandala, Solarized Contour Rings, Möbius Dual Vortex, RGB Aberration Vortex, Lissajous Vector CRT, Moiré Interference Loom, Spectral Ridge Terrain, Chladni Cymatic Sand, Phyllotaxis Spiral Bloom, Ferrofluid Magnetic Crown.
+  - **Showcase (presets 13–32):** Solar Crown Eclipse, Sacred Orbit Mandala, Polar Spirograph Bloom, Hexagon Inward Portal, Corridor LED Equalizer, Star Burst Stream, Spiral Pearl Beads, Dual-Rail Aurora Ark, Inhale Exhale, Ripple Pool, Gradient Storm, Mirror Tunnel, Deep Field, Scope Bloom, Ink Flow, Julia Drift, Orbit Hall, Corridor Glide, Bouncing Ribbon Wave, Twisting Scope Wave.
+  - **Classics & Textures:** Crown, Flight, Bars, Vortex, Ripple Field, Dust Wave.
+- **Preset browser:** a grid of presets grouped by theme, with favourites and a Light / Medium / Heavy cost badge.
+- **Auto-cycle:** switch presets on a timer, on strong beats, or every musical phrase, in order or shuffled, with an optional hard cut on the beat.
+- **Preset Studio:** edit every layer, feedback, warp and post setting live; add, remove and reorder layers; save, duplicate, export and import presets; undo and redo; randomise or mutate; organise your own presets in folders. Every slider, dropdown and colour can be linked to the music (the ⚡ button) with one-click recipes.
+- **Pop-out Studio:** open the Studio in its own window so the visuals stay full-screen.
+- **System presets:** the owner can publish system presets from the app; the admin path is protected by Cloudflare Access.
 
 ---
 
-## Architecture & Codebase Map
+## Codebase map
 
 ```
 music-visualizer/
+├── index.html                # Main page: start screen, controls, menus, shortcuts list
+├── popout.html               # Pop-out Studio window
 ├── src/
-│   ├── audio/                # Web Audio analysis pipeline
-│   │   ├── engine.ts         # AudioContext, microphone, file and display capture
-│   │   ├── frameBuilder.ts   # AudioFrame builder, kick detection, spectral centroid
-│   │   ├── bandWaveforms.ts  # Multi-band waveform analysis
-│   │   └── types.ts          # Audio data type definitions
-│   ├── gl/                   # Raw WebGL2 abstractions
-│   │   ├── fbo.ts            # Framebuffer objects (ping-pong, multi-target)
-│   │   ├── shader.ts         # Shader compilation and linking utilities
-│   │   └── size.ts           # Canvas and viewport resolution handling
-│   ├── presets/              # Preset system, schemas, and builtin library
-│   │   ├── builtin/          # 20 Flagship and classic JSON presets
-│   │   ├── schema.ts         # Strict preset schemas and parameter contracts
-│   │   ├── session.ts        # User preset storage, folder hierarchy, and state
-│   │   └── loader.ts         # Preset instantiation and parameter interpolation
-│   ├── render/               # WebGL2 rendering pipeline
-│   │   ├── compositor.ts     # Multi-pass compositor, transitions, and Calm governor
-│   │   ├── scene.ts          # Central render loop and layer coordination
-│   │   ├── bandTexture.ts    # Persistent R32F audio data texture manager
-│   │   ├── layers/           # 13 dedicated visual layer modules
-│   │   │   ├── shape.ts
-│   │   │   ├── spectralTerrain.ts
-│   │   │   ├── chladniSand.ts
-│   │   │   ├── ferrofluid.ts
-│   │   │   ├── reactionDiffusion.ts
-│   │   │   ├── moire.ts
-│   │   │   ├── tunnel.ts
-│   │   │   ├── waveform.ts
-│   │   │   ├── particles.ts
-│   │   │   ├── rings.ts
-│   │   │   ├── crown.ts
-│   │   │   ├── shockwave.ts
-│   │   │   └── bassPulse.ts
-│   │   └── shaders/          # GLSL ES 3.0 vertex and fragment shaders
-│   ├── studio/               # Preset Studio inspector and folder UI
-│   │   └── studio.ts         # Tweakpane integration, folder management
-│   ├── ui/                   # Player controls, keyboard shortcuts, and HUD
-│   │   └── controls.ts       # Play/pause, sensitivity, volume, file selector
-│   └── main.ts               # Application entrypoint and tick loop
-└── wrangler.jsonc            # Cloudflare Workers static assets configuration
+│   ├── main.ts               # App entry point and frame loop
+│   ├── worker.ts             # Cloudflare Worker: static assets plus the /admin routes
+│   ├── audio/                # Audio sources, analysis, onsets, tempo, test signals
+│   ├── gl/                   # WebGL2 helpers: context, shaders, framebuffers, textures, sizing
+│   ├── render/               # Scene, compositor, safety, Global Director, quality governor
+│   │   ├── layers/           # One module per visual layer type
+│   │   └── shaders/          # GLSL ES 3.0 shaders
+│   ├── presets/              # Preset format, schemas, loader, session, links, auto-cycle
+│   │   ├── builtin/          # Built-in preset JSON files and folder setup
+│   │   └── review/           # Presets kept out of the app (retired Preset 12, starter pack)
+│   ├── studio/               # Preset Studio, reactive sliders, pop-out window, admin controls
+│   ├── ui/                   # Controls bar, menus, preset browser, notices, debug panel
+│   └── config/               # Remote preset configuration
+├── supabase/                 # Database migrations for system presets
+└── wrangler.jsonc            # Cloudflare Workers configuration
 ```
 
 ---
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
-- Node.js (v20+ recommended)
-- npm or pnpm
+- Node.js 20 or newer
+- npm
 
-### Installation
+### Install
 ```bash
 git clone https://github.com/cchonguyen/music-visualizer.git
 cd music-visualizer
 npm install
 ```
 
-### Development Server
+### Run locally
 ```bash
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173` in Chrome or Edge.
 
-### Verification & Testing
+### Check and test
 ```bash
-# Run Vitest unit tests (827 tests across 60 test suites)
-npm test
-
-# Typecheck TypeScript without emitting JS
-npm run typecheck
-
-# Production build
-npm run build
+npm test            # Vitest unit tests
+npm run typecheck   # TypeScript check
+npm run build       # Production build to dist/
 ```
 
-### Production Deployment
-Production deployments to Cloudflare Workers are automated via GitHub Actions on every pull request merged into `main`. Local manual deploys from worktrees are disabled to prevent state overwrites.
+### Deploy
+Production deploys run in GitHub Actions when a pull request merges into `main`. `npm run deploy` is disabled on purpose.
 
 ---
 
-## Keyboard Controls
+## Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
-| `Space` | Play / Pause audio playback |
-| `0` – `9` | Instant switch to Flagship Presets 1–10 |
-| `[` / `]` | Cycle previous / next preset |
-| `Tab` | Toggle Preset Studio inspector |
-| `F` | Toggle Fullscreen mode |
-| `C` | Toggle Auto-Cycle timer |
-| `B` | Toggle Beat-reactive preset auto-cycling |
-| `X` | Shuffle presets randomly |
-| `H` / `?` | Toggle Help & Keyboard Shortcuts overlay |
-| `Escape` | Dismiss open modals and panels |
+| `Space` | Play or pause (file source) |
+| `←` / `→` | Seek 5 s back or forward (file source) |
+| `↑` / `↓` | Volume up or down 5% |
+| `0` – `9` | Switch to preset 1–10 in the current order |
+| `[` / `]` | Previous or next preset |
+| `C` | Auto-cycle on a timer (press again to stop) |
+| `B` | Auto-cycle on strong beats (press again to stop) |
+| `X` | Shuffle the auto-cycle order |
+| `M` | Next experience mode (Cinematic, Calm, Minimal, Color Walk) |
+| `P` | Next colour palette |
+| `K` | Freeze or resume the picture |
+| `.` | Step one frame while frozen |
+| `E` | Open or close the Studio |
+| `Shift` + `E` | Pop the Studio out into its own window |
+| `A` (hold) | Compare with the saved copy of the preset |
+| `F` | Fullscreen |
+| `?` | Show or close the shortcuts list |
+| `D` | Show or hide the debug panel |
+| `Esc` | Close open menus |
 
 ---
 

@@ -1,5 +1,7 @@
 # Stage 2.5 Plan: Quiet-passage fixes (draft, not started)
 
+> **Historical (checked 2026-11-24):** this plan was built (see "Stage 2.5" in `.spec/HISTORY.md`). The status line below is from when it was written.
+
 Source: frame-by-frame review of the owner's test recording `video_1.mov` (2026-11-04).
 Owner rule (SYSTEM_SPEC, resolved 2026-11-04): **quiet passages dim, never go black.**
 

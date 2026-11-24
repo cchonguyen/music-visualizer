@@ -87,8 +87,8 @@ describe('Preset Taxonomy & System Subfolder Categorization', () => {
 
   it('contains display labels for all three system subfolders', () => {
     expect(SYSTEM_SUBFOLDER_LABELS).toEqual({
-      showcase: 'Stage 9 Showcase (13–20)',
-      flagship: 'Flagship Generative (01–12)',
+      showcase: 'Showcase',
+      flagship: 'Flagship Generative',
       classics: 'Classics & Textures',
     });
   });

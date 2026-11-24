@@ -1,7 +1,9 @@
 // Audio links (slice E2). A setting with a link follows a signal:
 //   final = base + amount × (max − min) × shaped(source), then clamped to the setting's range.
 // `amount` is the share of the setting's full range (-1 .. 1). `shaped` is the source, smoothed
-// with a one-pole filter (smooth 0 = quick, 1 = slow). Pure logic, so it is unit tested.
+// with a one-pole filter (smooth 0 = quick, 1 = slow). Stage 29 added response curves (punch, swell, gate),
+// bounds, bipolar and direction-flip modes, song-arc sources, Calm damping, and enum and colour targets.
+// Pure logic, so it is unit tested.
 import type { AudioFrame } from '../audio/types';
 import {
   AUDIO_SOURCES,

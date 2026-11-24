@@ -1,18 +1,7 @@
-# Session Handoff: Stage 28 Organic Twisting Center Waveform (`twistWave`) & Preset
+# Session Handoff: Stage 30 Docs, Comments & UI Text Audit
 
-## Last Active State
-- **Last Active Branch**: `stage-28-spec` (branched from `origin/main` at `8729b04`).
-- **Active Task**: none. No `[IN_PROGRESS]` slice.
-- **Status**: Stages 1 through 27 (Slices `27.1`–`27.2` ending at `8729b04`) are complete and archived in `.spec/HISTORY.md`. Stage 28 is planned, specified in `.spec/specs/stage-28-twist-wave-ribbon.md` (`[498]`), and queued in `.spec/PROGRESS.md` (`Slice 28.1` and `Slice 28.2`).
-
-## What changed (recent)
-- Completed Stage 27 (Slices `27.1`–`27.2`): untiered `bounceSpeed`/`bounceAngle`/`bounceAudioBoost`/`bounceFlipSpin` on `ShapeLayer` with persistent aspect-corrected wall-bounce physics, plus showcase preset `31-bouncing-ribbon-wave` (*Bouncing Ribbon Wave*).
-- Archived Stage 27 (`27.1`–`27.2`) into `.spec/HISTORY.md` and authored Stage 28 spec (`[498]`), ADR, system spec summary, and atomic slices (`28.1`–`28.2`).
-
-## Queued Stage 28 Scope
-1. **Slice 28.1**: Add `'twistWave'` (`baseShape` index `9`) and untiered `twistSpeed`/`twistChaos` controls to `SHAPE_SPECS`/`SHAPE_DEFAULTS`/`ShapeParams` (preserving 8 `'basic'` controls and `normalMode.showWhen`); implement persistent `twistPhaseA`/`twistPhaseB` (`getTwistState()`), `twistWave` bounce extents (`1.15 * effSize`), contiguous `1024`-sample `scope` tail-window sampling for `wf.length > 1024`, and `shape.vert.glsl` `uBaseShape == 9` 3D quadrature oscilloscope displacement + displaced screen-space finite-difference tangents + depth-cued `halfWidth` & `vAlpha` (keeping `knot3d` `8` untouched).
-2. **Slice 28.2**: Add built-in showcase preset `32-twisting-scope-wave` (*Twisting Scope Wave*) with dual `twistWave` layers (`frequencyGradient` ribbon + accent `dots`), curl trails (`warpReactivity: 0.30`), `radial` (`exponent: 1.5`) + `swirl` warp ops, `beat` `kick` zoom reaction, and bloom post; register `SHOWCASE_PRESETS_32` in `src/presets/builtin/index.ts` and update `src/presets/__tests__/presetTaxonomy.test.ts` (`20` showcase / `37` total).
-
-## Next Steps
-1. Execute `Slice 28.1` and `Slice 28.2` sequentially via Tier 3 workers from `.spec/PROGRESS.md`.
-2. Verify `npm run typecheck && npm test && npm run build` and `node .harness/scripts/navigator.mjs --check` after each slice.
+- **Last Active Platform:** Claude Code (cloud project thread, 2026-11-24)
+- **Active Branch / State:** `claude/project-thread-s28cz9`. Stage 30 (Slices 30.1–30.4, issues #432–#435) built in one pull request. No `[IN_PROGRESS]` slice once 30.4 is finished. Stages 1–29 are archived in `.spec/HISTORY.md`.
+- **Files Modified in Last Turn:** README.md, CLAUDE.md (project facts), `.spec/` (OVERVIEW, ATLAS, SYSTEM_SPEC, PROGRESS, HISTORY, Stage 30 spec, Stage 7 briefs), `docs/` (historical notes and a new `docs/README.md` index), `index.html`, `src/ui/controls.ts`, `src/ui/presetBrowser.ts`, `src/main.ts`, `src/presets/builtin/index.ts`, `src/presets/layerSchemas.ts`, `src/presets/schema.ts`, `src/presets/warpOps.ts`, `src/presets/format.ts`, `src/presets/linkRecipes.ts`, `src/presets/links.ts`, `src/studio/studio.ts`, `src/studio/reactiveSlider.ts`, `src/studio/adminControls.ts`, `src/render/scene.ts`, `src/render/layers/reactionDiffusion.ts`, and the string assertions in `src/ui/controls.test.ts`, `src/studio/studio.test.ts`, `src/presets/__tests__/presetTaxonomy.test.ts`.
+- **Verification Status:** Verified via finish-slice.mjs (Slice 30.5)
+- **Immediate Next Step for Claude:** Two bugs were found but not fixed (text-only stage): Export Look and Import Look are each wired twice (`src/ui/controls.ts` dispatches an event that `src/main.ts` handles, and `src/main.ts` also binds the same button and input directly), so one click may download or import twice; and auto-cycle's `favouritesOnly` option has no control in the UI. Ask Charlie before opening slices for them.

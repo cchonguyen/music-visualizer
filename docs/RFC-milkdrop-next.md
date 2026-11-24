@@ -1,5 +1,7 @@
 # RFC: Open-Source Cross-Platform Audio-Reactive Visualizer ("Project MilkDrop-Next")
 
+> **Historical (checked 2026-11-24):** long-term research RFC, not a plan of record. The app is a desktop web app (Chrome or Edge); `.spec/SYSTEM_SPEC.md` is the working contract.
+
 **Status:** Draft / Request for Comments (RFC)  
 **Target Platforms:** Desktop (Windows, macOS), Web Browser (PWA), Mobile (iOS, Android)  
 **License Intent:** Open-Source (MIT / GPLv3)  

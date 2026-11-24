@@ -1,5 +1,5 @@
-// Player controls: source buttons, playback, volume, calm mode, fullscreen and
-// keyboard shortcuts. Talks to the engine only through its public methods.
+// Player controls: the Source and Visuals menus, playback, seek, volume, preset auto-cycle, fullscreen,
+// the shortcuts list and keyboard shortcuts. Talks to the engine only through its public methods.
 import type { AudioEngine, SourceKind } from '../audio/engine';
 import type { TestSignal } from '../audio/testSignals';
 import { showNotice } from './notices';
@@ -39,22 +39,22 @@ export interface ExperienceToastInfo {
 export const EXPERIENCE_TOAST_DATA: Record<string, ExperienceToastInfo> = {
   cinematic: {
     title: 'Mode: Cinematic',
-    detail: 'Auto Camera · Dynamic Color',
+    detail: 'Moving camera · Changing colours',
     swatch: [DIRECTOR_PALETTES.cyberpunk.shadowTint, DIRECTOR_PALETTES.cyberpunk.highlightTint],
   },
   calm: {
     title: 'Mode: Calm',
-    detail: 'Still Anchor · Bioluminescent',
+    detail: 'Gentle camera · Soft blue-green colours',
     swatch: [DIRECTOR_PALETTES.biolum.shadowTint, DIRECTOR_PALETTES.biolum.highlightTint],
   },
   minimal: {
     title: 'Mode: Minimal',
-    detail: 'Camera Off · Native Color',
+    detail: 'Camera off · Preset colours',
     swatch: [[0.2, 0.2, 0.2], [0.8, 0.8, 0.8]],
   },
   colorWalk: {
     title: 'Mode: Color Walk',
-    detail: 'Still Anchor · Prismatic Color',
+    detail: 'Still camera · Strong colour changes',
     swatch: [DIRECTOR_PALETTES.prismatic.shadowTint, DIRECTOR_PALETTES.prismatic.highlightTint],
   },
 };
@@ -840,7 +840,7 @@ export function setupControls(
   libraryImportBtn.type = 'button';
   libraryImportBtn.textContent = 'Import library…';
   libraryImportBtn.setAttribute('aria-label', 'Import library');
-  libraryImportBtn.setAttribute('data-tooltip', 'Merge presets and folders from a library JSON file');
+  libraryImportBtn.setAttribute('data-tooltip', 'Add presets and folders from a library file you exported earlier');
   libraryImportBtn.addEventListener('click', () => {
     const session = getActiveSession();
     if (!session) {
@@ -862,7 +862,7 @@ export function setupControls(
   const intensitySelect = document.createElement('select');
   intensitySelect.id = 'intensity-select';
   intensitySelect.setAttribute('aria-label', 'Intensity');
-  intensitySelect.setAttribute('data-tooltip', 'Limit peak brightness and flash intensity');
+  intensitySelect.setAttribute('data-tooltip', 'Lower this to cap peak brightness and soften flashes');
   for (const opt of INTENSITY_OPTIONS) {
     const option = document.createElement('option');
     option.value = opt;
@@ -1182,8 +1182,8 @@ export function setupControls(
         playbackActionBtn.dataset.action = 'stop';
         if (actionIcon) actionIcon.textContent = '⏹';
         if (actionLabel) actionLabel.textContent = 'Stop';
-        playbackActionBtn.setAttribute('aria-label', 'Stop stream');
-        playbackActionBtn.setAttribute('data-tooltip', 'Stop audio input');
+        playbackActionBtn.setAttribute('aria-label', 'Stop listening');
+        playbackActionBtn.setAttribute('data-tooltip', 'Stop listening to this source');
       }
       if (scrubberSegment) scrubberSegment.hidden = true;
       if (timelineSeparator) timelineSeparator.hidden = true;

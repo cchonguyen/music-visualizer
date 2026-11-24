@@ -1,5 +1,7 @@
 # Stage 3 accessibility audit (static, 2026-11-05)
 
+> **Historical (checked 2026-11-24):** audit record from 2026-11-05. The controls have changed since; `docs/stage21-accessibility-audit.md` is the later audit.
+
 Scope: `index.html`, the control labels in `src/ui/controls.ts`, and the notices. This is a code-reading audit. No browser, screen reader or contrast measurement was run. The owner should confirm the items marked "check in browser".
 
 ## What is in place

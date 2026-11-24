@@ -1,5 +1,7 @@
 # Stage 1 Device Test Report
 
+> **Historical (checked 2026-11-24):** Stage 1 device test record. The debug panel key is still D.
+
 Live URL: https://music-visualizer.charliechonguyen.workers.dev
 Pass criteria: `docs/visualization-ladder.md` §3. Fill one table per machine. Press **D** to show the debug panel.
 

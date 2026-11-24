@@ -1,8 +1,9 @@
 # ATLAS.md — Context Atlas Registry (Sector 000)
 - `000` `CLAUDE.md` — Claude Code entry shim & project commands
 - `010` `AGENTS.md` — Universal Falcon Protocol card catalog
+- `020` `README.md` — Public project overview, features, shortcuts and setup
 ## Sector 100 — Work Dispatch & State
-- `110` `.spec/PROGRESS.md` — Active Stage 28 slice checklist & target files
+- `110` `.spec/PROGRESS.md` — Active stage slice checklist & target files
 - `120` `.spec/HISTORY.md` — Completed stages & archived slice history
 - `130` `.spec/BLACK_BOX.md` — Circuit-breaker crash reports (on-demand)
 - `140` `.spec/SESSION_HANDOFF.md` — Cross-session handoff summary
@@ -30,7 +31,7 @@
 - `479` `.spec/specs/roadmap/stage-18-warp-blur-colour.md` — Stage 18 warp field, blur & colour
 - `480` `.spec/specs/stage7-architecture-plan.md` — Stage 7 master architecture plan
 - `481` `.spec/specs/stage7-slice-briefs.md` — Stage 7 atomic implementation briefs
-- `482` `.spec/stage7-slice-briefs.md` — Stage 7 slice briefs alias
+- `482` `.spec/stage7-slice-briefs.md` — Older draft of the Stage 7 slice briefs (historical; 481 is the kept copy)
 - `483` `.spec/specs/global-director-spec.md` — Global Director (Camera & Color Evolution) spec
 - `484` `.spec/specs/global-director-roadmap.md` — Global Director consolidation & Experience Hub
 - `485` `.spec/specs/shape-layer-spec.md` — Stage 9 Composable `shape` Layer Architecture spec
@@ -48,3 +49,5 @@
 - `497` `.spec/specs/stage-27-wall-bounce-and-ribbon-preset.md` — Stage 27 True Wall-Bounce Physics & Bouncing Ribbon Wave spec
 - `498` `.spec/specs/stage-28-twist-wave-ribbon.md` — Stage 28 Organic Twisting Center Waveform & Preset spec
 - `499` `.spec/specs/stage-29-music-reactive-sliders.md` — Stage 29 Music-Reactive Core Sliders & Song-Arc Modulation spec
+- `500` `.spec/specs/stage-30-docs-text-audit.md` — Stage 30 Docs, Comments & UI Text Audit spec
+- `510` `docs/README.md` — Index of the `docs/` folder and which files are historical

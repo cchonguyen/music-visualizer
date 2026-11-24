@@ -1,7 +1,9 @@
 // Preset Studio panel. Built with Tweakpane (MIT), which is loaded only here; the renderer does not use it.
-// Sections: preset bar (switch, save, save as, duplicate, delete, export, import, undo, redo),
-// vary (randomise, mutate, lock per layer), layer stack (select, enable, add, remove, reorder),
-// settings for every enabled layer (built from the schema), and a frame-time readout.
+// Sections: preset bar (switch, folders, favourite and skip tags, save, save as, duplicate, delete,
+// export, import, library, undo, redo, admin promote), vary (randomise, mutate, mashup, lock per layer),
+// Global Director, layer stack (select, enable, solo, mute, duplicate, add, remove, reorder), settings for
+// every enabled layer plus Feedback, Warp field and Post (built from the schema, each with its ⚡ music
+// link drawer from reactiveSlider.ts), links, reactions, morphs, ⚡ Active Links and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
@@ -471,8 +473,8 @@ export function attachResetControl(
 }
 
 export const SYSTEM_OPTGROUP_LABELS = {
-  showcase: 'System: Stage 9 Showcase (13–20)',
-  flagship: 'System: Flagship Generative (01–12)',
+  showcase: 'System: Showcase',
+  flagship: 'System: Flagship Generative',
   classics: 'System: Classics & Textures',
 } as const;
 
@@ -691,7 +693,7 @@ export class Studio {
     const closeBtn = container.querySelector<HTMLButtonElement>('#studio-close');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this.setVisible(false));
-      this.attachHelp(closeBtn, 'Close Studio', 'Hides the Preset Studio panel and returns focus to the main controls.');
+      this.attachHelp(closeBtn, 'Close Studio', 'Close the Studio and go back to the visuals.');
     }
     // Swipe down on a phone sheet closes Studio (slice 11.6). Same path as the Close button, so focus returns.
     attachSwipeDismiss(container, () => this.setVisible(false));
@@ -1264,7 +1266,7 @@ export class Studio {
       }
     };
     presetBinding.on('change', (ev: { value: unknown }) => onSelectPreset(String(ev.value)));
-    this.attachHelp(presetBinding, 'Preset', 'Switch the active preset. System presets are read-only; user presets can be edited and saved.');
+    this.attachHelp(presetBinding, 'Preset', 'Switch to another preset. Built-in presets cannot be overwritten; your own presets can be edited and saved.');
 
     const selectEl = (presetBinding?.element?.querySelector?.('select') ?? this.body.querySelector?.('select')) as HTMLSelectElement | null;
     if (selectEl) {
@@ -1458,9 +1460,9 @@ export class Studio {
         commitEdit();
       }
     };
-    const favBinding = pane.addBinding(tagHolder, 'favourite', { label: 'Favourite (auto-cycle)' });
+    const favBinding = pane.addBinding(tagHolder, 'favourite', { label: 'Favourite' });
     favBinding.on('change', (ev) => setTag('favourite', Boolean(ev.value)));
-    this.attachHelp(favBinding, 'Favourite (auto-cycle)', 'Mark this preset as a favourite so auto-cycle favours it.');
+    this.attachHelp(favBinding, 'Favourite', 'Mark this preset as a favourite. It shows a filled star in the preset browser.');
     const skipBinding = pane.addBinding(tagHolder, 'skip', { label: 'Skip in auto-cycle' });
     skipBinding.on('change', (ev) => setTag('skip', Boolean(ev.value)));
     this.attachHelp(skipBinding, 'Skip in auto-cycle', 'Exclude this preset from automatic cycling while keeping it selectable manually.');
@@ -1515,7 +1517,7 @@ export class Studio {
       customBlendBinding,
       {
         label: 'Custom blend time',
-        description: 'Override the transition crossfade with a custom per-preset blend time (0 s for an instant cut).',
+        description: 'Use your own fade time for switching into this preset instead of the usual fade. 0 s cuts instantly.',
       },
       this.onHelper,
     );
@@ -1541,8 +1543,8 @@ export class Studio {
     if (entry.builtin) {
       if (!isAdmin) {
         tile(
-          pane.addButton({ title: 'Save (Read-only)' }),
-          'Save (Read-only)',
+          pane.addButton({ title: 'Save (built-in, read-only)' }),
+          'Save (built-in, read-only)',
           'Built-in presets are read-only. Use "Save as…" to keep an editable copy.',
         ).on('click', () => {
           showToast('Built-in presets are read-only. Use "Save as…" to keep a copy.');
@@ -1583,7 +1585,7 @@ export class Studio {
     tile(
       pane.addButton({ title: 'Duplicate' }),
       'Duplicate',
-      'Create an immediate copy of this preset and switch to it.',
+      'Make a copy of this preset and switch to it.',
     ).on('click', () =>
       this.run(() => this.opts.switchTo(session.saveAs(id, `${preset.name} copy`)), 'Duplicated'),
     );
@@ -1615,7 +1617,7 @@ export class Studio {
     tile(
       pane.addButton({ title: 'Import .json…' }),
       'Import .json…',
-      'Import a preset, palette, or bundle from a JSON file.',
+      'Load a preset, palette or look from a .json file.',
     ).on('click', () => this.importFile());
     // Whole library (slice 21.9): every user preset, folder, favourite and tag in one file.
     tile(
@@ -1945,7 +1947,7 @@ export class Studio {
       readonly: true,
       format: (v: number) => v.toFixed(1),
     });
-    this.attachHelp(frameTimeBinding, 'Frame time', `Live render time per frame in milliseconds (staying at or below ${FRAME_BUDGET_MS} ms keeps 60 fps).`);
+    this.attachHelp(frameTimeBinding, 'Frame time', `How long each frame takes to draw, in milliseconds. At or below ${FRAME_BUDGET_MS} ms keeps 60 frames per second.`);
 
     // --- Administrator Mode Access (Slice 11.4) -------------------------------------
     pane.addBlade({ view: 'separator' });
@@ -1985,7 +1987,7 @@ export class Studio {
       this.linkTarget = String(ev.value);
       this.bind(id);
     });
-    this.attachHelp(linkTargetBinding, 'Link or morph a setting', 'Choose any numeric layer, warp, feedback, or post setting to modulate with audio, an LFO, or a morph.');
+    this.attachHelp(linkTargetBinding, 'Link or morph a setting', 'Pick a number setting to drive with the music, a slow wave (LFO), or a morph between two values.');
     const target = targets.find((t) => t.key === this.linkTarget)!;
     const setting = target.setting;
     const session = this.opts.session;
@@ -1996,7 +1998,7 @@ export class Studio {
         setting.link = { source: 'bass', amount: 0.2, smooth: 0.2 };
         this.bind(id);
       });
-      this.attachHelp(addLinkBtn, 'Add audio link', 'Attach an audio band or LFO modulator to the selected setting.');
+      this.attachHelp(addLinkBtn, 'Add audio link', 'Make the chosen setting follow the music or a slow wave (LFO).');
       return;
     }
     const link = setting.link;
@@ -2009,25 +2011,25 @@ export class Studio {
       options: Object.fromEntries(AUDIO_SOURCES.map((s) => [AUDIO_SOURCE_LABELS[s] ?? formatEnumOptionLabel(s), s])),
     });
     sourceBinding.on('change', onEdit);
-    this.attachHelp(sourceBinding, 'Source', 'Select the audio frequency band, beat envelope, or LFO waveform driving this setting.');
+    this.attachHelp(sourceBinding, 'Source', 'What moves the setting: a frequency band, the beat, a song signal like drops, or a slow wave (LFO).');
     const linkAmountBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'amount', { label: 'Amount (share of range)', min: -1, max: 1, step: 0.01 });
     linkAmountBinding.on('change', onEdit);
     this.attachHelp(linkAmountBinding, 'Amount (share of range)', 'How far the link pushes the setting across its range (negative values invert the modulation).');
     const linkSmoothBinding = pane.addBinding(link as unknown as Record<string, unknown>, 'smooth', { label: 'Smoothing', min: 0, max: 1, step: 0.01 });
     linkSmoothBinding.on('change', onEdit);
-    this.attachHelp(linkSmoothBinding, 'Smoothing', 'Controls how smoothly the link follows rapid changes in the source signal (0 = instant, 1 = very smooth).');
+    this.attachHelp(linkSmoothBinding, 'Smoothing', 'How smoothly the setting follows the source. 0 follows instantly, 1 is very smooth.');
     if (link.source.startsWith('lfo')) {
       // LFO rate (slice: adjustable LFOs). Blank means the 0.5 Hz default.
       const rateBox = link as unknown as { rate?: number };
       if (rateBox.rate === undefined) rateBox.rate = LFO_RATE_DEFAULT;
       const lfoRateBinding = pane.addBinding(rateBox, 'rate', { label: 'LFO rate (Hz)', min: LFO_RATE_MIN, max: LFO_RATE_MAX, step: 0.05 });
       lfoRateBinding.on('change', onEdit);
-      this.attachHelp(lfoRateBinding, 'LFO rate (Hz)', 'Oscillation frequency in cycles per second when using an LFO source.');
+      this.attachHelp(lfoRateBinding, 'LFO rate (Hz)', 'How many times per second the slow wave goes up and down.');
     }
     // The runner's keys are `${presetId}${L|F}…`, so the preset id goes in front.
     this.linkMonitor.value = target.meterKey ? this.opts.linkMeter?.(`${id}${target.meterKey}`) ?? 0 : 0;
     const linkMonitorBinding = pane.addBinding(this.linkMonitor, 'value', { label: 'Source now (0–1)', readonly: true, format: (v: number) => v.toFixed(2) });
-    this.attachHelp(linkMonitorBinding, 'Source now (0–1)', 'Live normalised readout of the selected modulation source right now.');
+    this.attachHelp(linkMonitorBinding, 'Source now (0–1)', 'The source level right now, from 0 to 1.');
     const removeLinkBtn = pane.addButton({ title: 'Remove audio link' });
     removeLinkBtn.on('click', () => {
       session.commit(id);
@@ -2171,7 +2173,7 @@ export class Studio {
         this.reactionIndex = reactions.length - 1;
         this.bind(id);
       });
-      this.attachHelp(addReactionBtn, 'Add reaction', 'Create a new automated trigger-and-response rule on a Feedback or Post control.');
+      this.attachHelp(addReactionBtn, 'Add reaction', 'Add a rule that nudges a Feedback or Post setting on a beat, a section change or a timer.');
     }
     const reaction = list[this.reactionIndex];
     if (!reaction) return;
@@ -2250,7 +2252,7 @@ export class Studio {
         setting.morph = { to: morphTargetFor(spec, setting.value), rate: MORPH_RATE_DEFAULT };
         this.bind(id);
       });
-      this.attachHelp(addMorphBtn, 'Add morph', 'Continuously oscillate the selected setting between its base value and a target value.');
+      this.attachHelp(addMorphBtn, 'Add morph', 'Swing the chosen setting back and forth between its value and a second value.');
       return;
     }
     const morph = setting.morph;
@@ -2269,7 +2271,7 @@ export class Studio {
       step: 0.01,
     });
     morphRateBinding.on('change', onEdit);
-    this.attachHelp(morphRateBinding, 'Morph rate (cycles/s)', 'Speed of the cosine morph cycle in full back-and-forth cycles per second.');
+    this.attachHelp(morphRateBinding, 'Morph rate (cycles/s)', 'How many full back-and-forth swings per second.');
     const removeMorphBtn = pane.addButton({ title: 'Remove morph' });
     removeMorphBtn.on('click', () => {
       session.commit(id);
@@ -2924,12 +2926,12 @@ export class Studio {
       try {
         const res = this.opts.session.importAsset(await file.text());
         if (res.kind === 'preset') {
-          showToast(res.warnings.length ? `Imported with ${res.warnings.length} fix(es)` : `Imported Preset · ${res.name}`);
+          showToast(res.warnings.length ? `Imported with ${res.warnings.length} fix(es)` : `Preset imported · ${res.name}`);
           if (res.id) this.opts.switchTo(res.id);
         } else if (res.kind === 'palette') {
-          showToast(`Imported Palette · ${res.name}`);
+          showToast(`Palette imported · ${res.name}`);
         } else if (res.kind === 'bundle') {
-          showToast(`Imported Bundle · ${res.name}`);
+          showToast(`Look imported · ${res.name}`);
         }
       } catch (err) {
         showToast((err as Error).message);
@@ -3345,7 +3347,7 @@ export function bindSection(
       viewBinding,
       {
         label: 'View',
-        description: 'Switch between Basic (essential controls) and Advanced (every parameter in this section).',
+        description: 'Basic shows the main controls. Advanced shows every setting in each section.',
       },
       onHelperUpdate as ((info: ParamSpec | ControlHelperDescriptor | null) => void) | undefined,
     );
@@ -3597,7 +3599,7 @@ export function buildGlobalDirectorControls(
     experienceModeBinding,
     {
       label: 'Experience mode',
-      description: 'Sets overall visual energy: Cinematic (full dynamic range), Calm (soft motion), Minimal (reduced elements), Color Walk, or Custom.',
+      description: 'A ready-made camera and colour setup. Cinematic moves and recolours, Calm is gentle, Minimal leaves the preset alone, Color Walk keeps still and shifts colour. Custom is your own mix.',
     },
     onHelperUpdate,
   );
@@ -3608,8 +3610,8 @@ export function buildGlobalDirectorControls(
       'Auto': 'auto',
       'Crane sway': 'craneSway',
       'Dutch roll': 'dutchRoll',
-      'Push swell': 'breathingPush',
-      'Horizon 2.5D': 'horizonTilt',
+      'Push in and out': 'breathingPush',
+      'Horizon tilt': 'horizonTilt',
       'Still anchor': 'stillAnchor',
       'Off': 'off',
     },
@@ -3623,7 +3625,7 @@ export function buildGlobalDirectorControls(
     cameraModeBinding,
     {
       label: 'Camera motion',
-      description: 'Controls automated 3D camera sweeps, breathing push/pull, rolls, and anchor points.',
+      description: 'How the camera moves over the picture. Auto picks a move that suits each preset.',
     },
     onHelperUpdate,
   );
@@ -3643,7 +3645,7 @@ export function buildGlobalDirectorControls(
     cameraIntensityBinding,
     {
       label: 'Camera intensity',
-      description: 'Scales the amplitude of automated camera movements and parallax displacement.',
+      description: 'How far the camera moves. 0 keeps it still.',
     },
     onHelperUpdate,
   );
@@ -3655,7 +3657,7 @@ export function buildGlobalDirectorControls(
       'Native (preset)': 'native',
       'Cyberpunk': 'cyberpunk',
       'Ember': 'ember',
-      'Biolum': 'biolum',
+      'Bioluminescent': 'biolum',
       'Vapor': 'vapor',
       'Prismatic': 'prismatic',
       'Monochrome Noir': 'noir',
@@ -3673,7 +3675,7 @@ export function buildGlobalDirectorControls(
     colorMoodBinding,
     {
       label: 'Color mood',
-      description: 'Overlays harmonic colour palettes or preserves each preset’s native colour scheme.',
+      description: 'Tints the picture with a colour palette. Auto changes palettes over time; Native keeps the preset colours.',
     },
     onHelperUpdate,
   );
@@ -3693,7 +3695,7 @@ export function buildGlobalDirectorControls(
     colorIntensityBinding,
     {
       label: 'Color intensity',
-      description: 'Controls the strength of global colour palette remapping.',
+      description: 'How strongly the palette tints the picture. 0 leaves the preset colours alone.',
     },
     onHelperUpdate,
   );
@@ -3710,7 +3712,7 @@ export function buildGlobalDirectorControls(
     customTintBinding,
     {
       label: 'Custom tint',
-      description: 'Override the active colour palette with your own shadow and highlight RGB tints.',
+      description: 'Use your own two colours instead of the palette: one for dark areas, one for bright areas.',
     },
     onHelperUpdate,
   );
@@ -3728,7 +3730,7 @@ export function buildGlobalDirectorControls(
     customShadowTintBinding,
     {
       label: 'Shadow tint',
-      description: 'Choose the shadow tint colour used when Custom tint is enabled.',
+      description: 'The colour for dark areas when Custom tint is on.',
     },
     onHelperUpdate,
   );
@@ -3746,7 +3748,7 @@ export function buildGlobalDirectorControls(
     customHighlightTintBinding,
     {
       label: 'Highlight tint',
-      description: 'Choose the highlight tint colour used when Custom tint is enabled.',
+      description: 'The colour for bright areas when Custom tint is on.',
     },
     onHelperUpdate,
   );
@@ -3772,7 +3774,7 @@ export function buildGlobalDirectorControls(
     triggerCadenceBinding,
     {
       label: 'Transition trigger',
-      description: 'Determines when automated preset transitions fire based on song sections, beat counts, or timer intervals.',
+      description: 'When Camera or Color mood is Auto, how often they change: at a new song section, every 32, 64 or 128 beats, or every 45 seconds. This does not switch presets.',
     },
     onHelperUpdate,
   );

@@ -828,8 +828,8 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
       'Auto': 'auto',
       'Crane sway': 'craneSway',
       'Dutch roll': 'dutchRoll',
-      'Push swell': 'breathingPush',
-      'Horizon 2.5D': 'horizonTilt',
+      'Push in and out': 'breathingPush',
+      'Horizon tilt': 'horizonTilt',
       'Still anchor': 'stillAnchor',
       'Off': 'off',
     });
@@ -845,7 +845,7 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
       'Native (preset)': 'native',
       'Cyberpunk': 'cyberpunk',
       'Ember': 'ember',
-      'Biolum': 'biolum',
+      'Bioluminescent': 'biolum',
       'Vapor': 'vapor',
       'Prismatic': 'prismatic',
       'Monochrome Noir': 'noir',
@@ -1467,8 +1467,8 @@ describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
     expect(optgroups).toHaveLength(5);
 
     // Verify optgroup labels
-    expect(optgroups[0]?.label).toBe('System: Stage 9 Showcase (13–20)');
-    expect(optgroups[1]?.label).toBe('System: Flagship Generative (01–12)');
+    expect(optgroups[0]?.label).toBe('System: Showcase');
+    expect(optgroups[1]?.label).toBe('System: Flagship Generative');
     expect(optgroups[2]?.label).toBe('System: Classics & Textures');
     expect(optgroups[3]?.label).toBe('User: Chill Ambient');
     expect(optgroups[4]?.label).toBe('User: Unfiled');
@@ -1565,7 +1565,7 @@ describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
     const optgroups = selectEl.querySelectorAll('optgroup');
     // Only Flagship has presets; showcase, classics, empty folder and unfiled should be omitted
     expect(optgroups).toHaveLength(1);
-    expect(optgroups[0]?.label).toBe('System: Flagship Generative (01–12)');
+    expect(optgroups[0]?.label).toBe('System: Flagship Generative');
   });
 
   it('integrates with Studio.bind() and renders hierarchy on dropdown element', () => {
@@ -1907,7 +1907,7 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
     expect(deleteBtn).toBeUndefined();
 
     // 6. Save button should be read-only indicator and clicking shows toast
-    const saveBtn = pane.buttons.find((b: any) => b.title.startsWith('Save (Read-only)'));
+    const saveBtn = pane.buttons.find((b: any) => b.title.startsWith('Save (built-in, read-only)'));
     expect(saveBtn).toBeDefined();
     saveBtn.fire('click');
     expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Built-in presets are read-only'));
@@ -1934,7 +1934,7 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
 
     const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
     expect(categoryBinding).toBeDefined();
-    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Stage 9 Showcase (13–20)');
+    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Showcase');
   });
 
   it('renders user preset controls with folder assignment dropdown, editable name, and active Delete', () => {
@@ -2191,7 +2191,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(nameBinding.options.readonly).toBe(true);
 
     // 3. Save button is read-only with warning toast
-    const saveBtn = pane.buttons.find((b: any) => b.title === 'Save (Read-only)');
+    const saveBtn = pane.buttons.find((b: any) => b.title === 'Save (built-in, read-only)');
     expect(saveBtn).toBeDefined();
     saveBtn.fire('click');
     expect(showToastSpy).toHaveBeenCalledWith('Built-in presets are read-only. Use "Save as…" to keep a copy.');
@@ -2231,8 +2231,8 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(subfolderBinding.target.subfolder).toBe('classics');
     expect(subfolderBinding.options.options).toEqual(
       expect.objectContaining({
-        'Stage 9 Showcase (13–20)': 'showcase',
-        'Flagship Generative (01–12)': 'flagship',
+        'Showcase': 'showcase',
+        'Flagship Generative': 'flagship',
         'Classics & Textures': 'classics',
       }),
     );
@@ -2240,7 +2240,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     // Move to flagship subfolder
     subfolderBinding.fire('change', 'flagship');
     expect(session.setSystemPresetSubfolder).toHaveBeenCalledWith('crown', 'flagship');
-    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
+    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative locally (remote sync offline)');
 
     // 3. Name is editable
     const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
@@ -2365,7 +2365,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     // UI should have refreshed back to user mode
     pane = getPane();
     expect(studio.adminBadge).toBeNull();
-    expect(pane.buttons.find((b: any) => b.title === 'Save (Read-only)')).toBeDefined();
+    expect(pane.buttons.find((b: any) => b.title === 'Save (built-in, read-only)')).toBeDefined();
     expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeUndefined();
 
     showToastSpy.mockRestore();
@@ -2635,11 +2635,11 @@ describe('Slice 26.5: Studio Blend time override controls', () => {
 
     customBlend.element.dispatchEvent({ type: 'mouseenter' });
     expect(helperBar?.textContent).toContain('Custom blend time');
-    expect(helperBar?.textContent).toContain('Override the transition crossfade');
+    expect(helperBar?.textContent).toContain('Use your own fade time');
 
     blendSec.element.dispatchEvent({ type: 'mouseenter' });
     expect(helperBar?.textContent).toContain('Blend time (s)');
-    expect(helperBar?.textContent).toContain('per-preset blend time override');
+    expect(helperBar?.textContent).toContain('overriding the usual fade');
   });
 });
 
@@ -4194,7 +4194,7 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
       expect(showToastSpy).toHaveBeenLastCalledWith('System preset saved locally (remote sync offline)');
 
       setSystemPresetSubfolderAction(offline.session, 'crown', 'flagship');
-      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative locally (remote sync offline)');
 
       promoteUserPresetAction(offline.session, offlineUser, () => 'showcase');
       expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset locally (remote sync offline)');
@@ -4219,7 +4219,7 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
 
       setSystemPresetSubfolderAction(online.session, 'crown', 'flagship');
       await flush();
-      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) remotely');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative remotely');
 
       promoteUserPresetAction(online.session, onlineUser, () => 'showcase');
       await flush();
@@ -4458,7 +4458,7 @@ describe('Slice 25.11: Humanized labels, [Linked]/[Morphed] badges, read-only hi
 
 describe('Slice 26.1: Studio inline SVG icons replace crown emoji in Admin controls', () => {
   it('uses plain text without crown emoji for ADMIN_BADGE_LABEL and EXIT_ADMIN_LABEL', () => {
-    expect(ADMIN_BADGE_LABEL).toBe('Admin Mode Active');
+    expect(ADMIN_BADGE_LABEL).toBe('Admin mode on');
     expect(ADMIN_BADGE_LABEL).not.toContain('👑');
     expect(EXIT_ADMIN_LABEL).toBe('Exit Admin Mode');
     expect(EXIT_ADMIN_LABEL).not.toContain('👑');
