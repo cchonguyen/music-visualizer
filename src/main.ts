@@ -719,16 +719,8 @@ function start(): void {
     }
   });
 
-  document.getElementById('exp-export-btn')?.addEventListener('click', handleExportLook);
-
-  const expImportInput = document.getElementById('exp-import-input') as HTMLInputElement | null;
-  expImportInput?.addEventListener('change', () => {
-    const file = expImportInput.files?.[0];
-    if (file) {
-      void handleImportAssetFile(file);
-      expImportInput.value = '';
-    }
-  });
+  // The Export Look button and Import Look input are bound in src/ui/controls.ts,
+  // which dispatches the two events above. Binding them here too ran each action twice.
 
   window.addEventListener(
     'drop',

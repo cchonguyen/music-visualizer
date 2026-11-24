@@ -204,14 +204,14 @@ export function mountPresetBrowser(root: HTMLElement, handlers: PresetBrowserHan
       ...options.map((o) => {
         const opt = document.createElement('option');
         opt.value = o.value;
-        opt.textContent = `${o.label} (${o.count})`;
+        opt.textContent = o.label;
         return opt;
       }),
     );
     select.value = options.some((o) => o.value === filter) ? filter : 'all';
     filter = select.value as ThemeKey | 'all';
     const favs = favouriteCount(entries);
-    count.textContent = `${entries.length} presets, ${favs} ${favs === 1 ? 'favourite' : 'favourites'}`;
+    count.textContent = `${favs} ${favs === 1 ? 'favourite' : 'favourites'}`;
 
     const sections = groups.map((group) => {
       const section = document.createElement('section');
