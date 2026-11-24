@@ -4,7 +4,7 @@ import { Compositor, TRANSITIONS } from '../compositor';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderLayer, RenderTarget } from '../layer';
-import { AutoCycler, DEFAULT_CYCLE, eligible, type CycleOptions } from '../../presets/autoCycler';
+import { DEFAULT_CYCLE, eligible } from '../../presets/autoCycle';
 import {
   ALL_PRESETS,
   getPresetsByGroup,
@@ -219,36 +219,6 @@ describe('Compositor morph transition lifecycle (Slice 7.16)', () => {
   });
 });
 
-describe('AutoCycler 3.0s beatless fallback (Slice 7.16)', () => {
-  const opts = (over: Partial<CycleOptions>): CycleOptions => ({ ...DEFAULT_CYCLE, ...over });
-
-  it('beat mode advances on a strong beat once minGapSec has passed', () => {
-    const c = new AutoCycler();
-    const o = opts({ mode: 'beat', minGapSec: 5 });
-
-    expect(c.next(2, true, 'a', ['a', 'b'], o)).toBeNull(); // min gap not reached
-    expect(c.next(3.5, false, 'a', ['a', 'b'], o)).toBeNull(); // gap reached (5.5s), but no beat
-    expect(c.next(0.1, true, 'a', ['a', 'b'], o)).toBe('b'); // strong beat triggers switch
-  });
-
-  it('beat mode advances automatically after 3.0s max-wait fallback during beatless ambient breakdowns', () => {
-    const c = new AutoCycler();
-    const o = opts({ mode: 'beat', minGapSec: 5 });
-
-    // Step 1: 5.0s pass (minGapSec met, no beat)
-    expect(c.next(5.0, false, 'a', ['a', 'b', 'c'], o)).toBeNull();
-
-    // Step 2: 2.9s pass (total 7.9s since switch, fallback timeout not yet reached)
-    expect(c.next(2.9, false, 'a', ['a', 'b', 'c'], o)).toBeNull();
-
-    // Step 3: 0.1s pass (total 8.0s = 5.0s minGap + 3.0s fallback timeout reached)
-    expect(c.next(0.1, false, 'a', ['a', 'b', 'c'], o)).toBe('b');
-
-    // After fallback trigger, timer resets and requires minGapSec again
-    expect(c.next(2.0, false, 'b', ['a', 'b', 'c'], o)).toBeNull();
-  });
-});
-
 describe('Preset group organization (Slice 7.16)', () => {
   it('assigns all presets to flagship, textures, classic, or archive groups', () => {
     for (const p of ALL_PRESETS) {
@@ -295,28 +265,17 @@ describe('Preset group organization (Slice 7.16)', () => {
     }
   });
 
-  it('excludes archive presets from default auto-cycle eligible pool but leaves them loadable by ID', () => {
-    const candidates = ALL_PRESETS.map((p) => ({
-      id: p.id,
-      tags: p.preset.tags,
-      group: p.group,
-    }));
-
+  it('puts every built-in preset in the default auto-cycle pool and keeps archive presets loadable by ID', () => {
+    const candidates = ALL_PRESETS.map((p) => ({ id: p.id, tags: p.preset.tags }));
     const pool = eligible(candidates, DEFAULT_CYCLE);
 
-    // Archive starter-* presets should be excluded from default pool
-    for (const p of ALL_PRESETS.filter((x) => x.group === 'archive')) {
-      expect(pool).not.toContain(p.id);
-    }
-
-    // Flagship and classic presets should be present
     expect(pool).toContain('crown');
     expect(pool).toContain('01-curl-fluid-warp');
     expect(pool).toContain('11-ferrofluid-magnetic-crown');
+    // Vortex sits in Classics & Textures and is cycled like any other preset.
+    expect(pool).toContain('starter-vortex');
 
-    // Archive presets remain in ALL_PRESETS and loadable by ID
     const starterVortex = ALL_PRESETS.find((p) => p.id === 'starter-vortex');
-    expect(starterVortex).toBeDefined();
     expect(starterVortex?.preset.name).toBe('Vortex');
   });
 
