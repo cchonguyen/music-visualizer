@@ -1,5 +1,7 @@
 # Reference Visuals: Owner Notes and What We Take From Them
 
+> **Historical (checked 2026-11-24):** owner notes used to tune Stage 2. Kept for reference.
+
 Source: owner's notes on five YouTube references (2026-11-04). Used to tune Stage 2 slices 2.4 (tunnel) and 2.5 (particles). The videos themselves were not analysed by the agent; the notes are the owner's description.
 
 ## What the five share

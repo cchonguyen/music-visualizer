@@ -1,5 +1,7 @@
 # Stage 4: parked work (for later pickup)
 
+> **Historical (checked 2026-11-24):** most of these items were picked up in later stages, for example particle shapes (Slice 4.6), LFO rate (Slice 4.5), layer opacity and blend (Stage 7 and the Stage 13 fix), invert (Slice 26.11) and the pop-out Studio (Stage 22). Check `.spec/HISTORY.md` before treating any item as open. `npm run deploy` is now disabled; deploys run from GitHub Actions on merge to `main`.
+
 **Status:** parked 2026-11-05. Stage 4 is built and deployed (commit `9a75891`). These items are not started. Pick them up in the order below unless the owner says otherwise.
 
 Full plan: `docs/stage4-presets-plan.md`. Slice status: `.spec/PROGRESS.md`.

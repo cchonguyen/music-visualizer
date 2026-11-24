@@ -1,5 +1,7 @@
 # Stage 21 accessibility audit: preset browser and toast (Slice 21.11)
 
+> **Historical (checked 2026-11-24):** audit record from Stage 21 (Slice 21.11).
+
 Scope: `src/ui/presetBrowser.ts`, `src/ui/toast.ts`, the browser rules in `src/style.css`. This is a code-reading audit. No real browser, screen reader, or pixel contrast measurement was run. Items marked "browser check needed" must be confirmed by hand.
 
 ## Checks

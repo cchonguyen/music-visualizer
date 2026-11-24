@@ -1,5 +1,7 @@
 # Visualization Ladder and Differentiation
 
+> **Historical (checked 2026-11-24):** written for Stages 1 and 2. Section 3 (test pass criteria) still describes how the debug panel numbers were checked.
+
 Companion to `.spec/SYSTEM_SPEC.md`. Written 2026-11-04. Owner is the taste judge; this doc says what the engine can do and how we test each step.
 
 ## 1. What We Are Trying to Do Better

@@ -5,15 +5,17 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 
 ## Current Build Status
 - **Live:** https://music-visualizer.charliechonguyen.com (custom domain; workers.dev backup).
-- **Stages 1 to 10:** Complete and verified in code.
-  - 14 WebGL2 visual layer types including ShapeLayer, SpectralTerrain, ChladniSand, ReactionDiffusion, Ferrofluid, Moire, Tunnel, Waveform, Particles, Rings, Crown, Shockwave, BassPulse, Bars.
-  - Post-processing chain with multi-mode feedback warp (curl, mobius, polarFold, rgbSplit, sobel, solarize) and bloom.
-  - 20 Flagship Presets fully tuned and registered.
-  - Preset Studio with hierarchical preset folders and user folder management.
-  - Photosensitivity safety governor with bidirectional slew clamping.
-  - Unit tests: 1849 tests passing across 83 test suites.
+- **Stages 1 to 29:** complete, verified and deployed. Each stage's slices are listed in `.spec/HISTORY.md`.
+  - 16 WebGL2 visual layer types: Shape, Particles, Tunnel, Spectral Terrain, Chladni Sand, Reaction-Diffusion, Ferrofluid, Moiré, Julia, Orbit, Architecture, Rings, Crown, Bars, Shockwave and Bass Pulse. Old Waveform layers load as Shape layers.
+  - Feedback warp (curl, Möbius, polar fold, RGB split, edge, solarize), up to four stacked warp operators, and post effects including bloom, vignette, mirror, colour mapping and invert.
+  - 31 numbered built-in presets (Flagship 01–12 and Showcase 13–32) plus six Classics & Textures.
+  - Preset browser with favourites, auto-cycle (timer, beat, phrase, shuffle, hard cut), Preset Studio with folders, and a pop-out Studio window.
+  - Global Director: experience modes (Cinematic, Calm, Minimal, Color Walk), camera moves and colour palettes.
+  - Photosensitivity safety governor with bidirectional slew clamping, and a Low-power mode.
+  - Unit tests: 1,849 passing across 83 test files (2026-11-24).
 - **Stage 14 (trust and foundations):** admin access is Cloudflare Access only (the old client passkey path and direct database writes are gone). The Worker caps and checks request bodies and sends security headers. Frame time steps are clamped to 0.1 s, feedback motion is per second so it looks the same at any refresh rate, and the morph wave no longer jumps when its rate changes.
 - **Stage 29 (music-reactive sliders):** every Studio slider, enum dropdown, colour picker, Warp Operator, and layer opacity slider now has inline `⚡` music-reactivity controls with 1-click recipes, live modulation track overlays, direction-flipping on beats/drops/sections, song-arc sources, and an `⚡ Active Links` overview, with flagship built-in presets updated out of the box.
+- **Stage 30 (docs and text audit, 2026-11-24):** documents, code comments and on-screen text were checked against the code and rewritten where they were out of date or hard to follow. No behaviour changed.
 - **In Progress:** none
 - **Up Next:** Ongoing refinement and preset authoring.
 
@@ -23,13 +25,12 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 - 2026-11-09: bug fix. The layer opacity slider had no visible effect on Shape layers, because their default additive blend ignored the alpha it changes. The fix scales the Shape layer's color by the opacity, so the slider works. No other layer changes.
 
 - 2026-11-06: particles will fill the whole frame, corners included, at twice their current size. A new "Follow scene transform" switch lets particles move with the scene. It is on for new presets only, so existing presets look the same.
-- 2026-11-12: triage only. Proposed: Visuals menu gets auto-cycle (Off / Timer / Beat) and Shuffle controls, reusing the existing keyboard-driven cycling. Not yet confirmed by Charlie.
 - 2026-11-12: confirmed by Charlie and planned as Slice 21.13. The Visuals menu gets an auto-cycle choice (Off / Timer / Beat), a Shuffle switch, and a timer length (5 to 120 seconds, 20 by default). Your choice is remembered after reload and stays in step with the C, B and X keys. The colour "Auto-cycle" option, favourite/skip tags and safety code are untouched.
-- 2026-11-12: triage only. Studio jumps to the top when you pick an option, because the whole panel is rebuilt. Proposed: keep your scroll place and open sections. Not yet confirmed by Charlie.
+- 2026-11-12: Studio jumped to the top when you picked an option, because the whole panel was rebuilt. Fixed in Slice 21.15: the Studio keeps your scroll place and open sections.
 
 ## Where the Plan Lives
 - Working contract: `.spec/SYSTEM_SPEC.md`
 - Earlier phone-focused brief (superseded for scope): `.spec/SCOPE_BRIEF.md`
 - Long-term research RFC: `docs/RFC-milkdrop-next.md`
 - Decisions: `.spec/DECISIONS.md`
-- 2026-11-13: triage only. Reviewed the shared Harness UI design system and drafted a list of proposed tweaks, mostly small. The visualizer does not use the kit yet, so the main open question is whether it adopts it or keeps its own styles as a documented exception. Not yet confirmed by Charlie.
+- 2026-11-13: Charlie chose to adopt the shared Harness UI design system. Stage 24 moved the controls, pills and Studio onto it (`design-system/profile.md` records where the app departs from the kit).

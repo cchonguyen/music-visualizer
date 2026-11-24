@@ -1,5 +1,7 @@
 # Stage 7 slice briefs (for /implement)
 
+> **Historical (checked 2026-11-24):** This is the older, shorter draft; `.spec/specs/stage7-slice-briefs.md` is the kept copy. These briefs were built in Stage 7 (see `.spec/HISTORY.md`). The "Not built" status line below is from when they were saved.
+
 Status: saved 2026-11-06 at Charlie's request. Not built. No slice is `[IN_PROGRESS]`, and none of these slices are in `.spec/PROGRESS.md` yet.
 
 Numbering: Charlie chose (2026-11-07) to renumber these briefs to 7.8–7.17, so the texture-preset slices 7.2–7.5 already in `.spec/PROGRESS.md` keep their IDs. Architecture plan: `.spec/specs/stage7-architecture-plan.md`.
