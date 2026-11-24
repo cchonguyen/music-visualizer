@@ -115,13 +115,13 @@ export type PresetGroup = 'flagship' | 'textures' | 'classic' | 'archive';
 export type SystemSubfolder = 'showcase' | 'flagship' | 'classics';
 
 export const SYSTEM_SUBFOLDER_LABELS: Record<SystemSubfolder, string> = {
-  showcase: 'Showcase (13–32)',
-  flagship: 'Flagship Generative (01–11)',
+  showcase: 'Showcase',
+  flagship: 'Flagship Generative',
   classics: 'Classics & Textures',
 };
 
 export const SYSTEM_PRESET_CATEGORIES: Record<string, SystemSubfolder> = {
-  // Showcase (13–32)
+  // Showcase (presets 13–32)
   '13-solar-crown-eclipse': 'showcase',
   '14-sacred-orbit-mandala': 'showcase',
   '15-polar-spirograph-bloom': 'showcase',

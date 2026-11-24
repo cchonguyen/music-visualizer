@@ -40,8 +40,8 @@ It is built on **raw WebGL2** and the **Web Audio API** in TypeScript with Vite.
 
 ### 3. Presets and the Studio
 - **Built-in presets:** 31 numbered presets plus Classics & Textures, in three system folders (number 12 was retired with the Reaction-Diffusion layer):
-  - **Flagship Generative (01–11):** Curl Fluid Warp, Kaleidoscopic Mandala, Solarized Contour Rings, Möbius Dual Vortex, RGB Aberration Vortex, Lissajous Vector CRT, Moiré Interference Loom, Spectral Ridge Terrain, Chladni Cymatic Sand, Phyllotaxis Spiral Bloom, Ferrofluid Magnetic Crown.
-  - **Showcase (13–32):** Solar Crown Eclipse, Sacred Orbit Mandala, Polar Spirograph Bloom, Hexagon Inward Portal, Corridor LED Equalizer, Star Burst Stream, Spiral Pearl Beads, Dual-Rail Aurora Ark, Inhale Exhale, Ripple Pool, Gradient Storm, Mirror Tunnel, Deep Field, Scope Bloom, Ink Flow, Julia Drift, Orbit Hall, Corridor Glide, Bouncing Ribbon Wave, Twisting Scope Wave.
+  - **Flagship Generative (presets 01–11):** Curl Fluid Warp, Kaleidoscopic Mandala, Solarized Contour Rings, Möbius Dual Vortex, RGB Aberration Vortex, Lissajous Vector CRT, Moiré Interference Loom, Spectral Ridge Terrain, Chladni Cymatic Sand, Phyllotaxis Spiral Bloom, Ferrofluid Magnetic Crown.
+  - **Showcase (presets 13–32):** Solar Crown Eclipse, Sacred Orbit Mandala, Polar Spirograph Bloom, Hexagon Inward Portal, Corridor LED Equalizer, Star Burst Stream, Spiral Pearl Beads, Dual-Rail Aurora Ark, Inhale Exhale, Ripple Pool, Gradient Storm, Mirror Tunnel, Deep Field, Scope Bloom, Ink Flow, Julia Drift, Orbit Hall, Corridor Glide, Bouncing Ribbon Wave, Twisting Scope Wave.
   - **Classics & Textures:** Crown, Flight, Bars, Vortex, Ripple Field, Dust Wave.
 - **Preset browser:** a grid of presets grouped by theme, with favourites and a Light / Medium / Heavy cost badge.
 - **Auto-cycle:** switch presets on a timer, on strong beats, or every musical phrase, in order or shuffled, with an optional hard cut on the beat.

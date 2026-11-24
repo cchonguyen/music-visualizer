@@ -473,8 +473,8 @@ export function attachResetControl(
 }
 
 export const SYSTEM_OPTGROUP_LABELS = {
-  showcase: 'System: Showcase (13–32)',
-  flagship: 'System: Flagship Generative (01–11)',
+  showcase: 'System: Showcase',
+  flagship: 'System: Flagship Generative',
   classics: 'System: Classics & Textures',
 } as const;
 
