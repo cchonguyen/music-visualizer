@@ -31,7 +31,6 @@
 - `479` `.spec/specs/roadmap/stage-18-warp-blur-colour.md` — Stage 18 warp field, blur & colour
 - `480` `.spec/specs/stage7-architecture-plan.md` — Stage 7 master architecture plan
 - `481` `.spec/specs/stage7-slice-briefs.md` — Stage 7 atomic implementation briefs
-- `482` `.spec/stage7-slice-briefs.md` — Older draft of the Stage 7 slice briefs (historical; 481 is the kept copy)
 - `483` `.spec/specs/global-director-spec.md` — Global Director (Camera & Color Evolution) spec
 - `484` `.spec/specs/global-director-roadmap.md` — Global Director consolidation & Experience Hub
 - `485` `.spec/specs/shape-layer-spec.md` — Stage 9 Composable `shape` Layer Architecture spec
@@ -51,3 +50,5 @@
 - `499` `.spec/specs/stage-29-music-reactive-sliders.md` — Stage 29 Music-Reactive Core Sliders & Song-Arc Modulation spec
 - `500` `.spec/specs/stage-30-docs-text-audit.md` — Stage 30 Docs, Comments & UI Text Audit spec
 - `510` `docs/README.md` — Index of the `docs/` folder and which files are historical
+- `520` `.spec/specs/stage-31-streamlining.md` — Stage 31 Streamlining and Consolidation spec
+- `530` `.spec/specs/stage-32-upgrades.md` — Stage 32 Auto-Cycle Upgrades spec

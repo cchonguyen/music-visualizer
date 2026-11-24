@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   ALL_PRESETS,
-  REVIEW_PRESETS,
   SYSTEM_PRESET_CATEGORIES,
   SYSTEM_SUBFOLDER_LABELS,
   getSystemSubfolder,
   type SystemSubfolder,
   SCHEMAS,
 } from '../builtin';
+import { REVIEW_PRESETS, REVIEW_TAXONOMY } from '../review';
 import { PRESET_THEMES, PRESET_MOODS, parsePreset } from '../format';
 import { LAYER_FACTORIES, buildScene, presetHasRetiredLayer } from '../loader';
 import { PRESET_TAXONOMY } from '../builtin';
@@ -287,10 +287,11 @@ describe('Slice 20.7: every built-in preset has a theme, a mood and a cost level
   });
 
   it('keeps no table row for a preset that does not exist', () => {
-    // Review presets (Slice 15.10) keep their rows so they are tagged if restored to the default list.
-    const ids = new Set([...ALL_PRESETS, ...REVIEW_PRESETS].map((e) => e.id));
+    const ids = new Set(ALL_PRESETS.map((e) => e.id));
     for (const id of Object.keys(PRESET_TAXONOMY)) expect(ids.has(id), id).toBe(true);
     expect(Object.keys(PRESET_TAXONOMY).length).toBe(ids.size);
+    // Review presets keep their own rows (src/presets/review/), so they are tagged if restored.
+    expect(Object.keys(REVIEW_TAXONOMY).sort()).toEqual(REVIEW_PRESETS.map((e) => e.id).sort());
   });
 
   it('spreads the set across several themes and moods', () => {

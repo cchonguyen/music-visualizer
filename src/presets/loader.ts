@@ -25,36 +25,9 @@ import { warpOpSpecs } from './warpOps';
 import { LinkRunner, type LinkInputs } from './links';
 import type { ReactionEngine } from './reactions';
 import { FEEDBACK_DEFAULTS, FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
-import { FEEDBACK_WARP_SPECS, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ParamSpec, type ParamValue } from './schema';
+import { type MoireParams, type SpectralTerrainParams, type ChladniSandParams, type FerrofluidParams, type ParamValue } from './schema';
 import type { BarsParams, BassPulseParams, CrownParams, ParticleParams, RingsParams, ShockwaveParams, TunnelParams, ShapeParams, JuliaParams, OrbitParams, ArchitectureParams } from './layerSchemas';
 import { migrateLegacyLayers, migrateLegacyLayerToShape } from './legacyShapeMigration';
-
-// Register moire and spectralTerrain in LAYER_SPECS for loader consumers
-if (!LAYER_SPECS.moire) {
-  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).moire = MOIRE_SPECS;
-}
-if (!LAYER_SPECS.spectralTerrain) {
-  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).spectralTerrain = SPECTRAL_TERRAIN_SPECS;
-}
-if (!LAYER_SPECS.chladniSand) {
-  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).chladniSand = CHLADNI_SPECS;
-}
-if (!LAYER_SPECS.ferrofluid) {
-  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).ferrofluid = FERROFLUID_SPECS;
-}
-if (!LAYER_SPECS.reactionDiffusion) {
-  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).reactionDiffusion = REACTION_DIFFUSION_SPECS;
-}
-if (LAYER_SPECS.particles && !LAYER_SPECS.particles.some((s) => s.name === 'mode')) {
-  (LAYER_SPECS.particles as ParamSpec[]).push(PARTICLE_MODE_SPEC);
-}
-
-// Extend FEEDBACK_SPECS with opt-in feedback warp parameters (Slice 7.11)
-for (const spec of FEEDBACK_WARP_SPECS) {
-  if (!FEEDBACK_SPECS.some((s) => s.name === spec.name)) {
-    (FEEDBACK_SPECS as ParamSpec[]).push(spec);
-  }
-}
 
 type LayerFactory = (params: Record<string, ParamValue>) => RenderLayer;
 

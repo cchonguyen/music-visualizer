@@ -68,17 +68,23 @@ describe("layer schemas", () => {
   });
 
   it("every layer type is registered including shape", () => {
+    // Every schema is defined here, so the list is complete without importing the loader (Slice 31.4).
     expect(Object.keys(LAYER_SPECS).sort()).toEqual([
       "architecture",
       "bars",
       "bassPulse",
+      "chladniSand",
       "crown",
+      "ferrofluid",
       "julia",
+      "moire",
       "orbit",
       "particles",
+      "reactionDiffusion",
       "rings",
       "shape",
       "shockwave",
+      "spectralTerrain",
       "tunnel",
       "waveform",
     ]);

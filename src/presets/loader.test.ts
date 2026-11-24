@@ -5,7 +5,8 @@ import { LinkRunner, ReactionBank } from './links';
 import { previewPreset } from './session';
 import type { AudioFrame } from '../audio/types';
 import type { Preset } from './format';
-import { ALL_PRESETS, BUILTIN_PRESETS, REVIEW_PRESETS } from './builtin';
+import { ALL_PRESETS, getPresetsBySubfolder } from './builtin';
+import { REVIEW_PRESETS } from './review';
 import { parsePreset, PRESET_VERSION } from './format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from './layerSchemas';
 import { defaultsFor } from './schema';
@@ -13,6 +14,8 @@ import { ShapeLayer } from '../render/layers/shape';
 import { TunnelLayer } from '../render/layers/tunnel';
 import { ParticleLayer } from '../render/layers/particles';
 import { isShapeReadyWaveform, migrateLegacyLayerToShape, migrateLegacyLayers, migrateWaveformsInPreset } from './legacyShapeMigration';
+
+const BUILTIN_PRESETS = getPresetsBySubfolder('classics');
 
 const schemas = { feedback: [], post: [], layers: LAYER_SPECS };
 const byId = (id: string) => BUILTIN_PRESETS.find((p) => p.id === id)!.preset;

@@ -587,8 +587,6 @@ export const RINGS_MODE_SPEC: ParamSpec = {
 /** Retired post keys (CRT controls never reached the compositor); old presets still load silently. */
 export const REMOVED_POST_SETTINGS: readonly string[] = ["crtScanlines", "crtBarrel"];
 
-import { LAYER_SPECS } from "./layerSchemas";
-
 declare module "./layerSchemas" {
   interface RingsParams {
     mode?: string;
@@ -833,18 +831,6 @@ export const PARTICLES_SCHEMA: readonly ParamSpec[] = [
   PARTICLE_MODE_SPEC,
   ...PHYLLOTAXIS_SPECS,
 ];
-
-if (LAYER_SPECS && LAYER_SPECS.particles) {
-  const existingNames = new Set(LAYER_SPECS.particles.map((s) => s.name));
-  const newSpecs = [
-    PARTICLE_MODE_SPEC,
-    ...PHYLLOTAXIS_SPECS,
-  ].filter((s) => !existingNames.has(s.name));
-  (LAYER_SPECS as Record<string, readonly ParamSpec[]>).particles = [
-    ...LAYER_SPECS.particles,
-    ...newSpecs,
-  ];
-}
 
 /** Chladni sand parameters and schema (Slice 7.14, Slice 7.28). */
 export type ChladniPlateMode = 'fullscreen' | 'isometricPlate' | 'radialMandala' | 'hexagon' | 'triangle' | 'starMandala' | 'morph';

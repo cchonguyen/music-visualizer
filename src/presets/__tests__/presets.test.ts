@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { BUILTIN_PRESETS, FLAGSHIP_PRESETS, ALL_PRESETS, SHOWCASE_PRESETS_13_20 } from '../builtin';
+import { ALL_PRESETS, getPresetsBySubfolder } from '../builtin';
 import { PRESET_VERSION, type AudioLink } from '../format';
 import { buildScene, hasLinks } from '../loader';
 import { BrightnessLimiter, CAP_FLOOR } from '../../render/safety';
+
+const BUILTIN_PRESETS = getPresetsBySubfolder('classics');
+const FLAGSHIP_PRESETS = ALL_PRESETS.filter((p) => /^0[1-6]-/.test(p.id));
+const SHOWCASE_PRESETS_13_20 = ALL_PRESETS.filter((p) => /^(1[3-9]|20)-/.test(p.id));
 
 describe('Flagship Presets 01–06 (Slice 7.12)', () => {
   it('registers all 6 flagship presets with valid IDs', () => {

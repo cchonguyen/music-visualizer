@@ -96,6 +96,21 @@ export interface ParsedLibrary {
   warnings: string[];
 }
 
+/** What importAsset read from a file: a preset, a custom palette, or a look (experience bundle). */
+export interface AssetImportResult {
+  kind: 'preset' | 'palette' | 'bundle';
+  id?: string;
+  name: string;
+  warnings: string[];
+}
+
+/** The toast shown after an import, shared by the Visuals menu and the Studio (Slice 31.6). */
+export function assetImportMessage(res: AssetImportResult): string {
+  if (res.kind === 'palette') return `Palette imported · ${res.name}`;
+  if (res.kind === 'bundle') return `Look imported · ${res.name}`;
+  return res.warnings.length ? `Imported with ${res.warnings.length} fix(es)` : `Preset imported · ${res.name}`;
+}
+
 export interface LibraryImportResult {
   presetsAdded: number;
   /** Presets already in this browser with the same content, so not added again. */
@@ -1413,12 +1428,7 @@ export class PresetSession {
   /**
    * Imports a polymorphic visualizer asset (preset, custom palette, or experience bundle).
    */
-  importAsset(jsonString: string): {
-    kind: 'preset' | 'palette' | 'bundle';
-    id?: string;
-    name: string;
-    warnings: string[];
-  } {
+  importAsset(jsonString: string): AssetImportResult {
     let raw: unknown;
     try {
       raw = JSON.parse(jsonString);

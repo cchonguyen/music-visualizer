@@ -16,6 +16,8 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 - **Stage 14 (trust and foundations):** admin access is Cloudflare Access only (the old client passkey path and direct database writes are gone). The Worker caps and checks request bodies and sends security headers. Frame time steps are clamped to 0.1 s, feedback motion is per second so it looks the same at any refresh rate, and the morph wave no longer jumps when its rate changes.
 - **Stage 29 (music-reactive sliders):** every Studio slider, enum dropdown, colour picker, Warp Operator, and layer opacity slider now has inline `⚡` music-reactivity controls with 1-click recipes, live modulation track overlays, direction-flipping on beats/drops/sections, song-arc sources, and an `⚡ Active Links` overview, with flagship built-in presets updated out of the box.
 - **Stage 30 (docs and text audit, 2026-11-24):** documents, code comments and on-screen text were checked against the code and rewritten where they were out of date or hard to follow. No behaviour changed.
+- **Stage 31 (streamlining, 2026-11-24):** unused code was removed (a second auto-cycle copy and the retired Reaction-Diffusion renderer), the review presets left the app download, the settings lists are defined in one place, the built-in presets are one list, and the Studio file was split into smaller modules. The app looks and behaves the same; the preset browser no longer shows preset counts, and Export and Import Look run once per click.
+- **Stage 32 (planned):** beat-mode auto-cycle keeps moving through quiet passages, and auto-cycle gets a "Favourites only" switch.
 - **In Progress:** none
 - **Up Next:** Ongoing refinement and preset authoring.
 

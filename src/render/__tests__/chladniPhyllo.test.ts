@@ -22,12 +22,14 @@ import {
   SPECTRAL_TERRAIN_SPECS,
 } from '../../presets/schema';
 import { LAYER_FACTORIES, applyValues, buildScene } from '../../presets/loader';
-import { FLAGSHIP_PRESETS_09_10, ALL_PRESETS } from '../../presets/builtin';
+import { ALL_PRESETS } from '../../presets/builtin';
 import { PRESET_VERSION } from '../../presets/format';
 import { BrightnessLimiter } from '../safety';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderTarget } from '../layer';
+
+const FLAGSHIP_PRESETS_09_10 = ALL_PRESETS.filter((p) => /^(09|10)-/.test(p.id));
 
 function createMockGl(): WebGL2RenderingContext {
   const uniformValues = new Map<string, any>();
