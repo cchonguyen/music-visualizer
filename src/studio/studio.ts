@@ -1,7 +1,9 @@
 // Preset Studio panel. Built with Tweakpane (MIT), which is loaded only here; the renderer does not use it.
-// Sections: preset bar (switch, save, save as, duplicate, delete, export, import, undo, redo),
-// vary (randomise, mutate, lock per layer), layer stack (select, enable, add, remove, reorder),
-// settings for every enabled layer (built from the schema), and a frame-time readout.
+// Sections: preset bar (switch, folders, favourite and skip tags, save, save as, duplicate, delete,
+// export, import, library, undo, redo, admin promote), vary (randomise, mutate, mashup, lock per layer),
+// Global Director, layer stack (select, enable, solo, mute, duplicate, add, remove, reorder), settings for
+// every enabled layer plus Feedback, Warp field and Post (built from the schema, each with its ⚡ music
+// link drawer from reactiveSlider.ts), links, reactions, morphs, ⚡ Active Links and a frame-time readout.
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';

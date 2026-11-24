@@ -1,3 +1,5 @@
+// Retired in Slice 15.10: this layer is no longer in LAYER_FACTORIES (src/presets/loader.ts), so the app never
+// draws it. The class stays for its tests and old presets.
 // Reaction-Diffusion Layer (Slice 7.17): Isolated 256x256 ping-pong chemical state FBO
 // running Gray-Scott kinetics on TEXTURE5, rendered with screen-space derivative normals
 // and Blinn-Phong specular highlights.

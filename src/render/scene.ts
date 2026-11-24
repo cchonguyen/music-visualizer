@@ -1,6 +1,6 @@
 // A Scene is a group of layers with its own feedback history (slice 2.2).
-// Per frame: decay last frame into `write`, add the layers on top (additive),
-// then swap. After the swap, `outputTexture()` is the finished image.
+// Per frame: decay last frame into `write`, draw the layers on top (each with its own opacity and
+// blend mode, see applyLayerBlend), then swap. After the swap, `outputTexture()` is the finished image.
 import type { AudioFrame } from '../audio/types';
 import { PingPong, clampSize, feedbackFormat, type PassTarget } from '../gl/fbo';
 import { FULLSCREEN_VERT } from '../gl/shader';

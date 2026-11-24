@@ -1,5 +1,5 @@
-// Player controls: source buttons, playback, volume, calm mode, fullscreen and
-// keyboard shortcuts. Talks to the engine only through its public methods.
+// Player controls: the Source and Visuals menus, playback, seek, volume, preset auto-cycle, fullscreen,
+// the shortcuts list and keyboard shortcuts. Talks to the engine only through its public methods.
 import type { AudioEngine, SourceKind } from '../audio/engine';
 import type { TestSignal } from '../audio/testSignals';
 import { showNotice } from './notices';
