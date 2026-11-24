@@ -8,7 +8,7 @@
 - Scope and contracts: `.spec/SYSTEM_SPEC.md` (current). Decisions: `.spec/DECISIONS.md`.
 - Stack: plain TypeScript + Vite, raw WebGL2, Web Audio API, Tweakpane (Studio only), Vitest. Hosting: Cloudflare Workers static assets, plus a small Worker for the `/admin` routes (Cloudflare Access) and Supabase for system presets.
 - Live: https://music-visualizer.charliechonguyen.com (custom domain, owner approved 2026-11-04). Backup: https://music-visualizer.charliechonguyen.workers.dev
-- Status: Stages 1–29 built, verified and deployed (custom domain and workers.dev). 31 numbered built-in presets plus Classics & Textures, 16 WebGL2 visual layer types, Preset Studio with folders, pop-out Studio and music-reactive (⚡) controls, and the photosensitivity safety governor. Stage history: `.spec/HISTORY.md`. Run `npm test` for the current test count (1,849 tests in 83 files on 2026-11-24).
+- Status: Stages 1–29 built, verified and deployed (custom domain and workers.dev). 31 numbered built-in presets plus Classics & Textures, 15 WebGL2 visual layer types (Reaction-Diffusion retired in Slice 15.10), Preset Studio with folders, pop-out Studio and music-reactive (⚡) controls, and the photosensitivity safety governor. Stage history: `.spec/HISTORY.md`. Run `npm test` for the current test count (1,849 tests in 83 files on 2026-11-24).
 - GitHub: https://github.com/cchonguyen/music-visualizer (branch `main`).
 
 ## Work Mode

@@ -179,7 +179,7 @@ describe('Segmented Pill HUD layout & Hub Popups in index.html (Stage 12 / Secto
   it('includes startup onboarding toast and guide re-summon button', () => {
     expect(indexHtml).toContain('id="onboarding-toast" class="onboarding-toast" role="status" aria-live="polite" hidden');
     expect(indexHtml).toContain('id="dismiss-toast-btn"');
-    expect(indexHtml).toContain('Ready to visualize audio');
+    expect(indexHtml).toContain('Ready to go.');
     expect(dialog).toContain('id="reopen-toast-btn"');
     expect(dialog).toContain('Show Getting Started Guide');
   });
@@ -282,7 +282,7 @@ describe('toRgbStr & Rich Swatch Toast (Slice 8.2)', () => {
 
     try {
       showToast('Mode: Calm', {
-        detail: 'Still Anchor · Bioluminescent',
+        detail: 'Gentle camera · Soft blue-green colours',
         swatch: [[0, 0.17, 0.21], [0, 1, 0.67]],
       });
 
@@ -302,7 +302,7 @@ describe('toRgbStr & Rich Swatch Toast (Slice 8.2)', () => {
 
       const detail = content.children[2] as MockDomElement;
       expect(detail.className).toBe('toast-detail');
-      expect(detail.textContent).toBe('Still Anchor · Bioluminescent');
+      expect(detail.textContent).toBe('Gentle camera · Soft blue-green colours');
     } finally {
       (globalThis as any).document = originalDoc;
     }
@@ -369,7 +369,7 @@ describe('Experience mode definitions & triggerExperienceToast (Slice 8.2)', () 
       expect(toastEl.getAttribute('aria-label')).toBeNull();
       const content = toastEl.children[0]!;
       expect(content.children.find((c) => c.className === 'toast-title')?.textContent).toBe('Mode: Calm');
-      expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Still Anchor · Bioluminescent');
+      expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Gentle camera · Soft blue-green colours');
     } finally {
       (globalThis as any).document = originalDoc;
     }
@@ -719,7 +719,7 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     expect(toastEl.getAttribute('aria-label')).toBeNull();
     const content = toastEl.children[0]!;
     expect(content.children.find((c) => c.className === 'toast-title')?.textContent).toBe('Mode: Calm');
-    expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Still Anchor · Bioluminescent');
+    expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Gentle camera · Soft blue-green colours');
   });
 
   it('cycles Experience mode on M keydown', () => {
@@ -739,7 +739,7 @@ describe('Experience HUD wiring in setupControls (Slice 8.2)', () => {
     expect(toastEl.getAttribute('aria-label')).toBeNull();
     const content = toastEl.children[0]!;
     expect(content.children.find((c) => c.className === 'toast-title')?.textContent).toBe('Mode: Calm');
-    expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Still Anchor · Bioluminescent');
+    expect(content.children.find((c) => c.className === 'toast-detail')?.textContent).toBe('Gentle camera · Soft blue-green colours');
   });
 
   it('ignores shortcuts when typing in a text field or form input', () => {
@@ -1305,7 +1305,7 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     expect(actionBtn.dataset.action).toBe('stop');
     expect(actionIcon.textContent).toBe('⏹');
     expect(actionLabel.textContent).toBe('Stop');
-    expect(actionBtn.getAttribute('aria-label')).toBe('Stop stream');
+    expect(actionBtn.getAttribute('aria-label')).toBe('Stop listening');
     expect(scrubber.hidden).toBe(true);
     expect(separator.hidden).toBe(true);
 
@@ -1422,7 +1422,7 @@ describe('Segmented Pill Controls & Interactivity (Slice 12.4)', () => {
     // Live stream: Stop
     const micBtn = domElements['source-panel']!.querySelectorAll('button[data-source="mic"]')[0];
     micBtn?.dispatchEvent({ type: 'click' });
-    expect(actionBtn.getAttribute('data-tooltip')).toBe('Stop audio input');
+    expect(actionBtn.getAttribute('data-tooltip')).toBe('Stop listening to this source');
   });
 
   it('wires shortcuts dialog and keeps active HUD controls functional without legacy DOM elements (Slice 25.9)', () => {

@@ -6,9 +6,9 @@ A desktop web app (Chrome or Edge) that draws live visuals in time with music. I
 ## Current Build Status
 - **Live:** https://music-visualizer.charliechonguyen.com (custom domain; workers.dev backup).
 - **Stages 1 to 29:** complete, verified and deployed. Each stage's slices are listed in `.spec/HISTORY.md`.
-  - 16 WebGL2 visual layer types: Shape, Particles, Tunnel, Spectral Terrain, Chladni Sand, Reaction-Diffusion, Ferrofluid, Moiré, Julia, Orbit, Architecture, Rings, Crown, Bars, Shockwave and Bass Pulse. Old Waveform layers load as Shape layers.
+  - 15 WebGL2 visual layer types: Shape, Particles, Tunnel, Spectral Terrain, Chladni Sand, Ferrofluid, Moiré, Julia, Orbit, Architecture, Rings, Crown, Bars, Shockwave and Bass Pulse. Old Waveform layers load as Shape layers. Reaction-Diffusion was retired in Slice 15.10; presets that still hold it skip that layer.
   - Feedback warp (curl, Möbius, polar fold, RGB split, edge, solarize), up to four stacked warp operators, and post effects including bloom, vignette, mirror, colour mapping and invert.
-  - 31 numbered built-in presets (Flagship 01–12 and Showcase 13–32) plus six Classics & Textures.
+  - 31 numbered built-in presets (Flagship 01–11 and Showcase 13–32; number 12 was retired) plus six Classics & Textures.
   - Preset browser with favourites, auto-cycle (timer, beat, phrase, shuffle, hard cut), Preset Studio with folders, and a pop-out Studio window.
   - Global Director: experience modes (Cinematic, Calm, Minimal, Color Walk), camera moves and colour palettes.
   - Photosensitivity safety governor with bidirectional slew clamping, and a Low-power mode.

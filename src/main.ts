@@ -389,7 +389,7 @@ function start(): void {
       // Old presets may still hold a retired ReactionDiffusion layer. It is skipped; say so once per session.
       if (!retiredNoticeShown && presetHasRetiredLayer(liveSession.get(id)?.preset)) {
         retiredNoticeShown = true;
-        showNotice('ReactionDiffusion has been retired. Its layer is skipped in this preset.', 'info', 6000);
+        showNotice('This preset uses the retired Reaction-Diffusion layer, so that layer is not drawn.', 'info', 6000);
       }
       crownOn = hasCrownLayer(liveSession.get(id)?.preset);
       director.notifyPresetChanged(liveSession.get(id)?.preset);
@@ -464,7 +464,7 @@ function start(): void {
       adminGateway.checkCloudflareAccess().then((verified) => {
         if (verified) {
           const email = adminGateway.getState().adminEmail;
-          showToast(`Admin Mode Active${email ? ` (${email})` : ''}`);
+          showToast(`Admin mode on${email ? ` (${email})` : ''}`);
         }
         if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
           window.history.replaceState({}, '', '/');
@@ -676,7 +676,7 @@ function start(): void {
     a.download = `${name}-look.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`Exported Look · ${entry?.preset.name ?? 'Look'}`);
+    showToast(`Look exported · ${entry?.preset.name ?? 'Look'}`);
   };
 
   const handleImportAssetFile = async (file: File) => {
@@ -688,7 +688,7 @@ function start(): void {
         if (res.id && switchShown) {
           switchShown(res.id);
         }
-        showToast(`Imported Preset · ${res.name}`);
+        showToast(`Preset imported · ${res.name}`);
       } else if (res.kind === 'palette') {
         const expColorSelect = document.getElementById('exp-color-select') as HTMLSelectElement | null;
         if (expColorSelect && res.id && !expColorSelect.querySelector(`option[value="${res.id}"]`)) {
@@ -699,9 +699,9 @@ function start(): void {
           expColorSelect.value = res.id;
         }
         director.updateSettings({ colorMood: res.id as any });
-        showToast(`Imported Palette · ${res.name}`);
+        showToast(`Palette imported · ${res.name}`);
       } else if (res.kind === 'bundle') {
-        showToast(`Imported Bundle · ${res.name}`);
+        showToast(`Look imported · ${res.name}`);
       }
     } catch (err) {
       showToast((err as Error).message);

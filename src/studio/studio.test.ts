@@ -1467,8 +1467,8 @@ describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
     expect(optgroups).toHaveLength(5);
 
     // Verify optgroup labels
-    expect(optgroups[0]?.label).toBe('System: Stage 9 Showcase (13–20)');
-    expect(optgroups[1]?.label).toBe('System: Flagship Generative (01–12)');
+    expect(optgroups[0]?.label).toBe('System: Showcase (13–32)');
+    expect(optgroups[1]?.label).toBe('System: Flagship Generative (01–11)');
     expect(optgroups[2]?.label).toBe('System: Classics & Textures');
     expect(optgroups[3]?.label).toBe('User: Chill Ambient');
     expect(optgroups[4]?.label).toBe('User: Unfiled');
@@ -1565,7 +1565,7 @@ describe('Studio Hierarchical Optgroup Preset Selector (Slice 10.3)', () => {
     const optgroups = selectEl.querySelectorAll('optgroup');
     // Only Flagship has presets; showcase, classics, empty folder and unfiled should be omitted
     expect(optgroups).toHaveLength(1);
-    expect(optgroups[0]?.label).toBe('System: Flagship Generative (01–12)');
+    expect(optgroups[0]?.label).toBe('System: Flagship Generative (01–11)');
   });
 
   it('integrates with Studio.bind() and renders hierarchy on dropdown element', () => {
@@ -1934,7 +1934,7 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
 
     const categoryBinding = pane.bindings.find((b: any) => b.prop === 'category');
     expect(categoryBinding).toBeDefined();
-    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Stage 9 Showcase (13–20)');
+    expect(categoryBinding.target.category).toBe('System Preset (Read-Only) · Showcase (13–32)');
   });
 
   it('renders user preset controls with folder assignment dropdown, editable name, and active Delete', () => {
@@ -2231,8 +2231,8 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(subfolderBinding.target.subfolder).toBe('classics');
     expect(subfolderBinding.options.options).toEqual(
       expect.objectContaining({
-        'Stage 9 Showcase (13–20)': 'showcase',
-        'Flagship Generative (01–12)': 'flagship',
+        'Showcase (13–32)': 'showcase',
+        'Flagship Generative (01–11)': 'flagship',
         'Classics & Textures': 'classics',
       }),
     );
@@ -2240,7 +2240,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     // Move to flagship subfolder
     subfolderBinding.fire('change', 'flagship');
     expect(session.setSystemPresetSubfolder).toHaveBeenCalledWith('crown', 'flagship');
-    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
+    expect(showToastSpy).toHaveBeenCalledWith('Moved to Flagship Generative (01–11) locally (remote sync offline)');
 
     // 3. Name is editable
     const nameBinding = pane.bindings.find((b: any) => b.prop === 'name');
@@ -4194,7 +4194,7 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
       expect(showToastSpy).toHaveBeenLastCalledWith('System preset saved locally (remote sync offline)');
 
       setSystemPresetSubfolderAction(offline.session, 'crown', 'flagship');
-      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) locally (remote sync offline)');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–11) locally (remote sync offline)');
 
       promoteUserPresetAction(offline.session, offlineUser, () => 'showcase');
       expect(showToastSpy).toHaveBeenLastCalledWith('Promoted to system preset locally (remote sync offline)');
@@ -4219,7 +4219,7 @@ describe('Slice 25.10: Studio timer cleanup, Admin deduplication, Director sync,
 
       setSystemPresetSubfolderAction(online.session, 'crown', 'flagship');
       await flush();
-      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–12) remotely');
+      expect(showToastSpy).toHaveBeenLastCalledWith('Moved to Flagship Generative (01–11) remotely');
 
       promoteUserPresetAction(online.session, onlineUser, () => 'showcase');
       await flush();

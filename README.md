@@ -28,7 +28,6 @@ It is built on **raw WebGL2** and the **Web Audio API** in TypeScript with Vite.
   - **Tunnel:** forward flight through ring, grid, spoke, checker or stripe walls, with polygon cross-sections and twist.
   - **Spectral Terrain:** 3D ridge lines built from the recent spectrum.
   - **Chladni Sand:** grains that settle on the nodal lines of a vibrating plate.
-  - **Reaction-Diffusion:** a Gray-Scott chemical simulation with lit ridges.
   - **Ferrofluid:** a metallic blob pushed by 3D noise.
   - **Moiré:** two overlapping line grids that make interference patterns.
   - **Julia, Orbit and Architecture:** a breathing Julia set, bodies on tilted 3D orbits, and a gliding 3D corridor.
@@ -40,8 +39,8 @@ It is built on **raw WebGL2** and the **Web Audio API** in TypeScript with Vite.
 - **Performance:** render quality presets, an automatic quality governor, and a Low-power mode that caps resolution and skips heavy post effects.
 
 ### 3. Presets and the Studio
-- **Built-in presets:** 31 numbered presets plus Classics & Textures, in three system folders:
-  - **Flagship Generative (01–12):** Curl Fluid Warp, Kaleidoscopic Mandala, Solarized Contour Rings, Möbius Dual Vortex, RGB Aberration Vortex, Lissajous Vector CRT, Moiré Interference Loom, Spectral Ridge Terrain, Chladni Cymatic Sand, Phyllotaxis Spiral Bloom, Ferrofluid Magnetic Crown, Reaction Diffusion Coral.
+- **Built-in presets:** 31 numbered presets plus Classics & Textures, in three system folders (number 12 was retired with the Reaction-Diffusion layer):
+  - **Flagship Generative (01–11):** Curl Fluid Warp, Kaleidoscopic Mandala, Solarized Contour Rings, Möbius Dual Vortex, RGB Aberration Vortex, Lissajous Vector CRT, Moiré Interference Loom, Spectral Ridge Terrain, Chladni Cymatic Sand, Phyllotaxis Spiral Bloom, Ferrofluid Magnetic Crown.
   - **Showcase (13–32):** Solar Crown Eclipse, Sacred Orbit Mandala, Polar Spirograph Bloom, Hexagon Inward Portal, Corridor LED Equalizer, Star Burst Stream, Spiral Pearl Beads, Dual-Rail Aurora Ark, Inhale Exhale, Ripple Pool, Gradient Storm, Mirror Tunnel, Deep Field, Scope Bloom, Ink Flow, Julia Drift, Orbit Hall, Corridor Glide, Bouncing Ribbon Wave, Twisting Scope Wave.
   - **Classics & Textures:** Crown, Flight, Bars, Vortex, Ripple Field, Dust Wave.
 - **Preset browser:** a grid of presets grouped by theme, with favourites and a Light / Medium / Heavy cost badge.
@@ -68,7 +67,7 @@ music-visualizer/
 │   │   └── shaders/          # GLSL ES 3.0 shaders
 │   ├── presets/              # Preset format, schemas, loader, session, links, auto-cycle
 │   │   ├── builtin/          # Built-in preset JSON files and folder setup
-│   │   └── review/           # Presets still being tuned (Preset 12, starter pack)
+│   │   └── review/           # Presets kept out of the app (retired Preset 12, starter pack)
 │   ├── studio/               # Preset Studio, reactive sliders, pop-out window, admin controls
 │   ├── ui/                   # Controls bar, menus, preset browser, notices, debug panel
 │   └── config/               # Remote preset configuration
