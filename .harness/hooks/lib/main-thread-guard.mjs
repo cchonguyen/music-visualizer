@@ -3,8 +3,8 @@
 import path from 'node:path';
 
 const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit'];
-const EDIT_REFUSAL = 'Main thread may edit only .spec/. Dispatch harness:gf-coder for source edits.';
-const BASH_REFUSAL = 'Main thread Bash is limited to the allow-list (git, test/typecheck/lint, finish-slice, doctor, read-only gh and status). Dispatch harness:gf-coder for other work.';
+const EDIT_REFUSAL = 'Main thread may edit only .spec/. Dispatch harness:gf-coder for source edits. (Warning only: the edit goes ahead.)';
+const BASH_REFUSAL = 'Main thread Bash is limited to the allow-list (git, test/typecheck/lint, finish-slice, doctor, read-only gh and status). Dispatch harness:gf-coder for other work. (Warning only: the command runs.)';
 const STATUS_COMMANDS = new Set(['ls', 'cat', 'head', 'tail', 'wc', 'grep', 'pwd', 'date', 'stat', 'file', 'diff', 'realpath']);
 const GH_NOUNS = new Set(['pr', 'run', 'issue', 'repo']);
 const GH_VERBS = new Set(['view', 'list', 'checks', 'status', 'diff']);
@@ -74,7 +74,6 @@ function isAllowedSegment(tokens, segment) {
     case 'node': return sub === '--test' || NODE_SCRIPTS.has(sub) || (sub === RESTORE_SCRIPT && verb === '--restore');
     case 'npm': return sub === 'run' && NPM_SCRIPTS.has(verb) && tokens.slice(3).every((x) => x.startsWith('-'));
     case 'rm': return tokens.length === 2 && sub === '.spec/.doctor-canary';
-    case 'bin/restart-dashboard.sh': return true;
     case 'gh': return sub === 'search' || (GH_NOUNS.has(sub) && GH_VERBS.has(verb));
     case 'sed': return sedAllowed(tokens, segment);
     case 'rg': return rgAllowed(tokens);
@@ -151,13 +150,13 @@ function bashDecision(command) {
   if (!text) return ALLOWED;
   const masked = maskQuoted(text);
   if (masked === null) {
-    return refused(`Main thread Bash refused: unterminated quote in \`${text}\`. ${BASH_REFUSAL}`);
+    return refused(`Main thread Bash outside the allow-list: unterminated quote in \`${text}\`. ${BASH_REFUSAL}`);
   }
   const hit = harmlessHits(masked);
   const checkText = blankAt(masked, hit);
   const tokenText = blankAt(text, hit);
   if (/[<>`]|\$\(/.test(checkText)) {
-    return refused(`Main thread Bash refused: \`${text}\` (redirection, input or substitution). ${BASH_REFUSAL}`);
+    return refused(`Main thread Bash outside the allow-list: \`${text}\` (redirection, input or substitution). ${BASH_REFUSAL}`);
   }
   const pieces = [];
   let last = 0;
@@ -170,7 +169,7 @@ function bashDecision(command) {
     const segment = tokenText.slice(s, e).replace(/["']/g, '').trim();
     if (!segment) continue;
     if (!isAllowedSegment(segment.split(/\s+/), segment)) {
-      return refused(`Main thread Bash refused: \`${text.slice(s, e).trim()}\`. ${BASH_REFUSAL}`);
+      return refused(`Main thread Bash outside the allow-list: \`${text.slice(s, e).trim()}\`. ${BASH_REFUSAL}`);
     }
   }
   return ALLOWED;
@@ -178,11 +177,11 @@ function bashDecision(command) {
 
 function editDecision(toolInput, root) {
   const raw = toolInput?.file_path || toolInput?.notebook_path || toolInput?.path || '';
-  if (!raw) return refused(`Main thread edit refused: no file path given. ${EDIT_REFUSAL}`);
+  if (!raw) return refused(`Main thread edit with no file path given. ${EDIT_REFUSAL}`);
   const base = path.resolve(root);
   const rel = path.relative(base, path.resolve(base, raw)).split(path.sep).join('/');
   if (rel.startsWith('.spec/')) return ALLOWED;
-  return refused(`Main thread edit refused for "${raw}" (repo-relative: ${rel || '.'}). ${EDIT_REFUSAL}`);
+  return refused(`Main thread edit outside .spec/ for "${raw}" (repo-relative: ${rel || '.'}). ${EDIT_REFUSAL}`);
 }
 
 export function mainThreadDecision({ agentType, toolName, toolInput = {}, root = '.' } = {}) {

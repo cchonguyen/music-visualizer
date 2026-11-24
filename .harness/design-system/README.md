@@ -171,6 +171,20 @@ You provide the words and, for a state, its icon.
 
 Define each app's states once, in one map of label, icon and tone, and render every pill from it.
 
+### Filters
+
+A collapsible row of pill controls behind a single Filters button, shared across table, map, timeline and list views so filters behave the same everywhere without cluttering the header.
+
+You provide the search input, the open state, the active count, and the facet options.
+
+- `ui-filter-bar`: a wrapping toolbar row holding the search `ui-input`, an optional sort control, the Filters trigger (`ui-btn ui-filter-trigger`), optional removable active `ui-pill ui-pill--active` chips, and a `Clear` `ui-btn ui-btn--ghost` button shown only when at least one filter is set.
+- `ui-filter-trigger`: sits on a `ui-btn` with a `SlidersHorizontal` icon, `aria-expanded`, and the active count in parentheses (`Filters (3)`) when non-zero. Highlighted in `accent` when open or active (`ui-filter-trigger--active`).
+- `ui-filter-panel`: rendered only when open. Holds one or more `ui-filter-group` wrapping rows; adjacent groups automatically get a `line` top divider (for example, facet selects in the first group and presence or status filters in the second).
+- `ui-filter-select`: a native `<select>` styled as a pill (`field-sizing: content`, capped at `14rem`). Its empty `<option value="">` shows the facet name (`Year`, `City`); when a value is chosen, add `ui-filter-select--active` or `data-active="true"` so it highlights in `accent-tint` with an `accent` border. Always set `aria-label`.
+- `ui-filter-toggle`: a tri-state chip button that cycles `any` → `yes` → `no` → `any` on tap. Default (`any`) is neutral and reads the facet name (`Notes`); `data-state="yes"` (or `ui-filter-toggle--yes`) uses `accent` with a `Check` icon, positive wording (`Has notes`), and `aria-pressed="true"`; `data-state="no"` (or `ui-filter-toggle--no`) uses `mid` with a `Minus` icon, negative wording (`No notes`), and `aria-pressed="mixed"`. Never use `good` or `warn` for filter toggles — colour follows accent and mid-tone, and the icon plus wording carry the state.
+- Responsive sizing: below 640 px every filter pill is `touch-phone` (44 px) tall at `control-fs` (16 px) so mobile browsers do not zoom; from 640 px up they step down to `control-h-compact` (32 px) and `control-fs-compact` (13 px).
+- Shared cross-view filters: if another view's filters apply and are hidden on the current view, show a quiet `ui-help` note with a `Clear them` action.
+
 ### Notice
 
 A message that stays in the page: a result, a caveat or a warning.
@@ -244,6 +258,7 @@ Set `data-accent` and `data-density` once on `<html>`, for example `<html data-a
 | Control pair | `ui-control-pair` | none | none |
 | Dialog | `ui-scrim` around `ui-dialog` | parts `__head`, `__title`, `__body`, `__foot` | `role="dialog"` or `"alertdialog"`, `aria-modal="true"`, `aria-labelledby` |
 | Field | `ui-field` | `ui-input`, `ui-textarea`, `ui-select` in `ui-select-wrap`, `ui-check`, `ui-switch`, `ui-segmented`; `ui-help` (`--bad`) | label `for` matches input `id`; invalid sets `aria-invalid="true"` and `aria-describedby`; a switch sets `role="switch"` and shows On or Off in `ui-switch__state`; a segmented control is `role="radiogroup"` with `role="radio"` and `aria-checked` options |
+| Filters | `ui-filter-bar`, `ui-filter-panel` | `ui-filter-trigger` (`--active`), `ui-filter-group`, `ui-filter-select` (`--active`, `data-active="true"`), `ui-filter-toggle` (`data-state="yes\|no"`, `--yes`, `--no`) | trigger has `aria-expanded`; each `ui-filter-select` has `aria-label`; `ui-filter-toggle` sets `aria-pressed` and pairs an icon with state wording |
 | Menu | `ui-menu` | `ui-menu-item`, `ui-menu-item__hint`, `ui-menu__rule` | trigger has `aria-haspopup` and `aria-expanded`; list is `role="listbox"`, rows `role="option"` with `aria-selected` |
 | Notice | `ui-notice` | `--good`, `--warn`, `--bad`; part `__body`, `__actions` | `role="alert"` for warn and bad, `role="status"` for the rest |
 | Pill | `ui-pill` | `--mid`, `--active`, `--good`, `--warn`, `--bad` | a word, and an icon on every state pill |

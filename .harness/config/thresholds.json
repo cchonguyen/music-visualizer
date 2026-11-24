@@ -1,17 +1,13 @@
 {
   "fa_fast_path": {
     "max_source_reads": 3,
-    "max_reads": 3,
     "max_searches": 1,
     "max_edits": 1,
-    "max_single_file_edit_lines": 25,
-    "max_edit_lines": 25
+    "max_single_file_edit_lines": 25
   },
   "gf_circuit_breaker": {
     "max_exploratory_searches": 2,
-    "max_searches": 2,
     "max_test_failure_strikes": 2,
-    "max_strikes": 2,
     "max_mutating_calls": 15
   },
   "line_budgets": {

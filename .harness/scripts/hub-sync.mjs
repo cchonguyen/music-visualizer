@@ -130,8 +130,29 @@ export function compileRuntimePayloads(projectRoot = (process.env.CLAUDE_PROJECT
   return payloads;
 }
 
-// Synchronize canonical subagent templates from .harness/agents/*.md to .claude/agents/ and .agents/
+// One source for agent definitions (Slice 20.2). In the hub, plugins/harness/agents/ is what threads load,
+// so it is the source: its .md files are copied into .harness/agents/ first. Spokes have no plugins/ folder
+// and keep using the .harness/agents/ copy that sync delivers. Returns the repo-relative paths it wrote.
+export function adoptPluginAgents(projectRoot) {
+  const pluginDir = path.join(projectRoot, 'plugins', 'harness', 'agents');
+  if (!fs.existsSync(pluginDir)) return [];
+  const harnessDir = path.join(projectRoot, '.harness', 'agents');
+  fs.mkdirSync(harnessDir, { recursive: true });
+  const written = [];
+  for (const file of fs.readdirSync(pluginDir).filter((f) => f.endsWith('.md')).sort()) {
+    const content = fs.readFileSync(path.join(pluginDir, file), 'utf8');
+    const dst = path.join(harnessDir, file);
+    if (!fs.existsSync(dst) || fs.readFileSync(dst, 'utf8') !== content) {
+      atomicWriteFileSync(dst, content, 'utf8');
+      written.push(path.relative(projectRoot, dst));
+    }
+  }
+  return written;
+}
+
+// Synchronize subagent templates from .harness/agents/*.md (after adopting the plugin copies) to .claude/agents/ and .agents/
 export function syncAgents(projectRoot = (process.env.CLAUDE_PROJECT_DIR || gitRoot() || process.cwd()), customDirs = null) {
+  const adopted = adoptPluginAgents(projectRoot);
   const sourceDir = path.join(projectRoot, '.harness', 'agents');
   if (!fs.existsSync(sourceDir)) return [];
   const entries = fs.readdirSync(sourceDir).filter((file) => file.endsWith('.md')).sort();
@@ -198,7 +219,7 @@ export function syncAgents(projectRoot = (process.env.CLAUDE_PROJECT_DIR || gitR
       }
     }
   }
-  return synced;
+  return [...adopted, ...synced];
 }
 
 // Cloud sessions clone every attached repo side by side, so look next to (and one level around) the project
@@ -450,6 +471,7 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   if (action === 'sync-agents') {
+    adoptPluginAgents(root);
     compileRuntimePayloads(root);
     const synced = syncAgents(root);
     console.log(`✓ Synchronized ${synced.length} agent template(s): ${synced.join(', ') || 'already up to date'}.`);

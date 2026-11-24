@@ -64,7 +64,7 @@ if (strikes >= 2) {
   console.log(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PostToolUseFailure',
-      additionalContext: `CIRCUIT BREAKER TRIGGERED (2 Consecutive Identical Test/Build Failures): Stop guessing immediately. Run node .harness/hooks/pre-tool-guard.mjs --restore (${vibe ? 'restores the last known green checkpoint, or lists changed files if nothing has passed yet' : 'restores ONLY the active slice target files to the slice-start checkpoint'}), then output a "Needed from you:" block offering: (1) Free Gemini audit via /prep-audit diff, or (2) Model upshift via /implement sonnet.`
+      additionalContext: `CIRCUIT BREAKER TRIGGERED (2 Consecutive Identical Test/Build Failures): Stop guessing. List the files you changed and ask the operator before restoring anything. The restore is node .harness/hooks/pre-tool-guard.mjs --restore (${vibe ? 'restores the last known green checkpoint, or lists changed files if nothing has passed yet' : 'restores ONLY the active slice target files to the slice-start checkpoint'}). To re-plan instead, dispatch harness:el-architect.`
     }
   }));
 }

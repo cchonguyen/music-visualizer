@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -14,36 +13,11 @@ import { updateTelemetry } from './lib/telemetry-store.mjs';
 const gitIn = (cwd, args) =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 
-export const CI_VERIFIED_REASON = 'CI-verified: the "verify" check on the pull request (.github/workflows/harness-verify.yml) is the verifier';
+export const CI_VERIFIED_REASON = 'CI-verified: the "pr-check" check on the pull request (.github/workflows/harness-pr-check.yml) is the verifier';
 
-/**
- * Runs bin/verify-slice.sh as an optional manual step when the operator's verify secret is on this machine.
- * Without a secret, finish-slice does not need one: CI is the verifier. Never throws.
- */
-export function autoVerify(root) {
-  const secret = process.env.HARNESS_VERIFY_SECRET || readVerifySecret();
-  if (!secret) return { ran: false, verifier: 'ci', reason: CI_VERIFIED_REASON };
-  const script = path.join(root, 'bin', 'verify-slice.sh');
-  if (!fs.existsSync(script)) return { ran: false, reason: 'bin/verify-slice.sh not found' };
-  try {
-    execFileSync('bash', [script], {
-      cwd: root,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf8',
-      env: { ...process.env, HARNESS_VERIFY_SECRET: secret },
-    });
-    return { ran: true, passed: true };
-  } catch (err) {
-    return { ran: true, passed: false, reason: String(err.stderr || err.message || 'verify-slice.sh failed').trim().split('\n').slice(-3).join(' ') };
-  }
-}
-
-function readVerifySecret() {
-  try {
-    return fs.readFileSync(path.join(os.homedir(), '.config', 'vibe-command-center', 'verify-secret'), 'utf8').trim();
-  } catch {
-    return '';
-  }
+/** CI is the only verifier: finish-slice records that and never runs a local gate. */
+export function ciVerification() {
+  return { ran: false, verifier: 'ci', reason: CI_VERIFIED_REASON };
 }
 
 export function parseActiveTargets(line) {
@@ -61,13 +35,15 @@ export function parseActiveTargets(line) {
     .filter(Boolean);
 }
 
+// The event store (.spec/.events/) is session-local and never committed, even where .gitignore misses it.
+const isEventLog = (rel) => rel.replace(/\\/g, '/').startsWith('.spec/.events/');
+
 export function isTargetMatch(relFile, targets) {
   const norm = relFile.replace(/\\/g, '/');
   const trackingFiles = [
     '.spec/PROGRESS.md',
     '.spec/SESSION_HANDOFF.md',
     '.spec/.session-telemetry.json',
-    '.spec/STATUS_BATCH.jsonl',
   ];
   if (trackingFiles.includes(norm)) return true;
 
@@ -176,7 +152,7 @@ function runChecks(root) {
 }
 
 export function finishSlice(root, commitMsg, options = {}) {
-  const verify = options.verify || autoVerify;
+  const verify = options.verify || ciVerification;
   ensureHarnessRoot();
   root = root || resolveRoot();
 
@@ -241,7 +217,7 @@ export function finishSlice(root, commitMsg, options = {}) {
   // 2. Enforce scope neutrality before modifying or staging files
   const statusOut = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
   const statusLines = statusOut.split('\n').filter(Boolean);
-  const changedFiles = statusLines.map((l) => l.slice(2).trim().replace(/.* -> /, ''));
+  const changedFiles = statusLines.map((l) => l.slice(2).trim().replace(/.* -> /, '')).filter((f) => !isEventLog(f));
 
   const outOfScope = changedFiles.filter((f) => !isTargetMatch(f, targets));
   if (outOfScope.length > 0) {
@@ -320,7 +296,6 @@ export function finishSlice(root, commitMsg, options = {}) {
       '.spec/PROGRESS.md',
       '.spec/SESSION_HANDOFF.md',
       '.spec/.session-telemetry.json',
-      '.spec/STATUS_BATCH.jsonl',
     ];
     let allPermitted = Array.from(new Set([...changedFiles, ...trackingFiles]))
       .filter((f) => fs.existsSync(path.join(root, f)));
@@ -333,7 +308,7 @@ export function finishSlice(root, commitMsg, options = {}) {
 
     // Verify no unstaged dirty files remain
     const remainingDirty = gitIn(root, ['status', '--porcelain']);
-    const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l));
+    const unstaged = remainingDirty.split('\n').filter(Boolean).filter((l) => !/^[MADRC] /.test(l) && !isEventLog(l.slice(3)));
     if (unstaged.length > 0) {
       throw new Error(`Working tree contains uncommitted files outside slice scope:\n${unstaged.join('\n')}`);
     }
@@ -363,7 +338,7 @@ export function finishSlice(root, commitMsg, options = {}) {
     gitIn(root, ['commit', '-m', commitMsg, ...trailers]);
     committed = true;
     const commitSha = gitIn(root, ['log', '-1', '--oneline']);
-    // Auto-verify: a passing run advances the card to Verified. Runs after the commit, so a failure never undoes it.
+    // Records CI as the verifier. Runs after the commit, so a test-injected failure never undoes it.
     const verification = verify(root);
 
     // 9. Natural lull check

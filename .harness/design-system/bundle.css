@@ -34,10 +34,10 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .ui-missing{color:var(--text-faint)}
 
 /* Icons: lucide, stroke only */
-.ui-icon,.ui-topbar svg,.ui-appmark svg,.ui-btn svg,.ui-icon-btn svg,.ui-pill svg,.ui-notice svg,.ui-nav-item svg,.ui-menu-item svg,.ui-tab svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.ui-icon,.ui-topbar svg,.ui-appmark svg,.ui-btn svg,.ui-icon-btn svg,.ui-pill svg,.ui-filter-toggle svg,.ui-notice svg,.ui-nav-item svg,.ui-menu-item svg,.ui-tab svg{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
 
 /* Focus */
-.ui-btn:focus-visible,.ui-icon-btn:focus-visible,.ui-input:focus-visible,.ui-segmented__opt:focus-visible,.ui-switch input:focus-visible,.ui-check input:focus-visible,.ui-nav-item:focus-visible,.ui-menu-item:focus-visible,.ui-tab:focus-visible,.ui-link:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.ui-btn:focus-visible,.ui-icon-btn:focus-visible,.ui-input:focus-visible,.ui-segmented__opt:focus-visible,.ui-switch input:focus-visible,.ui-check input:focus-visible,.ui-filter-select:focus-visible,.ui-filter-toggle:focus-visible,.ui-nav-item:focus-visible,.ui-menu-item:focus-visible,.ui-tab:focus-visible,.ui-link:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* Button */
 .ui-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);min-height:var(--control-h);padding:0 var(--space-4);border:1px solid var(--line-strong);border-radius:var(--radius-control);background:var(--surface-raised);color:var(--text);font:600 14px/20px var(--font-sans);white-space:nowrap;cursor:pointer;text-decoration:none;transition:background-color var(--duration-fast),border-color var(--duration-fast),color var(--duration-fast)}
@@ -106,6 +106,21 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .ui-pill--warn{background:var(--warn-tint);border-color:transparent;color:var(--warn)}
 .ui-pill--bad{background:var(--bad-tint);border-color:transparent;color:var(--bad)}
 
+/* Filters: toolbar + collapsible pill panel */
+.ui-filter-bar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
+.ui-filter-bar .ui-input{flex:1 1 200px;min-width:0}
+.ui-filter-trigger[aria-expanded="true"],.ui-filter-trigger--active{background:var(--accent-tint);border-color:var(--accent);color:var(--text)}
+.ui-filter-panel{display:flex;flex-direction:column;gap:var(--space-3);padding:var(--pad-card);border:1px solid var(--line);border-radius:var(--radius-card);background:var(--surface)}
+.ui-filter-group{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
+.ui-filter-group+.ui-filter-group{padding-top:var(--space-3);border-top:1px solid var(--line)}
+.ui-filter-select,.ui-filter-toggle{display:inline-flex;align-items:center;gap:var(--space-1);min-height:var(--touch-phone);padding:0 var(--space-3);border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--surface-sunken);color:var(--text-muted);font:500 var(--control-fs)/1.2 var(--font-sans);cursor:pointer;transition:background-color var(--duration-fast),border-color var(--duration-fast),color var(--duration-fast)}
+.ui-filter-select{field-sizing:content;max-width:14rem;padding-right:var(--space-2);text-overflow:ellipsis}
+.ui-filter-select option{background:var(--surface-raised);color:var(--text)}
+.ui-filter-select:hover,.ui-filter-toggle:hover{border-color:var(--mid-line);color:var(--text)}
+.ui-filter-select--active,.ui-filter-select[data-active="true"],.ui-filter-toggle[data-state="yes"],.ui-filter-toggle--yes{background:var(--accent-tint);border-color:var(--accent);color:var(--text)}
+.ui-filter-toggle[data-state="no"],.ui-filter-toggle--no{background:var(--mid);border-color:var(--mid-line);color:var(--mid-text)}
+.ui-filter-toggle svg{width:12px;height:12px;stroke-width:2.25}
+
 /* Notice */
 .ui-notice{display:flex;gap:var(--space-3);align-items:flex-start;padding:var(--space-3) var(--space-4);border:1px solid var(--mid-line);border-radius:var(--radius-card);background:var(--mid);color:var(--text);font-size:14px;line-height:20px}
 .ui-notice svg{margin-top:2px;color:var(--mid-text)}
@@ -159,6 +174,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 
 @media (min-width:640px){
   .ui-menu-item{min-height:var(--touch-desktop)}
+  .ui-filter-select,.ui-filter-toggle{min-height:var(--control-h-compact);font-size:var(--control-fs-compact);line-height:18px}
   .ui-table .ui-input,.ui-table .ui-select,.ui-table .ui-btn{min-height:var(--control-h-compact);font-size:var(--control-fs-compact);line-height:18px}
   .ui-table .ui-input,.ui-table .ui-select{padding-left:var(--space-2)}
   .ui-table .ui-select-wrap .ui-select{padding-right:var(--space-6)}
@@ -189,5 +205,5 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans
 .ui-shell[data-shell="minimal"] .ui-main--bleed{padding:0}
 @media (min-width:1100px){.ui-shell[data-shell="minimal"] .ui-main{padding:var(--space-8)}.ui-shell[data-shell="minimal"] .ui-main--bleed{padding:0}}
 @media (prefers-reduced-motion:reduce){
-  .ui-btn,.ui-icon-btn,.ui-input,.ui-segmented__opt,.ui-switch input,.ui-switch input::before{transition:none}
+  .ui-btn,.ui-icon-btn,.ui-input,.ui-segmented__opt,.ui-switch input,.ui-switch input::before,.ui-filter-select,.ui-filter-toggle{transition:none}
 }

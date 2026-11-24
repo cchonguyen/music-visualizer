@@ -143,6 +143,14 @@ export function parseApprovedTripwires(message) {
   return approved;
 }
 
+// The commit whose message carries Approved-Tripwire trailers. On a pull request, actions/checkout
+// checks out GitHub's merge commit, whose message is "Merge X into Y"; its second parent is the PR head.
+// `parentsLine` is `git rev-list --parents -n 1 <head>` output: the commit, then its parents.
+export function approvalRef(head, parentsLine) {
+  const parts = String(parentsLine || '').trim().split(/\s+/).filter(Boolean);
+  return parts.length >= 3 ? `${head}^2` : head;
+}
+
 // Line count for a budget file. AGENTS.md does not count the hub-sync block (marker lines included).
 export function countBudgetLines(budgetFile, content) {
   let text = content;
@@ -504,7 +512,11 @@ function main(argv) {
     try { return fs.readFileSync(path.join(root, file), 'utf8'); } catch { return null; }
   };
   let headMessage = '';
-  try { headMessage = git('log', '-1', '--format=%B', head); } catch { /* no head message: no approvals */ }
+  try {
+    let parents = '';
+    try { parents = git('rev-list', '--parents', '-n', '1', head); } catch { /* unknown parents: use head */ }
+    headMessage = git('log', '-1', '--format=%B', approvalRef(head, parents));
+  } catch { /* no head message: no approvals */ }
   const result = analyze({ changed, deleted, diff, progress, strict, root, hubSync, agentsBlockOnly, readHead, headMessage });
 
   const verdict = formatJsonVerdict({
