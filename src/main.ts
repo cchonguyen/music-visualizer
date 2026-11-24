@@ -20,7 +20,7 @@ import { ParticleLayer } from './render/layers/particles';
 import { BarsLayer } from './render/layers/bars';
 import { RingsLayer } from './render/layers/rings';
 import { ALL_PRESETS, SCHEMAS } from './presets/builtin';
-import { PresetSession } from './presets/session';
+import { PresetSession, assetImportMessage } from './presets/session';
 import { applyLinkedPreset, applyVisualGainAndCalm, CALM_SCALE, hasCrownLayer, hasLinks, LAYER_FACTORIES, presetHasRetiredLayer, restoreBasePreset, valuesOf } from './presets/loader';
 import { migrateLegacyLayerToShape } from './presets/legacyShapeMigration';
 import { effectiveReactionStyle, getReactionStyle, reactionsForStyle } from './presets/reactionStyles';
@@ -688,7 +688,6 @@ function start(): void {
         if (res.id && switchShown) {
           switchShown(res.id);
         }
-        showToast(`Preset imported · ${res.name}`);
       } else if (res.kind === 'palette') {
         const expColorSelect = document.getElementById('exp-color-select') as HTMLSelectElement | null;
         if (expColorSelect && res.id && !expColorSelect.querySelector(`option[value="${res.id}"]`)) {
@@ -699,10 +698,8 @@ function start(): void {
           expColorSelect.value = res.id;
         }
         director.updateSettings({ colorMood: res.id as any });
-        showToast(`Palette imported · ${res.name}`);
-      } else if (res.kind === 'bundle') {
-        showToast(`Look imported · ${res.name}`);
       }
+      showToast(assetImportMessage(res));
     } catch (err) {
       showToast((err as Error).message);
     }

@@ -7,7 +7,7 @@
 // Value edits go straight to the live layers. Layer-list edits rebuild the scene.
 import { Pane, type ButtonApi } from 'tweakpane';
 import '../ui/style.css';
-import { isLayerRendered } from '../presets/session';
+import { assetImportMessage, isLayerRendered } from '../presets/session';
 import { LAYER_FACTORIES, applyPresetToScene, applyValues, hasLinks, readWarpOps, valuesOf } from '../presets/loader';
 import { WARP_OP_LABELS, WARP_OP_MAX, WARP_OP_TYPES, isWarpOpType, warpOpSpecs, type WarpOpType } from '../presets/warpOps';
 import { LAYER_SPECS, tierOf } from '../presets/layerSchemas';
@@ -472,11 +472,12 @@ export function attachResetControl(
   return { update, reset };
 }
 
-export const SYSTEM_OPTGROUP_LABELS = {
-  showcase: 'System: Showcase',
-  flagship: 'System: Flagship Generative',
-  classics: 'System: Classics & Textures',
-} as const;
+/** Preset picker group names: the system folder names with a "System:" prefix. */
+export const SYSTEM_OPTGROUP_LABELS: Readonly<Record<SystemSubfolder, string>> = {
+  showcase: `System: ${SYSTEM_SUBFOLDER_LABELS.showcase}`,
+  flagship: `System: ${SYSTEM_SUBFOLDER_LABELS.flagship}`,
+  classics: `System: ${SYSTEM_SUBFOLDER_LABELS.classics}`,
+};
 
 /** Populate selectEl with an optgroup hierarchy matching session categorization (Slice 10.3). */
 export function renderPresetSelectHierarchy(
@@ -2925,14 +2926,8 @@ export class Studio {
       if (!file) return;
       try {
         const res = this.opts.session.importAsset(await file.text());
-        if (res.kind === 'preset') {
-          showToast(res.warnings.length ? `Imported with ${res.warnings.length} fix(es)` : `Preset imported · ${res.name}`);
-          if (res.id) this.opts.switchTo(res.id);
-        } else if (res.kind === 'palette') {
-          showToast(`Palette imported · ${res.name}`);
-        } else if (res.kind === 'bundle') {
-          showToast(`Look imported · ${res.name}`);
-        }
+        showToast(assetImportMessage(res));
+        if (res.kind === 'preset' && res.id) this.opts.switchTo(res.id);
       } catch (err) {
         showToast((err as Error).message);
       }
