@@ -3,7 +3,7 @@
 // the layers used before 4.2, so the look is unchanged until a preset changes them.
 // Ranges are proposals; the owner confirms them in the Studio (S1).
 import { COLOUR_MAP_INDEXES, GRADIENT_DEFAULT_A, GRADIENT_DEFAULT_B, GRADIENT_NAMES } from '../render/colourMap';
-import type { ParamSpec } from './schema';
+import { CHLADNI_SPECS, FEEDBACK_WARP_SPECS, FERROFLUID_SPECS, MOIRE_SPECS, PARTICLE_MODE_SPEC, PHYLLOTAXIS_SPECS, REACTION_DIFFUSION_SPECS, RINGS_MODE_SPEC, SPECTRAL_TERRAIN_SPECS, type ParamSpec } from './schema';
 
 export interface TunnelParams {
   ringDensity: number;
@@ -722,9 +722,14 @@ const allBasic = (specs: readonly ParamSpec[]): ParamSpec[] => withTiers(specs, 
 export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   shape: withTiers(SHAPE_SPECS, ['baseShape', 'size', 'rotation', 'effectType', 'thickness', 'colorMode', 'solidColor', 'glow']),
   tunnel: withTiers(TUNNEL_SPECS, ['ringDensity', 'ringContrast', 'pattern', 'sides', 'twist', 'flightMode', 'hueSpread', 'beatReactivity']),
-  particles: withTiers(PARTICLE_SPECS, ['brightness', 'shape', 'size', 'rotation', 'zoom', 'hueShift', 'mode', 'beatReactivity']),
+  // The layout mode and phyllotaxis settings (Slice 7.14) follow the base particle settings.
+  particles: [
+    ...withTiers(PARTICLE_SPECS, ['brightness', 'shape', 'size', 'rotation', 'zoom', 'hueShift', 'mode', 'beatReactivity']),
+    PARTICLE_MODE_SPEC,
+    ...PHYLLOTAXIS_SPECS,
+  ],
   crown: allBasic(CROWN_SPECS),
-  rings: allBasic(RINGS_SPECS),
+  rings: [...allBasic(RINGS_SPECS), RINGS_MODE_SPEC],
   shockwave: allBasic(SHOCKWAVE_SPECS),
   bars: allBasic(BARS_SPECS),
   bassPulse: allBasic(BASS_PULSE_SPECS),
@@ -732,6 +737,12 @@ export const LAYER_SPECS: Readonly<Record<string, readonly ParamSpec[]>> = {
   julia: allBasic(JULIA_SPECS),
   orbit: allBasic(ORBIT_SPECS),
   architecture: allBasic(ARCHITECTURE_SPECS),
+  moire: MOIRE_SPECS,
+  spectralTerrain: SPECTRAL_TERRAIN_SPECS,
+  chladniSand: CHLADNI_SPECS,
+  ferrofluid: FERROFLUID_SPECS,
+  // Retired (Slice 15.10): no factory draws it. The schema stays so old saved presets still parse.
+  reactionDiffusion: REACTION_DIFFUSION_SPECS,
 };
 
 /** Basic controls of the combined Feedback and post section (8). Applied in place below, these specs are not shared. */
@@ -839,11 +850,13 @@ export const FEEDBACK_SPECS: readonly ParamSpec[] = [
   { type: 'float', name: 'warp', label: 'Wave warp amount', group: 'Warp', default: 0, min: 0, max: 1, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'mobius'] }, description: 'How much the trail ripples with a wave pattern.' },
   { type: 'float', name: 'warpScale', label: 'Wave count', group: 'Warp', default: 1, min: 0.1, max: 4, step: 0.01, showWhen: { warpMode: ['classic', 'curl'] }, description: 'How many waves cross the screen. In Classic mode it needs Wave warp amount above 0.' },
   { type: 'float', name: 'warpSpeed', label: 'Wave speed', group: 'Warp', default: 1, min: 0, max: 15, step: 0.01, showWhen: { warpMode: ['classic', 'curl', 'rgbSplit'] }, description: 'How fast the waves move. In Classic mode it needs Wave warp amount above 0.' },
-  { type: 'float', name: 'decay', label: 'Trail length', group: 'Trail', default: 0.92, min: 0.5, max: 1, step: 0.001, description: 'How much of the last frame stays each frame. 1 keeps everything; lower values make trails shrink faster. Works by multiplying, so bright trails fade smoothly.' },
+  { type: 'float', name: 'decay', label: 'Trail length', group: 'Trail', default: 0.92, min: 0, max: 1, step: 0.001, description: 'How much of the last frame stays each frame. 1 keeps everything; lower values make trails shrink faster. Works by multiplying, so bright trails fade smoothly.' },
   { type: 'float', name: 'fade', label: 'Trail fade-out', group: 'Trail', default: 0.004, min: 0, max: 0.1, step: 0.0005, description: 'Takes a fixed amount of brightness off every frame, so faint trails vanish completely instead of lingering. Use with Trail length: length shortens trails smoothly, fade-out clears what is left.' },
   { type: 'enum', name: 'wrap', label: 'Trail edges (clamp or wrap)', group: 'Trail', default: 'clamp', options: ['clamp', 'wrap'], description: 'What the trail does at the screen edge. Clamp stretches the edge colour; wrap brings it back in from the other side.' },
   { type: 'float', name: 'hueDrift', label: 'Trail hue drift per frame (rad)', group: 'Colour', default: 0, min: -0.1, max: 0.1, step: 0.001, description: 'Shifts the trail colours a little every frame, so older trails change colour.' },
   { type: 'float', name: 'blur', label: 'Trail blur', group: 'Colour', default: 0, min: 0, max: 1, step: 0.01, description: 'Softens the trail a little every frame, so older trails go blurry.' },
+  // Opt-in feedback warp settings (Slice 7.11).
+  ...FEEDBACK_WARP_SPECS,
 ];
 for (const spec of [...POST_SPECS, ...FEEDBACK_SPECS]) {
   if (FEEDBACK_POST_BASIC.includes(spec.name)) (spec as TieredSpec).tier = 'basic';

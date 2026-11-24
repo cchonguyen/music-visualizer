@@ -1,8 +1,7 @@
 // Built-in presets shipped in the repo (read-only). Each JSON file is checked by parsePreset at startup.
-import { BLEND_MODES, parsePreset, type Preset, type PresetMood, type PresetTheme, type SchemaRegistry } from '../format';
+import { parsePreset, type Preset, type PresetMood, type PresetTheme, type SchemaRegistry } from '../format';
 import { FEEDBACK_SPECS, LAYER_SPECS, POST_SPECS } from '../layerSchemas';
 import { migrateWaveformsInPreset } from '../legacyShapeMigration';
-import { FEEDBACK_WARP_SPECS, RINGS_MODE_SPEC, MOIRE_SPECS, SPECTRAL_TERRAIN_SPECS, CHLADNI_SPECS, FERROFLUID_SPECS, REACTION_DIFFUSION_SPECS, PARTICLE_MODE_SPEC, type ParamSpec, type EnumSpec, type NumberSpec } from '../schema';
 import crown from './crown.json';
 import flight from './flight.json';
 import bars from './bars.json';
@@ -41,55 +40,10 @@ import preset30 from './30-corridor-glide.json';
 import preset31 from './31-bouncing-ribbon-wave.json';
 import preset32 from './32-twisting-scope-wave.json';
 
-// Support 'alpha' and 'screen' in layer blend specification
-if (!BLEND_MODES.includes('alpha' as any)) {
-  (BLEND_MODES as unknown as string[]).push('alpha', 'screen');
-}
-
-// Extend FEEDBACK_SPECS with opt-in feedback warp parameters
-for (const spec of FEEDBACK_WARP_SPECS) {
-  if (!FEEDBACK_SPECS.some((s) => s.name === spec.name)) {
-    (FEEDBACK_SPECS as ParamSpec[]).push(spec);
-  }
-}
-
-// Extend rings schema with shape/mode option
-const ringsSpecs = LAYER_SPECS.rings;
-if (ringsSpecs && !ringsSpecs.some((s) => s.name === 'mode')) {
-  (ringsSpecs as ParamSpec[]).push(RINGS_MODE_SPEC);
-}
-
-// Extend particles schema with layout mode option (Slice 7.14)
-const particleSpecs = LAYER_SPECS.particles;
-if (particleSpecs && !particleSpecs.some((s) => s.name === 'mode')) {
-  (particleSpecs as ParamSpec[]).push(PARTICLE_MODE_SPEC);
-}
-
-// Extend waveform schema mode with star7 and lissajous
-const waveformSpecs = LAYER_SPECS.waveform;
-const waveformModeSpec = waveformSpecs?.find((s) => s.name === 'mode') as EnumSpec | undefined;
-if (waveformModeSpec && !waveformModeSpec.options.includes('star7')) {
-  waveformModeSpec.options = [...waveformModeSpec.options, 'star7', 'lissajous'];
-}
-
-// Allow low decay values down to 0.0 for flagships (07 uses 0.25, 08 uses 0.15)
-const decaySpec = FEEDBACK_SPECS.find((s) => s.name === 'decay') as NumberSpec | undefined;
-if (decaySpec) {
-  decaySpec.min = 0.0;
-}
-
 export const SCHEMAS: SchemaRegistry = {
   feedback: FEEDBACK_SPECS,
   post: POST_SPECS,
-  layers: {
-    ...LAYER_SPECS,
-    ...(LAYER_SPECS.shape ? {} : { shape: (LAYER_SPECS as any).shape }),
-    moire: MOIRE_SPECS,
-    spectralTerrain: SPECTRAL_TERRAIN_SPECS,
-    chladniSand: CHLADNI_SPECS,
-    ferrofluid: FERROFLUID_SPECS,
-    reactionDiffusion: REACTION_DIFFUSION_SPECS,
-  },
+  layers: LAYER_SPECS,
 };
 
 export type PresetGroup = 'flagship' | 'textures' | 'classic' | 'archive';
