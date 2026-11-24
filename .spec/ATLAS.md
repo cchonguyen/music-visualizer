@@ -51,3 +51,4 @@
 - `499` `.spec/specs/stage-29-music-reactive-sliders.md` — Stage 29 Music-Reactive Core Sliders & Song-Arc Modulation spec
 - `500` `.spec/specs/stage-30-docs-text-audit.md` — Stage 30 Docs, Comments & UI Text Audit spec
 - `510` `docs/README.md` — Index of the `docs/` folder and which files are historical
+- `520` `.spec/specs/stage-31-streamlining.md` — Stage 31 Streamlining and Consolidation spec
