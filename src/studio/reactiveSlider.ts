@@ -70,11 +70,11 @@ const ENUM_TRIGGER_SOURCES = [
 ] as const;
 
 const ENUM_TRIGGER_CHIPS: ReadonlyArray<{ id: string; label: string; link: AudioLink }> = [
-  { id: 'section8', label: 'Section 8s', link: { source: 'section', amount: 1, smooth: 0, cooldownSec: 8 } },
-  { id: 'drop10', label: 'Drop 10s', link: { source: 'drop', amount: 1, smooth: 0, cooldownSec: 10 } },
-  { id: 'phrase16b', label: 'Phrase 16b', link: { source: 'phrase16', amount: 1, smooth: 0, cooldownSec: 4 } },
-  { id: 'phrase32b', label: 'Phrase 32b', link: { source: 'phrase32', amount: 1, smooth: 0, cooldownSec: 8 } },
-  { id: 'beat4', label: 'Beat 4s', link: { source: 'beat', amount: 1, smooth: 0, cooldownSec: 4 } },
+  { id: 'section8', label: 'New section (8 s gap)', link: { source: 'section', amount: 1, smooth: 0, cooldownSec: 8 } },
+  { id: 'drop10', label: 'Drop (10 s gap)', link: { source: 'drop', amount: 1, smooth: 0, cooldownSec: 10 } },
+  { id: 'phrase16b', label: 'Every 16 beats', link: { source: 'phrase16', amount: 1, smooth: 0, cooldownSec: 4 } },
+  { id: 'phrase32b', label: 'Every 32 beats', link: { source: 'phrase32', amount: 1, smooth: 0, cooldownSec: 8 } },
+  { id: 'beat4', label: 'Beat (4 s gap)', link: { source: 'beat', amount: 1, smooth: 0, cooldownSec: 4 } },
 ];
 
 const COLOUR_RECIPES: ReadonlyArray<{ id: string; label: string; link: AudioLink }> = [
@@ -220,6 +220,7 @@ export function attachReactiveSlider(opts: AttachReactiveSliderOptions): Reactiv
   boltBtn.className = 'mv-react-bolt';
   boltBtn.textContent = '⚡';
   boltBtn.setAttribute?.('aria-label', `${spec.label} reactivity`);
+  boltBtn.setAttribute?.('data-tooltip', 'Make this setting react to the music');
   boltBtn.setAttribute?.('aria-expanded', 'false');
   if (typeof boltHost.append === 'function') {
     boltHost.append(boltBtn);
@@ -700,7 +701,7 @@ export function attachReactiveSlider(opts: AttachReactiveSliderOptions): Reactiv
     smoothInput = sm.input;
     smoothVal = sm.valEl;
 
-    const gate = makeSliderRow('Gate Threshold', LINK_THRESHOLD_MIN, LINK_THRESHOLD_MAX, 0.02, (v, discrete) => {
+    const gate = makeSliderRow('Gate level', LINK_THRESHOLD_MIN, LINK_THRESHOLD_MAX, 0.02, (v, discrete) => {
       const link = ensureLink();
       link.threshold = v;
       syncVisual();
@@ -710,7 +711,7 @@ export function attachReactiveSlider(opts: AttachReactiveSliderOptions): Reactiv
     gateInput = gate.input;
     gateVal = gate.valEl;
 
-    const slew = makeSliderRow('Flip Slew', LINK_FLIP_SLEW_MIN, LINK_FLIP_SLEW_MAX, 0.05, (v, discrete) => {
+    const slew = makeSliderRow('Flip glide (s)', LINK_FLIP_SLEW_MIN, LINK_FLIP_SLEW_MAX, 0.05, (v, discrete) => {
       const link = ensureLink();
       link.flipSlew = v;
       syncVisual();

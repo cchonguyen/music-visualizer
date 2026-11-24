@@ -270,7 +270,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     group: "Warp",
     default: "classic",
     options: ["classic", "curl", "polarFold", "mobius", "rgbSplit"],
-    description: "Selects the coordinate warp algorithm applied to feedback coordinates each frame.",
+    description: "The kind of warp applied to the trail every frame.",
   },
   {
     type: "enum",
@@ -279,7 +279,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     group: "Warp",
     default: "sub",
     options: [...WARP_AUDIO_SOURCES],
-    description: "Selects the frequency band or transient signal driving dynamic coordinate warp swells.",
+    description: "What part of the music makes the warp swell.",
   },
   {
     type: "float",
@@ -290,7 +290,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 1.0,
     step: 0.05,
-    description: "Scales audio-driven warp coordinate displacement and flow velocity.",
+    description: "How much the music strengthens and speeds up the warp. 0 ignores the music.",
   },
   {
     type: "float",
@@ -301,7 +301,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 5,
     max: 200,
     step: 5,
-    description: "Sets envelope rise time in milliseconds for warp transient expansion.",
+    description: "How quickly the warp swells when the music hits, in milliseconds.",
   },
   {
     type: "float",
@@ -312,7 +312,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 50,
     max: 1000,
     step: 10,
-    description: "Sets envelope recovery time in milliseconds as warp settles back to resting scale.",
+    description: "How slowly the warp settles back afterwards, in milliseconds.",
   },
   {
     type: "float",
@@ -323,32 +323,32 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 0.25,
     step: 0.005,
-    description: "Sets the radius of the unwarped central portal disk.",
+    description: "Size of the calm, unwarped circle in the middle.",
     showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
     name: "mobiusPoleOffset",
-    label: "Pole separation",
+    label: "Whirlpool spacing",
     group: "Warp",
     default: 0.48,
     min: 0.2,
     max: 0.85,
     step: 0.02,
-    description: "Adjusts the spatial distance between the two Möbius vortex poles.",
+    description: "How far apart the two whirlpool centres are.",
     showWhen: { warpMode: "mobius" },
   },
   // Slice 7.22 additions
   {
     type: "int",
     name: "curlOctaves",
-    label: "Curl octaves",
+    label: "Flow detail",
     group: "Warp",
     default: 2,
     min: 1,
     max: 3,
     step: 1,
-    description: "Sets the number of noise octave layers used in the curl fluid simulation.",
+    description: "Layers of detail in the fluid flow. More looks finer and costs more.",
     showWhen: { warpMode: "curl" },
   },
   {
@@ -360,7 +360,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 1.0,
     step: 0.05,
-    description: "Controls treble-reactive smoke turbulence chaos in curl warp.",
+    description: "How much the treble stirs the flow into smoky turbulence.",
     showWhen: { warpMode: "curl" },
   },
   {
@@ -370,7 +370,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     group: "Warp",
     default: "plumes",
     options: ["plumes", "eddies", "outflow", "inflow"],
-    description: "Chooses the fluid flow pattern style governing curl vector motion.",
+    description: "The overall shape of the fluid flow.",
     showWhen: { warpMode: "curl" },
   },
   {
@@ -382,19 +382,19 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 1.0,
     step: 0.05,
-    description: "Controls angular sector mirroring repetition around the center.",
+    description: "Repeats the trail in mirrored slices around the centre.",
     showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
     name: "mandalaTile",
-    label: "Wallpaper crystal tiling",
+    label: "Crystal tiling",
     group: "Warp",
     default: 0.0,
     min: 0.0,
     max: 1.0,
     step: 0.05,
-    description: "Tiles the feedback buffer with crystal wallpaper symmetry.",
+    description: "Repeats the trail in a tiled, crystal-like pattern.",
     showWhen: { warpMode: "polarFold" },
   },
   {
@@ -406,29 +406,29 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: -1.0,
     max: 1.0,
     step: 0.05,
-    description: "Sets counter-rotational spin speed across nested mandala rings.",
+    description: "Spins inner and outer rings of the mandala in opposite directions.",
     showWhen: { warpMode: "polarFold" },
   },
   {
     type: "enum",
     name: "mandalaPattern",
-    label: "Symmetry lock",
+    label: "Mandala repeats",
     group: "Warp",
     default: "auto",
     options: ["auto", "4", "6", "8", "12", "16"],
-    description: "Locks the rotational symmetry order for crystal mandala tiling.",
+    description: "How many times the mandala pattern repeats around the circle.",
     showWhen: { warpMode: "polarFold" },
   },
   {
     type: "float",
     name: "mobiusFlow",
-    label: "Dipole flow speed",
+    label: "Whirlpool flow speed",
     group: "Warp",
     default: 0.85,
     min: 0.0,
     max: 2.0,
     step: 0.05,
-    description: "Controls the circulation flow velocity through Möbius vortex poles.",
+    description: "How fast the trail flows between the two whirlpool centres.",
     showWhen: { warpMode: "mobius" },
   },
   {
@@ -440,19 +440,19 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: -2.0,
     max: 2.0,
     step: 0.05,
-    description: "Controls logarithmic spiral winding tightness around Möbius poles.",
+    description: "How tightly the trail spirals into each whirlpool centre.",
     showWhen: { warpMode: "mobius" },
   },
   {
     type: "float",
     name: "mobiusWander",
-    label: "Pole & screen drift",
+    label: "Whirlpool wander",
     group: "Warp",
     default: 0.55,
     min: 0.0,
     max: 1.0,
     step: 0.05,
-    description: "Modulates autonomous orbital wandering of Möbius poles across the screen.",
+    description: "How much the whirlpool centres wander around the screen.",
     showWhen: { warpMode: "mobius" },
   },
   {
@@ -462,7 +462,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     group: "Warp",
     default: "auto",
     options: ["auto", "dipoleFlow", "doubleVortex", "figureEight", "breathingOrbit"],
-    description: "Chooses the automated trajectory pattern followed by Möbius poles.",
+    description: "The path the whirlpool centres follow.",
     showWhen: { warpMode: "mobius" },
   },
   // Warp group (high-intensity at bottom)
@@ -475,7 +475,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 4,
     max: 16,
     step: 1,
-    description: "Sets the number of radial reflection axes folded across the screen.",
+    description: "How many mirrored slices the trail is folded into.",
     showWhen: { warpMode: "polarFold" },
     intense: true,
     warning: "Intense visual transform. Highly sensitive to small adjustments — use with care.",
@@ -489,7 +489,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 0.08,
     step: 0.001,
-    description: "Displaces red, green, and blue coordinates during coordinate warping.",
+    description: "Pulls the red, green and blue parts of the trail apart for a rainbow fringe.",
     showWhen: { warpMode: "rgbSplit" },
     intense: true,
     warning: "Intense visual transform. Highly sensitive to small adjustments — use with care.",
@@ -510,13 +510,13 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
   {
     type: "float",
     name: "sobel",
-    label: "Edge outline (Sobel)",
+    label: "Edge outline",
     group: "Trail",
     default: 0.0,
     min: 0.0,
     max: 1.0,
     step: 0.01,
-    description: "Extracts high-contrast edge gradients using Sobel spatial filtering.",
+    description: "Turns the trail into glowing outlines of its edges.",
     intense: true,
     warning: "Intense visual transform. Highly sensitive to small adjustments — use with care.",
   },
@@ -531,7 +531,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 2.0,
     max: 16.0,
     step: 0.25,
-    description: "Sets the spatial frequency and count of topographic contour bands.",
+    description: "How many contour lines are drawn, like a topographic map.",
     showWhen: { solarize: { above: 0 } },
   },
   {
@@ -543,7 +543,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.1,
     max: 1.0,
     step: 0.05,
-    description: "Adjusts the stroke thickness of topographic contour bands.",
+    description: "How thick the contour lines are.",
     showWhen: { solarize: { above: 0 } },
   },
   {
@@ -555,7 +555,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 1.0,
     step: 0.05,
-    description: "Spreads palette hues across topographic contour gradient cycles.",
+    description: "How many colours run through the contour lines.",
     showWhen: { solarize: { above: 0 } },
   },
   {
@@ -567,7 +567,7 @@ export const FEEDBACK_WARP_SPECS: readonly ParamSpec[] = [
     min: 0.0,
     max: 1.0,
     step: 0.01,
-    description: "Inverts colors above a luminous threshold for a surreal solarized look.",
+    description: "Flips the brightest colours to their opposites for a solarized photo look.",
     intense: true,
     warning: "Intense visual transform. Highly sensitive to small adjustments — use with care.",
   },
@@ -581,7 +581,7 @@ export const RINGS_MODE_SPEC: ParamSpec = {
   group: "Shape",
   default: "rings",
   options: ["rings", "orbitTriangles", "polarGrid"],
-  description: "Switches between concentric rings, orbiting triangles, and polar grid layouts.",
+  description: "Concentric rings, orbiting triangles, or a polar grid.",
 };
 
 /** Retired post keys (CRT controls never reached the compositor); old presets still load silently. */
@@ -678,15 +678,15 @@ export const MOIRE_DEFAULTS: Required<MoireParams> = {
 };
 
 export const MOIRE_SPECS: readonly ParamSpec[] = [
-  { type: "float", name: "scale", label: "Grid scale", group: "Moiré", default: MOIRE_DEFAULTS.scale, min: 4.0, max: 75.0, step: 0.5, description: "Sets the density and spatial frequency of the moiré interference grid." },
-  { type: "float", name: "speed", label: "Animation speed", group: "Moiré", default: MOIRE_DEFAULTS.speed, min: 0.0, max: 3.0, step: 0.05, description: "Controls rotation and phase animation velocity of the moiré lattice." },
-  { type: "float", name: "lineWidth", label: "Line width", group: "Moiré", default: MOIRE_DEFAULTS.lineWidth, min: 0.1, max: 0.9, step: 0.05, description: "Adjusts the stroke thickness of the intersecting moiré lines." },
-  { type: "float", name: "brightness", label: "Brightness", group: "Moiré", default: MOIRE_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05, description: "Scales overall luminosity of the moiré interference pattern." },
-  { type: "float", name: "contrast", label: "Contrast", group: "Moiré", default: MOIRE_DEFAULTS.contrast, min: 0.1, max: 1.0, step: 0.05, description: "Enhances dynamic contrast between dark and bright interference bands." },
-  { type: "float", name: "waveShape", label: "Edge softness / sharpness", group: "Moiré", default: MOIRE_DEFAULTS.waveShape, min: 0.0, max: 1.0, step: 0.05, description: "Shapes interference profile between smooth sine waves and sharp steps." },
-  { type: "float", name: "colorSpread", label: "Two-tone color gradient", group: "Colour", default: MOIRE_DEFAULTS.colorSpread, min: 0.0, max: 1.0, step: 0.05, description: "Blends two-tone accent color spread across moiré interference fringes." },
-  { type: "enum", name: "patternMode", label: "Loom pattern style", group: "Moiré", default: MOIRE_DEFAULTS.patternMode, options: ["starburstLoom", "twinCircles", "doubleSpirals", "warpedCrossGrid"], description: "Selects the geometric lattice structure for overlapping wave patterns." },
-  { type: "float", name: "audioWarp", label: "Bass center sweep & kick ripple", group: "Moiré", default: MOIRE_DEFAULTS.audioWarp, min: 0.0, max: 1.0, step: 0.05, description: "Modulates lattice distortion depth from bass sweeps and kick ripples." },
+  { type: "float", name: "scale", label: "Grid scale", group: "Moiré", default: MOIRE_DEFAULTS.scale, min: 4.0, max: 75.0, step: 0.5, description: "How many lines are in each grid. More lines make finer patterns." },
+  { type: "float", name: "speed", label: "Animation speed", group: "Moiré", default: MOIRE_DEFAULTS.speed, min: 0.0, max: 3.0, step: 0.05, description: "How fast the grids turn and slide past each other." },
+  { type: "float", name: "lineWidth", label: "Line width", group: "Moiré", default: MOIRE_DEFAULTS.lineWidth, min: 0.1, max: 0.9, step: 0.05, description: "How thick the grid lines are." },
+  { type: "float", name: "brightness", label: "Brightness", group: "Moiré", default: MOIRE_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05, description: "How bright the pattern is." },
+  { type: "float", name: "contrast", label: "Contrast", group: "Moiré", default: MOIRE_DEFAULTS.contrast, min: 0.1, max: 1.0, step: 0.05, description: "How strongly the bright and dark bands stand apart." },
+  { type: "float", name: "waveShape", label: "Edge softness / sharpness", group: "Moiré", default: MOIRE_DEFAULTS.waveShape, min: 0.0, max: 1.0, step: 0.05, description: "0 gives soft blurry bands, 1 gives crisp hard edges." },
+  { type: "float", name: "colorSpread", label: "Two-tone color gradient", group: "Colour", default: MOIRE_DEFAULTS.colorSpread, min: 0.0, max: 1.0, step: 0.05, description: "Adds a second colour to the bands. 0 is one colour." },
+  { type: "enum", name: "patternMode", label: "Loom pattern style", group: "Moiré", default: MOIRE_DEFAULTS.patternMode, options: ["starburstLoom", "twinCircles", "doubleSpirals", "warpedCrossGrid"], description: "The kind of grids that overlap." },
+  { type: "float", name: "audioWarp", label: "Bass center sweep & kick ripple", group: "Moiré", default: MOIRE_DEFAULTS.audioWarp, min: 0.0, max: 1.0, step: 0.05, description: "How much the bass bends the grids and kicks send ripples through them." },
 ];
 
 export const MOIRE_SCHEMA = MOIRE_SPECS;
@@ -728,19 +728,19 @@ export const SPECTRAL_TERRAIN_DEFAULTS: Required<SpectralTerrainParams> = {
 };
 
 export const SPECTRAL_TERRAIN_SPECS: readonly ParamSpec[] = [
-  { type: "float", name: "elevation", label: "Peak elevation", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.elevation, min: 0.1, max: 2.0, step: 0.01, description: "Scales vertical peak elevation driven by audio frequency bands." },
-  { type: "float", name: "width", label: "Terrain width", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.width, min: 0.5, max: 2.5, step: 0.01, description: "Controls horizontal camera span and width of the 3D terrain grid." },
-  { type: "float", name: "horizonY", label: "Horizon Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.horizonY, min: -0.5, max: 0.8, step: 0.01, description: "Sets vertical positioning of the distant horizon vanishing line." },
-  { type: "float", name: "foregroundY", label: "Foreground Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.foregroundY, min: -0.9, max: 0.2, step: 0.01, description: "Sets vertical positioning of the bottom foreground edge." },
-  { type: "float", name: "brightness", label: "Ridge brightness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.01, description: "Scales luminous glow intensity of illuminated terrain ridges." },
-  { type: "float", name: "lineThickness", label: "Line thickness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.lineThickness, min: 0.5, max: 4.0, step: 0.1, description: "Sets stroke width of wireframe terrain ridge vectors." },
-  { type: "enum", name: "ridgeShape", label: "Ridge profile", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.ridgeShape, options: ["smooth", "rounded", "pointed", "stepped"], description: "Selects geometric profile curve for frequency peak ridges." },
-  { type: "enum", name: "layoutMode", label: "Mountain layout", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.layoutMode, options: ["fullHorizon", "centerPeak", "canyon"], description: "Configures geographic layout arrangement of mountain peaks." },
-  { type: "int", name: "gridCols", label: "3D front-to-back grid lines", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.gridCols, min: 0, max: 32, step: 4, description: "Sets count of longitudinal depth grid lines spanning toward horizon." },
-  { type: "float", name: "skirtOpacity", label: "Mountain fill opacity", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.skirtOpacity, min: 0.0, max: 1.0, step: 0.05, description: "Controls opacity of terrain body fill shading under the ridges." },
-  { type: "float", name: "colorSpread", label: "Cyan-to-magenta gradient", group: "Colour", default: SPECTRAL_TERRAIN_DEFAULTS.colorSpread, min: 0.0, max: 1.0, step: 0.05, description: "Adjusts cyan-to-magenta color gradient spread across depth." },
-  { type: "bool", name: "invertColors", label: "Invert colors", group: "Colour", default: SPECTRAL_TERRAIN_DEFAULTS.invertColors, description: "Inverts ridge and valley color assignments across the terrain." },
-  { type: "float", name: "terrainFlow", label: "Downhill trail drift", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.terrainFlow, min: 0.0, max: 1.0, step: 0.05, description: "Controls continuous forward downhill drift velocity of the terrain." },
+  { type: "float", name: "elevation", label: "Peak elevation", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.elevation, min: 0.1, max: 2.0, step: 0.01, description: "How tall the ridges grow with the music." },
+  { type: "float", name: "width", label: "Terrain width", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.width, min: 0.5, max: 2.5, step: 0.01, description: "How wide the terrain stretches across the screen." },
+  { type: "float", name: "horizonY", label: "Horizon Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.horizonY, min: -0.5, max: 0.8, step: 0.01, description: "Where the far edge of the terrain sits on screen." },
+  { type: "float", name: "foregroundY", label: "Foreground Y", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.foregroundY, min: -0.9, max: 0.2, step: 0.01, description: "Where the near edge of the terrain sits on screen." },
+  { type: "float", name: "brightness", label: "Ridge brightness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.01, description: "How brightly the ridge lines glow." },
+  { type: "float", name: "lineThickness", label: "Line thickness", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.lineThickness, min: 0.5, max: 4.0, step: 0.1, description: "How thick the ridge lines are." },
+  { type: "enum", name: "ridgeShape", label: "Ridge profile", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.ridgeShape, options: ["smooth", "rounded", "pointed", "stepped"], description: "The shape of each peak: smooth, rounded, pointed or stepped." },
+  { type: "enum", name: "layoutMode", label: "Mountain layout", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.layoutMode, options: ["fullHorizon", "centerPeak", "canyon"], description: "Peaks across the whole horizon, one central peak, or a canyon." },
+  { type: "int", name: "gridCols", label: "3D front-to-back grid lines", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.gridCols, min: 0, max: 32, step: 4, description: "How many lines run from the front toward the horizon." },
+  { type: "float", name: "skirtOpacity", label: "Mountain fill opacity", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.skirtOpacity, min: 0.0, max: 1.0, step: 0.05, description: "How solid the dark fill under each ridge is. 0 shows only lines." },
+  { type: "float", name: "colorSpread", label: "Cyan-to-magenta gradient", group: "Colour", default: SPECTRAL_TERRAIN_DEFAULTS.colorSpread, min: 0.0, max: 1.0, step: 0.05, description: "How much the colour shifts from cyan to magenta from near to far." },
+  { type: "bool", name: "invertColors", label: "Invert colors", group: "Colour", default: SPECTRAL_TERRAIN_DEFAULTS.invertColors, description: "Swaps the colours of the peaks and valleys." },
+  { type: "float", name: "terrainFlow", label: "Downhill trail drift", group: "Terrain", default: SPECTRAL_TERRAIN_DEFAULTS.terrainFlow, min: 0.0, max: 1.0, step: 0.05, description: "How fast the terrain scrolls toward you." },
 ];
 
 export const SPECTRAL_TERRAIN_SCHEMA = SPECTRAL_TERRAIN_SPECS;
@@ -767,7 +767,7 @@ export const PARTICLE_SEED_SHAPE_SPEC: EnumSpec = {
   group: "Shape",
   default: "petal",
   options: ["orb", "petal", "star"],
-  description: "Chooses the geometric morphology of individual particle seeds.",
+  description: "What each particle looks like.",
   showWhen: { mode: "phyllotaxis" },
 };
 
@@ -778,7 +778,7 @@ export const PARTICLE_PHYLLO_PATTERN_SPEC: EnumSpec = {
   group: "Shape",
   default: "auto",
   options: ["auto", "golden137.5", "lucas99.5", "fibonacci137.6", "rosette137.3", "starburst144"],
-  description: "Sets the mathematical divergence angle determining botanical spiral patterns.",
+  description: "The turn between neighbouring particles, which sets the spiral pattern. Golden 137.5° is the sunflower look.",
   showWhen: { mode: "phyllotaxis" },
 };
 
@@ -791,7 +791,7 @@ export const PARTICLE_PETAL_STRETCH_SPEC: NumberSpec = {
   min: 0.5,
   max: 3.0,
   step: 0.05,
-  description: "Elongates particle geometry along radial velocity vectors.",
+  description: "Stretches particles into streaks along their direction of travel.",
   showWhen: { mode: "phyllotaxis" },
 };
 
@@ -804,7 +804,7 @@ export const PARTICLE_FLOW_SPEED_SPEC: NumberSpec = {
   min: 0.1,
   max: 4.0,
   step: 0.05,
-  description: "Controls the outward bloom expansion velocity of the particle field.",
+  description: "How fast the spiral blooms outward.",
   showWhen: { mode: "phyllotaxis" },
 };
 
@@ -817,7 +817,7 @@ export const PARTICLE_SUB_TWIST_SPEC: NumberSpec = {
   min: 0.0,
   max: 4.0,
   step: 0.05,
-  description: "Couples sub-bass audio energy to rotational spiral vortex twisting.",
+  description: "Lets the sub-bass twist the spiral.",
   showWhen: { mode: "phyllotaxis" },
 };
 
@@ -877,16 +877,16 @@ export const CHLADNI_DEFAULTS: Required<ChladniSandParams> = {
 };
 
 export const CHLADNI_SPECS: readonly ParamSpec[] = [
-  { type: "float", name: "scale", label: "Pattern scale", group: "Sand", default: CHLADNI_DEFAULTS.scale, min: 0.1, max: 3.0, step: 0.05, description: "Scales resonant acoustic nodal pattern frequency across the plate." },
-  { type: "float", name: "brightness", label: "Sand brightness", group: "Sand", default: CHLADNI_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05, description: "Controls luminous intensity of sand grain particles." },
-  { type: "float", name: "pointSize", label: "Grain size", group: "Sand", default: CHLADNI_DEFAULTS.pointSize, min: 0.5, max: 4.0, step: 0.1, description: "Adjusts rendered particle point diameter." },
-  { type: "float", name: "attraction", label: "Nodal attraction", group: "Sand", default: CHLADNI_DEFAULTS.attraction, min: 0.1, max: 3.0, step: 0.05, description: "Sets gravitational velocity pulling sand toward nodal lines." },
-  { type: "float", name: "jitter", label: "Kick jitter", group: "Sand", default: CHLADNI_DEFAULTS.jitter, min: 0.0, max: 3.0, step: 0.05, description: "Injects kinetic brownian dispersion into grains on bass kicks." },
-  { type: "colour", name: "color", label: "Sand colour", group: "Colour", default: CHLADNI_DEFAULTS.color, description: "Sets base tint color of the resonant sand grains." },
-  { type: "enum", name: "plateMode", label: "Plate geometry", group: "Sand", default: CHLADNI_DEFAULTS.plateMode, options: ["fullscreen", "isometricPlate", "radialMandala", "hexagon", "triangle", "starMandala", "morph"], description: "Chooses the boundary geometry of the vibrating resonant plate." },
-  { type: "enum", name: "harmonyMode", label: "Harmonic mode (n:m)", group: "Sand", default: CHLADNI_DEFAULTS.harmonyMode, options: ["auto", "1:2", "2:3", "3:4", "3:5", "4:5", "5:7", "6:8"], description: "Selects harmonic frequency integer ratios shaping nodal curves." },
-  { type: "float", name: "nodalSharpness", label: "Nodal line sharpness", group: "Sand", default: CHLADNI_DEFAULTS.nodalSharpness, min: 0.2, max: 2.0, step: 0.05, description: "Sharpens acoustic potential wells defining nodal line boundaries." },
-  { type: "float", name: "grainWarmth", label: "Amber/cyan color mix", group: "Colour", default: CHLADNI_DEFAULTS.grainWarmth, min: 0.0, max: 1.0, step: 0.05, description: "Blends between warm amber and cool spectral color tones." },
+  { type: "float", name: "scale", label: "Pattern scale", group: "Sand", default: CHLADNI_DEFAULTS.scale, min: 0.1, max: 3.0, step: 0.05, description: "How busy the sand pattern is. Higher makes more, smaller cells." },
+  { type: "float", name: "brightness", label: "Sand brightness", group: "Sand", default: CHLADNI_DEFAULTS.brightness, min: 0.1, max: 3.0, step: 0.05, description: "How bright the sand is." },
+  { type: "float", name: "pointSize", label: "Grain size", group: "Sand", default: CHLADNI_DEFAULTS.pointSize, min: 0.5, max: 4.0, step: 0.1, description: "How big each grain is." },
+  { type: "float", name: "attraction", label: "Nodal attraction", group: "Sand", default: CHLADNI_DEFAULTS.attraction, min: 0.1, max: 3.0, step: 0.05, description: "How fast the sand settles onto the pattern lines." },
+  { type: "float", name: "jitter", label: "Kick jitter", group: "Sand", default: CHLADNI_DEFAULTS.jitter, min: 0.0, max: 3.0, step: 0.05, description: "How much bass kicks scatter the sand." },
+  { type: "colour", name: "color", label: "Sand colour", group: "Colour", default: CHLADNI_DEFAULTS.color, description: "The colour of the sand." },
+  { type: "enum", name: "plateMode", label: "Plate geometry", group: "Sand", default: CHLADNI_DEFAULTS.plateMode, options: ["fullscreen", "isometricPlate", "radialMandala", "hexagon", "triangle", "starMandala", "morph"], description: "The shape of the vibrating plate." },
+  { type: "enum", name: "harmonyMode", label: "Harmonic mode (n:m)", group: "Sand", default: CHLADNI_DEFAULTS.harmonyMode, options: ["auto", "1:2", "2:3", "3:4", "3:5", "4:5", "5:7", "6:8"], description: "Which vibration pattern the plate makes." },
+  { type: "float", name: "nodalSharpness", label: "Nodal line sharpness", group: "Sand", default: CHLADNI_DEFAULTS.nodalSharpness, min: 0.2, max: 2.0, step: 0.05, description: "How tightly the sand gathers on the lines. Higher gives thinner, sharper lines." },
+  { type: "float", name: "grainWarmth", label: "Amber/cyan color mix", group: "Colour", default: CHLADNI_DEFAULTS.grainWarmth, min: 0.0, max: 1.0, step: 0.05, description: "Shifts the sand colour from warm amber toward cool tones." },
 ];
 
 export const CHLADNI_SAND_SCHEMA = CHLADNI_SPECS;
@@ -914,13 +914,13 @@ export const FERROFLUID_DEFAULTS: FerrofluidParams = {
 };
 
 export const FERROFLUID_SPECS: readonly ParamSpec[] = [
-  { type: "float", name: "radius", label: "Base radius", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.radius, min: 0.2, max: 1.2, step: 0.01, description: "Sets base spherical radius of the magnetic fluid core." },
-  { type: "float", name: "spikeAmp", label: "Spike amplitude", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeAmp, min: 0.0, max: 1.0, step: 0.01, description: "Controls maximum outward projection height of magnetic spikes." },
-  { type: "float", name: "spikeFreq", label: "Spike frequency", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeFreq, min: 0.2, max: 3.0, step: 0.05, description: "Adjusts spatial distribution frequency and count of surface spikes." },
-  { type: "float", name: "spikeSharp", label: "Spike sharpness", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeSharp, min: 1.0, max: 8.0, step: 0.1, description: "Sharpens the curvature tip profile of ferrofluid spikes." },
-  { type: "float", name: "rotSpeed", label: "Rotation speed", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.rotSpeed, min: -2.0, max: 2.0, step: 0.05, description: "Controls angular rotation velocity of the magnetic fluid body." },
-  { type: "float", name: "brightness", label: "Brightness", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.brightness, min: 0.2, max: 3.0, step: 0.05, description: "Scales specular core luminescence of the ferrofluid material." },
-  { type: "float", name: "fresnelGain", label: "Fresnel halo", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.fresnelGain, min: 0.0, max: 4.0, step: 0.1, description: "Increases grazing-angle edge lighting and specular halo intensity." },
+  { type: "float", name: "radius", label: "Base radius", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.radius, min: 0.2, max: 1.2, step: 0.01, description: "Size of the blob." },
+  { type: "float", name: "spikeAmp", label: "Spike amplitude", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeAmp, min: 0.0, max: 1.0, step: 0.01, description: "How tall the spikes grow." },
+  { type: "float", name: "spikeFreq", label: "Spike frequency", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeFreq, min: 0.2, max: 3.0, step: 0.05, description: "How many spikes cover the surface." },
+  { type: "float", name: "spikeSharp", label: "Spike sharpness", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.spikeSharp, min: 1.0, max: 8.0, step: 0.1, description: "How pointed the spike tips are." },
+  { type: "float", name: "rotSpeed", label: "Rotation speed", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.rotSpeed, min: -2.0, max: 2.0, step: 0.05, description: "How fast the blob turns." },
+  { type: "float", name: "brightness", label: "Brightness", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.brightness, min: 0.2, max: 3.0, step: 0.05, description: "How shiny and bright the blob is." },
+  { type: "float", name: "fresnelGain", label: "Rim light", group: "Ferrofluid", default: FERROFLUID_DEFAULTS.fresnelGain, min: 0.0, max: 4.0, step: 0.1, description: "Adds a bright rim of light around the blob edge." },
 ];
 
 /** Reaction-diffusion simulation and rendering parameters (Slice 7.17). */

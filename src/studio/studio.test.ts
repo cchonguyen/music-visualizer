@@ -828,8 +828,8 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
       'Auto': 'auto',
       'Crane sway': 'craneSway',
       'Dutch roll': 'dutchRoll',
-      'Push swell': 'breathingPush',
-      'Horizon 2.5D': 'horizonTilt',
+      'Push in and out': 'breathingPush',
+      'Horizon tilt': 'horizonTilt',
       'Still anchor': 'stillAnchor',
       'Off': 'off',
     });
@@ -845,7 +845,7 @@ describe('buildGlobalDirectorControls (slice 7.32)', () => {
       'Native (preset)': 'native',
       'Cyberpunk': 'cyberpunk',
       'Ember': 'ember',
-      'Biolum': 'biolum',
+      'Bioluminescent': 'biolum',
       'Vapor': 'vapor',
       'Prismatic': 'prismatic',
       'Monochrome Noir': 'noir',
@@ -1907,7 +1907,7 @@ describe('Slice 10.4: Studio User Folder Management UI & Read-Only Invariants', 
     expect(deleteBtn).toBeUndefined();
 
     // 6. Save button should be read-only indicator and clicking shows toast
-    const saveBtn = pane.buttons.find((b: any) => b.title.startsWith('Save (Read-only)'));
+    const saveBtn = pane.buttons.find((b: any) => b.title.startsWith('Save (built-in, read-only)'));
     expect(saveBtn).toBeDefined();
     saveBtn.fire('click');
     expect(showToastSpy).toHaveBeenCalledWith(expect.stringContaining('Built-in presets are read-only'));
@@ -2191,7 +2191,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     expect(nameBinding.options.readonly).toBe(true);
 
     // 3. Save button is read-only with warning toast
-    const saveBtn = pane.buttons.find((b: any) => b.title === 'Save (Read-only)');
+    const saveBtn = pane.buttons.find((b: any) => b.title === 'Save (built-in, read-only)');
     expect(saveBtn).toBeDefined();
     saveBtn.fire('click');
     expect(showToastSpy).toHaveBeenCalledWith('Built-in presets are read-only. Use "Save as…" to keep a copy.');
@@ -2365,7 +2365,7 @@ describe('Slice 11.4: Studio Admin UI Controls & System Preset Management', () =
     // UI should have refreshed back to user mode
     pane = getPane();
     expect(studio.adminBadge).toBeNull();
-    expect(pane.buttons.find((b: any) => b.title === 'Save (Read-only)')).toBeDefined();
+    expect(pane.buttons.find((b: any) => b.title === 'Save (built-in, read-only)')).toBeDefined();
     expect(pane.buttons.find((b: any) => b.title === 'Delete')).toBeUndefined();
 
     showToastSpy.mockRestore();
@@ -2635,11 +2635,11 @@ describe('Slice 26.5: Studio Blend time override controls', () => {
 
     customBlend.element.dispatchEvent({ type: 'mouseenter' });
     expect(helperBar?.textContent).toContain('Custom blend time');
-    expect(helperBar?.textContent).toContain('Override the transition crossfade');
+    expect(helperBar?.textContent).toContain('Use your own fade time');
 
     blendSec.element.dispatchEvent({ type: 'mouseenter' });
     expect(helperBar?.textContent).toContain('Blend time (s)');
-    expect(helperBar?.textContent).toContain('per-preset blend time override');
+    expect(helperBar?.textContent).toContain('overriding the usual fade');
   });
 });
 
@@ -4458,7 +4458,7 @@ describe('Slice 25.11: Humanized labels, [Linked]/[Morphed] badges, read-only hi
 
 describe('Slice 26.1: Studio inline SVG icons replace crown emoji in Admin controls', () => {
   it('uses plain text without crown emoji for ADMIN_BADGE_LABEL and EXIT_ADMIN_LABEL', () => {
-    expect(ADMIN_BADGE_LABEL).toBe('Admin Mode Active');
+    expect(ADMIN_BADGE_LABEL).toBe('Admin mode on');
     expect(ADMIN_BADGE_LABEL).not.toContain('👑');
     expect(EXIT_ADMIN_LABEL).toBe('Exit Admin Mode');
     expect(EXIT_ADMIN_LABEL).not.toContain('👑');

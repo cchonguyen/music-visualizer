@@ -11,7 +11,7 @@ import { showToast } from '../ui/toast';
 
 export type { AdminSessionState };
 
-export const ADMIN_BADGE_LABEL = 'Admin Mode Active';
+export const ADMIN_BADGE_LABEL = 'Admin mode on';
 export const ADMIN_ACCESS_LABEL = 'Admin Access';
 export const EXIT_ADMIN_LABEL = 'Exit Admin Mode';
 export const DELETE_ARMED_LABEL = 'Tap again to delete';

@@ -232,7 +232,7 @@ export const OPACITY_SPEC: NumberSpec = {
   min: 0,
   max: 1,
   step: 0.01,
-  description: "Controls how visible this layer is when blended over earlier layers.",
+  description: "How see-through this layer is. 0 hides it, 1 is fully visible.",
 };
 export const SECONDS_SPEC: NumberSpec = {
   type: "float",
@@ -243,7 +243,7 @@ export const SECONDS_SPEC: NumberSpec = {
   min: 0.3,
   max: 10,
   step: 0.01,
-  description: "Duration of the transition animation when switching to this preset, in seconds.",
+  description: "How long the switch into this preset takes, in seconds.",
 };
 export const BLEND_SECONDS_SPEC: NumberSpec = {
   type: "float",
@@ -254,7 +254,7 @@ export const BLEND_SECONDS_SPEC: NumberSpec = {
   min: PRESET_BLEND_MIN_SEC,
   max: PRESET_BLEND_MAX_SEC,
   step: 0.05,
-  description: "Optional per-preset blend time override in seconds (0 for an instant cut). Missing means use the transition crossfade.",
+  description: "Fade time into this preset, in seconds, overriding the usual fade. 0 cuts instantly.",
 };
 export const BLEND_SPEC: EnumSpec = {
   type: "enum",
@@ -263,7 +263,7 @@ export const BLEND_SPEC: EnumSpec = {
   group: "Layer",
   default: "max",
   options: BLEND_MODES,
-  description: "Chooses how this layer combines with earlier layers (Max, Alpha, Add, or Screen).",
+  description: "How this layer mixes with the layers under it: Max keeps the brighter, Alpha covers, Add and Screen brighten.",
 };
 export const TRAILS_SPEC: BoolSpec = {
   type: "bool",
@@ -271,7 +271,7 @@ export const TRAILS_SPEC: BoolSpec = {
   label: "Trails",
   group: "Layer",
   default: true,
-  description: "When on, this layer feeds into the feedback trail buffer instead of drawing only on the final pass.",
+  description: "On: this layer leaves trails. Off: it draws on top with no trails.",
 };
 export const STYLE_SPEC: EnumSpec = {
   type: "enum",
@@ -280,7 +280,7 @@ export const STYLE_SPEC: EnumSpec = {
   group: "Transition",
   default: "crossfade",
   options: TRANSITION_STYLES,
-  description: "Visual transition effect used when switching into this preset.",
+  description: "The effect used when switching into this preset.",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
