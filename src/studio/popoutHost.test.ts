@@ -1,13 +1,15 @@
 // Slice 22.7: the main-window pop-out host. Runs the real channel and the real session in node.
 // The only fakes are the BroadcastChannel (global) and a stub scene for the live-apply path.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BUILTIN_PRESETS, SCHEMAS } from '../presets/builtin';
+import { getPresetsBySubfolder, SCHEMAS } from '../presets/builtin';
 import { PresetSession, type SceneHost } from '../presets/session';
 import { LAYER_SPECS } from '../presets/layerSchemas';
 import type { Scene } from '../render/scene';
 import { warpOpSpecs } from '../presets/warpOps';
 import { POPOUT_DISCONNECT_TIMEOUT_MS, POPOUT_HEARTBEAT_INTERVAL_MS, createPopoutChannel, type EditValue, type PopoutMessage } from './popoutChannel';
 import { applyEdit, createPopoutHost, type PopoutHost } from './popoutHost';
+
+const BUILTIN_PRESETS = getPresetsBySubfolder('classics');
 
 const ORIGIN = 'https://music.example.test';
 

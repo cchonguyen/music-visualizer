@@ -10,11 +10,13 @@ import {
 } from './session';
 import { parsePreset, PresetFormatError, PRESET_VERSION } from './format';
 import { LAYER_SPECS } from './layerSchemas';
-import { BUILTIN_PRESETS, SCHEMAS } from './builtin';
+import { getPresetsBySubfolder, SCHEMAS } from './builtin';
 import { AdminGateway } from './adminGateway';
 import type { RemotePresetRecord } from './remotePresets';
 import type { Scene } from '../render/scene';
 import { getGlobalDirector, resetGlobalDirector } from '../render/globalDirector';
+
+const BUILTIN_PRESETS = getPresetsBySubfolder('classics');
 
 function memoryStorage(): Storage {
   const data = new Map<string, string>();

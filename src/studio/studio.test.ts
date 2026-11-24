@@ -3307,7 +3307,7 @@ describe('Basic and Advanced views (Slice 15.4)', () => {
 describe('Studio duplicate, solo and mute controls (Slice 15.6)', () => {
   async function setup() {
     const { PresetSession } = await import('../presets/session');
-    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const BUILTIN_PRESETS = (await import('../presets/builtin')).getPresetsBySubfolder('classics');
     const host = {
       setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
       setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
@@ -3358,7 +3358,7 @@ describe('Studio duplicate, solo and mute controls (Slice 15.6)', () => {
 describe('Studio reaction editor (Slice 17.6)', () => {
   async function setup() {
     const { PresetSession } = await import('../presets/session');
-    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const BUILTIN_PRESETS = (await import('../presets/builtin')).getPresetsBySubfolder('classics');
     const host = {
       setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
       setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
@@ -3442,7 +3442,7 @@ describe('Studio reaction editor (Slice 17.6)', () => {
 
 describe('reaction editor helpers (Slice 17.6)', () => {
   it('lists Feedback and Post number controls, and skips the ones the current mode hides', async () => {
-    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const BUILTIN_PRESETS = (await import('../presets/builtin')).getPresetsBySubfolder('classics');
     const { reactionTargets, parseReactionTargetKey, reactionTargetKey } = await import('./studio');
     const preset = JSON.parse(JSON.stringify(BUILTIN_PRESETS[0]!.preset)) as Preset;
     const keys = reactionTargets(preset).map((t) => t.key);
@@ -3469,7 +3469,7 @@ describe('reaction editor helpers (Slice 17.6)', () => {
 describe('Studio warp operator editor (Slice 18.4)', () => {
   async function setup() {
     const { PresetSession } = await import('../presets/session');
-    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const BUILTIN_PRESETS = (await import('../presets/builtin')).getPresetsBySubfolder('classics');
     const host = {
       setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
       setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),
@@ -3551,7 +3551,7 @@ describe('Studio warp operator editor (Slice 18.4)', () => {
   });
 
   it('operator settings can be picked in the audio link editor', async () => {
-    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const BUILTIN_PRESETS = (await import('../presets/builtin')).getPresetsBySubfolder('classics');
     const { newWarpOperator } = await import('./studio');
     const preset = JSON.parse(JSON.stringify(BUILTIN_PRESETS[0]!.preset)) as Preset;
     expect(linkTargets(preset).some((t) => t.key.startsWith('W'))).toBe(false);
@@ -3818,7 +3818,7 @@ describe('Slice 25.7: Universal Studio helper bar coverage & Warp Operator int/m
 
   it('every Studio control row across Preset/Folder, Director, Layer actions, Warp, Links/Morphs, Reactions, Diagnostics, and Admin updates the helper bar on hover/focus', async () => {
     const { PresetSession } = await import('../presets/session');
-    const { BUILTIN_PRESETS } = await import('../presets/builtin');
+    const BUILTIN_PRESETS = (await import('../presets/builtin')).getPresetsBySubfolder('classics');
     const host = {
       setScene: vi.fn(), removeScene: vi.fn(), setFadeSeconds: vi.fn(),
       setWeights: vi.fn(), setPost: vi.fn(), setTransition: vi.fn(),

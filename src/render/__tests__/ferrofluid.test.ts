@@ -9,11 +9,13 @@ import {
   FERROFLUID_DEFAULTS,
 } from '../../presets/schema';
 import { LAYER_FACTORIES, applyValues, buildScene } from '../../presets/loader';
-import { FLAGSHIP_PRESETS_11, ALL_PRESETS } from '../../presets/builtin';
+import { ALL_PRESETS } from '../../presets/builtin';
 import { PRESET_VERSION } from '../../presets/format';
 import type { AudioFrame } from '../../audio/types';
 import type { RenderClock } from '../clock';
 import type { RenderTarget } from '../layer';
+
+const FLAGSHIP_PRESETS_11 = ALL_PRESETS.filter((p) => /^11-/.test(p.id));
 
 function createMockGl(): WebGL2RenderingContext & {
   calls: string[];

@@ -118,49 +118,32 @@ export interface BuiltinPresetEntry {
   subfolder?: SystemSubfolder;
 }
 
-/** Built-in presets in key order. The first three keep the old keys 0 / 1 / 2; the starter pack follows (drafts to tune). */
-export const BUILTIN_PRESETS: readonly BuiltinPresetEntry[] = [
+/**
+ * Every built-in preset, in key order (one list since Slice 31.5). Classics & Textures come first so crown,
+ * flight and bars keep the old keys 0 / 1 / 2, then Flagship (01–11), then Showcase (13–32).
+ * Waveform line, circle and star7 layers load as Shape layers (Slice 19.10); the JSON files stay as they are.
+ */
+export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
+  // Classics & Textures
   { id: 'crown', group: 'classic', subfolder: 'classics', ...parsePreset(crown, SCHEMAS) },
   { id: 'flight', group: 'classic', subfolder: 'classics', ...parsePreset(flight, SCHEMAS) },
   { id: 'bars', group: 'classic', subfolder: 'classics', ...parsePreset(bars, SCHEMAS) },
   { id: 'starter-vortex', group: 'archive', subfolder: 'classics', ...parsePreset(starter_vortex, SCHEMAS) },
-  // Waveform line, circle and star7 layers load as Shape layers (Slice 19.10). The JSON files stay as they are.
   { id: 'tex-ripple-field', group: 'textures', subfolder: 'classics', ...migrateWaveformsInPreset(parsePreset(tex_ripple_field, SCHEMAS)) },
   { id: 'tex-dust-wave', group: 'textures', subfolder: 'classics', ...migrateWaveformsInPreset(parsePreset(tex_dust_wave, SCHEMAS)) },
-];
-
-
-/** Flagship Presets 01–06 (Slice 7.12). */
-export const FLAGSHIP_PRESETS: readonly BuiltinPresetEntry[] = [
+  // Flagship Generative
   { id: '01-curl-fluid-warp', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset01, SCHEMAS) },
   { id: '02-kaleidoscopic-mandala', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset02, SCHEMAS) },
   { id: '03-solarized-contour-rings', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset03, SCHEMAS) },
   { id: '04-mobius-dual-vortex', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset04, SCHEMAS) },
   { id: '05-rgb-aberration-vortex', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset05, SCHEMAS) },
   { id: '06-lissajous-vector-crt', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset06, SCHEMAS) },
-];
-
-(BUILTIN_PRESETS as any).flagship = FLAGSHIP_PRESETS;
-
-/** Flagship Presets 07–08 (Slice 7.13). */
-export const FLAGSHIP_PRESETS_07_08: readonly BuiltinPresetEntry[] = [
   { id: '07-moire-interference-loom', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset07, SCHEMAS) },
   { id: '08-spectral-ridge-terrain', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset08, SCHEMAS) },
-];
-
-/** Flagship Presets 09–10 (Slice 7.14). */
-export const FLAGSHIP_PRESETS_09_10: readonly BuiltinPresetEntry[] = [
   { id: '09-chladni-cymatic-sand', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset09, SCHEMAS) },
   { id: '10-phyllotaxis-spiral-bloom', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset10, SCHEMAS) },
-];
-
-/** Flagship Preset 11 (Slice 7.15). */
-export const FLAGSHIP_PRESETS_11: readonly BuiltinPresetEntry[] = [
   { id: '11-ferrofluid-magnetic-crown', group: 'flagship', subfolder: 'flagship', ...parsePreset(preset11, SCHEMAS) },
-];
-
-/** Stage 9 Showcase Presets 13–20 (Sector 485, Slice 9.5). */
-export const SHOWCASE_PRESETS_13_20: readonly BuiltinPresetEntry[] = [
+  // Showcase
   { id: '13-solar-crown-eclipse', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset13, SCHEMAS) },
   { id: '14-sacred-orbit-mandala', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset14, SCHEMAS) },
   { id: '15-polar-spirograph-bloom', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset15, SCHEMAS) },
@@ -169,55 +152,18 @@ export const SHOWCASE_PRESETS_13_20: readonly BuiltinPresetEntry[] = [
   { id: '18-star-burst-stream', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset18, SCHEMAS) },
   { id: '19-spiral-pearl-beads', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset19, SCHEMAS) },
   { id: '20-dual-rail-aurora-ark', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset20, SCHEMAS) },
-];
-
-export const FLAGSHIP_PRESETS_13_20 = SHOWCASE_PRESETS_13_20;
-(BUILTIN_PRESETS as any).showcase = SHOWCASE_PRESETS_13_20;
-
-/** Stage 18 showcase presets 21–24: warp field operators, wide and tinted bloom, colour map and vignette options. */
-export const SHOWCASE_PRESETS_21_24: readonly BuiltinPresetEntry[] = [
   { id: '21-inhale-exhale', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset21, SCHEMAS) },
   { id: '22-ripple-pool', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset22, SCHEMAS) },
   { id: '23-gradient-storm', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset23, SCHEMAS) },
   { id: '24-mirror-tunnel', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset24, SCHEMAS) },
-];
-
-/** Stage 19 showcase presets 25–26: the starfield particle mode and the signed oscilloscope trace. */
-export const SHOWCASE_PRESETS_25_26: readonly BuiltinPresetEntry[] = [
   { id: '25-deep-field', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset25, SCHEMAS) },
   { id: '26-scope-bloom', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset26, SCHEMAS) },
-];
-
-/** Stage 20 generator showcase presets 27–30. */
-export const SHOWCASE_PRESETS_27_30: readonly BuiltinPresetEntry[] = [
   { id: '27-ink-flow', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset27, SCHEMAS) },
   { id: '28-julia-drift', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset28, SCHEMAS) },
   { id: '29-orbit-hall', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset29, SCHEMAS) },
   { id: '30-corridor-glide', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset30, SCHEMAS) },
-];
-
-/** Stage 27 wall-bounce ribbon showcase preset 31. */
-export const SHOWCASE_PRESETS_31: readonly BuiltinPresetEntry[] = [
   { id: '31-bouncing-ribbon-wave', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset31, SCHEMAS) },
-];
-
-/** Stage 28 organic twisting oscilloscope waveform showcase preset 32. */
-export const SHOWCASE_PRESETS_32: readonly BuiltinPresetEntry[] = [
   { id: '32-twisting-scope-wave', group: 'flagship', subfolder: 'showcase', ...parsePreset(preset32, SCHEMAS) },
-];
-
-export const ALL_PRESETS: readonly BuiltinPresetEntry[] = [
-  ...BUILTIN_PRESETS,
-  ...FLAGSHIP_PRESETS,
-  ...FLAGSHIP_PRESETS_07_08,
-  ...FLAGSHIP_PRESETS_09_10,
-  ...FLAGSHIP_PRESETS_11,
-  ...SHOWCASE_PRESETS_13_20,
-  ...SHOWCASE_PRESETS_21_24,
-  ...SHOWCASE_PRESETS_25_26,
-  ...SHOWCASE_PRESETS_27_30,
-  ...SHOWCASE_PRESETS_31,
-  ...SHOWCASE_PRESETS_32,
 ];
 
 /**
@@ -264,7 +210,7 @@ export const PRESET_TAXONOMY: Readonly<Record<string, { theme: PresetTheme; mood
   'tex-dust-wave': { theme: 'waveform', mood: 'dreamy' },
 };
 
-// Fill in theme and mood from the table. The preset objects are shared with every list above, so one pass covers all.
+// Fill in theme and mood from the table.
 for (const entry of ALL_PRESETS) {
   const tag = PRESET_TAXONOMY[entry.id];
   if (!tag) continue;
@@ -274,6 +220,11 @@ for (const entry of ALL_PRESETS) {
 
 export function getPresetsByGroup(group: PresetGroup): readonly BuiltinPresetEntry[] {
   return ALL_PRESETS.filter((p) => p.group === group);
+}
+
+/** The built-in presets in one system folder, in list order. */
+export function getPresetsBySubfolder(subfolder: SystemSubfolder): readonly BuiltinPresetEntry[] {
+  return ALL_PRESETS.filter((p) => p.subfolder === subfolder);
 }
 
 export function filterPresetsByGroup(

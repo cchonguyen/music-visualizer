@@ -23,7 +23,7 @@ import {
   SPECTRAL_TERRAIN_DEFAULTS,
 } from '../../presets/schema';
 import { LAYER_FACTORIES, applyValues, buildScene } from '../../presets/loader';
-import { FLAGSHIP_PRESETS_07_08, ALL_PRESETS } from '../../presets/builtin';
+import { ALL_PRESETS } from '../../presets/builtin';
 import { PRESET_VERSION } from '../../presets/format';
 import { BrightnessLimiter } from '../safety';
 import type { AudioFrame } from '../../audio/types';
@@ -32,6 +32,8 @@ import type { RenderTarget } from '../layer';
 import { getTerrainState, setTerrainState, clearTerrainState } from '../terrainStore';
 import { ParticleLayer } from '../layers/particles';
 import { Scene } from '../scene';
+
+const FLAGSHIP_PRESETS_07_08 = ALL_PRESETS.filter((p) => /^0[78]-/.test(p.id));
 
 function createMockGl(): WebGL2RenderingContext {
   const activeTextures: number[] = [];
