@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const dir = new URL('../design-system/', import.meta.url);
 const bundle = readFileSync(new URL('bundle.css', dir), 'utf8');
 const tokens = readFileSync(new URL('tokens.css', dir), 'utf8');
+const readme = readFileSync(new URL('README.md', dir), 'utf8');
 
 const rule = (sel) => {
   const re = new RegExp('(^|\\n|\\})' + sel.replace(/[.[\]]/g, '\\$&') + '\\{([^}]*)\\}');
@@ -61,4 +62,56 @@ test('bundle.css defines light-mode --glow-accent without 24px blur for non-viol
   const lightAttrMatch = bundle.match(/\[data-theme="light"\]\[data-accent\]:not\(\[data-accent="violet"\]\)\s*\{([^}]*)\}/);
   assert.ok(lightAttrMatch);
   assert.doesNotMatch(lightAttrMatch[1], /24px/, 'data-theme=light --glow-accent must not have 24px blur');
+});
+
+test('Filters pattern classes exist in bundle.css without hardcoded colours or state tokens', () => {
+  const filterStart = bundle.indexOf('/* Filters:');
+  assert.notEqual(filterStart, -1, 'Filters section must exist in bundle.css');
+  const filterSection = bundle.slice(filterStart, bundle.indexOf('/* Notice */'));
+
+  for (const cls of [
+    '.ui-filter-bar',
+    '.ui-filter-trigger',
+    '.ui-filter-panel',
+    '.ui-filter-group',
+    '.ui-filter-select',
+    '.ui-filter-toggle',
+  ]) {
+    assert.ok(filterSection.includes(cls), `${cls} must exist in Filters section`);
+  }
+
+  assert.doesNotMatch(filterSection, /#[0-9a-fA-F]{3,8}|rgb\(|oklch\(/, 'Filters section must not hardcode colours');
+  assert.doesNotMatch(filterSection, /--good|--warn|--bad/, 'Filters section must not use state tokens');
+});
+
+test('Filters pattern uses mobile touch targets and compact desktop sizing', () => {
+  const pillRule = rule('.ui-filter-select,.ui-filter-toggle');
+  assert.match(pillRule, /min-height:var\(--touch-phone\)/);
+  assert.match(pillRule, /var\(--control-fs\)/);
+
+  const desktop = bundle.slice(bundle.indexOf('@media (min-width:640px)'));
+  const desktopBlock = desktop.slice(0, desktop.indexOf('\n}\n'));
+  assert.match(desktopBlock, /\.ui-filter-select,\.ui-filter-toggle\{min-height:var\(--control-h-compact\);font-size:var\(--control-fs-compact\)/);
+});
+
+test('Filters pattern wires focus-visible, reduced-motion, and accent/mid-tone active states', () => {
+  assert.match(bundle, /:focus-visible[^}]*\.ui-filter-select:focus-visible/);
+  assert.match(bundle, /:focus-visible[^}]*\.ui-filter-toggle:focus-visible/);
+
+  const reducedMotion = bundle.slice(bundle.indexOf('@media (prefers-reduced-motion:reduce)'));
+  assert.match(reducedMotion, /\.ui-filter-select,\.ui-filter-toggle\{transition:none\}/);
+
+  const activeRule = rule('.ui-filter-select--active,.ui-filter-select[data-active="true"],.ui-filter-toggle[data-state="yes"],.ui-filter-toggle--yes');
+  assert.match(activeRule, /background:var\(--accent-tint\)/);
+  assert.match(activeRule, /border-color:var\(--accent\)/);
+
+  const noRule = rule('.ui-filter-toggle[data-state="no"],.ui-filter-toggle--no');
+  assert.match(noRule, /background:var\(--mid\)/);
+  assert.match(noRule, /border-color:var\(--mid-line\)/);
+  assert.match(noRule, /color:var\(--mid-text\)/);
+});
+
+test('README.md documents Filters section and quick-reference row', () => {
+  assert.match(readme, /^### Filters$/m);
+  assert.match(readme, /^\| Filters \|/m);
 });

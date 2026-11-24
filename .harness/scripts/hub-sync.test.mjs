@@ -430,3 +430,32 @@ test('needsRerun is false when hub-sync.mjs was not written', () => {
   assert.equal(needsRerun({ written: ['.harness/scripts/other.mjs', '.github/workflows/harness-slice-gate.yml (CI caller, refreshed)'] }, {}), false);
   assert.equal(needsRerun({ written: [] }, {}), false);
 });
+
+test('syncAgents adopts plugins/harness/agents as the source when the folder exists (Slice 20.2)', () => {
+  const root = makeTempDir();
+  const pluginAgents = path.join(root, 'plugins', 'harness', 'agents');
+  const harnessAgents = path.join(root, '.harness', 'agents');
+  fs.mkdirSync(pluginAgents, { recursive: true });
+  fs.mkdirSync(harnessAgents, { recursive: true });
+  fs.writeFileSync(path.join(pluginAgents, 'gf-coder.md'), 'plugin v2');
+  fs.writeFileSync(path.join(harnessAgents, 'gf-coder.md'), 'stale v1');
+
+  const synced = syncAgents(root);
+  assert.ok(synced.includes(path.join('.harness', 'agents', 'gf-coder.md')));
+  for (const dir of [harnessAgents, path.join(root, '.claude', 'agents'), path.join(root, '.agents')]) {
+    assert.equal(fs.readFileSync(path.join(dir, 'gf-coder.md'), 'utf8'), 'plugin v2', dir);
+  }
+  assert.deepEqual(syncAgents(root), []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('hub agent copies match the plugin source (no drift)', () => {
+  const repo = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
+  const pluginAgents = path.join(repo, 'plugins', 'harness', 'agents');
+  for (const file of fs.readdirSync(pluginAgents).filter((f) => f.endsWith('.md'))) {
+    const source = fs.readFileSync(path.join(pluginAgents, file), 'utf8');
+    for (const dir of ['.harness/agents', '.claude/agents', '.agents']) {
+      assert.equal(fs.readFileSync(path.join(repo, dir, file), 'utf8'), source, `${dir}/${file} differs from plugins/harness/agents/${file}; run node .harness/scripts/hub-sync.mjs sync-agents`);
+    }
+  }
+});

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { finishSlice, restampSlice, parseActiveTargets, bootstrapException, autoVerify, CI_VERIFIED_REASON } from './finish-slice.mjs';
+import { finishSlice, restampSlice, parseActiveTargets, bootstrapException, ciVerification, CI_VERIFIED_REASON } from './finish-slice.mjs';
 import { startSlice, startFromScope, startAdhoc } from './start-slice.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 import { appendCall, readCalls } from './lib/telemetry.mjs';
@@ -89,8 +89,8 @@ function makeRepo() {
   git('init', '-q', '-b', 'main');
   git('config', 'user.email', 'test@example.com');
   git('config', 'user.name', 'test');
-  // STATE.json is machine-local and gitignored in real repos; mirror that here.
-  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/STATE.json\n');
+  // The event store is session-local and gitignored in real repos (gitignore.block); mirror that here.
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.events/\n');
   return dir;
 }
 
@@ -366,7 +366,7 @@ test('finishSlice git staging filters gitignored tracking files and succeeds', (
   fs.writeFileSync(path.join(dir, 'a.txt'), 'a initial');
 
   // Gitignore tracking files
-  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/STATUS_BATCH.jsonl\n.spec/STATE.json\n');
+  fs.writeFileSync(path.join(dir, '.gitignore'), '.spec/.session-telemetry.json\n.spec/.events/\n');
 
   git('add', '-A');
   git('commit', '-m', 'init with gitignore');
@@ -493,71 +493,23 @@ test('finishSlice reports a passing auto-verify result', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-// Runs autoVerify with a fake HOME (no verify-secret file) and the given env, restoring both afterwards.
-function withSecretEnv({ secret, home }, fn) {
-  const saved = { HOME: process.env.HOME, HARNESS_VERIFY_SECRET: process.env.HARNESS_VERIFY_SECRET };
-  process.env.HOME = home;
-  if (secret === undefined) delete process.env.HARNESS_VERIFY_SECRET;
-  else process.env.HARNESS_VERIFY_SECRET = secret;
-  try {
-    return fn();
-  } finally {
-    for (const [k, v] of Object.entries(saved)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-  }
-}
-
-function makeVerifyRoot(scriptBody) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'finish-slice-verify-'));
-  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'bin', 'verify-slice.sh'), scriptBody);
-  return root;
-}
-
-test('autoVerify without a verify secret reports CI as the verifier and never runs verify-slice.sh', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'finish-slice-home-'));
-  const marker = path.join(home, 'script-ran');
-  const root = makeVerifyRoot(`#!/usr/bin/env bash\ntouch "${marker}"\n`);
-  const result = withSecretEnv({ secret: undefined, home }, () => autoVerify(root));
+test('ciVerification names CI as the only verifier', () => {
+  const result = ciVerification();
   assert.equal(result.ran, false);
   assert.equal(result.verifier, 'ci');
   assert.equal(result.reason, CI_VERIFIED_REASON);
-  assert.doesNotMatch(result.reason, /no verify secret/);
-  assert.equal(fs.existsSync(marker), false);
-  fs.rmSync(root, { recursive: true, force: true });
-  fs.rmSync(home, { recursive: true, force: true });
 });
 
-test('finishSlice without a verify secret records CI-verified and does not fail', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'finish-slice-home-'));
+test('finishSlice records CI-verified by default and does not fail', () => {
   const dir = makeFinishableRepo();
   seedDispatch(dir);
-  const result = withSecretEnv({ secret: undefined, home }, () =>
-    finishSlice(dir, 'feat: finish slice 1', { skipChecks: true })
-  );
+  const result = finishSlice(dir, 'feat: finish slice 1', { skipChecks: true });
   assert.equal(result.success, true);
-  assert.equal(result.verification.ran, false);
   assert.equal(result.verification.verifier, 'ci');
   assert.equal(result.verification.reason, CI_VERIFIED_REASON);
   const body = execFileSync('git', ['log', '-1', '--format=%B'], { cwd: dir, encoding: 'utf8' });
   assert.match(body, /^Referee-Verdict: VERIFIED$/m);
   fs.rmSync(dir, { recursive: true, force: true });
-  fs.rmSync(home, { recursive: true, force: true });
-});
-
-test('autoVerify with a verify secret present runs verify-slice.sh with that secret', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'finish-slice-home-'));
-  const root = makeVerifyRoot('#!/usr/bin/env bash\n[ "$HARNESS_VERIFY_SECRET" = "test-secret" ] || exit 1\n');
-  const passed = withSecretEnv({ secret: 'test-secret', home }, () => autoVerify(root));
-  assert.deepEqual(passed, { ran: true, passed: true });
-  fs.writeFileSync(path.join(root, 'bin', 'verify-slice.sh'), '#!/usr/bin/env bash\nexit 1\n');
-  const failed = withSecretEnv({ secret: 'test-secret', home }, () => autoVerify(root));
-  assert.equal(failed.ran, true);
-  assert.equal(failed.passed, false);
-  fs.rmSync(root, { recursive: true, force: true });
-  fs.rmSync(home, { recursive: true, force: true });
 });
 
 test('finishSlice keeps the commit when auto-verify is skipped or fails', () => {

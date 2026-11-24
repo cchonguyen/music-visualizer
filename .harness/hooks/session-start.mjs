@@ -5,7 +5,6 @@ import { ensureBaseline, resolveRoot } from './lib/vibe.mjs';
 import { branchOwnerOf, mainRedState, MAIN_RED_TAG, whereWeLeftOff } from './lib/session-signals.mjs';
 import { statePath, writeState } from './lib/doctor-state.mjs';
 import { currentHead, runProbes } from '../scripts/doctor.mjs';
-import { readBatchEvents } from '../scripts/status-batch.mjs';
 import { appendEvent } from '../scripts/lib/event-log.mjs';
 import { REPO_PLUGIN_MANIFEST, readManifestVersion, installedManifestPath, checkPluginVersion, mismatchBanner } from './lib/session-banner.mjs';
 
@@ -38,8 +37,7 @@ try { ensureBaseline(root, event.session_id || 'default'); } catch {}
 
 let version = '3.1.0';
 try { version = fs.readFileSync(path.join(root, '.harness-version'), 'utf8').trim() || version; } catch {}
-const batchCount = readBatchEvents(root).length;
-let contextMsg = `✓ Harness v${version} active (Node ${process.version}, Model tier: Haiku baseline, Batch queue: ${batchCount} event(s)).`;
+let contextMsg = `✓ Harness v${version} active (Node ${process.version}).`;
 
 // Live doctor: run the probes now and store the result for the PreToolUse gate.
 try {
@@ -48,9 +46,9 @@ try {
   writeState(statePath(), state);
   contextMsg += state.status === 'DOCTOR_PASS'
     ? `\n✓ DOCTOR_PASS (${state.checks.length} checks, HEAD ${head.slice(0, 7)})`
-    : `\n✖ DOCTOR_FAIL: ${state.failing.join(', ')}. Edits and non-allow-listed Bash are refused until fixed.`;
+    : `\n✖ DOCTOR_FAIL: ${state.failing.join(', ')}. Edits and Bash still run, with a warning, until doctor passes. Run node .harness/scripts/doctor.mjs.`;
 } catch {
-  contextMsg += '\n✖ DOCTOR_FAIL: doctor probes could not run. Edits and non-allow-listed Bash are refused until fixed.';
+  contextMsg += '\n✖ DOCTOR_FAIL: doctor probes could not run. Edits and Bash still run, with a warning. Run node .harness/scripts/doctor.mjs.';
 }
 
 // Main-red (4.C.3): while the tag exists on origin, no new slices start. Fixing main is the only work.

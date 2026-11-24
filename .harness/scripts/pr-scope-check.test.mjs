@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets, sliceKey } from './pr-scope-check.mjs';
+import { analyze, formatJsonVerdict, parseDiff, parseNameStatus, isCommentLine, ASSERTION, SKIP_MARK, isPackageJsonVersionOnly, isAdditiveSupabaseMigration, isTemplateCopy, parseActiveTargets, sliceKey, approvalRef } from './pr-scope-check.mjs';
 import { AGENTS_MARKERS } from './lib/sync-core.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -710,4 +710,35 @@ test('a test file outside Target files is allowed with a note', () => {
   });
   assert.ok(!r.problems.some((p) => p.includes('Outside the slice')), r.problems.join('; '));
   assert.ok(r.notes.includes('Test file outside Target files (allowed): src/other.test.js'));
+});
+
+test('approvalRef reads a merge commit\'s second parent and leaves an ordinary commit alone', () => {
+  assert.equal(approvalRef('HEAD', 'aaa bbb ccc\n'), 'HEAD^2');
+  assert.equal(approvalRef('HEAD', 'aaa bbb\n'), 'HEAD');
+  assert.equal(approvalRef('HEAD', ''), 'HEAD');
+});
+
+test('CLI finds Approved-Tripwire on the PR head when HEAD is a CI merge commit', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scope-merge-'));
+  const g = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  g('init', '-q', '-b', 'main');
+  g('config', 'user.email', 't@example.com');
+  g('config', 'user.name', 't');
+  fs.mkdirSync(path.join(dir, 'docs'));
+  fs.writeFileSync(path.join(dir, 'docs', 'old.md'), 'x\n');
+  g('add', '-A');
+  g('commit', '-q', '-m', 'base');
+  g('checkout', '-q', '-b', 'pr');
+  fs.rmSync(path.join(dir, 'docs', 'old.md'));
+  g('add', '-A');
+  g('commit', '-q', '-m', 'remove old\n\nApproved-Tripwire: docs/old.md');
+  g('checkout', '-q', 'main');
+  fs.writeFileSync(path.join(dir, 'other.txt'), 'y\n');
+  g('add', '-A');
+  g('commit', '-q', '-m', 'main moves on');
+  g('checkout', '-q', '--detach', 'main');
+  g('merge', '-q', '--no-ff', '-m', 'Merge pr into main', 'pr');
+  const res = spawnSync('node', [SCRIPT, 'main', 'HEAD', '--strict'], { cwd: dir, encoding: 'utf8', env: { ...process.env, CLAUDE_PROJECT_DIR: dir } });
+  assert.match(res.stdout, /Approved tripwire \(file deleted\): docs\/old\.md/);
+  assert.doesNotMatch(res.stdout, /Red tripwire/);
 });

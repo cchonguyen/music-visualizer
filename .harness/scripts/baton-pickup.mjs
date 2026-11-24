@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { appendBatchEvent, readBatchEvents, resolveRoot } from './status-batch.mjs';
+import { appendBatchEvent, resolveRoot } from './status-batch.mjs';
 import { verifyHeadTrust } from './referee.mjs';
 
 const gitSafe = (cwd, args) => {
@@ -35,7 +35,6 @@ const nextStep = extractField('Immediate Next Step') || extractField('Exact Next
 const progressLines = fs.existsSync(progressPath) ? fs.readFileSync(progressPath, 'utf8').split('\n') : [];
 const activeSlice = progressLines.find((l) => /^\s*-\s*\[.\].*\[IN_PROGRESS\]/.test(l))?.trim() || 'None';
 const nextPendingSlice = progressLines.find((l) => /^\s*-\s*\[\s\]/.test(l) && !/\[IN_PROGRESS\]/.test(l))?.trim() || 'None';
-const batchCount = readBatchEvents(root).length;
 
 // Referee Trust Verification
 const trust = verifyHeadTrust(root);
@@ -48,7 +47,7 @@ appendBatchEvent(root, {
 });
 
 console.log([
-  `✓ BATON PICKUP | Branch: ${branch} (${headCommit}) | Working tree: ${dirtyCount ? `${dirtyCount} modified` : 'clean'} | Batch queue: ${batchCount + 1} event(s)`,
+  `✓ BATON PICKUP | Branch: ${branch} (${headCommit}) | Working tree: ${dirtyCount ? `${dirtyCount} modified` : 'clean'}`,
   `  Referee Trust: ${trust.trusted ? 'VERIFIED (Commit Trailer Matches HEAD Tree)' : `UNVERIFIED (${trust.reason})`}`,
   `  Last Platform: ${lastPlatform} | Recorded Status: ${verifyStatus}`,
   `  Active Slice:  ${activeSlice}`,

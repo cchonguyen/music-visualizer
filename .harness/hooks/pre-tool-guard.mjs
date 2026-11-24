@@ -10,7 +10,6 @@ import {
 } from './lib/guard-rules.mjs';
 import { appendBatchEvent } from '../scripts/status-batch.mjs';
 import { updateTelemetry } from '../scripts/lib/telemetry-store.mjs';
-import { clearUpshiftAuth } from '../scripts/evaluate-upshift.mjs';
 import { normalizePayload } from './adapter.mjs';
 import { currentHead, ensureDoctorState } from '../scripts/doctor.mjs';
 import { gateDecision } from './lib/doctor-state.mjs';
@@ -525,7 +524,6 @@ if (isDirectRun) {
     if (previousActive && prevId !== nextId) {
       const completedNow = incoming.split('\n').some((l) => /^\s*-\s*\[x\]/i.test(l) && sliceId(l) === prevId);
       if (completedNow) {
-        clearUpshiftAuth(root);
         appendBatchEvent(root, {
           event: 'slice_complete',
           slice: `Slice ${prevId}`,

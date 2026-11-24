@@ -52,7 +52,6 @@ test('main-thread Bash allow-list families are allowed', () => {
     'node --test x 2>&1',
     'npm run test -- --silent',
     'rm .spec/.doctor-canary',
-    'bin/restart-dashboard.sh --port 3000',
     'gh search issues foo',
     'git push origin feature-branch',
     'git restore --staged x',

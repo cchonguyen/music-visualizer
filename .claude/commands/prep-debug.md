@@ -6,7 +6,7 @@ disable-model-invocation: true
 1. Find the last failed build or test command in this session and its output. Find the file currently being edited.
 2. Extract the failure message and its stack or assertion lines. Cap the excerpt at 25 lines. Remove memory addresses (any `0x` followed by hex digits) and replace each with `<addr>`.
 3. Write `.spec/DEBUG_PACKET.md` with this structure:
-   - First line, exactly: `@root-cause-solver Please diagnose this failure and provide an atomic code replacement.`
+   - First line, exactly: `@root-cause-solver Please diagnose this failure and provide an atomic code replacement.` (`@root-cause-solver` is the name of the operator's external Gemini prompt, not a harness subagent. Paste the packet there.)
    - `Command:` the failed command.
    - `File in focus:` the file currently being edited, with its path.
    - `Failure excerpt:` the capped excerpt in a fenced code block.

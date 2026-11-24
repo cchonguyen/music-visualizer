@@ -199,13 +199,14 @@ test('SCOUT level routing maps facts deterministically to levels and agents', ()
   assert.equal(r1.status, 0);
   assert.match(r1.stdout, /Level 1/);
 
-  // Level 3: Cross module -> Opus
+  // Level 3: cross module -> el-architect
   fs.writeFileSync(scoutPath, 'Files-Touched: 8\nContract-Change: yes\nCross-Module: yes\n');
   const r3 = spawnSync(process.execPath, [EVAL, 'spec'], {
     cwd: dir, encoding: 'utf8', env: { ...process.env, ...doctorEnv(dir), CLAUDE_PROJECT_DIR: dir },
   });
   assert.equal(r3.status, 0);
-  assert.match(r3.stdout, /architect-opus/);
+  assert.match(r3.stdout, /Level 3/);
+  assert.match(r3.stdout, /harness:el-architect/);
 });
 
 test('session-start resets session telemetry and post-tool-scrub tracks mutating calls', () => {

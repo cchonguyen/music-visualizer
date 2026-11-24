@@ -119,13 +119,15 @@ test('agents carry the slice-issue rules', () => {
   assert.match(arch, /gate-change/);
 });
 
-test('gf-coder close step mirrors /wrap: gate and decision record come before marking [x], and nothing is committed', () => {
+test('gf-coder close step: run Verify, then leave [IN_PROGRESS] for finish-slice.mjs, and nothing is committed', () => {
   const coder = fs.readFileSync(new URL('../agents/gf-coder.md', import.meta.url), 'utf8');
-  const gate = coder.indexOf('Run the gate: `bash bin/verify-slice.sh`');
-  const decision = coder.indexOf('Record a decision.');
-  const mark = coder.indexOf('change the marker to `[x]`');
-  assert.ok(gate > 0 && decision > gate && mark > decision, 'close steps out of order or missing');
+  const verify = coder.indexOf("Run the slice's `Verify:` command");
+  const leave = coder.indexOf('Leave the marker `[IN_PROGRESS]`');
+  assert.ok(verify > 0 && leave > verify, 'close steps out of order or missing');
+  // finish-slice.mjs needs the line still [IN_PROGRESS]; gf-coder must not mark it [x] itself.
+  assert.ok(!coder.includes('change the marker to `[x]`'), 'gf-coder must not mark its slice [x]');
+  assert.match(coder, /finish-slice\.mjs/);
   assert.match(coder, /Do not commit, push, or open a pull request/);
-  assert.match(coder, /--bypass-decisions/);
-  assert.match(coder, /--add-recent/);
+  // The v2.2 local close path is retired.
+  assert.doesNotMatch(coder, /verify-slice\.sh|accept-slice\.sh|update-state\.mjs/);
 });
